@@ -2714,6 +2714,7 @@ dependencies = [
  "avian3d",
  "bevy",
  "directories",
+ "libc",
  "rand 0.9.5",
  "serde",
  "serde_json",
