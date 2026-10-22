@@ -17,6 +17,7 @@
 
 pub mod commands;
 pub mod control;
+pub mod metrics;
 pub mod offscreen;
 pub mod perf;
 mod perf_overlay;
@@ -27,6 +28,7 @@ pub mod session_log;
 use bevy::prelude::*;
 
 pub use control::{AddControlCommand, ControlAppExt, ControlRegistry, PendingReplies, ReplyId, params};
+pub use metrics::Metrics;
 pub use perf::{DebugLines, PerfAppExt, PerfOverlay, PerfOverlayKey};
 pub use session_log::SessionLog;
 
@@ -38,6 +40,7 @@ impl Plugin for DevtoolsPlugin {
             control::ControlPlugin,
             offscreen::OffscreenPlugin,
             perf::PerfPlugin,
+            metrics::MetricsPlugin,
             perf_overlay::PerfOverlayPlugin,
         ));
         commands::register(app);

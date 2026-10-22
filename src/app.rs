@@ -202,6 +202,7 @@ impl Plugin for EnginePlugin {
                 crate::input::InputPlugin,
                 crate::audio::EngineAudioPlugin,
                 crate::gfx::GfxPlugin,
+                crate::render_budget::RenderBudgetPlugin,
             ));
         if o.ui && !o.headless {
             app.add_plugins(crate::ui::UiKitPlugin);
