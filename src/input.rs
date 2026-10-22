@@ -78,7 +78,7 @@ fn cursor_policy(
     state: Option<Res<State<AppState>>>,
     paused: Res<Paused>,
     mouse: Option<Res<ButtonInput<MouseButton>>>,
-    mut cursors: Query<&mut CursorOptions, With<PrimaryWindow>>,
+    mut cursors: Query<(&Window, &mut CursorOptions), With<PrimaryWindow>>,
     mut captured: ResMut<CursorCaptured>,
     mut was_wanted: Local<bool>,
 ) {
@@ -87,8 +87,11 @@ fn cursor_policy(
     *was_wanted = want;
     let clicked = mouse.is_some_and(|m| m.just_pressed(MouseButton::Left));
     let mut any = false;
-    for mut c in &mut cursors {
+    for (window, mut c) in &mut cursors {
         let locked = c.grab_mode != CursorGrabMode::None;
+        // Mouse buttons are global: a click in another window (the metrics window) must not
+        // grab the game's cursor, so a click only counts while the game window has focus.
+        let clicked = clicked && window.focused;
         if !want && locked {
             set_cursor(&mut c, false);
         } else if want && !locked && (became_wanted || clicked) {

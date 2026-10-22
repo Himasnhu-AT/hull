@@ -100,7 +100,7 @@ fn rotate(dir: &Path, keep: usize) {
 }
 
 /// `20261019T143005Z-<pid>` (UTC; pid keeps two runs in the same second apart).
-fn utc_stamp(t: SystemTime) -> String {
+pub(super) fn utc_stamp(t: SystemTime) -> String {
     let secs = t.duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0) as i64;
     let (days, rem) = (secs.div_euclid(86_400), secs.rem_euclid(86_400));
     // Howard Hinnant's civil_from_days.

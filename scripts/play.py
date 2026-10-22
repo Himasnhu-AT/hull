@@ -29,6 +29,7 @@ steps.json: a list of steps, each one of
   {"sleep": 2.5}
   {"cmd": "input.key", "params": {"key": "w", "action": "down"}}
   {"shot": "name"}            -> DIR/name.png (windowed / offscreen only)
+  {"shot": "name", "cmd": "metrics.screenshot"}  -> same through another screenshot command
 Every reply is printed as one JSON line.
 """
 import json, os, re, shutil, socket, subprocess, sys, tempfile, time
@@ -171,7 +172,7 @@ def main():
                 time.sleep(st["sleep"])
                 continue
             if "shot" in st:
-                r = c.call(shot_cmd, {"path": os.path.join(out, st["shot"] + ".png")})
+                r = c.call(st.get("cmd", shot_cmd), {"path": os.path.join(out, st["shot"] + ".png")})
             else:
                 r = c.call(st["cmd"], st.get("params", {}))
             print(json.dumps(r)[:2000], flush=True)
