@@ -2,7 +2,7 @@
 //! `--headless` run, plus [`EnginePlugin`]. Owner: core stream.
 //!
 //! - `--headless`: MinimalPlugins at 60 Hz + Log, Transform, Diagnostics, Asset, Mesh, Scene,
-//!   WorldSerialization, States plugins (no window/renderer/input/UI/audio).
+//!   WorldSerialization, States, Input plugins (no window/renderer/UI/audio).
 //! - windowed: DefaultPlugins with the asset root from [`crate::paths::assets_dir`], title from
 //!   [`GameInfo`], `--offscreen` → hidden window, `--control` → always-on-top window.
 //! - `physics` feature: avian3d `PhysicsPlugins::default()`.
@@ -131,6 +131,8 @@ pub fn app_with(info: GameInfo, mut options: EngineOptions) -> App {
             bevy::world_serialization::WorldSerializationPlugin,
             bevy::scene::ScenePlugin,
             bevy::state::app::StatesPlugin,
+            // Keyboard/mouse resources exist headless so the control port can inject input.
+            bevy::input::InputPlugin,
         ));
     } else {
         app.add_plugins(
