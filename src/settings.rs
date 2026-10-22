@@ -130,9 +130,8 @@ impl<G: GameSettings> Plugin for SettingsPlugin<G> {
         store.sections.retain(|(k, _)| *k != GAME);
         store.sections.push((GAME, serialize_resource::<G>));
         app.insert_resource(game).add_systems(PostUpdate, mark_dirty::<G>.in_set(SettingsSet::Track));
-        // MERGE: once the ui stream lands, also call
-        // `engine::ui::settings_screen::RegisterSettingsUi::settings_defaults::<G>(app)` here so
-        // "Reset tab" knows G's defaults.
+        // "Reset tab" in the settings screen reads G's defaults from here.
+        crate::ui::settings_screen::RegisterSettingsUi::settings_defaults::<G>(app);
     }
 }
 

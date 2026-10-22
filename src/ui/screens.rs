@@ -13,7 +13,7 @@
 //!   handles [`NavBack`] itself), on anything else pops (leaving "settings" also saves).
 //! - Leaving `InGame` clears the stack and unpauses; entering `MainMenu` opens "main";
 //!   leaving `MainMenu` clears the stack.
-//! - Losing window focus during play: core's pause plugin sends `ScreenRequest::Push("pause")`.
+//! - Losing window focus during play pauses (never in test-driven runs).
 //!
 //! A builder reads what it needs from the world first, then spawns through `world.commands()`;
 //! the caller flushes:
@@ -34,6 +34,7 @@
 
 use bevy::prelude::*;
 use bevy::ecs::system::SystemParam;
+use bevy::window::WindowFocused;
 
 use super::menus::{MenuAction, MenuEvent};
 use super::settings_screen::{PendingReset, settings_tabs};
@@ -293,6 +294,7 @@ impl Plugin for ScreensPlugin {
             .add_systems(
                 Update,
                 (
+                    pause_on_focus_loss.run_if(resource_exists::<Messages<WindowFocused>>),
                     screen_logic,
                     note_rebuilds,
                     super::settings_screen::reset_tab,
@@ -320,6 +322,21 @@ fn clear_screens(mut screens: ResMut<Screens>, mut st: ResMut<ScreenState>, mut 
 }
 
 /// Apply requests, Esc and button actions to the stack, then keep pause in sync with it.
+/// Clicking away from the game (alt-tab) pauses a live round. Never in test-driven runs.
+fn pause_on_focus_loss(
+    mut events: MessageReader<WindowFocused>,
+    state: Option<Res<State<AppState>>>,
+    allowed: Res<PauseAllowed>,
+    screens: Res<Screens>,
+    mut out: MessageWriter<ScreenRequest>,
+) {
+    let lost = events.read().any(|e| !e.focused);
+    let in_game = state.is_some_and(|s| *s.get() == AppState::InGame);
+    if lost && in_game && allowed.0 && screens.stack.is_empty() && !crate::cli::test_driven() {
+        out.write(ScreenRequest::Push("pause"));
+    }
+}
+
 /// Read-only inputs of [`screen_logic`].
 #[derive(SystemParam)]
 struct LogicIn<'w, 's> {

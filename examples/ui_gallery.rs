@@ -3,18 +3,15 @@
 //!
 //! ```text
 //! cargo run --example ui_gallery                                   # interactive window
-//! cargo run --example ui_gallery -- --shot /tmp/s.png --screen settings --tab 2 --nav down,down
-//! cargo run --example ui_gallery -- --shot /tmp/p.png --play --screen pause
+//! cargo run --example ui_gallery -- --offscreen --shot /tmp/s.png --screen settings --tab 2 --nav down,down
+//! cargo run --example ui_gallery -- --offscreen --shot /tmp/p.png --play --screen pause
 //! ```
-//! `--shot <png>` renders offscreen (hidden window, camera → 1920×1080 image), saves after
+//! `--shot <png>` (with `--offscreen`: hidden window, cameras → 1920×1080 image) saves after
 //! `--frames` (default 45) and exits. `--toast` posts two toasts, `--fps` shows the counter,
 //! `--accent r,g,b` re-brands. Add `--offscreen` for test-driven behaviour (muted, no mouse grab).
 
-use bevy::camera::RenderTarget;
 use bevy::prelude::*;
-use bevy::render::render_resource::{TextureFormat, TextureUsages};
 use bevy::render::view::window::screenshot::{Screenshot, ScreenshotCaptured, save_to_disk};
-use bevy::ui::IsDefaultUiCamera;
 
 use engine::app::{EngineOptions, GameInfo, app_with};
 use engine::cli::{arg_value, has_flag};
@@ -22,7 +19,6 @@ use engine::flow::AppState;
 use engine::gfx::MainCamera;
 use engine::input::Bindings;
 use engine::settings::{CoreSettings, FieldDef, FieldKind, RegisterSettings};
-use engine::ui::UiKitPlugin;
 use engine::ui::menus::{MenuAction, MenuConfig, MenuEvent};
 use engine::ui::screens::{RegisterScreen, ScreenRegistry, ScreenRequest};
 use engine::ui::settings_screen::RegisterSettingsUi;
@@ -208,7 +204,7 @@ fn crosshair_preview(world: &mut World, slot: Entity) {
                 for (w, h, x, y) in [(10.0, 2.0, -12.0, 0.0), (10.0, 2.0, 12.0, 0.0), (2.0, 10.0, 0.0, -12.0), (2.0, 10.0, 0.0, 12.0)] {
                     bx.spawn((
                         PreviewBar,
-                        Node { position_type: PositionType::Absolute, width: px(w), height: px(h), left: px(x), top: px(y), ..default() },
+                        Node { position_type: PositionType::Absolute, width: px(w), height: px(h), left: percent(50), top: percent(50), margin: UiRect::new(px(x - w / 2.0), px(0), px(y - h / 2.0), px(0)), ..default() },
                         BackgroundColor(Color::WHITE),
                         Pickable::IGNORE,
                     ));
@@ -229,18 +225,8 @@ fn update_preview(demo: Res<Demo>, mut bars: Query<(&mut BackgroundColor, &mut U
 
 // ---- scene + script ----
 
-#[derive(Resource)]
-struct ShotTarget(Handle<Image>);
-
-fn scene(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>, mut mats: ResMut<Assets<StandardMaterial>>, mut images: ResMut<Assets<Image>>) {
-    let mut cam = commands.spawn((MainCamera, Camera3d::default(), Transform::from_xyz(-2.0, 1.7, 7.0).looking_at(Vec3::new(1.5, 1.0, 0.0), Vec3::Y)));
-    if arg_value("shot").is_some() {
-        let mut image = Image::new_target_texture(1920, 1080, TextureFormat::Rgba8UnormSrgb, None);
-        image.texture_descriptor.usage |= TextureUsages::COPY_SRC;
-        let handle = images.add(image);
-        cam.insert((RenderTarget::from(handle.clone()), IsDefaultUiCamera));
-        commands.insert_resource(ShotTarget(handle));
-    }
+fn scene(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>, mut mats: ResMut<Assets<StandardMaterial>>) {
+    commands.spawn((MainCamera, Camera3d::default(), Transform::from_xyz(-2.0, 1.7, 7.0).looking_at(Vec3::new(1.5, 1.0, 0.0), Vec3::Y)));
     commands.spawn((Mesh3d(meshes.add(Plane3d::default().mesh().size(60.0, 60.0))), MeshMaterial3d(mats.add(Color::srgb(0.36, 0.33, 0.3)))));
     let crate_mat = mats.add(Color::srgb(0.2, 0.32, 0.28));
     let wall_mat = mats.add(Color::srgb(0.62, 0.55, 0.42));
@@ -271,7 +257,7 @@ fn script(world: &mut World, mut frame: Local<u32>, mut nav: Local<Vec<NavInput>
         *nav = arg_value("nav").map(|s| s.split(',').filter_map(NavInput::parse).collect()).unwrap_or_default();
         nav.reverse();
     }
-    if f >= 6 && f % 2 == 0
+    if f >= 6 && f.is_multiple_of(2)
         && let Some(i) = nav.pop()
     {
         world.resource_mut::<NavQueue>().0.push(i);
@@ -285,8 +271,12 @@ fn script(world: &mut World, mut frame: Local<u32>, mut nav: Local<Vec<NavInput>
     if f == shoot_at
         && let Some(path) = arg_value("shot")
     {
-        let target = world.resource::<ShotTarget>().0.clone();
-        world.spawn(Screenshot::image(target)).observe(save_to_disk(path)).observe(|_: On<ScreenshotCaptured>, mut exit: MessageWriter<AppExit>| {
+        // `--offscreen` (devtools) renders to an image; otherwise capture the window.
+        let shot = match world.get_resource::<engine::devtools::offscreen::OffscreenTarget>() {
+            Some(t) => Screenshot::image(t.0.clone()),
+            None => Screenshot::primary_window(),
+        };
+        world.spawn(shot).observe(save_to_disk(path)).observe(|_: On<ScreenshotCaptured>, mut exit: MessageWriter<AppExit>| {
             exit.write(AppExit::Success);
         });
     }

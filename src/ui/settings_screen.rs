@@ -235,7 +235,12 @@ pub fn describe(def: &FieldDef, value: f32) -> (String, String, String) {
         }
         FieldKind::Swatches { colors } => format!("{} colours. A / D to pick.", colors.len()),
     };
-    let body = if def.hint.is_empty() { format!("Currently {}.", format_value(&def.kind, value)) } else { def.hint.to_string() };
+    let body = match (&def.kind, def.hint.is_empty()) {
+        (_, false) => def.hint.to_string(),
+        // "#3" says nothing; the swatch row already shows the colour.
+        (FieldKind::Swatches { .. }, true) => String::new(),
+        (_, true) => format!("Currently {}.", format_value(&def.kind, value)),
+    };
     (def.label.to_uppercase(), body, detail)
 }
 
@@ -322,8 +327,7 @@ mod tests {
 
     #[test]
     fn controls_tab_appears_for_bindings() {
-        let mut reg = SettingsRegistry::default();
-        reg.tabs = vec!["Video", "Audio"];
+        let mut reg = SettingsRegistry { tabs: vec!["Video", "Audio"], ..Default::default() };
         assert_eq!(settings_tabs(Some(&reg), None), ["Video", "Audio"]);
         let b = Bindings(vec![("Move", "W A S D")]);
         assert_eq!(settings_tabs(Some(&reg), Some(&b)), ["Video", "Audio", "Controls"]);
