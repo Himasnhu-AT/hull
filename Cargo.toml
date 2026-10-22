@@ -1,0 +1,42 @@
+[package]
+name = "engine"
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+description = "Reusable game shell on Bevy: app bootstrap, settings, menus, pause, UI kit, rendering presets, audio, input, devtools."
+
+[dependencies]
+bevy = { version = "=0.19.1", features = ["jpeg"] }
+avian3d = { version = "=0.7.0", optional = true }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+directories = "6"
+rand = "0.9"
+# devtools: test control port (TCP + MCP), offscreen rendering, perf stats.
+ashlar-control = { path = "/Users/himanshu/codes/synthai/ashlar/crates/control", optional = true }
+ashlar-command = { path = "/Users/himanshu/codes/synthai/ashlar/crates/command", optional = true }
+ashlar-mcp = { path = "/Users/himanshu/codes/synthai/ashlar/crates/mcp", optional = true }
+sysinfo = { version = "0.38", default-features = false, features = ["system"], optional = true }
+# trace: crash / hang / frame-time reporting (no-op unless an endpoint is configured).
+ashlar-trace = { path = "/Users/himanshu/codes/synthai/ashlar/crates/trace", features = ["sysinfo"], optional = true }
+
+[features]
+default = ["physics", "devtools", "trace"]
+# avian3d: physics time is paused with the game; re-exported as `engine::avian3d`.
+physics = ["dep:avian3d"]
+# First-person controller (kinematic collide-and-slide + mouse look). Needs physics.
+fps = ["physics"]
+# Control port + MCP, offscreen capture, perf overlay. Ship builds turn this off.
+devtools = ["dep:ashlar-control", "dep:ashlar-command", "dep:ashlar-mcp", "dep:sysinfo"]
+trace = ["dep:ashlar-trace"]
+
+[dev-dependencies]
+ashlar-control = { path = "/Users/himanshu/codes/synthai/ashlar/crates/control" }
+
+[profile.dev]
+opt-level = 1
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+opt-level = 3
+debug = false
