@@ -88,11 +88,14 @@ fn drive_the_probe() {
         assert!(ids.contains(&id), "{id} missing from {ids:?}");
     }
 
-    // Boot → MainMenu by itself; engine.start → InGame.
-    let s = wait_for(&mut c, "engine.state", 10.0, |s| s["state"] == "MainMenu");
-    assert_eq!(s["state"], "MainMenu", "{s}");
+    // Headless runs skip the menu; engine.menu / engine.start move between the two.
+    let s = wait_for(&mut c, "engine.state", 10.0, |s| s["state"] == "InGame");
+    assert_eq!(s["state"], "InGame", "{s}");
     assert_eq!(s["headless"], true);
     assert_eq!(s["seed"], 7);
+    exec(&mut c, "engine.menu", json!({}));
+    let s = wait_for(&mut c, "engine.state", 10.0, |s| s["state"] == "MainMenu");
+    assert_eq!(s["state"], "MainMenu", "{s}");
     exec(&mut c, "engine.start", json!({}));
     let s = wait_for(&mut c, "engine.state", 10.0, |s| s["state"] == "InGame");
     assert_eq!(s["state"], "InGame", "{s}");

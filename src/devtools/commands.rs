@@ -33,7 +33,7 @@ use bevy::window::PrimaryWindow;
 use serde_json::{Value, json};
 
 use super::control::{AddControlCommand, ControlDrain, PendingReplies, ReplyId, params};
-use crate::cli::arg_value;
+use crate::cli::GameSeed;
 use crate::flow::{AppState, Headless};
 use crate::paths::DataDir;
 use crate::pause::{PauseCtl, Paused};
@@ -227,7 +227,7 @@ fn engine_state(world: &mut World, _: Value) -> Result<Value, String> {
         "screens": screens.map(|s| s.stack.clone()),
         "tab": screens.map(|s| s.tab),
         "headless": headless(world),
-        "seed": arg_value("seed").and_then(|s| s.parse::<u64>().ok()),
+        "seed": world.get_resource::<GameSeed>().map(|s| s.0),
     }))
 }
 
