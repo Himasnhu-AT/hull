@@ -22,7 +22,7 @@ use ashlar_trace::{Event, Gauge, Tracer};
 use bevy::prelude::*;
 
 use crate::app::GameInfo;
-use crate::cli::has_flag;
+use crate::cli::dev_flag;
 use crate::flow::{AppState, Headless};
 use crate::paths::DataDir;
 
@@ -149,7 +149,7 @@ impl Plugin for TracePlugin {
             .add_systems(First, begin_turn)
             .add_systems(Last, end_frame)
             .add_systems(OnEnter(AppState::MainMenu), notice_shown.run_if(visuals));
-        if has_flag("crash-test") {
+        if dev_flag("crash-test") {
             app.insert_resource(CrashTest)
                 .add_systems(Update, crash_test.run_if(resource_exists::<CrashTest>));
         }

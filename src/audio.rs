@@ -152,8 +152,8 @@ pub struct EngineAudioPlugin;
 impl Plugin for EngineAudioPlugin {
     fn build(&self, app: &mut App) {
         let headless = app.world().get_resource::<Headless>().is_some_and(|h| h.0);
-        let quiet = crate::cli::has_flag("mute") || (crate::cli::test_driven() && !crate::cli::has_flag("sound"));
-        let cli = crate::cli::arg_value("volume").and_then(|v| v.parse::<f32>().ok()).map(|v| v.clamp(0.0, 1.0));
+        let quiet = crate::cli::dev_flag("mute") || (crate::cli::test_driven() && !crate::cli::dev_flag("sound"));
+        let cli = crate::cli::dev_value("volume").and_then(|v| v.parse::<f32>().ok()).map(|v| v.clamp(0.0, 1.0));
         let muted = headless || quiet;
         app.insert_resource(Volumes { muted, ..default() })
             .insert_resource(VolumeOverride(cli))
