@@ -13,7 +13,7 @@
 //!   handles [`NavBack`] itself), on anything else pops (leaving "settings" also saves).
 //! - Leaving `InGame` clears the stack and unpauses; entering `MainMenu` opens "main";
 //!   leaving `MainMenu` clears the stack.
-//! - Losing window focus during play pauses (never in test-driven runs).
+//! - Losing window focus during play: core's pause plugin sends `ScreenRequest::Push("pause")`.
 //!
 //! A builder reads what it needs from the world first, then spawns through `world.commands()`;
 //! the caller flushes:
@@ -33,7 +33,7 @@
 //! ```
 
 use bevy::prelude::*;
-use bevy::window::WindowFocused;
+use bevy::ecs::system::SystemParam;
 
 use super::menus::{MenuAction, MenuEvent};
 use super::settings_screen::{PendingReset, settings_tabs};
@@ -293,7 +293,6 @@ impl Plugin for ScreensPlugin {
             .add_systems(
                 Update,
                 (
-                    pause_on_focus_loss.run_if(resource_exists::<Messages<WindowFocused>>),
                     screen_logic,
                     note_rebuilds,
                     super::settings_screen::reset_tab,
@@ -320,43 +319,41 @@ fn clear_screens(mut screens: ResMut<Screens>, mut st: ResMut<ScreenState>, mut 
     pause.set(false);
 }
 
-/// Clicking away from the game (alt-tab) pauses a live round. Never in test-driven runs.
-fn pause_on_focus_loss(
-    mut events: MessageReader<WindowFocused>,
-    state: Option<Res<State<AppState>>>,
-    allowed: Res<PauseAllowed>,
-    screens: Res<Screens>,
-    mut out: MessageWriter<ScreenRequest>,
-) {
-    let lost = events.read().any(|e| !e.focused);
-    let in_game = state.is_some_and(|s| *s.get() == AppState::InGame);
-    if lost && in_game && allowed.0 && screens.stack.is_empty() && !crate::cli::test_driven() {
-        out.write(ScreenRequest::Push("pause"));
-    }
+/// Apply requests, Esc and button actions to the stack, then keep pause in sync with it.
+/// Read-only inputs of [`screen_logic`].
+#[derive(SystemParam)]
+struct LogicIn<'w, 's> {
+    registry: Res<'w, ScreenRegistry>,
+    sticky: Res<'w, StickyScreens>,
+    settings_reg: Res<'w, SettingsRegistry>,
+    bindings: Option<Res<'w, Bindings>>,
+    state: Option<Res<'w, State<AppState>>>,
+    allowed: Res<'w, PauseAllowed>,
+    focus: Res<'w, Focus>,
+    focusables: Query<'w, 's, &'static Focusable>,
 }
 
-/// Apply requests, Esc and button actions to the stack, then keep pause in sync with it.
+/// Outputs of [`screen_logic`].
+#[derive(SystemParam)]
+struct LogicOut<'w> {
+    next: Option<ResMut<'w, NextState<AppState>>>,
+    pending_reset: ResMut<'w, PendingReset>,
+    events: MessageWriter<'w, MenuEvent>,
+    save: MessageWriter<'w, SaveSettings>,
+    exit: MessageWriter<'w, AppExit>,
+}
+
 fn screen_logic(
     mut requests: MessageReader<ScreenRequest>,
     mut backs: MessageReader<NavBack>,
     mut actions: MessageReader<UiActivated>,
     mut screens: ResMut<Screens>,
     mut st: ResMut<ScreenState>,
-    registry: Res<ScreenRegistry>,
-    sticky: Res<StickyScreens>,
-    settings_reg: Res<SettingsRegistry>,
-    bindings: Option<Res<Bindings>>,
-    state: Option<Res<State<AppState>>>,
-    next: Option<ResMut<NextState<AppState>>>,
-    allowed: Res<PauseAllowed>,
-    focus: Res<Focus>,
-    focusables: Query<&Focusable>,
-    mut pending_reset: ResMut<PendingReset>,
+    input: LogicIn,
+    mut out: LogicOut,
     mut pause: PauseCtl,
-    mut events: MessageWriter<MenuEvent>,
-    mut save: MessageWriter<SaveSettings>,
-    mut exit: MessageWriter<AppExit>,
 ) {
+    let LogicIn { registry, sticky, settings_reg, bindings, state, allowed, focus, focusables } = input;
     let cur = state.as_ref().map(|s| *s.get());
     let known = |id: &str| registry.get(id).is_some();
     let ctx = Ctx {
@@ -387,24 +384,23 @@ fn screen_logic(
         st.memory.push((before[depth], order));
     }
 
-    let mut next = next;
     for f in fx {
         match f {
             Fx::Goto(s) => {
-                if let Some(n) = next.as_mut() {
+                if let Some(n) = out.next.as_mut() {
                     n.set(s);
                 }
             }
             Fx::Exit => {
-                exit.write(AppExit::Success);
+                out.exit.write(AppExit::Success);
             }
             Fx::Save => {
-                save.write(SaveSettings);
+                out.save.write(SaveSettings);
             }
             Fx::Event(id) => {
-                events.write(MenuEvent(id));
+                out.events.write(MenuEvent(id));
             }
-            Fx::ResetTab(i) => pending_reset.0 = Some(i),
+            Fx::ResetTab(i) => out.pending_reset.0 = Some(i),
         }
     }
 
@@ -412,7 +408,7 @@ fn screen_logic(
     if want_pause != st.had_pause {
         st.had_pause = want_pause;
         pause.set(want_pause);
-        events.write(MenuEvent(if want_pause { "pause" } else { "resume" }));
+        out.events.write(MenuEvent(if want_pause { "pause" } else { "resume" }));
     }
 }
 

@@ -1,13 +1,14 @@
 //! UI kit gallery: the engine's main menu, settings, pause menu, a game-registered setup screen,
-//! side panels and toasts, on a bare `App` (no core `app()` needed).
+//! side panels and toasts, on the real `engine::app_with` (data in the temp dir).
 //!
 //! ```text
 //! cargo run --example ui_gallery                                   # interactive window
 //! cargo run --example ui_gallery -- --shot /tmp/s.png --screen settings --tab 2 --nav down,down
-//! cargo run --example ui_gallery -- --shot /tmp/p.png --state game --screen pause
+//! cargo run --example ui_gallery -- --shot /tmp/p.png --play --screen pause
 //! ```
 //! `--shot <png>` renders offscreen (hidden window, camera → 1920×1080 image), saves after
-//! `--frames` (default 45) and exits. `--toast` posts two toasts. `--accent r,g,b` re-brands.
+//! `--frames` (default 45) and exits. `--toast` posts two toasts, `--fps` shows the counter,
+//! `--accent r,g,b` re-brands. Add `--offscreen` for test-driven behaviour (muted, no mouse grab).
 
 use bevy::camera::RenderTarget;
 use bevy::prelude::*;
@@ -15,13 +16,12 @@ use bevy::render::render_resource::{TextureFormat, TextureUsages};
 use bevy::render::view::window::screenshot::{Screenshot, ScreenshotCaptured, save_to_disk};
 use bevy::ui::IsDefaultUiCamera;
 
-use engine::app::GameInfo;
+use engine::app::{EngineOptions, GameInfo, app_with};
 use engine::cli::{arg_value, has_flag};
-use engine::flow::{AppState, Headless, PauseAllowed};
-use engine::gfx::QualityPreset;
+use engine::flow::AppState;
+use engine::gfx::MainCamera;
 use engine::input::Bindings;
-use engine::pause::Paused;
-use engine::settings::{CoreSettings, FieldDef, FieldKind, GraphicsQuality, RegisterSettings, WindowModeSetting};
+use engine::settings::{CoreSettings, FieldDef, FieldKind, RegisterSettings};
 use engine::ui::UiKitPlugin;
 use engine::ui::menus::{MenuAction, MenuConfig, MenuEvent};
 use engine::ui::screens::{RegisterScreen, ScreenRegistry, ScreenRequest};
@@ -60,26 +60,12 @@ const MAPS: [(&str, &str); 3] = [
 ];
 const CROSSHAIRS: [[f32; 3]; 6] =
     [[0.4, 1.0, 0.6], [0.35, 0.9, 1.0], [1.0, 1.0, 1.0], [1.0, 0.92, 0.3], [1.0, 0.4, 0.95], [1.0, 0.3, 0.3]];
-const QUALITIES: [GraphicsQuality; 4] = [GraphicsQuality::Low, GraphicsQuality::Medium, GraphicsQuality::High, GraphicsQuality::Ultra];
-const MODES: [WindowModeSetting; 3] = [WindowModeSetting::Windowed, WindowModeSetting::Borderless, WindowModeSetting::Fullscreen];
 
 fn b(v: bool) -> f32 {
     if v { 1.0 } else { 0.0 }
 }
-fn pct(v: f32) -> String {
-    format!("{:.0}%", v * 100.0)
-}
 fn two(v: f32) -> String {
     format!("{v:.2}")
-}
-fn deg(v: f32) -> String {
-    format!("{v:.0}\u{b0}")
-}
-fn cs(w: &World) -> &CoreSettings {
-    w.resource::<CoreSettings>()
-}
-fn cs_mut(w: &mut World) -> Mut<'_, CoreSettings> {
-    w.resource_mut::<CoreSettings>()
 }
 fn demo(w: &World) -> &Demo {
     w.resource::<Demo>()
@@ -125,60 +111,6 @@ fn register_fields(app: &mut App) {
             |w| demo(w).crosshair_size,
             |w, v| demo_mut(w).crosshair_size = v,
         ),
-        row(
-            "sensitivity",
-            "Controls",
-            "Mouse sensitivity",
-            "",
-            FieldKind::Slider { min: 0.1, max: 4.0, step: 0.05, format: two },
-            |w| cs(w).sensitivity,
-            |w, v| cs_mut(w).sensitivity = v,
-        ),
-        row("invert_y", "Controls", "Invert look", "Mouse up looks down.", FieldKind::Toggle, |w| b(cs(w).invert_y), |w, v| cs_mut(w).invert_y = v > 0.5),
-        row(
-            "quality",
-            "Video",
-            "Graphics quality",
-            "Ambient occlusion, anti-aliasing, shadows, bloom.",
-            FieldKind::Choice { options: vec!["Low", "Medium", "High", "Ultra"] },
-            |w| QUALITIES.iter().position(|q| *q == cs(w).quality).unwrap_or(2) as f32,
-            |w, v| cs_mut(w).quality = QUALITIES[v as usize],
-        ),
-        row(
-            "fov",
-            "Video",
-            "Field of view",
-            "Horizontal-ish; wider shows more, smaller targets.",
-            FieldKind::Slider { min: 60.0, max: 110.0, step: 1.0, format: deg },
-            |w| cs(w).fov_deg,
-            |w, v| cs_mut(w).fov_deg = v,
-        ),
-        row(
-            "window_mode",
-            "Video",
-            "Display mode",
-            "",
-            FieldKind::Choice { options: vec!["Windowed", "Borderless", "Fullscreen"] },
-            |w| MODES.iter().position(|m| *m == cs(w).window_mode).unwrap_or(0) as f32,
-            |w, v| cs_mut(w).window_mode = MODES[v as usize],
-        ),
-        row("vsync", "Video", "V-Sync", "Off for lowest latency; may tear.", FieldKind::Toggle, |w| b(cs(w).vsync), |w, v| cs_mut(w).vsync = v > 0.5),
-        row("show_fps", "Video", "FPS counter", "Small counter in the top-right corner.", FieldKind::Toggle, |w| b(cs(w).show_fps), |w, v| {
-            cs_mut(w).show_fps = v > 0.5
-        }),
-        row(
-            "ui_scale",
-            "Video",
-            "Interface size",
-            "On top of the automatic size for your window.",
-            FieldKind::Slider { min: 0.75, max: 1.5, step: 0.05, format: pct },
-            |w| cs(w).ui_scale,
-            |w, v| cs_mut(w).ui_scale = v,
-        ),
-        row("master_volume", "Audio", "Master volume", "", vol(), |w| cs(w).master_volume, |w, v| cs_mut(w).master_volume = v),
-        row("sfx_volume", "Audio", "Effects", "Gunfire, footsteps, hits.", vol(), |w| cs(w).sfx_volume, |w, v| cs_mut(w).sfx_volume = v),
-        row("music_volume", "Audio", "Music", "", vol(), |w| cs(w).music_volume, |w, v| cs_mut(w).music_volume = v),
-        row("ambience_volume", "Audio", "Ambience", "Background bed.", vol(), |w| cs(w).ambience_volume, |w, v| cs_mut(w).ambience_volume = v),
     ];
     for f in fields {
         app.register_setting(f);
@@ -186,9 +118,6 @@ fn register_fields(app: &mut App) {
     app.set_settings_tabs(&["Gameplay", "Controls", "Video", "Audio"]);
 }
 
-fn vol() -> FieldKind {
-    FieldKind::Slider { min: 0.0, max: 1.0, step: 0.05, format: pct }
-}
 
 // ---- game screens / panels ----
 
@@ -304,7 +233,7 @@ fn update_preview(demo: Res<Demo>, mut bars: Query<(&mut BackgroundColor, &mut U
 struct ShotTarget(Handle<Image>);
 
 fn scene(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>, mut mats: ResMut<Assets<StandardMaterial>>, mut images: ResMut<Assets<Image>>) {
-    let mut cam = commands.spawn((Camera3d::default(), Transform::from_xyz(-2.0, 1.7, 7.0).looking_at(Vec3::new(1.5, 1.0, 0.0), Vec3::Y)));
+    let mut cam = commands.spawn((MainCamera, Camera3d::default(), Transform::from_xyz(-2.0, 1.7, 7.0).looking_at(Vec3::new(1.5, 1.0, 0.0), Vec3::Y)));
     if arg_value("shot").is_some() {
         let mut image = Image::new_target_texture(1920, 1080, TextureFormat::Rgba8UnormSrgb, None);
         image.texture_descriptor.usage |= TextureUsages::COPY_SRC;
@@ -319,7 +248,7 @@ fn scene(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>, mut mats: Res
     commands.spawn((Mesh3d(meshes.add(Cuboid::new(14.0, 0.9, 0.8))), MeshMaterial3d(wall_mat.clone()), Transform::from_xyz(5.0, 0.45, -3.0)));
     commands.spawn((Mesh3d(meshes.add(Cuboid::new(30.0, 3.0, 0.6))), MeshMaterial3d(wall_mat), Transform::from_xyz(2.0, 1.5, -12.0)));
     commands.spawn((
-        DirectionalLight { illuminance: 9000.0, shadows_enabled: true, ..default() },
+        DirectionalLight { illuminance: 9000.0, shadow_maps_enabled: true, ..default() },
         Transform::from_xyz(4.0, 8.0, 3.0).looking_at(Vec3::ZERO, Vec3::Y),
     ));
 }
@@ -375,33 +304,17 @@ fn on_menu_events(mut events: MessageReader<MenuEvent>, mut next: ResMut<NextSta
 }
 
 fn main() {
-    let shot = arg_value("shot").is_some();
-    let mut app = App::new();
-    app.add_plugins(DefaultPlugins.set(WindowPlugin {
-        primary_window: Some(Window { title: "engine · UI gallery".into(), resolution: (1600u32, 900u32).into(), visible: !shot, ..default() }),
-        ..default()
-    }));
     let accent = arg_value("accent").and_then(|s| {
         let v: Vec<f32> = s.split(',').filter_map(|x| x.parse().ok()).collect();
         (v.len() == 3).then(|| Color::srgb(v[0], v[1], v[2]))
     });
-    app.insert_resource(GameInfo::new("ui_gallery", "Shroud").tagline("They learn from you."))
-        .insert_resource(Headless(false))
-        .insert_resource(CoreSettings { show_fps: true, ..default() })
-        .insert_resource(Demo::default())
-        .insert_resource(QualityPreset::default())
+    // Keep the gallery's settings.json out of a real game's data folder.
+    let mut options = EngineOptions::from_args();
+    options.data_dir = Some(std::env::temp_dir().join("engine-ui-gallery"));
+    let mut app = app_with(GameInfo::new("ui_gallery", "Shroud").tagline("They learn from you."), options);
+    app.insert_resource(Demo::default())
         .insert_resource(ClearColor(Color::srgb(0.42, 0.47, 0.55)))
         .insert_resource(Theme::default().with_accent(accent.unwrap_or(Theme::default().accent)))
-        .insert_resource(Bindings(vec![
-            ("Move", "W A S D"),
-            ("Look", "Mouse"),
-            ("Fire", "Left mouse"),
-            ("Reload", "R"),
-            ("Jump", "Space"),
-            ("Crouch", "Ctrl / C"),
-            ("Sprint", "Shift"),
-            ("Pause", "Esc"),
-        ]))
         .insert_resource(MenuConfig {
             eyebrow: "Adaptive squad shooter",
             main_items: vec![("Play", MenuAction::Open("setup")), ("Settings", MenuAction::Settings), ("Quit", MenuAction::Quit)],
@@ -415,13 +328,18 @@ fn main() {
             pause_note: "Restarting or leaving abandons this match; the squad does not train on it.",
             main_panel: Some(stats_panel),
             pause_header: Some(pause_score),
-        })
-        .init_resource::<Paused>()
-        .init_resource::<PauseAllowed>()
-        .insert_state(if arg_value("state").as_deref() == Some("game") { AppState::InGame } else { AppState::MainMenu });
+        });
+    if has_flag("fps") {
+        app.world_mut().resource_mut::<CoreSettings>().show_fps = true;
+    }
+    {
+        let mut b = app.world_mut().resource_mut::<Bindings>();
+        for (action, keys) in [("Move", "W A S D"), ("Look", "Mouse"), ("Fire", "Left mouse"), ("Reload", "R"), ("Jump", "Space"), ("Crouch", "Ctrl / C"), ("Sprint", "Shift")] {
+            b.set(action, keys);
+        }
+    }
     register_fields(&mut app);
-    app.add_plugins(UiKitPlugin)
-        .register_screen("setup", build_setup)
+    app.register_screen("setup", build_setup)
         .settings_panel("Gameplay", crosshair_preview)
         .settings_defaults::<Demo>()
         .add_systems(Startup, scene)
