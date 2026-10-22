@@ -43,6 +43,11 @@ pub struct QualityPreset {
     pub shadow_map_size: [usize; 4],
     /// Bloom strength when enabled.
     pub bloom_intensity: f32,
+    /// GPU occlusion culling on the main camera (adds a depth prepass when the camera has none;
+    /// see `render_budget`). Only used where the GPU supports it.
+    pub occlusion_culling: [bool; 4],
+    /// Multiplier on `render_budget::SceneryRanges` (scenery detail and streaming distances).
+    pub detail_scale: [f32; 4],
 }
 
 impl Default for QualityPreset {
@@ -53,6 +58,8 @@ impl Default for QualityPreset {
             taa: [false, true, true, true],
             shadow_map_size: [1024, 2048, 2048, 4096],
             bloom_intensity: 0.12,
+            occlusion_culling: [true, true, true, true],
+            detail_scale: [0.6, 0.8, 1.0, 1.5],
         }
     }
 }
