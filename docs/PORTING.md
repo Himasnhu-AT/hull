@@ -74,3 +74,123 @@ fails if any `ashlar-*` crate (control, command, mcp, docs, trace) is still in t
 and copies only the binary and `assets/` into `dist/<bin>/` (no docs, scripts, tests,
 examples). Check without a release build: `cargo tree -p <pkg> --no-default-features
 --features "<ship features>" -e normal | grep ashlar` must print nothing.
+
+## Render budget
+
+Every game on the engine gets this with **zero code**: `EnginePlugin` adds
+`render_budget::RenderBudgetPlugin`, and untagged meshes are classified automatically.
+Module docs: `src/render_budget/{mod,detail,stream,pacing,stats}.rs`.
+
+What runs by default:
+- **Classification.** Explicit tags win: `Actor` (player, enemies, pickups, anything that moves)
+  or `Scenery` (static map pieces) on a mesh or any ancestor. Untagged meshes: under a camera,
+  skinned/morphed, or under a non-static avian `RigidBody` → actor at once; otherwise watched for
+  `RenderBudget::settle_frames` (60) frames and made scenery if they didn't move, an actor as soon
+  as they move. Auto scenery that moves later goes back to an actor (full detail, shadows back).
+  Actors are never changed: full detail, always cast shadows.
+- **Distance detail** for scenery (dithered `VisibilityRange` crossfades, no popping): pieces whose
+  largest side is < `small_size` (1.5 m) fade out beyond `small_props` (60 m) and stop casting
+  shadows beyond `shadow` (50 m); bigger pieces switch at `far` (80 m) to a far twin (the
+  game's `FarLook`, else the same mesh with a flat untextured material tinted with the texture's
+  average colour, no shadows) and vanish beyond `view` (170 m). Distances are `SceneryRanges`
+  (metres at High) × `QualityPreset::detail_scale` (Low 0.6, Medium 0.8, High 1.0, Ultra 1.5).
+  Set `view` to where your fog is opaque so the edge is never seen. `KeepDetail` opts a piece out.
+- **Frame pacing.** Menus, pause and boot update reactively (30 Hz when focused, 8 Hz unfocused;
+  30 Hz in control-port/offscreen runs) so the GPU idles; unpaused gameplay is continuous.
+- **CPU frustum culling** (Bevy, always on) is counted; `RenderStats` is filled every frame and
+  recorded into `Metrics` as `render.<field>` in dev builds (plus `render.cpu_us`, the budget
+  systems' own cost). Control commands: `render.stats`, `render.budget {occlusion, detail,
+  shadow_trim, streaming, stream_spawned, idle_skip, detailed_stats}` (toggle at runtime).
+
+Opt-in (measured below):
+- `RenderBudget::occlusion_culling = true`: GPU occlusion culling (+ depth prepass) on the main
+  camera, where the GPU supports it (`RenderStats::occlusion_supported`). Slower on every scene
+  measured here; try it only for heavy indoor overdraw and measure.
+- `RenderBudget::idle_skip = true`: frames where nothing visible changed (no mesh/camera/light/UI
+  change, no removal, no asset change, no resize, no `RequestRedraw`, no pending screenshot) are
+  simulated but not drawn; at least one frame in 30 is drawn. Needs pipelined rendering (the
+  desktop default). Shaders animated by time, custom material assets and gizmos must send
+  `RequestRedraw` while they animate. `RenderStats::redraw_reason` says why a frame was drawn.
+- **Streaming** (`SceneryStream`): for big maps, register scenery as data:
+  `stream.add(pos, move |c: &mut Commands| c.spawn((Mesh3d(m.clone()), MeshMaterial3d(mat.clone()), tf)).id())`.
+  Cells (sized from the scene's extent unless `cell_size` is set) within `view + buffer` of the
+  camera are spawned, nearest first, 64 per frame; cells beyond `+ hysteresis` are despawned.
+  `RenderBudget::stream_spawned_scenery` instead hides spawned `Scenery` roots by cell (no gain
+  measured over distance detail, so off).
+- **COLLIDERS ARE NEVER STREAMED.** Streaming closures spawn visuals only; spawn colliders once,
+  separately (a collider on a streamed visual logs a warning). Physics, AI raycasts and
+  navigation always see the whole map. Detail tiers and hide mode only touch visibility.
+
+Turn things off with the resource, e.g. `app.world_mut().resource_mut::<RenderBudget>().scenery_detail = false;`
+(or `auto_classify`, `shadow_trim`, `streaming`), `FramePacing { enabled: false, .. }`.
+
+### Measurements
+
+`examples/render_budget.rs`: 300×300 m city (100 ground tiles, ~170 buildings and ~120 yard
+walls that occlude, 4 000 props, 20 walking actors), driven over the control port with
+`--offscreen --uncapped` (vsync off), High quality, 1920×1080, Apple M5 Pro. Each row: 7 s at a
+fixed camera pose (`walk` = camera walking a loop), optimisations toggled at runtime.
+GPU ms = process GPU time per frame. "drawn" = meshes the camera drew / meshes in the world.
+
+| pose | config | fps | p50 ms | p95 ms | GPU ms | drawn |
+|---|---|---|---|---|---|---|
+| street | all off | 315 | 3.04 | 4.23 | 2.73 | 3484 / 4644 |
+| street | occlusion only | 303 | 3.29 | 3.61 | 3.02 | 3484 / 4644 |
+| street | detail only | 337 | 2.94 | 3.36 | 2.82 | 351 / 4644 |
+| street | streaming only | 333 | 2.97 | 3.39 | 2.84 | 2638 / 3732 |
+| street | **default** (detail + trim + streaming) | 332 | 2.97 | 3.38 | 2.82 | 351 / 3732 |
+| overview | all off | 344 | 2.86 | 3.28 | 2.54 | 4334 / 4644 |
+| overview | occlusion only | 314 | 3.18 | 3.44 | 2.73 | 4334 / 4644 |
+| overview | **default** | 345 | 2.87 | 3.27 | 2.45 | 160 / 2254 |
+| yard | all off | 332 | 2.95 | 3.43 | 2.77 | 3442 / 4644 |
+| yard | occlusion only | 301 | 3.29 | 3.70 | 2.96 | 3442 / 4644 |
+| yard | **default** | 342 | 2.91 | 3.25 | 2.72 | 262 / 2765 |
+| walk | all off | 336 | 2.94 | 3.39 | 2.76 | 1344 / 4644 |
+| walk | occlusion only | 287 | 3.34 | 4.26 | 2.91 | 596 / 4644 |
+| walk | **default** | 340 | 2.92 | 3.18 | 2.64 | 189 / 4021 |
+
+Same city with 40 000 props (`--props 40000`):
+
+| pose | config | fps | p50 ms | p95 ms | GPU ms | drawn | entities |
+|---|---|---|---|---|---|---|---|
+| street | all off | 259 | 3.74 | 4.97 | 3.76 | 32238 / 40644 | 41 469 |
+| street | **default** | 323 | 3.07 | 3.42 | 2.95 | 1736 / 32172 | 32 997 |
+| overview | all off | 268 | 3.64 | 4.54 | 3.51 | 40231 / 40644 | 41 469 |
+| overview | **default** | 350 | 2.84 | 3.07 | 2.58 | 480 / 19315 | 20 140 |
+| walk | all off | 279 | 3.51 | 4.15 | 3.14 | 9570 / 40644 | 41 469 |
+| walk | **default** | 308 | 3.20 | 3.63 | 2.89 | 1620 / 35605 | 36 430 |
+
+Other results:
+- **Pause / menus** (reactive pacing): GPU busy 85–92 % → 21–32 %, steady 30 Hz.
+- **Idle skip** (static street view, no actors): GPU busy 79 % → 2 %; 342 of ~350 frames skipped
+  over 6 s; the loop runs at ~55–60 Hz while skipping. Screenshots taken while skipping are correct.
+- **Zero config**: the same city with no `Actor`/`Scenery` tags at all (`--stream none
+  --untagged`) gives identical counts (drawn, far, culled) and frame times as the tagged one.
+- **Cost**: the budget's own systems take ~30 µs/frame at 4.6 k meshes and ~200–320 µs at 40 k
+  (mostly the dev-only per-mesh counters; `RenderBudget::detailed_stats` is off in ship builds).
+- The empty city still costs ~2.5–3.5 ms GPU at High: full-screen passes (SSAO, TAA, bloom, 3
+  shadow cascades at 1080p) dominate, so culling shows most where geometry is heavy (40 k
+  props: up to −0.9 ms GPU and −1.5 ms p95) and on weaker GPUs.
+
+Tried and dropped (or left opt-in):
+- GPU occlusion culling by default: 3–15 % slower in every pose (walk p95 3.39 → 4.26 ms);
+  the depth prepass + two-phase culling cost more than the draws it saves with GPU-driven
+  batching. Opt-in.
+- Trimming shadows of big scenery at 50 m: a building's shadow vanishing at mid range is
+  visible (screenshot check). Only small props lose shadows; big pieces keep them until their
+  far twin takes over.
+- Hide-mode streaming of spawned scenery: no measurable gain over distance detail (which already
+  stops drawing it); kept as an option.
+- View-direction bias for streaming: an FPS turns 180° in ~0.1 s and frustum culling already
+  skips what's behind; not worth the pop-in risk.
+
+### Shroud
+Nothing is required. Recommended:
+- Tag the player and enemy roots `Actor` (otherwise an enemy standing still for its first second
+  is briefly treated as scenery until it moves), and the map root `Scenery`.
+- Shroud's arenas are small: at High nothing is far enough to change. On Low (×0.6) props fade
+  beyond 36 m and big blocks go flat beyond 48 m. If that's too aggressive for an arena, raise
+  `SceneryRanges` or give hero props `KeepDetail`.
+- Set `SceneryRanges::view` to the fog's end distance.
+- Weapon viewmodels under the camera, pickups that bob, doors that open are actors automatically.
+- Don't use `SceneryStream` for arena maps (they're small; colliders stay as they are).

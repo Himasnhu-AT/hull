@@ -58,7 +58,7 @@ pub mod prelude {
     pub use crate::input::{Bindings, CursorCaptured, LookInput};
     pub use crate::pause::{PauseCtl, Paused, not_paused};
     pub use crate::paths::{AssetsDir, DataDir};
-    pub use crate::render_budget::{Actor, RenderStats, Scenery};
+    pub use crate::render_budget::{Actor, FarLook, KeepDetail, RenderBudget, RenderStats, Scenery, SceneryRanges, SceneryStream};
     pub use crate::settings::{CoreSettings, FieldDef, FieldKind, GameSettings, GraphicsQuality, RegisterSettings, SettingsPlugin, WindowModeSetting};
     pub use crate::ui::theme::Theme;
     #[cfg(feature = "fps")]
