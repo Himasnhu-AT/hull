@@ -181,7 +181,8 @@ mod devtools {
         app.perf_span(PostUpdate, RenderBudgetSystems::Stream, "budget.stream")
             .perf_span(PostUpdate, RenderBudgetSystems::Detail, "budget.detail")
             .perf_span(PostUpdate, RenderBudgetSystems::Stats, "budget.stats");
-        app.add_systems(Last, record_metrics.after(PacingSystems))
+        // Headless runs have no renderer: nothing to report (and a game may record its own).
+        app.add_systems(Last, record_metrics.after(PacingSystems).run_if(crate::flow::has_visuals))
             .add_control_command("render.stats", "Render budget counters, switches and distances", params(&[]), render_stats)
             .add_control_command(
                 "render.budget",
