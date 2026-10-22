@@ -1,6 +1,8 @@
 //! Command-line helpers shared by engine and games. Owner: core stream.
 //! Engine flags: `--headless`, `--offscreen`, `--control <port>`, `--play` (skip the menu),
-//! `--quit-after <s>`, `--seed <n>`, `--mute`, `--volume <0..1>`.
+//! `--quit-after <s>`, `--seed <n>`, `--mute`, `--sound`, `--volume <0..1>`.
+
+use bevy::prelude::*;
 
 /// Value of `--<name> <value>` or `--<name>=<value>`.
 pub fn arg_value(name: &str) -> Option<String> {
@@ -27,4 +29,14 @@ pub fn has_flag(name: &str) -> bool {
 /// change window mode, never play sound unless `--sound`.
 pub fn test_driven() -> bool {
     has_flag("control") || has_flag("offscreen") || has_flag("mcp")
+}
+
+/// RNG seed for the run: `--seed <n>` for deterministic tests, otherwise random.
+#[derive(Resource, Clone, Copy, Debug, PartialEq, Eq)]
+pub struct GameSeed(pub u64);
+
+impl GameSeed {
+    pub fn from_args() -> Self {
+        GameSeed(arg_value("seed").and_then(|s| s.parse().ok()).unwrap_or_else(rand::random))
+    }
 }
