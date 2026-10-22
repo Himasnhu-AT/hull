@@ -50,5 +50,9 @@ name = "devtools_probe"
 required-features = ["devtools"]
 
 [[example]]
+name = "ui_gallery"
+required-features = ["devtools"]
+
+[[example]]
 name = "metrics_demo"
 required-features = ["devtools"]
