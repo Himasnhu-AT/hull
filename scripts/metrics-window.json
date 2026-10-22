@@ -1,0 +1,9 @@
+[
+  {"sleep": 9},
+  {"shot": "game"},
+  {"shot": "metrics", "cmd": "metrics.screenshot"},
+  {"cmd": "metrics.window", "params": {"scroll": 400}},
+  {"sleep": 0.6},
+  {"shot": "metrics-scrolled", "cmd": "metrics.screenshot"},
+  {"cmd": "metrics.window", "params": {"scroll": 0}}
+]

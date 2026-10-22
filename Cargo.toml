@@ -48,3 +48,7 @@ debug = false
 [[example]]
 name = "devtools_probe"
 required-features = ["devtools"]
+
+[[example]]
+name = "metrics_demo"
+required-features = ["devtools"]

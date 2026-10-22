@@ -5,19 +5,24 @@
 //!
 //! Engine commands: `engine.state`, `engine.start` (→ InGame), `engine.menu`, `engine.pause`,
 //! `engine.resume`, `engine.quit`, `time.scale`, `time.step`, `screenshot`, `perf.stats`,
-//! `perf.overlay`, `perf.report`, `ui.screen {screen, tab}`, `ui.nav {input}`,
+//! `perf.overlay`, `perf.report`, `metrics.dump`, `metrics.sessions`, `metrics.label`,
+//! `metrics.window`, `metrics.screenshot`, `ui.screen {screen, tab}`, `ui.nav {input}`,
 //! `ui.setting {key, value}`, `settings.get`, `input.key {key, action}`,
 //! `input.mouse {dx, dy, button, action}`.
 //! Games add theirs with [`AddControlCommand::add_control_command`], add overlay rows with
 //! [`DebugLines`] and time their system sets with [`PerfAppExt::perf_span`].
 //!
 //! Flags: `--control <port>` (0 = any free port; prints `control: port=<n> key=<file>`),
-//! `--mcp` (MCP on stdio), `--offscreen`, `--perf` (overlay on at start), `--gpu-passes`.
+//! `--mcp` (MCP on stdio), `--offscreen`, `--perf` (overlay on at start), `--gpu-passes`,
+//! `--metrics-window` / `--no-metrics-window` (the [`metrics_window`], F4).
 //! Env (`<ID>` = `GameInfo.id` uppercased): `<ID>_PERF=off`, `<ID>_PERF_TOP=<n>`.
 
 pub mod commands;
 pub mod control;
 pub mod metrics;
+mod metrics_chart;
+pub mod metrics_history;
+pub mod metrics_window;
 pub mod offscreen;
 pub mod perf;
 mod perf_overlay;
@@ -29,6 +34,8 @@ use bevy::prelude::*;
 
 pub use control::{AddControlCommand, ControlAppExt, ControlRegistry, PendingReplies, ReplyId, params};
 pub use metrics::Metrics;
+pub use metrics_history::{MetricsHistory, SessionSummary};
+pub use metrics_window::{MetricsCompare, MetricsFeatured, MetricsView, MetricsWindowKey};
 pub use perf::{DebugLines, PerfAppExt, PerfOverlay, PerfOverlayKey};
 pub use session_log::SessionLog;
 
