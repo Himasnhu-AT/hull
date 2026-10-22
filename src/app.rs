@@ -43,7 +43,7 @@ impl GameInfo {
 
 /// Build the app: base plugins for this run mode + [`EnginePlugin`]. Add your game and `.run()`.
 pub fn app(info: GameInfo) -> App {
-    let mut app = App::new();
+    let app = App::new();
     let _ = &info;
     todo!("core stream: base plugins (headless/windowed), physics, EnginePlugin");
     #[allow(unreachable_code)]

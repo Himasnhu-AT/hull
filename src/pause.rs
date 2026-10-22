@@ -3,6 +3,8 @@
 //! Games gate their gameplay system sets with [`not_paused`].
 
 use bevy::prelude::*;
+#[cfg(feature = "physics")]
+use avian3d::prelude::PhysicsTime;
 
 #[derive(Resource, Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Paused(pub bool);
