@@ -46,18 +46,20 @@ pub mod fps;
 #[cfg(feature = "trace")]
 pub mod trace;
 
-pub use app::{GameInfo, app};
+pub use app::{EngineOptions, GameInfo, app, app_with};
 
 pub mod prelude {
-    pub use crate::app::{EnginePlugin, GameInfo, app};
+    pub use crate::app::{EngineOptions, EnginePlugin, GameInfo, app, app_with};
     pub use crate::audio::{AudioCategory, SoundLibrary, Volumes};
-    pub use crate::cli::{arg_value, has_flag};
+    pub use crate::cli::{GameSeed, arg_value, has_flag};
     pub use crate::flow::{AppState, Headless, has_visuals, in_game};
     pub use crate::gfx::{MainCamera, QualityPreset};
-    pub use crate::input::{CursorCaptured, LookInput};
+    pub use crate::input::{Bindings, CursorCaptured, LookInput};
     pub use crate::pause::{PauseCtl, Paused, not_paused};
     pub use crate::paths::{AssetsDir, DataDir};
     pub use crate::settings::{CoreSettings, FieldDef, FieldKind, GameSettings, GraphicsQuality, RegisterSettings, SettingsPlugin, WindowModeSetting};
     pub use crate::ui::theme::Theme;
+    #[cfg(feature = "fps")]
+    pub use crate::fps::{FpsController, FpsInput, FpsLook, FpsMotor, FpsPlugin, FpsSet};
     pub use bevy::prelude::*;
 }
