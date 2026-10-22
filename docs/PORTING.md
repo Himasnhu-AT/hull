@@ -41,6 +41,23 @@ What Shroud's port must change:
 8. **Input injection** for tests needs no game commands: `input.key {key, action: tap|down|up}` and `input.mouse {dx, dy, button, action}` send real Bevy input messages. Headless `app()` has no Bevy `InputPlugin`; add `bevy::input::InputPlugin` in headless test runs that inject input (as `examples/devtools_probe.rs` does).
 9. **Tests**: Shroud's `tests/*.rs` parse the same `control:` line and need no change beyond renamed commands (none if the aliases from item 2 are registered). `ui.screen` / `ui.nav` only work in windowed runs (headless has no UI kit).
 
+## Metrics window
+
+Dev builds (feature `devtools`) chart every metric in a second window and keep a history of runs, so a code change can be judged against the runs before it.
+
+- **Window**: `"<title> — metrics"` opens next to the game window in plain dev runs. It never opens in `--headless`, `--offscreen`, `--control` or `--mcp` runs, or with `--no-metrics-window`. `--metrics-window` forces it on. F4 (`MetricsWindowKey`) or `metrics.window {on?, scroll?}` toggles it. Closing it doesn't quit the game; closing the game window quits both. It never takes focus. Clicking it doesn't grab the game's cursor (`input.rs` only counts clicks while the game window has focus). Keys pressed while it has focus still reach the game, because Bevy's input is global.
+- **Layout**: a header (game, commit + `*` if dirty, profile, mode, quality, labels, uptime), big charts for `MetricsFeatured` (default `frame.ms`, `cpu.process_pct`, `gpu.pct`, `mem.footprint_mb`), then every key grouped by prefix with now / sparkline / avg / p95 / max over the last 60 s (scroll with the wheel). At the bottom is the **runs table**: this run plus the last runs' session stats for `MetricsCompare` rows, each with its change vs the previous *comparable* run (same mode, quality, labels; others are marked ≠). Green means better, red worse, dim means within 3 %. Colours follow thresholds: frame ms green < 16.7, amber < 33.3, red above.
+- **Cost**: it redraws at 4 Hz. Between redraws its camera is inactive, so Bevy doesn't touch the window at all, and it presents without vsync. A redraw takes ~0.4–1 ms of main-thread time in a dev build (`perf.metrics_view_ms`, also shown in the header). Measured on an M-series Mac, vsync off: frame p50 5.8 → 6.0–6.3 ms and p95 6.2 → 8.3 ms with it open. Close it (F4) for clean perf numbers.
+- **Engine keys** (from the perf monitor, no extra sampling): `frame.ms` (every frame), `frame.fps/p50_ms/p95_ms/p99_ms/max_ms/hitches`, `cpu.process_pct/machine_pct/main_pct/render_pct/<pool>_pct`, `gpu.pct/renderer_pct/tiler_pct/process_pct/frame_ms/mem_mb/alloc_mb/passes_ms`, `mem.footprint_mb/rss_mb`, `ecs.entities`, `span.<perf_span label>_ms`, `perf.overhead_us`. The render stream adds `render.*` (every `RenderStats` field).
+- **Game keys**: one line, one sample per key per frame (last write wins), behind the game's `dev` feature:
+  ```rust
+  #[cfg(feature = "dev")]
+  app.add_systems(Update, |mut m: ResMut<engine::devtools::Metrics>, q: Query<(), With<Enemy>>| m.record("enemies.alive", q.iter().count() as f64));
+  ```
+  For keys built at runtime use `m.record_dyn(&format!(..), v)`. Optional extras: colour levels with `m.set_threshold("ai.think_ms", 2.0, 4.0)`, run labels with `m.set_label("map", "warehouse")` (or `metrics.label {key, value}`), runs-table rows with `resource_mut::<MetricsCompare>().add("ai.think_ms", "avg")`, and big charts with `MetricsFeatured`. Samples from the first `Metrics.warmup` seconds (default 3) are left out of session stats.
+- **History**: `<data dir>/metrics/sessions.jsonl` gets one JSON line per run on exit: id, game, version, commit, dirty (`git rev-parse --short HEAD` / `git status` of the working dir, probed on a thread at startup), profile, mode, quality, labels, args, and per key `{n, min, avg, p50, p95, max}`. A checkpoint `unfinished-<pid>.json` is rewritten every 30 s, so a killed run is appended with `"ended": "killed"` by the next start. The session log also gets a `metrics.summary` line.
+- **Control commands**: `metrics.dump {prefix?}` (now / last-60 s / session stats per key, run info, view state), `metrics.sessions {n?}` (this run + last n), `metrics.label`, `metrics.window`, `metrics.screenshot {path?}`. With `--offscreen --metrics-window` the view renders into an image that `metrics.screenshot` saves, e.g. `python3 -I scripts/play.py scripts/metrics-window.json --example metrics_demo -- --metrics-window`. Steps can use `{"shot": "name", "cmd": "metrics.screenshot"}`.
+
 ## Ship builds (release)
 
 Debug tooling never ships. The engine's debug features are `devtools` (control port, MCP,
