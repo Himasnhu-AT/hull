@@ -40,3 +40,37 @@ What Shroud's port must change:
 7. **`scripts/play.py`**: Shroud can use the engine's `scripts/play.py` from its repo root with `--package game` (or `--bin shroud`). Its old CLI keeps working (positional steps file, `--headless`, `--onscreen`, `--out`, `--seed`, `--no-build`). It waits for `engine.state` = `InGame`; against a binary without engine commands it falls back to `game.state` = `Playing`, `capture.screenshot` and `game.quit`. If Shroud keeps its own script instead, update its command names (`engine.state`, `screenshot`, `engine.quit`).
 8. **Input injection** for tests needs no game commands: `input.key {key, action: tap|down|up}` and `input.mouse {dx, dy, button, action}` send real Bevy input messages. Headless `app()` has no Bevy `InputPlugin`; add `bevy::input::InputPlugin` in headless test runs that inject input (as `examples/devtools_probe.rs` does).
 9. **Tests**: Shroud's `tests/*.rs` parse the same `control:` line and need no change beyond renamed commands (none if the aliases from item 2 are registered). `ui.screen` / `ui.nav` only work in windowed runs (headless has no UI kit).
+
+## Ship builds (release)
+
+Debug tooling never ships. The engine's debug features are `devtools` (control port, MCP,
+offscreen capture, perf overlay, and the engine CLI flags `--control --mcp --offscreen
+--headless --play --quit-after --seed --mute --sound --volume --crash-test`) and `trace`
+(ashlar-trace crash/perf reporting, which only reports when an endpoint env var is set, so it
+does nothing on a player's machine). Without `devtools`, `cli::dev_flag`/`dev_value` ignore
+the command line, so none of those flags work in a shipped game. `has_flag`/`arg_value`
+stay available for a game's own player-facing flags.
+
+A game wires it like this:
+
+```toml
+[dependencies]
+engine = { path = "../engine", default-features = false, features = ["physics", "fps"] }
+
+[features]
+default = ["dev"]                        # cargo run / cargo test keep every debug tool
+dev = ["engine/devtools", "engine/trace"]
+
+[profile.release]                        # workspace root Cargo.toml
+strip = true
+debug = false
+lto = "thin"
+codegen-units = 1
+```
+
+Package with `scripts/package.sh --manifest <Cargo.toml> --package <pkg> --bin <bin>
+--features "<ship features>" --assets <assets dir>`. It builds with `--no-default-features`,
+fails if any `ashlar-*` crate (control, command, mcp, docs, trace) is still in the dependency tree or the binary,
+and copies only the binary and `assets/` into `dist/<bin>/` (no docs, scripts, tests,
+examples). Check without a release build: `cargo tree -p <pkg> --no-default-features
+--features "<ship features>" -e normal | grep ashlar` must print nothing.

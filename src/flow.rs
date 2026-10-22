@@ -65,7 +65,7 @@ fn leave_boot(skip: Res<SkipMenu>, mut next: ResMut<NextState<AppState>>) {
 
 /// `--quit-after <seconds>`: exit after that much real time (soak/smoke runs).
 pub(crate) fn quit_after(time: Res<Time<Real>>, mut exit: MessageWriter<AppExit>, mut limit: Local<Option<Option<f32>>>) {
-    let limit = *limit.get_or_insert_with(|| crate::cli::arg_value("quit-after").and_then(|s| s.parse().ok()));
+    let limit = *limit.get_or_insert_with(|| crate::cli::dev_value("quit-after").and_then(|s| s.parse().ok()));
     if limit.is_some_and(|l| time.elapsed_secs() > l) {
         info!("quit-after reached");
         exit.write(AppExit::Success);

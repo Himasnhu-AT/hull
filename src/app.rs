@@ -23,7 +23,7 @@ use std::time::Duration;
 use bevy::app::ScheduleRunnerPlugin;
 use bevy::prelude::*;
 
-use crate::cli::{GameSeed, has_flag};
+use crate::cli::{GameSeed, dev_flag};
 use crate::flow::{AppState, Headless, SkipMenu};
 use crate::paths::{AssetsDir, DataDir};
 
@@ -80,10 +80,10 @@ pub struct EngineOptions {
 
 impl EngineOptions {
     pub fn from_args() -> Self {
-        let headless = has_flag("headless");
+        let headless = dev_flag("headless");
         EngineOptions {
             headless,
-            skip_menu: headless || has_flag("play"),
+            skip_menu: headless || dev_flag("play"),
             data_dir: None,
             assets_dir: None,
             ui: true,
@@ -141,10 +141,10 @@ pub fn app_with(info: GameInfo, mut options: EngineOptions) -> App {
                     primary_window: Some(Window {
                         title: info.title.into(),
                         // `--offscreen` (tests): hidden window, camera renders to an image.
-                        visible: !has_flag("offscreen"),
+                        visible: !dev_flag("offscreen"),
                         // Control-port runs: stay on top so macOS keeps drawing the window
                         // (an occluded window renders black screenshots).
-                        window_level: if has_flag("control") {
+                        window_level: if dev_flag("control") {
                             bevy::window::WindowLevel::AlwaysOnTop
                         } else {
                             bevy::window::WindowLevel::Normal
@@ -202,6 +202,7 @@ impl Plugin for EnginePlugin {
                 crate::input::InputPlugin,
                 crate::audio::EngineAudioPlugin,
                 crate::gfx::GfxPlugin,
+                crate::render_budget::RenderBudgetPlugin,
             ));
         if o.ui && !o.headless {
             app.add_plugins(crate::ui::UiKitPlugin);

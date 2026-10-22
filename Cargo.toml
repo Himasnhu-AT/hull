@@ -23,6 +23,8 @@ libc = { version = "0.2", optional = true }
 ashlar-trace = { path = "/Users/himanshu/codes/synthai/ashlar/crates/trace", features = ["sysinfo"], optional = true }
 
 [features]
+# Dev defaults. Games depend with `default-features = false` and turn `devtools`/`trace` on
+# through their own `dev` feature, so ship builds carry none of it (docs/PORTING.md, "Ship builds").
 default = ["physics", "devtools", "trace"]
 # avian3d: physics time is paused with the game; re-exported as `engine::avian3d`.
 physics = ["dep:avian3d"]
