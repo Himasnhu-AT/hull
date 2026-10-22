@@ -3,17 +3,14 @@
 //! Games gate their gameplay system sets with [`not_paused`].
 //!
 //! [`PausePlugin`] (added by `EnginePlugin`):
-//! - leaving `InGame` always unpauses;
-//! - window focus loss in `InGame` (not paused, [`PauseAllowed`], not
-//!   [`crate::cli::test_driven`]) pauses and sends `ScreenRequest::Push("pause")` so the ui
-//!   stream's pause screen opens. Esc handling lives in the ui stream's pause screen.
+//! leaving `InGame` always unpauses (also headless, where there is no UI). Esc and
+//! window-focus-loss pausing live in the ui stream's pause screen (`UiKitPlugin`).
 
 use bevy::prelude::*;
 #[cfg(feature = "physics")]
 use avian3d::prelude::PhysicsTime;
 
-use crate::flow::{AppState, PauseAllowed, has_visuals};
-use crate::ui::screens::ScreenRequest;
+use crate::flow::AppState;
 
 #[derive(Resource, Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Paused(pub bool);
@@ -61,26 +58,10 @@ pub struct PausePlugin;
 impl Plugin for PausePlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Paused>()
-            .add_message::<ScreenRequest>()
-            .add_systems(OnExit(AppState::InGame), unpause)
-            .add_systems(PreUpdate, pause_on_focus_loss.run_if(has_visuals));
+            .add_systems(OnExit(AppState::InGame), unpause);
     }
 }
 
 fn unpause(mut pause: PauseCtl) {
     pause.set(false);
-}
-
-fn pause_on_focus_loss(
-    mut events: MessageReader<bevy::window::WindowFocused>,
-    state: Res<State<AppState>>,
-    allowed: Res<PauseAllowed>,
-    mut pause: PauseCtl,
-    mut screens: MessageWriter<ScreenRequest>,
-) {
-    let lost = events.read().fold(None, |_, e| Some(!e.focused)).unwrap_or(false);
-    if lost && *state.get() == AppState::InGame && allowed.0 && !pause.is_paused() && !crate::cli::test_driven() {
-        pause.set(true);
-        screens.write(ScreenRequest::Push("pause"));
-    }
 }
