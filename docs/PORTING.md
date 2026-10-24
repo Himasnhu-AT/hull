@@ -249,3 +249,8 @@ Engine additions it needed (branch `game-support`), all generic:
   angle and ambient; `sky_and_sun()` is unchanged (`SunSetup::default()`).
 - **`Toast` is registered by `EnginePlugin`** even without the UI kit, so gameplay systems can
   post toasts in `--headless` runs (writing an unregistered message panics).
+
+## API stability for games
+Engine config structs (`MenuConfig`, `QualityPreset`, `SceneryRanges`, `RenderBudget`,
+`EngineOptions`, `SunSetup`) gain fields over time. Build them with `..default()` so a new engine
+field doesn't break a game: `MenuConfig { eyebrow: "…", main_items: vec![…], ..default() }`.
