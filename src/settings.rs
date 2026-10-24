@@ -316,12 +316,7 @@ impl SettingsStore {
 }
 
 fn write_atomic(path: &Path, text: &str) -> std::io::Result<()> {
-    if let Some(dir) = path.parent() {
-        std::fs::create_dir_all(dir)?;
-    }
-    let tmp = path.with_extension("json.tmp");
-    std::fs::write(&tmp, text)?;
-    std::fs::rename(&tmp, path)
+    crate::paths::write_atomic(path, text)
 }
 
 fn serialize_resource<T: Resource + Serialize>(w: &World) -> Option<Value> {

@@ -24,6 +24,55 @@ impl DataDir {
     pub fn file(&self, name: &str) -> PathBuf {
         self.0.join(name)
     }
+
+    /// Reads `<data>/<name>` as JSON (save games, records, unlocks). Missing → `T::default()`;
+    /// unreadable or corrupt → default + warning, and a corrupt file is moved aside to
+    /// `<name>.corrupt` so the next save doesn't silently destroy it. Put `#[serde(default)]` on
+    /// `T` so files from older versions still load.
+    pub fn load_json<T: serde::de::DeserializeOwned + Default>(&self, name: &str) -> T {
+        load_json(&self.file(name))
+    }
+
+    /// Writes `value` to `<data>/<name>` as pretty JSON, atomically (temp file + rename).
+    pub fn save_json<T: serde::Serialize>(&self, name: &str, value: &T) -> std::io::Result<()> {
+        save_json(&self.file(name), value)
+    }
+}
+
+/// [`DataDir::load_json`] for any path.
+pub fn load_json<T: serde::de::DeserializeOwned + Default>(path: &std::path::Path) -> T {
+    let text = match std::fs::read_to_string(path) {
+        Ok(t) => t,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return T::default(),
+        Err(e) => {
+            warn!("could not read {}: {e}; using defaults", path.display());
+            return T::default();
+        }
+    };
+    serde_json::from_str(&text).unwrap_or_else(|e| {
+        let mut aside = path.as_os_str().to_owned();
+        aside.push(".corrupt");
+        warn!("{} is corrupt ({e}); using defaults (moved to {})", path.display(), aside.to_string_lossy());
+        let _ = std::fs::rename(path, &aside);
+        T::default()
+    })
+}
+
+/// [`DataDir::save_json`] for any path.
+pub fn save_json<T: serde::Serialize>(path: &std::path::Path, value: &T) -> std::io::Result<()> {
+    let text = serde_json::to_string_pretty(value).map_err(std::io::Error::other)?;
+    write_atomic(path, &text)
+}
+
+/// Writes `text` to a temp file next to `path`, then renames it over `path` (creating folders).
+pub fn write_atomic(path: &std::path::Path, text: &str) -> std::io::Result<()> {
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    let mut tmp = path.as_os_str().to_owned();
+    tmp.push(".tmp");
+    std::fs::write(&tmp, text)?;
+    std::fs::rename(&tmp, path)
 }
 
 /// `"my-game"` → `"MY_GAME"`: prefix for this game's env overrides.

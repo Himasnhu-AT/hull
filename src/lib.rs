@@ -30,10 +30,12 @@ pub use avian3d;
 
 pub mod app;
 pub mod audio;
+pub mod chase;
 pub mod cli;
 pub mod flow;
 pub mod gfx;
 pub mod input;
+pub mod meshkit;
 pub mod pause;
 pub mod paths;
 pub mod render_budget;
@@ -52,10 +54,12 @@ pub use app::{EngineOptions, GameInfo, app, app_with};
 pub mod prelude {
     pub use crate::app::{EngineOptions, EnginePlugin, GameInfo, app, app_with};
     pub use crate::audio::{AudioCategory, SoundLibrary, Volumes};
+    pub use crate::chase::ChaseCamera;
     pub use crate::cli::{GameSeed, arg_value, has_flag};
     pub use crate::flow::{AppState, Headless, has_visuals, in_game};
     pub use crate::gfx::{MainCamera, QualityPreset};
     pub use crate::input::{Bindings, CursorCaptured, LookInput};
+    pub use crate::meshkit::MeshKit;
     pub use crate::pause::{PauseCtl, Paused, not_paused};
     pub use crate::paths::{AssetsDir, DataDir};
     pub use crate::render_budget::{Actor, FarLook, KeepDetail, RenderBudget, RenderStats, Scenery, SceneryRanges, SceneryStream};

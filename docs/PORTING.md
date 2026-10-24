@@ -211,3 +211,41 @@ Nothing is required. Recommended:
 - Set `SceneryRanges::view` to the fog's end distance.
 - Weapon viewmodels under the camera, pickups that bob, doors that open are actors automatically.
 - Don't use `SceneryStream` for arena maps (they're small; colliders stay as they are).
+
+## Second game: Courier (what a non-FPS game needed)
+
+`~/codes/game/courier` is a third-person hover-bike delivery game on a 1.28 km procedural map,
+built to check the engine works for something unlike Shroud. It uses the engine's app shell,
+settings (own `CourierSettings` section, "Gameplay"/"Camera" tabs), menus (`MenuConfig`,
+`register_screen`, a sticky results screen), UI kit (HUD), quality presets, `SceneryStream`
+(~9 000 props streamed by cell, colliders spawned once), metrics, control port and trace.
+Engine additions it needed (branch `game-support`), all generic:
+
+- **A new game's Cargo.toml** names bevy itself, with no features: `bevy = { version = "=0.19.1",
+  default-features = false }` next to `engine = { path = .., default-features = false }`. Bevy's
+  derives (`Component`, `Resource`, `Message`, `SystemSet`) expand to `bevy::ecs::..` paths found
+  through the game's own manifest, so `engine::bevy` alone fails with "cannot find `bevy_ecs`".
+  The engine still picks every feature.
+- **`SpatialQuery` reads `Position`/`Rotation`**: a system with both it and
+  `Query<&mut Position>` panics at startup (B0001). Use a `ParamSet` (probe, then write), as
+  Courier's `bike::drive` does.
+
+- **`engine::chase::ChaseCamera`** (`ChasePlugin`, added by `EnginePlugin`): third-person
+  follow camera for any root entity: trails the target's heading, looks ahead, orbits with
+  `LookInput` and recenters when the mouse rests, and with `physics` pulls in front of
+  colliders between the target and the camera. `active: false` hands the camera back to the
+  game (menu flyovers); `snap = true` after teleports. The FPS controller was the only camera
+  before.
+- **`engine::meshkit::MeshKit`**: build low-poly meshes from Bevy primitives (or raw
+  triangles/quads) with a transform and a colour each, as one vertex-coloured mesh, smooth or
+  flat-shaded; `meshkit::displace` for noisy rocks. Games without models (prototypes, jams)
+  need this immediately; one mesh + one white material per object type batches well.
+- **`DataDir::load_json` / `save_json`** (+ `paths::load_json/save_json/write_atomic`): save
+  games / records next to settings.json with the same guarantees (atomic write, a corrupt file
+  moved to `<name>.corrupt` instead of crashing or being overwritten). Settings now share
+  `write_atomic`.
+- **`gfx::SunSetup` + `sky_and_sun_with`**: `sky_and_sun` hard-coded Shroud's arena sun
+  (shadows to 90 m, 3 cascades). Open maps need shadows to ~300 m with 4 cascades, another sun
+  angle and ambient; `sky_and_sun()` is unchanged (`SunSetup::default()`).
+- **`Toast` is registered by `EnginePlugin`** even without the UI kit, so gameplay systems can
+  post toasts in `--headless` runs (writing an unregistered message panics).
