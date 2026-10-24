@@ -120,7 +120,7 @@ export const inside: Tab[] = [
       { label: 'Offscreen screenshots', hint: 'A hidden window renders to an image, so captures work behind a fullscreen app.', value: 'Dev only' },
       { label: 'Perf overlay and session log', hint: 'CPU, GPU, memory and frame times per span, plus a log of state changes.', value: 'Dev only' },
       { label: 'Metrics window', hint: 'F4 opens a second window with live charts and run history tied to git commits.', value: 'F4' },
-      { label: 'Ship check', hint: 'package.sh refuses to package if any ashlar debug crate is still in the tree.', value: 'Enforced' },
+      { label: 'Ship check', hint: 'package.sh refuses to package if any of the ashlar debug crates behind the devtools is still in the tree.', value: 'Enforced' },
     ],
   },
 ];
