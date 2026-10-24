@@ -161,6 +161,8 @@ pub enum FieldKind {
 pub struct FieldDef {
     /// Stable id, used by the control port (`ui.setting {key, value}`) and tests.
     pub key: &'static str,
+    /// Settings tab the row appears on. `""` = not shown on any tab: the field still works for
+    /// `get_field`/`set_field`, the control port and game screens (e.g. a match-setup card row).
     pub tab: &'static str,
     pub label: &'static str,
     pub hint: &'static str,
@@ -194,7 +196,7 @@ pub trait RegisterSettings {
 impl RegisterSettings for App {
     fn register_setting(&mut self, field: FieldDef) -> &mut Self {
         let mut reg = self.world_mut().get_resource_or_insert_with(SettingsRegistry::default);
-        if !reg.tabs.contains(&field.tab) {
+        if !field.tab.is_empty() && !reg.tabs.contains(&field.tab) {
             reg.tabs.push(field.tab);
         }
         reg.fields.retain(|f| f.key != field.key);
@@ -653,6 +655,10 @@ mod tests {
             let video: Vec<_> = reg.tab_fields("Video").map(|f| f.key).collect();
             assert_eq!(video, vec!["quality", "fov_deg", "window_mode", "vsync", "show_fps", "ui_scale"]);
         }
+        // A field with no tab is registered but adds no tab.
+        app.register_setting(field("map", ""));
+        assert!(app.world().resource::<SettingsRegistry>().field("map").is_some());
+        assert!(!app.world().resource::<SettingsRegistry>().tabs.contains(&""));
         // Re-registering a key replaces it (moves to the end), tabs unchanged.
         app.register_setting(field("sensitivity", "Controls"));
         app.set_settings_tabs(&["Gameplay", "Controls"]);

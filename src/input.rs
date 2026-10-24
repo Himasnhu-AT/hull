@@ -1,7 +1,7 @@
 //! Mouse look + cursor capture + a display list of key bindings. Owner: core stream.
 //!
-//! - Cursor is captured (locked + hidden) in `AppState::InGame` while not paused and not
-//!   [`crate::cli::test_driven`]; released in menus / pause. If it gets lost while it should be
+//! - Cursor is captured (locked + hidden) in `AppState::InGame` while not paused, not
+//!   [`crate::cli::test_driven`] and [`CaptureCursor`] is true; released in menus / pause. If it gets lost while it should be
 //!   captured (focus loss, Cmd-Tab), a left click re-captures it.
 //! - [`LookInput`] each frame: mouse delta × `CoreSettings.sensitivity` (× invert Y), zero when
 //!   not captured. Games read it for camera look (radians per frame, already scaled).
@@ -20,6 +20,17 @@ use crate::settings::CoreSettings;
 
 #[derive(Resource, Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct CursorCaptured(pub bool);
+
+/// Games set this false for in-game screens that need a free pointer (results, shops, a
+/// between-rounds summary). Default true: the cursor is captured whenever the game is live.
+#[derive(Resource, Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CaptureCursor(pub bool);
+
+impl Default for CaptureCursor {
+    fn default() -> Self {
+        CaptureCursor(true)
+    }
+}
 
 /// Look delta this frame in radians (yaw, pitch). Positive pitch = look up.
 #[derive(Resource, Clone, Copy, Debug, Default)]
@@ -55,6 +66,7 @@ pub struct InputPlugin;
 impl Plugin for InputPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<CursorCaptured>()
+            .init_resource::<CaptureCursor>()
             .init_resource::<LookInput>()
             .init_resource::<Bindings>()
             .add_systems(
@@ -77,12 +89,13 @@ fn set_cursor(c: &mut CursorOptions, locked: bool) {
 fn cursor_policy(
     state: Option<Res<State<AppState>>>,
     paused: Res<Paused>,
+    allowed: Res<CaptureCursor>,
     mouse: Option<Res<ButtonInput<MouseButton>>>,
     mut cursors: Query<(&Window, &mut CursorOptions), With<PrimaryWindow>>,
     mut captured: ResMut<CursorCaptured>,
     mut was_wanted: Local<bool>,
 ) {
-    let want = state.is_some_and(|s| *s.get() == AppState::InGame) && !paused.0 && !crate::cli::test_driven();
+    let want = state.is_some_and(|s| *s.get() == AppState::InGame) && !paused.0 && allowed.0 && !crate::cli::test_driven();
     let became_wanted = want && !*was_wanted;
     *was_wanted = want;
     let clicked = mouse.is_some_and(|m| m.just_pressed(MouseButton::Left));
