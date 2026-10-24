@@ -204,6 +204,10 @@ impl Plugin for EnginePlugin {
                 crate::gfx::GfxPlugin,
                 crate::render_budget::RenderBudgetPlugin,
             ));
+        if !o.headless {
+            // Avoids a pipelined-rendering deadlock on exit (see `exit.rs`).
+            app.add_plugins(crate::exit::CleanExitPlugin);
+        }
         if o.ui && !o.headless {
             app.add_plugins(crate::ui::UiKitPlugin);
         }
