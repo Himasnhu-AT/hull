@@ -318,6 +318,7 @@ fn main() {
             pause_note: "Restarting or leaving abandons this match; the squad does not train on it.",
             main_panel: Some(stats_panel),
             pause_header: Some(pause_score),
+            pause_eyebrow: Some(|_| "Match 1 \u{b7} Round 2".into()),
         });
     if has_flag("fps") {
         app.world_mut().resource_mut::<CoreSettings>().show_fps = true;

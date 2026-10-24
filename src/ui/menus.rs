@@ -2,7 +2,8 @@
 //!
 //! - "main": eyebrow + [`crate::GameInfo::title`] + tagline, [`MenuConfig::main_items`], the
 //!   optional [`MenuConfig::main_panel`] (bottom right), key hints, version.
-//! - "pause": game title as eyebrow, "PAUSED", the optional [`MenuConfig::pause_header`],
+//! - "pause": game title (or [`MenuConfig::pause_eyebrow`]) as eyebrow, "PAUSED", the optional
+//!   [`MenuConfig::pause_header`],
 //!   [`MenuConfig::pause_items`], [`MenuConfig::pause_note`], key hints.
 
 use bevy::prelude::*;
@@ -51,6 +52,8 @@ pub struct MenuConfig {
     pub main_panel: Option<PanelBuilder>,
     /// Extra line(s) under "PAUSED" (e.g. score), built by the game.
     pub pause_header: Option<PanelBuilder>,
+    /// Small label above "PAUSED" (e.g. "Match 2 · Round 3"). Default: the game title.
+    pub pause_eyebrow: Option<fn(&World) -> String>,
 }
 
 impl Default for MenuConfig {
@@ -67,6 +70,7 @@ impl Default for MenuConfig {
             pause_note: "",
             main_panel: None,
             pause_header: None,
+            pause_eyebrow: None,
         }
     }
 }
@@ -139,14 +143,17 @@ pub fn build_main(world: &mut World, root: Entity) {
 pub fn build_pause(world: &mut World, root: Entity) {
     let t = world.resource::<Theme>().clone();
     let cfg = world.get_resource::<MenuConfig>().cloned().unwrap_or_default();
-    let name = world.get_resource::<GameInfo>().map_or("", |i| i.title);
+    let name = match cfg.pause_eyebrow {
+        Some(f) => f(world),
+        None => world.get_resource::<GameInfo>().map_or("", |i| i.title).to_string(),
+    };
     let nav = items(&cfg.pause_items);
     let mut slot = None;
     world.commands().entity(root).with_children(|p| {
         menu_backdrop(p, &t, 0.55, 0.95);
         p.spawn(menu_column(0.0)).with_children(|col| {
             if !name.is_empty() {
-                col.spawn(eyebrow(name, t.accent));
+                col.spawn(eyebrow(&name, t.accent));
             }
             col.spawn(title("Paused", SIZE_H1 + 24.0, t.text));
             if cfg.pause_header.is_some() {
