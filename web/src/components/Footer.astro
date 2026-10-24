@@ -1,0 +1,33 @@
+---
+import { site, nav } from '../data/site';
+import Code from './Code.astro';
+interface Props { title?: string; lede?: string; code?: string; file?: string }
+const { title = 'Start at<br />gameplay', lede = 'Add the crate, write your plugin, run it. The menus, settings and pause are already on screen.', code: pageCode, file = 'src/main.rs' } = Astro.props;
+const year = 2026;
+const snippet = `fn main() {
+    engine::app(GameInfo::new("orbs", "Orbs"))
+        .add_plugins(MyGamePlugin)
+        .run();
+}`;
+---
+<footer class="foot wrap">
+  <div class="grid">
+    <div class="foot__big">
+      <span class="eyebrow">Start</span>
+      <p class="display foot__title" style="margin-top:1rem" set:html={title} />
+    </div>
+    <div class="foot__cta">
+      <p class="lede">{lede}</p>
+      <div style="display:flex;gap:0.8rem;flex-wrap:wrap">
+        <a class="btn btn--primary" href="/start/" data-screen="Start"><span class="btn__label">Start a game</span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 8h11M9 4l4 4-4 4" stroke="currentColor" stroke-width="2" fill="none"/></svg></a>
+        <a class="btn" href="/render-budget/" data-screen="Render budget"><span class="btn__label">Read the numbers</span></a>
+      </div>
+      <p class="label" style="text-transform:none;letter-spacing:0">Source and docs are not public yet. License {site.license}.</p>
+    </div>
+    <div class="foot__code"><Code code={pageCode ?? snippet} file={file} /></div>
+    <div class="foot__links">
+      <span>{site.name} · crate <code>{site.crate}</code> · Bevy {site.bevy} · avian3d {site.avian} · {year}</span>
+      <nav aria-label="Footer"><ul>{nav.map((n) => <li><a href={n.href}>{n.label}</a></li>)}</ul></nav>
+    </div>
+  </div>
+</footer>

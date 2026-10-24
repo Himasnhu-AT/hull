@@ -1,0 +1,82 @@
+---
+import Base from '../layouts/Base.astro';
+import Code from '../components/Code.astro';
+import { code, site } from '../data/site';
+
+const settingsStruct = `#[derive(Resource, Serialize, Deserialize, Default, Clone, PartialEq)]
+#[serde(default)]
+struct MySettings { difficulty: usize, assist: bool }
+
+fn main() {
+    engine::app(GameInfo::new("id", "Title"))
+        .add_plugins((engine::settings::SettingsPlugin::<MySettings>::default(), MyPlugin))
+        .run();
+}`;
+const run = `cargo run --example minimal --features fps      # the smallest game: ground, cube, camera
+cargo run -- --play                               # skip the main menu (dev builds)
+cargo run -- --headless                           # no window, for tests`;
+const ship = `scripts/package.sh --manifest Cargo.toml --package mygame --bin mygame \\
+    --features "physics fps" --assets assets
+${code.ship}`;
+
+const steps = [
+  { id: 'add', title: 'Add the crate', text: 'Depend on the engine with its defaults off and pick features: physics (avian3d) and fps (the first-person controller). Name bevy yourself with no features, so its derive macros resolve; the engine picks every feature. Your dev feature turns the debug tools on.', note: 'Not on crates.io yet: a path dependency for now.', code: code.cargo, file: 'Cargo.toml', lang: 'toml' as const },
+  { id: 'main-rs', title: 'Write main.rs', text: 'One call builds the window or headless app, CLI flags, data and asset folders, settings, the main menu and the pause menu. Add your game as a plugin and put its flow under AppState::InGame.', code: code.main, file: 'src/main.rs', lang: 'rust' as const },
+  { id: 'settings', title: 'Add your settings', text: 'Your section is a serde struct. It is saved next to the core settings in settings.json, 0.6 s after the last change and on exit. A corrupt file is moved aside and defaults load.', code: settingsStruct, file: 'src/main.rs', lang: 'rust' as const },
+  { id: 'rows', title: 'Put them on screen', text: 'Each FieldDef is a row on the generated settings screen: Toggle, Slider, Choice, Cards or Swatches, on the tab you name. Reset tab restores the defaults.', code: code.setting, file: 'courier/src/settings.rs', lang: 'rust' as const },
+  { id: 'menus', title: 'Brand the menus', text: 'One accent colour re-themes the whole kit. MenuConfig sets the main and pause items, a side panel and a pause header. Build config structs with ..default(), so new engine fields never break your game.', code: code.menu, file: 'courier/src/menus.rs', lang: 'rust' as const },
+  { id: 'run', title: 'Run it, test it', text: 'Dev builds take engine flags such as `--play` and `--headless`. The control port lets a test or an agent press keys, read state and save screenshots from a hidden window.', code: run, file: 'terminal', lang: 'sh' as const },
+  { id: 'ship', title: 'Ship without the tools', text: 'Build with `--no-default-features`. The debug tools live in the ashlar crates (control port, MCP, trace); the packaging script fails if any of them is still in the tree or the binary, and copies only the binary and assets.', code: ship, file: 'terminal', lang: 'sh' as const },
+];
+---
+<Base title="Start" state="Start" footerTitle="Now build<br />the game" footerLede="The shell is done. Everything from here on is gameplay." description="Start a Bevy 0.19 game on Hull: the Cargo.toml lines, a six-line main.rs, settings as FieldDefs, menu branding, test runs and a ship build without debug tools.">
+  <header class="st-hero wrap">
+    <div class="grid">
+      <span class="eyebrow st-eyebrow" data-reveal="fade" data-intro>Start</span>
+      <h1 class="h-xl st-title" data-split="lines" data-intro>From cargo new to a main menu</h1>
+      <p class="lede st-lede" data-reveal="fade" data-intro data-delay="0.15">Seven steps. The first two already give you a window, a main menu, settings that save and Esc to pause.</p>
+    </div>
+  </header>
+  <div class="wrap">
+    <div class="grid st-body">
+      <nav class="st-index" aria-label="Steps">
+        <ul class="menu" data-menu data-steps-index>
+          {steps.map((s, i) => <li><a href={`#${s.id}`}><span class="num st-n">{i + 1}</span> {s.title}</a></li>)}
+        </ul>
+        <p class="st-facts label">Bevy {site.bevy} · avian3d {site.avian} · {site.license}</p>
+      </nav>
+      <ol class="st-steps">
+        {steps.map((s, i) => (
+          <li id={s.id} class="st-step">
+            <div class="st-step__head"><span class="st-step__n num">{String(i + 1).padStart(2, '0')}</span><h2 class="h-l">{s.title}</h2></div>
+            <p class="body st-step__text">{s.text.split(/`([^`]+)`/).map((part, j) => (j % 2 ? <code>{part}</code> : part))}</p>
+            {s.note && <p class="st-step__note"><span class="chip">Placeholder</span> {s.note}</p>}
+            <Code code={s.code} file={s.file} lang={s.lang} />
+          </li>
+        ))}
+      </ol>
+    </div>
+  </div>
+</Base>
+
+<style>
+  .st-hero { padding-top: clamp(7.5rem, 13vw, 11rem); padding-bottom: clamp(3rem, 6vw, 5rem); }
+  .st-eyebrow { grid-column: 1 / -1; margin-bottom: 1rem; }
+  .st-title { grid-column: 1 / span 8; }
+  .st-lede { grid-column: 9 / -1; align-self: end; }
+  .st-body { align-items: start; }
+  .st-index { grid-column: 1 / span 3; position: sticky; top: 6rem; }
+  .st-index .menu { --menu-size: 1.3rem; }
+  .st-n { display: inline-block; min-width: 1.2em; color: var(--accent); }
+  .st-facts { margin-top: 1.5rem; padding-left: 0.6rem; text-transform: none; letter-spacing: 0; font-family: var(--f-body); font-weight: 500; }
+  .st-steps { grid-column: 5 / -1; list-style: none; padding: 0; display: grid; gap: clamp(4rem, 8vw, 6.5rem); }
+  .st-step { display: grid; gap: 1.1rem; scroll-margin-top: 6rem; min-width: 0; }
+  .st-step__head { display: flex; align-items: baseline; gap: 1rem; }
+  .st-step__n { font-family: var(--f-display); font-weight: 700; color: var(--accent); font-size: 1.25rem; }
+  .st-step__note { display: flex; align-items: center; gap: 0.7rem; color: var(--c-muted); font-size: var(--t-s); }
+  @media (max-width: 900px) {
+    .st-title, .st-lede, .st-index, .st-steps { grid-column: 1 / -1; }
+    .st-lede { margin-top: 1.2rem; }
+    .st-index { position: static; margin-bottom: 3rem; }
+  }
+</style>

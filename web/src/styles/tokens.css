@@ -1,0 +1,59 @@
+/* Tokens from the engine's own Theme::default (src/ui/theme.rs). DESIGN.md has the mapping. */
+@font-face { font-family: 'Barlow Condensed'; src: url('/fonts/barlow-condensed-600-normal.woff2') format('woff2'); font-weight: 600; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Barlow Condensed'; src: url('/fonts/barlow-condensed-700-normal.woff2') format('woff2'); font-weight: 700; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Barlow'; src: url('/fonts/barlow-500-normal.woff2') format('woff2'); font-weight: 500; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Barlow'; src: url('/fonts/barlow-600-normal.woff2') format('woff2'); font-weight: 600; font-style: normal; font-display: swap; }
+@font-face { font-family: 'JetBrains Mono'; src: url('/fonts/jetbrains-mono-400-normal.woff2') format('woff2'); font-weight: 400; font-style: normal; font-display: swap; }
+/* Fallback metrics so the swap does not shift layout. */
+@font-face { font-family: 'Barlow Condensed Fallback'; src: local('Arial Narrow'), local('Arial'); size-adjust: 82%; ascent-override: 118%; }
+@font-face { font-family: 'Barlow Fallback'; src: local('Arial'); size-adjust: 96%; ascent-override: 100%; }
+
+:root {
+  color-scheme: dark;
+  --c-bg: #090b0f;
+  --c-panel: #12161c;
+  --c-raised: #212630;
+  --c-fg: #edf1f6;
+  --c-muted: #949eb0;
+  --c-dim: #9aa3b4;
+  --c-line: rgb(255 255 255 / 0.09);
+  --c-line-strong: rgb(255 255 255 / 0.18);
+  --c-good: #61e6b8;
+  --c-bad: #ff5c4d;
+  /* The one variable the concept turns: every bar, rule and number follows it. */
+  --accent: #ffa838;
+  --c-accent: var(--accent);
+  --c-on-accent: #090b0f;
+  --accent-soft: color-mix(in srgb, var(--accent) 22%, transparent);
+  --accent-bar: linear-gradient(90deg, color-mix(in srgb, var(--accent) 62%, var(--c-bg)) 0%, color-mix(in srgb, var(--accent) 26%, var(--c-bg)) 100%);
+  --c-curtain: var(--c-panel);
+
+  --f-display: 'Barlow Condensed', 'Barlow Condensed Fallback', 'Arial Narrow', sans-serif;
+  --f-body: 'Barlow', 'Barlow Fallback', system-ui, sans-serif;
+  --f-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  --t-mega: clamp(5.5rem, 1rem + 17vw, 16rem);
+  --t-xl: clamp(2.75rem, 1.2rem + 5.4vw, 6.5rem);
+  --t-l: clamp(1.7rem, 1.15rem + 1.9vw, 2.9rem);
+  --t-m: clamp(1.25rem, 1.1rem + 0.55vw, 1.6rem);
+  --t-body: clamp(1.0625rem, 1rem + 0.2vw, 1.125rem);
+  --t-s: 0.9375rem;
+  --t-xs: 0.8125rem;
+
+  --u: clamp(0.5rem, 0.35rem + 0.6vw, 1rem);
+  --gutter: clamp(1rem, 0.6rem + 1.6vw, 2.5rem);
+  --edge: clamp(1rem, 5.8vw, 7rem);
+  --cols: 12;
+  --radius: 4px;
+
+  --ease-soft: cubic-bezier(0.215, 0.61, 0.355, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+
+  --z-gl: 0;
+  --z-content: 1;
+  --z-header: 50;
+  --z-cursor: 80;
+  --z-menu: 85;
+  --z-curtain: 90;
+  --z-loader: 100;
+}

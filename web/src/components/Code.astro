@@ -1,0 +1,27 @@
+---
+// Code panel with a tiny build-time highlighter (Rust/TOML/shell). No client JS except Copy.
+interface Props { code: string; file: string; lang?: 'rust' | 'toml' | 'sh' }
+const { code, file, lang = 'rust' } = Astro.props;
+const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const kw = lang === 'rust' ? /\b(use|fn|let|mut|pub|struct|impl|for|match|if|else|true|false|Some|None|move)\b/g
+  : lang === 'toml' ? /^(\[[^\]]+\])/gm : /\b(cargo|grep|memgate|python3)\b/g;
+function hl(src: string) {
+  const out: string[] = [];
+  const re = /("(?:[^"\\]|\\.)*")|((?:\/\/|#).*$)/gm;
+  let last = 0; let m: RegExpExecArray | null;
+  const plain = (s: string) => esc(s).replace(kw, '<span class="tk-k">$1</span>').replace(/\b([A-Z][A-Za-z0-9]+)\b/g, (x) => (lang === 'rust' ? `<span class="tk-t">${x}</span>` : x));
+  while ((m = re.exec(src))) {
+    // '#' only starts a comment in toml/sh, and only outside a string
+    if (m[2] && lang === 'rust' && m[2].startsWith('#')) continue;
+    out.push(plain(src.slice(last, m.index)));
+    out.push(m[1] ? `<span class="tk-s">${esc(m[1])}</span>` : `<span class="tk-c">${esc(m[2])}</span>`);
+    last = m.index + m[0].length;
+  }
+  out.push(plain(src.slice(last)));
+  return out.join('');
+}
+---
+<div class="code" data-code>
+  <div class="code__bar"><span class="label">{file}</span><button class="copy" type="button" data-copy aria-label={`Copy ${file}`}>Copy</button></div>
+  <pre tabindex="0" aria-label={`${file} code`}><code set:html={hl(code)} /></pre>
+</div>

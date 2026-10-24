@@ -1,0 +1,376 @@
+---
+import Base from '../layouts/Base.astro';
+import Shot from '../components/Shot.astro';
+import Code from '../components/Code.astro';
+import AccentPicker from '../components/AccentPicker.astro';
+import { Picture } from 'astro:assets';
+import { site, accents, inside, code, budget, games } from '../data/site';
+import shotSettingsGame from '../assets/shots/gallery-settings-game.webp';
+import shotPause from '../assets/shots/gallery-pause.webp';
+import shotRoad from '../assets/shots/courier-road.webp';
+import shotOverview from '../assets/shots/budget-overview-on.webp';
+import shotMetricsLive from '../assets/shots/metrics-live.webp';
+import shotMetricsRuns from '../assets/shots/metrics-runs.webp';
+import shotMetricsCharts from '../assets/shots/metrics-charts.webp';
+import shotMetricsTable from '../assets/shots/metrics-table.webp';
+import shroudSettings from '../assets/shots/shroud-settings-video.webp';
+import courierSettings from '../assets/shots/courier-settings-video.webp';
+import shroudFight from '../assets/shots/shroud-firefight.webp';
+import courierTown from '../assets/shots/courier-town.webp';
+import streetOff from '../assets/shots/budget-overview-off.webp';
+import streetOn from '../assets/shots/budget-overview-on.webp';
+
+const tabShots = {
+  shell: { src: shotSettingsGame, alt: 'The settings screen the engine generates from FieldDefs: difficulty cards, a toggle, crosshair colour swatches and a slider', cap: 'Generated settings screen, Gameplay tab' },
+  ui: { src: shotPause, alt: 'The engine pause menu: a match score header, five menu items with the first selected, key hints at the bottom', cap: 'Pause menu from MenuConfig' },
+  play: { src: shotRoad, alt: 'Courier: a hover bike on a valley road seen from the chase camera, low-poly trees and hills', cap: 'ChaseCamera and MeshKit in Courier' },
+  render: { src: shotOverview, alt: 'A city of grey blocks and thousands of small props seen from above, drawn with the render budget on', cap: '40k props, 480 meshes drawn' },
+  dev: { src: shotMetricsLive, alt: 'The metrics window: four large charts for frame time, CPU, GPU and memory, then rows of metrics with sparklines', cap: 'Metrics window, F4' },
+} as const;
+const gameShots = { shroud: shroudFight, courier: courierTown };
+const gameAlts = {
+  shroud: 'Shroud: first-person view of a desert yard, a pistol in hand, two squad members behind a low wall',
+  courier: 'Courier: a hover bike entering a small town square with houses and a tower',
+};
+const arrow = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 8h11M9 4l4 4-4 4" stroke="currentColor" stroke-width="2" fill="none"/></svg>';
+---
+<Base state="Main menu">
+  <!-- HERO: the main menu -->
+  <section class="hero wrap" aria-labelledby="hero-title">
+    <div class="hero__grid grid">
+      <div class="hero__menu">
+        <span class="eyebrow" data-reveal="fade" data-intro>Game shell for Bevy {site.bevy}</span>
+        <div class="hero__title">
+          <h1 id="hero-title" class="display hero__name"><span data-split="chars" data-intro>{site.name}</span><span class="sr-only">, the game shell for Bevy</span></h1>
+          <p class="hero__tag" data-reveal="fade" data-intro data-delay="0.12">Start your Bevy game at gameplay, not at the settings menu.</p>
+        </div>
+        <nav aria-label="Main menu" data-reveal="up" data-intro data-delay="0.2">
+          <ul class="menu hero__items" data-menu>
+            <li><a href="/start/" data-screen="Start">Start <small>Cargo.toml and main.rs</small></a></li>
+            <li><a href="#inside">Inside <small>Settings, menus, cameras, devtools</small></a></li>
+            <li><a href="/render-budget/" data-screen="Render budget">Render budget <small>40,231 meshes down to 480</small></a></li>
+            <li><a href="#games">Games <small>Shroud and Courier</small></a></li>
+          </ul>
+        </nav>
+        <div class="keys hero__keys" aria-hidden="true" data-reveal="fade" data-intro data-delay="0.4">
+          <span><span class="kbd">↑ ↓</span> Navigate</span><span><span class="kbd">Enter</span> Select</span><span><span class="kbd">Esc</span> Menu</span>
+        </div>
+      </div>
+      <div class="hero__media">
+        <figure class="shot">
+          <div class="shot__frame hero__stack" data-accent-stack>
+            {accents.map((a, i) => (
+              <div class:list={['hero__layer', i === 0 && 'is-top is-shown']} data-accent-shot={a.id}>
+                <Picture src={a.img} alt={i === 0 ? 'The engine main menu in the ui_gallery example: title, tagline, three menu items with the first selected by an accent bar, a stats card and key hints' : ''}
+                  formats={['avif', 'webp']} fallbackFormat="webp" widths={[640, 960, 1440, 1920]} sizes="(min-width: 768px) 56vw, 100vw"
+                  loading={i === 0 ? 'eager' : 'lazy'} fetchpriority={i === 0 ? 'high' : 'auto'} decoding="async" quality={72} />
+              </div>
+            ))}
+          </div>
+          <span class="hero__timer" data-attract-timer aria-hidden="true"></span>
+          <figcaption><span>Real capture, same build, one flag changed</span><code data-accent-flag>ui_gallery, default theme</code></figcaption>
+        </figure>
+        <div class="hero__pick"><AccentPicker id="hero-accent" label="Pick an accent" attract /></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- STATEMENT -->
+  <section class="statement wrap section" aria-labelledby="why-title">
+    <div class="grid">
+      <h2 id="why-title" class="label statement__label">Why</h2>
+      <p class="statement__text" data-split="lines">Every Bevy game begins by rebuilding the same shell: a main menu, a settings screen that saves, Esc to pause, volume sliders, quality presets, a way to test it. Hull ships that shell, so the first commit is gameplay.</p>
+      <p class="statement__note">The crate is called <code>{site.crate}</code> today. Hull is a working name.</p>
+    </div>
+  </section>
+
+  <!-- INSIDE: the settings screen layout -->
+  <section id="inside" class="inside wrap section" aria-labelledby="inside-title">
+    <div class="grid">
+      <header class="section-head inside__head">
+        <span class="eyebrow">Options</span>
+        <h2 id="inside-title" class="h-xl" data-split="lines">Inside the shell</h2>
+      </header>
+      <div class="inside__tabs" data-tabs>
+        <div class="tablist" role="tablist" aria-label="Parts of the engine">
+          {inside.map((t, i) => (
+            <button class="tab" role="tab" id={`tab-${t.id}`} aria-controls={`panel-${t.id}`} aria-selected={i === 0 ? 'true' : 'false'} tabindex={i === 0 ? 0 : -1} type="button">{t.label}</button>
+          ))}
+          <span class="tablist__line" data-tab-line aria-hidden="true"></span>
+        </div>
+        {inside.map((t) => {
+          const s = tabShots[t.id as keyof typeof tabShots];
+          return (
+            <div class="tabpanel" role="tabpanel" id={`panel-${t.id}`} aria-labelledby={`tab-${t.id}`}>
+              <h3 class="tabpanel__title">{t.label}</h3>
+              <ul class="rows" data-select-rows>
+                {t.rows.map((r, j) => (
+                  <li class:list={['row', j === 0 && 'is-sel']}>
+                    <div class="row__text">
+                      <span class="row__label">{r.label}</span>
+                      <span class="row__hint">{r.hint}</span>
+                      {r.code && <code class="row__code">{r.code}</code>}
+                    </div>
+                    <span class="chip">{r.value}</span>
+                  </li>
+                ))}
+              </ul>
+              <aside class="about panel" aria-label={`About ${t.label}`}>
+                <span class="label" data-about-label>About this tab</span>
+                <p class="about__title" data-about-title>{t.title}</p>
+                <p class="about__text" data-about-text>{t.about}</p>
+                <Shot src={s.src} alt={s.alt} caption={s.cap} sizes="(min-width: 1024px) 28vw, 100vw" />
+              </aside>
+            </div>
+          );
+        })}
+        <div class="keys inside__keys" aria-hidden="true"><span><span class="kbd">Q / E</span> Switch tab</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CODE -->
+  <section class="code-sec wrap section" aria-labelledby="code-title">
+    <div class="grid">
+      <div class="code-sec__panels" data-reveal="up">
+        <Code code={code.main} file="src/main.rs" />
+        <Code code={code.cargo} file="Cargo.toml" lang="toml" />
+      </div>
+      <div class="code-sec__text">
+        <h2 id="code-title" class="h-l" data-split="lines">Your main.rs is the whole setup</h2>
+        <div class="body">
+          <p><code>engine::app</code> builds the window, the app states, settings, menus and pause. Your plugin is the game. Ship builds drop every debug tool with <code>--no-default-features</code>.</p>
+          <p>Settings are data: each <code>FieldDef</code> becomes a row on the generated screen, saved to <code>settings.json</code>.</p>
+        </div>
+        <a class="btn" href="/start/" data-screen="Start"><span class="btn__label">Start a game</span><Fragment set:html={arrow} /></a>
+      </div>
+    </div>
+  </section>
+
+  <!-- PROOF: one shell, two games -->
+  <section id="games" class="games wrap section" aria-labelledby="games-title">
+    <div class="grid">
+      <header class="section-head games__head">
+        <span class="eyebrow">Proof</span>
+        <h2 id="games-title" class="h-xl" data-split="lines">Two games, one shell</h2>
+        <p class="lede">An indoor shooter and a driving game. Same settings screen, same tabs, same presets, same key hints. Courier changed the accent with one line.</p>
+      </header>
+      <div class="same">
+        <Shot class="same__a" src={shroudSettings} alt="Shroud's video settings: quality presets with High selected in orange, field of view slider, window mode, VSync and UI scale" caption="Shroud, Settings, Video" sizes="(min-width: 768px) 46vw, 100vw" />
+        <Shot class="same__b" src={courierSettings} alt="Courier's video settings: the same screen and rows, with High selected in yellow over a valley backdrop" caption="Courier, Settings, Video" sizes="(min-width: 768px) 46vw, 100vw" />
+        <code class="same__code">Theme::default().with_accent(Color::srgb(1.0, 0.78, 0.22))</code>
+      </div>
+      <ul class="cards">
+        {games.map((g) => (
+          <li class="card" style={`--game:${g.accent}`}>
+            <a href={`/games/${g.slug}/`} data-screen={g.title} class="card__link">
+              <div class="card__frame shot__frame">
+                <Picture src={gameShots[g.slug]} alt={gameAlts[g.slug]} formats={['avif', 'webp']} fallbackFormat="webp" widths={[640, 960, 1440]} sizes="(min-width: 768px) 46vw, 100vw" loading="lazy" decoding="async" quality={70} />
+              </div>
+              <div class="card__meta">
+                <span class="label">{g.kind}</span>
+                <span class="card__title">{g.title}</span>
+                <span class="card__sum">{g.summary}</span>
+                <span class="card__facts">{g.facts.map((f) => <span><b class="num">{f.value}</b> {f.label}</span>)}</span>
+                <span class="card__go">Open case <Fragment set:html={arrow} /></span>
+              </div>
+            </a>
+          </li>
+        ))}
+      </ul>
+    </div>
+  </section>
+
+  <!-- RENDER BUDGET: facts -->
+  <section class="budget wrap section" aria-labelledby="budget-title">
+    <div class="grid">
+      <header class="section-head budget__head">
+        <span class="eyebrow">Render budget</span>
+        <h2 id="budget-title" class="h-xl" data-split="lines">Drawn on a budget, with zero code</h2>
+      </header>
+      <dl class="facts">
+        {budget.headline.map((b) => (
+          <div class="fact">
+            <dt class="fact__unit label">{b.unit}</dt>
+            <dd class="fact__nums"><s class="num"><span class="sr-only">from </span>{b.from}</s><span class="fact__to num"><span class="sr-only">to </span>{b.to}</span></dd>
+            <dd class="fact__note">{b.note}</dd>
+          </div>
+        ))}
+      </dl>
+      <p class="budget__rig">{budget.rig}. Before: every optimisation off. After: the defaults.</p>
+      <div class="pair">
+        <Shot src={streetOff} alt="The test city from above with every optimisation off: blocks and thousands of props out to the horizon" caption="Budget off: 40,231 meshes drawn" sizes="(min-width: 768px) 40vw, 100vw" />
+        <Shot src={streetOn} alt="The same view with the defaults: near props unchanged, far props faded, far blocks flattened" caption="Budget on: 480 meshes drawn" sizes="(min-width: 768px) 40vw, 100vw" />
+        <p class="pair__text">Near the camera nothing changes. Far props fade out in a dithered cross-fade, so nothing pops, and far blocks become flat copies. GPU occlusion culling was tried too and left off: it was 3 to 15% slower in every pose measured.</p>
+        <a class="btn pair__btn" href="/render-budget/" data-screen="Render budget"><span class="btn__label">Read the render budget</span><Fragment set:html={arrow} /></a>
+      </div>
+    </div>
+  </section>
+
+  <!-- DEVTOOLS: full bleed -->
+  <section class="dev section" aria-labelledby="dev-title">
+    <div class="wrap grid">
+      <header class="section-head dev__head">
+        <span class="eyebrow">Devtools</span>
+        <h2 id="dev-title" class="h-xl" data-split="lines">Every run, against the last one</h2>
+      </header>
+    </div>
+    <div class="wrap">
+      <figure class="dev__full shot">
+        <div class="shot__frame dev__frame" data-reveal="clip">
+          <Picture src={shotMetricsRuns} alt="The metrics window: large charts for frame time, CPU, GPU and memory, rows of keys with sparklines, and a runs table comparing this run with three earlier runs, changes in green when better and red when worse" formats={['avif', 'webp']} fallbackFormat="webp" widths={[960, 1440]} sizes="(min-width: 768px) 88vw, 100vw" loading="lazy" decoding="async" quality={80} />
+        </div>
+        <figcaption><span>metrics_demo after four runs of commit 330d7d5</span><code>--metrics-window</code></figcaption>
+      </figure>
+      <div class="dev__crops">
+        <Shot src={shotMetricsCharts} alt="Two live charts from the metrics window: frame time at 6.56 ms and process CPU at 182%" caption="Live charts, redrawn 4 times a second" sizes="100vw" />
+        <Shot src={shotMetricsTable} alt="The runs table: this run against earlier runs of commit 330d7d5, frame time p95 down 34% in green, CPU up 65% in red" caption="Runs table: green better, red worse" sizes="100vw" />
+      </div>
+    </div>
+    <div class="wrap grid dev__body">
+      <div class="body dev__text">
+        <p>Press <span class="kbd">F4</span> in a dev build and a second window charts frame time, CPU, GPU and memory, then keeps a table of past runs tied to the git commit. <strong>Green is better, red is worse</strong>, dim is within 3%.</p>
+        <p>A control port and an MCP server let tests and AI agents drive the game: send keys, read state, take offscreen screenshots. Every engine capture on this site was taken that way.</p>
+      </div>
+      <ul class="rows dev__rows" data-select-rows>
+        <li class="row is-sel"><div class="row__text"><span class="row__label">Ship builds</span><span class="row__hint"><code>--no-default-features</code> removes all of it. The ashlar debug crates are not even in the dependency tree, and the packaging script refuses to package if one slipped in.</span></div><span class="chip">Enforced</span></li>
+        <li class="row"><div class="row__text"><span class="row__label">Clean exits</span><span class="row__hint">A pipelined-rendering deadlock on exit was found and fixed: clean exits went from 22 of 30 runs to 30 of 30.</span></div><span class="chip chip--on">30 / 30</span></li>
+      </ul>
+    </div>
+  </section>
+</Base>
+
+<style>
+  /* HERO */
+  .hero { min-height: 100svh; display: grid; align-items: center; padding-top: 6.5rem; padding-bottom: 3rem; }
+  .hero__grid { align-items: center; row-gap: 2.5rem; }
+  .hero__menu { grid-column: 1 / span 5; display: grid; gap: 1.4rem; align-content: center; }
+  .hero__title { display: grid; gap: 1.1rem; }
+  .hero__name { display: block; color: var(--c-fg); }
+  .hero__tag { display: block; font-family: var(--f-body); font-weight: 500; font-size: var(--t-m); line-height: 1.35; color: var(--c-muted); max-width: 22ch; text-transform: none; letter-spacing: 0; }
+  .hero__items { margin-top: 0.6rem; max-width: 30rem; }
+  .hero__keys { margin-top: 0.4rem; }
+  .hero__media { grid-column: 6 / -1; display: grid; gap: 1.6rem; }
+  .hero__stack { display: grid; }
+  .hero__layer { grid-area: 1 / 1; opacity: 0; }
+  .hero__layer.is-shown, .hero__layer.is-top { opacity: 1; }
+  .hero__layer.is-top { z-index: 1; }
+  .hero__layer :global(img) { width: 100%; height: 100%; object-fit: cover; }
+  .hero__pick { max-width: 26rem; }
+  .hero__timer { display: block; height: 4px; margin-top: 0.5rem; border-radius: 2px; background: var(--accent); transform-origin: left; visibility: hidden; }
+
+  /* STATEMENT */
+  .statement__label { grid-column: 1 / span 2; padding-top: 0.6rem; }
+  .statement__text { grid-column: 3 / span 9; font-size: var(--t-l); line-height: 1.22; letter-spacing: -0.005em; font-weight: 500; text-wrap: pretty; }
+  .statement__note { grid-column: 3 / span 6; margin-top: 2rem; color: var(--c-muted); font-size: var(--t-s); }
+
+  /* INSIDE */
+  .inside__head { grid-column: 1 / -1; }
+  .inside__tabs { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); column-gap: var(--gutter); }
+  .tablist { grid-column: 1 / -1; position: relative; display: flex; gap: clamp(0.25rem, 1.2vw, 1.4rem); margin-left: -0.55em; border-bottom: 1px solid var(--c-line-strong); margin-bottom: 2rem; overflow-x: auto; scrollbar-width: none; }
+  .tab { position: relative; isolation: isolate; padding: 0.7rem 0.55em 0.8rem; font-weight: 600; font-size: clamp(1.1rem, 0.95rem + 0.5vw, 1.5rem); letter-spacing: 0.04em; color: var(--c-muted); white-space: nowrap; transition: color 0.2s; }
+  .tab[aria-selected='true'] { color: var(--c-fg); }
+  .tab::before { content: ''; position: absolute; inset: 0.3rem 0 0.4rem; z-index: -1; border-left: 3px solid var(--accent); background: var(--accent-bar); border-radius: 0 var(--radius) var(--radius) 0; scale: 0 1; transform-origin: left; transition: scale 0.3s var(--ease-soft); }
+  @media (hover: hover) { .tab:hover { color: var(--c-fg); } .tab:hover::before { scale: 1 1; } }
+  .tab:focus-visible::before { scale: 1 1; }
+  .tab { transition: color 0.2s; }
+  .tablist__line { position: absolute; left: 0; bottom: 0; height: 3px; width: 0; background: var(--accent); }
+  :global(html:not(.js)) .tablist { display: none; }
+  .tabpanel { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); column-gap: var(--gutter); row-gap: 1.5rem; align-items: start; }
+  :global(html:not(.js)) .tabpanel { margin-bottom: 3rem; }
+  .tabpanel[hidden] { display: none; }
+  .tabpanel__title { grid-column: 1 / -1; font-family: var(--f-display); text-transform: uppercase; font-weight: 700; font-size: 1.5rem; }
+  :global(.is-tabs) .tabpanel__title { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .tabpanel .rows { grid-column: 1 / span 8; }
+  .about { grid-column: 9 / -1; padding: 1.2rem 1.2rem 1.3rem; display: grid; gap: 0.5rem; position: sticky; top: 6rem; }
+  .about__title { font-family: var(--f-display); font-weight: 700; text-transform: uppercase; font-size: 1.6rem; line-height: 1; }
+  .about__text { color: var(--c-muted); font-size: var(--t-s); margin-bottom: 0.6rem; }
+  .inside__keys { grid-column: 1 / -1; margin-top: 1.8rem; }
+
+  /* CODE */
+  .code-sec__panels { grid-column: 1 / span 7; display: grid; gap: 1rem; min-width: 0; }
+  .code-sec__text { grid-column: 9 / -1; display: grid; gap: 1.5rem; align-content: start; justify-items: start; padding-top: 0.5rem; }
+
+  /* GAMES */
+  .games__head { grid-column: 1 / span 9; }
+  .same { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); column-gap: var(--gutter); row-gap: 1rem; }
+  .same :global(.same__a) { grid-column: 1 / span 6; }
+  .same :global(.same__b) { grid-column: 7 / span 6; margin-top: clamp(2rem, 6vw, 6rem); }
+  .same__code { grid-column: 7 / span 6; font-size: 0.8rem; color: var(--accent); overflow-wrap: anywhere; }
+  .cards { grid-column: 1 / -1; list-style: none; padding: 0; margin-top: clamp(4rem, 8vw, 7rem); display: grid; grid-template-columns: 1fr 1fr; gap: var(--gutter); }
+  .card__link { display: grid; gap: 1.1rem; }
+  .card__frame :global(img) { transition: scale 0.6s var(--ease-out), filter 0.4s; }
+  .card__meta { display: grid; gap: 0.45rem; position: relative; padding-left: 1rem; }
+  .card__meta::before { content: ''; position: absolute; left: 0; top: 0.2rem; bottom: 0.2rem; width: 3px; background: var(--game); scale: 1 0.3; transform-origin: top; transition: scale 0.4s var(--ease-soft); }
+  .card__title { justify-self: start; position: relative; isolation: isolate; padding: 0.06em 0.25em 0 0.1em; margin-left: -0.1em; font-family: var(--f-display); font-weight: 700; text-transform: uppercase; font-size: var(--t-xl); line-height: 0.9; }
+  .card__title::before { content: ''; position: absolute; inset: 0; z-index: -1; border-left: 4px solid var(--game); background: linear-gradient(90deg, color-mix(in srgb, var(--game) 55%, var(--c-bg)), color-mix(in srgb, var(--game) 14%, var(--c-bg))); border-radius: 0 var(--radius) var(--radius) 0; scale: 0 1; transform-origin: left; transition: scale 0.42s var(--ease-soft); }
+  .card__sum { color: var(--c-muted); max-width: 46ch; }
+  .card__facts { display: flex; flex-wrap: wrap; gap: 0.4rem 1.5rem; color: var(--c-muted); font-size: var(--t-s); }
+  .card__facts b { font-family: var(--f-display); font-weight: 700; font-size: 1.6rem; color: var(--c-fg); margin-right: 0.15em; }
+  .card__go { display: inline-flex; align-items: center; gap: 0.5em; font-family: var(--f-display); text-transform: uppercase; font-weight: 600; letter-spacing: 0.06em; margin-top: 0.4rem; color: var(--game); }
+  .card__go :global(svg) { width: 1em; height: 1em; transition: translate 0.3s var(--ease-soft); }
+  @media (hover: hover) {
+    .card__link:hover .card__frame :global(img) { scale: 1.06; filter: brightness(1.12); }
+    .card__link:hover .card__meta::before { scale: 1 1; }
+    .card__link:hover .card__title::before { scale: 1 1; }
+    .card__link:hover .card__go :global(svg) { translate: 0.6em 0; }
+  }
+  .card__link:focus-visible .card__meta::before { scale: 1 1; }
+  .card__link:focus-visible .card__title::before { scale: 1 1; }
+  .card__link:focus-visible .card__frame :global(img) { scale: 1.045; }
+
+  /* BUDGET */
+  .budget__head { grid-column: 1 / span 9; }
+  .facts { grid-column: 1 / -1; display: grid; border-top: 1px solid var(--c-line-strong); }
+  .fact { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); column-gap: var(--gutter); align-items: baseline; padding-block: clamp(1rem, 2vw, 1.6rem); border-bottom: 1px solid var(--c-line-strong); }
+  .fact__unit { grid-column: 1 / span 3; grid-row: 1; }
+  .fact__nums { grid-column: 4 / span 6; display: flex; align-items: baseline; gap: clamp(0.8rem, 2vw, 2rem); flex-wrap: wrap; }
+  .fact__nums s { font-family: var(--f-display); font-weight: 600; font-size: var(--t-l); color: var(--c-dim); text-decoration-thickness: 2px; }
+  .fact__to { font-family: var(--f-display); font-weight: 700; font-size: var(--t-xl); line-height: 0.9; color: var(--accent); }
+  .fact__note { grid-column: 10 / -1; color: var(--c-muted); font-size: var(--t-s); }
+  .budget__rig { grid-column: 1 / -1; margin-top: 1rem; color: var(--c-muted); font-size: var(--t-xs); }
+  .pair { grid-column: 1 / -1; margin-top: clamp(3rem, 6vw, 5rem); display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); column-gap: var(--gutter); row-gap: 1.5rem; align-items: start; }
+  .pair > :global(.shot:nth-child(1)) { grid-column: 1 / span 6; }
+  .pair > :global(.shot:nth-child(2)) { grid-column: 7 / span 6; }
+  .pair__text { grid-column: 1 / span 6; color: var(--c-muted); max-width: 56ch; }
+  .pair__btn { grid-column: 7 / span 6; justify-self: start; align-self: center; }
+
+  /* DEV */
+  .dev__head { grid-column: 1 / span 9; }
+  .dev__frame { aspect-ratio: 1440 / 900; }
+  .dev__crops { display: none; }
+  .dev__crops :global(.shot__frame) { aspect-ratio: auto; }
+  .dev__crops :global(.shot__frame img) { height: auto; }
+  .dev__body { margin-top: clamp(2rem, 4vw, 3rem); row-gap: 2rem; }
+  .dev__text { grid-column: 1 / span 6; }
+  .dev__rows { grid-column: 8 / -1; }
+  .dev__text .kbd { font-size: 0.8rem; }
+
+  @media (max-width: 1023px) {
+    .hero__menu { grid-column: 1 / span 6; }
+    .hero__media { grid-column: 7 / -1; }
+    .tabpanel .rows { grid-column: 1 / span 7; }
+    .about { grid-column: 8 / -1; }
+  }
+  @media (max-width: 767px) {
+    .hero { padding-top: 5.5rem; align-items: start; min-height: auto; }
+    .hero__menu, .hero__media { grid-column: 1 / -1; }
+    .hero__name { font-size: clamp(6rem, 34vw, 9rem); }
+    .hero__keys { display: none; }
+    .statement__label, .statement__text, .statement__note { grid-column: 1 / -1; }
+    .tabpanel .rows, .about { grid-column: 1 / -1; }
+    .about { position: static; }
+    .inside__keys { display: none; }
+    .code-sec__panels, .code-sec__text { grid-column: 1 / -1; }
+    .code-sec__text { order: -1; margin-bottom: 1.5rem; }
+    .games__head, .budget__head, .dev__head { grid-column: 1 / -1; }
+    .same :global(.same__a), .same :global(.same__b), .same__code { grid-column: 1 / -1; margin-top: 0; }
+    .cards { grid-template-columns: 1fr; gap: 3rem; }
+    .fact { grid-template-columns: 1fr; row-gap: 0.4rem; }
+    .fact__unit, .fact__nums, .fact__note { grid-column: 1; grid-row: auto; }
+    .pair > :global(.shot:nth-child(1)), .pair > :global(.shot:nth-child(2)), .pair__text, .pair__btn { grid-column: 1 / -1; }
+    .dev__text, .dev__rows { grid-column: 1 / -1; }
+    .dev__full { display: none; }
+    .dev__crops { display: grid; gap: 1.5rem; }
+  }
+</style>

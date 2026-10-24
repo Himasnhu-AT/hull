@@ -1,0 +1,19 @@
+---
+// FieldKind::Swatches, on the web. The driver (src/motion/accent.ts) owns the state.
+import { accents } from '../data/site';
+interface Props { id: string; label?: string; attract?: boolean }
+const { id, label = 'Accent', attract = false } = Astro.props;
+---
+<div class="accent-pick" data-accent-pick>
+  <div class="accent-pick__head">
+    <span class="label" id={`${id}-label`}>{label}</span>
+    <span class="accent-pick__name" data-accent-name aria-live="off">{accents[0].name}, {accents[0].owner}’s theme</span>
+  </div>
+  <div class="swatches" role="radiogroup" aria-labelledby={`${id}-label`}>
+    {accents.map((a, i) => (
+      <button type="button" class="swatch" role="radio" aria-checked={i === 0 ? 'true' : 'false'} tabindex={i === 0 ? 0 : -1}
+        data-accent={a.id} style={`--sw:${a.hex}`} aria-label={a.name}><span></span></button>
+    ))}
+  </div>
+  {attract && <span class="chip attract" data-attract hidden>Attract mode <span class="kbd">Any key</span> stops</span>}
+</div>

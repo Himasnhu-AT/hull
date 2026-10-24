@@ -1,0 +1,35 @@
+---
+// Site navigation as the engine's pause menu: Esc opens it, Esc or Resume closes it.
+import { nav } from '../data/site';
+import AccentPicker from './AccentPicker.astro';
+const path = Astro.url.pathname;
+const current = (href: string) => (href === path ? 'page' : undefined);
+const hints: Record<string, string> = {
+  '/': 'Main menu', '/#inside': 'What the shell gives you', '/render-budget/': 'Measured on a 40k-prop city',
+  '/games/shroud/': 'Indoor FPS', '/games/courier/': 'Hover-bike delivery', '/start/': 'Cargo.toml and main.rs',
+};
+---
+<div id="menu" class="pause" role="dialog" aria-modal="true" aria-labelledby="menu-title" hidden data-pause>
+  <div class="pause__inner">
+    <div class="pause__main">
+      <span class="eyebrow">Hull</span>
+      <h2 class="pause__title" id="menu-title">Paused</h2>
+      <ul class="menu" data-menu>
+        <li><button type="button" data-resume>Resume <small>Back to the page</small></button></li>
+        {nav.map((n) => <li><a href={n.href} aria-current={current(n.href)} data-screen={n.label}>{n.label} <small>{hints[n.href]}</small></a></li>)}
+      </ul>
+      <p class="pause__note">The page does not scroll while paused. Nothing is lost when you leave.</p>
+      <div class="keys pause__keys" aria-hidden="true">
+        <span><span class="kbd">↑ ↓</span> Navigate</span><span><span class="kbd">Enter</span> Select</span><span><span class="kbd">Esc</span> Resume</span>
+      </div>
+    </div>
+    <div class="pause__side">
+      <div class="panel panel--accent pause-card">
+        <span class="label">Settings · Video</span>
+        <h3>Accent colour</h3>
+        <p>The engine re-brands every menu with one colour. So does this site.</p>
+        <div style="margin-top:1.2rem"><AccentPicker id="pause-accent" /></div>
+      </div>
+    </div>
+  </div>
+</div>

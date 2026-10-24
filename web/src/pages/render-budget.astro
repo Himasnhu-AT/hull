@@ -1,0 +1,221 @@
+---
+import Base from '../layouts/Base.astro';
+import Shot from '../components/Shot.astro';
+import BudgetFigure from '../components/BudgetFigure.astro';
+import { Picture } from 'astro:assets';
+import { budget } from '../data/site';
+import overviewOff from '../assets/shots/budget-overview-off.webp';
+import overviewOn from '../assets/shots/budget-overview-on.webp';
+import walkOn from '../assets/shots/budget-walk-on.webp';
+import shroudHigh from '../assets/shots/shroud-office-high.webp';
+
+const big = [
+  { pose: 'overview', offDrawn: '40,231 / 40,644', onDrawn: '480 / 19,315', offP95: '4.54', onP95: '3.07', offGpu: '3.51', onGpu: '2.58', offFps: '268', onFps: '350' },
+  { pose: 'street', offDrawn: '32,238 / 40,644', onDrawn: '1,736 / 32,172', offP95: '4.97', onP95: '3.42', offGpu: '3.76', onGpu: '2.95', offFps: '259', onFps: '323' },
+  { pose: 'walk', offDrawn: '9,570 / 40,644', onDrawn: '1,620 / 35,605', offP95: '4.15', onP95: '3.63', offGpu: '3.14', onGpu: '2.89', offFps: '279', onFps: '308' },
+];
+const small = [
+  { pose: 'street', off: '3,484 / 4,644', occ: '3.61', on: '351 / 3,732', offP95: '4.23', onP95: '3.38' },
+  { pose: 'overview', off: '4,334 / 4,644', occ: '3.44', on: '160 / 2,254', offP95: '3.28', onP95: '3.27' },
+  { pose: 'yard', off: '3,442 / 4,644', occ: '3.70', on: '262 / 2,765', offP95: '3.43', onP95: '3.25' },
+  { pose: 'walk', off: '1,344 / 4,644', occ: '4.26', on: '189 / 4,021', offP95: '3.39', onP95: '3.18' },
+];
+const dropped = [
+  { what: 'GPU occlusion culling by default', why: '3 to 15% slower in every pose. Walking p95 went from 3.39 to 4.26 ms: the depth prepass and two-phase culling cost more than the draws they save with GPU-driven batching.', state: 'Opt-in' },
+  { what: 'Trimming shadows of big scenery at 50 m', why: 'A building’s shadow vanishing at mid range is visible in screenshots. Only small props lose shadows; big pieces keep theirs until the far twin takes over.', state: 'Dropped' },
+  { what: 'Hide-mode streaming of spawned scenery', why: 'No measurable gain over distance detail, which already stops drawing it.', state: 'Option' },
+  { what: 'Streaming biased toward the view direction', why: 'An FPS turns 180° in about 0.1 s and frustum culling already skips what is behind. Not worth the pop-in risk.', state: 'Dropped' },
+];
+---
+<Base title="Render budget" state="Render budget" footerTitle="On by<br />default" footerLede="No tags, no config: the budget runs the moment a game is built on the engine. The only code you might write is a switch to turn a part off." footerCode={`// Nothing to add. To turn one part off:\napp.world_mut()\n    .resource_mut::<RenderBudget>()\n    .scenery_detail = false;`} footerFile="opt-out" description="How Hull's render budget cuts a 40,000-prop city from 40,231 meshes drawn to 480 with zero game code, with every measurement and what was tried and dropped.">
+  <section class="rb-hero wrap" aria-labelledby="rb-title">
+    <div class="grid">
+      <span class="eyebrow rb-hero__eyebrow" data-reveal="fade" data-intro>Render budget</span>
+      <h1 id="rb-title" class="rb-hero__title h-xl" data-split="lines" data-intro><span class="num">40,231</span> meshes.<br /><span class="rb-accent num">480</span> drawn.</h1>
+      <p class="lede rb-hero__lede" data-reveal="fade" data-intro data-delay="0.15">Every game on the engine gets a render budget with zero code. It works out what moves and what stands still, then spends detail where the camera is.</p>
+      <p class="label rb-hero__rig">{budget.rig}</p>
+    </div>
+  </section>
+
+  <section class="rb-compare wrap" aria-labelledby="cmp-title">
+    <h2 id="cmp-title" class="sr-only">Before and after</h2>
+    <div class="compare" data-compare style="--pos:50%">
+      <div class="compare__img compare__off">
+        <Picture src={overviewOff} alt="The 300 by 300 metre test city from above with every optimisation off: 40,231 meshes drawn" formats={['avif', 'webp']} fallbackFormat="webp" widths={[960, 1440, 1920]} sizes="100vw" loading="eager" fetchpriority="high" quality={74} />
+      </div>
+      <div class="compare__img compare__on">
+        <Picture src={overviewOn} alt="The same view with the defaults: far props faded and far buildings swapped for flat copies, 480 meshes drawn" formats={['avif', 'webp']} fallbackFormat="webp" widths={[960, 1440, 1920]} sizes="100vw" loading="eager" quality={74} />
+      </div>
+      <span class="compare__tag compare__tag--off"><b class="num">40,231</b> <span class="long">drawn, </span>all off</span>
+      <span class="compare__tag compare__tag--on"><b class="num">480</b> <span class="long">drawn, </span>defaults</span>
+      <span class="compare__handle" aria-hidden="true"><span></span></span>
+      <label class="sr-only" for="cmp-range">Split between budget off (left) and budget on (right)</label>
+      <input id="cmp-range" class="compare__range" type="range" min="0" max="100" value="50" step="1" />
+    </div>
+    <p class="rb-compare__cap">Drag the split. Far props dither out, far buildings become flat copies tinted with their texture's average colour, and cells beyond the view are not spawned at all. Near the camera nothing changes.</p>
+  </section>
+
+  <section class="rb-how wrap section" aria-labelledby="how-title">
+    <div class="grid">
+      <header class="section-head rb-how__head">
+        <span class="eyebrow">How it works</span>
+        <h2 id="how-title" class="h-xl" data-split="lines">Four rules, no tags needed</h2>
+      </header>
+      <ol class="steps" data-select-rows>
+        <li class="step is-sel"><span class="step__n num">1</span><div><h3 class="step__t">Classify</h3><p>Tags win if you set them: <code>Actor</code> or <code>Scenery</code>. Untagged meshes under a camera, skinned, morphed or under a moving rigid body are actors at once. The rest are watched for 60 frames and become scenery if they did not move. Scenery that moves later turns back into an actor.</p></div></li>
+        <li class="step"><span class="step__n num">2</span><div><h3 class="step__t">Spend detail by distance</h3><p>Props under 1.5 m stop casting shadows past 50 m and fade past 60 m. Bigger pieces switch to a far twin at 80 m and vanish at 170 m. Set the view distance to where your fog turns opaque and the edge is never seen. Actors are never changed.</p></div></li>
+        <li class="step"><span class="step__n num">3</span><div><h3 class="step__t">Stream big maps</h3><p>Register scenery as data with <code>SceneryStream</code> and cells around the camera spawn nearest first, 64 per frame, with hysteresis on the way out. Colliders are never streamed: physics, AI raycasts and navigation always see the whole map.</p></div></li>
+        <li class="step"><span class="step__n num">4</span><div><h3 class="step__t">Rest the GPU in menus</h3><p>Menus, pause and boot redraw at 30 Hz when focused and 8 Hz when not. Gameplay stays continuous. GPU busy in menus dropped from 85 to 92% to 21 to 32%.</p></div></li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="rb-fig wrap section--tight" aria-labelledby="fig-title">
+    <div class="grid">
+      <h2 id="fig-title" class="label rb-fig__label">Distance detail, explained</h2>
+      <div class="rb-fig__body"><BudgetFigure /></div>
+    </div>
+  </section>
+
+  <section class="rb-data wrap section" aria-labelledby="data-title">
+    <div class="grid">
+      <header class="section-head rb-data__head">
+        <span class="eyebrow">Measurements</span>
+        <h2 id="data-title" class="h-xl" data-split="lines">The numbers</h2>
+        <p class="body">A 300 × 300 m city: 100 ground tiles, about 170 buildings and 120 yard walls that occlude, 20 walking actors. Each row is 7 seconds at a fixed camera pose, driven over the control port, with the optimisations toggled at runtime. "Drawn" is meshes the camera drew over meshes in the world.</p>
+      </header>
+      <div class="table-wrap rb-data__t1">
+        <table>
+          <caption><span class="label">40,000 props</span></caption>
+          <thead><tr><th scope="col">Pose</th><th scope="col">Drawn, off</th><th scope="col">Drawn, default</th><th scope="col">p95 ms</th><th scope="col">GPU ms</th><th scope="col">FPS</th></tr></thead>
+          <tbody>
+            {big.map((r) => (
+              <tr><th scope="row">{r.pose}</th><td data-l="Drawn, off">{r.offDrawn}</td><td class="hl" data-l="Drawn, default">{r.onDrawn}</td><td data-l="p95 ms">{r.offP95} <span class="to">to</span> <b>{r.onP95}</b></td><td data-l="GPU ms">{r.offGpu} <span class="to">to</span> <b>{r.onGpu}</b></td><td data-l="FPS">{r.offFps} <span class="to">to</span> <b>{r.onFps}</b></td></tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div class="table-wrap rb-data__t2">
+        <table>
+          <caption><span class="label">4,000 props</span></caption>
+          <thead><tr><th scope="col">Pose</th><th scope="col">Drawn, off</th><th scope="col">Drawn, default</th><th scope="col">p95 ms</th><th scope="col">p95 with occlusion</th></tr></thead>
+          <tbody>
+            {small.map((r) => (
+              <tr><th scope="row">{r.pose}</th><td data-l="Drawn, off">{r.off}</td><td class="hl" data-l="Drawn, default">{r.on}</td><td data-l="p95 ms">{r.offP95} <span class="to">to</span> <b>{r.onP95}</b></td><td class="bad" data-l="p95 with occlusion">{r.occ}</td></tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <ul class="rb-data__more rows">
+        <li class="row"><div class="row__text"><span class="row__label">Idle skip, opt-in</span><span class="row__hint">On a still street view a frame where nothing visible changed is simulated but not drawn. GPU busy went from 79% to 2%; 342 of about 350 frames were skipped over 6 s, and screenshots taken while skipping are correct.</span></div><span class="chip">79% to 2%</span></li>
+        <li class="row"><div class="row__text"><span class="row__label">Zero config</span><span class="row__hint">The same city with no Actor or Scenery tags at all gives identical counts and frame times.</span></div><span class="chip chip--on">Identical</span></li>
+        <li class="row"><div class="row__text"><span class="row__label">Its own cost</span><span class="row__hint">About 30 µs per frame at 4.6k meshes and 200 to 320 µs at 40k, mostly dev-only per-mesh counters that are off in ship builds.</span></div><span class="chip">~30 µs</span></li>
+        <li class="row"><div class="row__text"><span class="row__label">Where it shows</span><span class="row__hint">The empty city still costs 2.5 to 3.5 ms of GPU at High: SSAO, TAA, bloom and three shadow cascades dominate. Culling shows most where geometry is heavy, and on weaker GPUs.</span></div><span class="chip">Honest</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="rb-drop wrap section" aria-labelledby="drop-title">
+    <div class="grid">
+      <header class="section-head rb-drop__head">
+        <span class="eyebrow">Tried and dropped</span>
+        <h2 id="drop-title" class="h-xl" data-split="lines">What did not make the cut</h2>
+      </header>
+      <ul class="drops">
+        {dropped.map((d) => (
+          <li class="drop"><span class="chip">{d.state}</span><h3 class="drop__t">{d.what}</h3><p class="drop__why">{d.why}</p></li>
+        ))}
+      </ul>
+      <Shot class="rb-drop__shot" src={walkOn} alt="Walking pose in the test city with the defaults on: a brick yard wall, a building and props at close range, all at full detail" caption="Walking pose, defaults: 1,536 meshes drawn of 35,098" sizes="(min-width: 768px) 45vw, 100vw" />
+      <Shot class="rb-drop__shot2" src={shroudHigh} alt="Shroud's office map at High quality: desks, monitors and ceiling panels" caption="Shroud's arenas are small: at High nothing is far enough to change" sizes="(min-width: 768px) 45vw, 100vw" />
+    </div>
+  </section>
+</Base>
+
+<style>
+  .rb-hero { padding-top: clamp(6.5rem, 10vw, 8.5rem); padding-bottom: clamp(1.5rem, 3vw, 2.5rem); }
+  .rb-hero__eyebrow { grid-column: 1 / -1; margin-bottom: 1.2rem; }
+  .rb-hero__title { grid-column: 1 / span 8; font-size: clamp(3.2rem, 1rem + 6.4vw, 7.5rem); }
+  .rb-accent { color: var(--accent); }
+  .rb-hero__lede { grid-column: 9 / -1; align-self: end; }
+  .rb-hero__rig { grid-column: 1 / -1; margin-top: 1.2rem; text-transform: none; letter-spacing: 0; font-family: var(--f-body); font-weight: 500; }
+
+  .compare { position: relative; aspect-ratio: 21 / 9; overflow: clip; border-radius: var(--radius); outline: 1px solid var(--c-line); outline-offset: -1px; background: var(--c-panel); touch-action: pan-y; }
+  .compare__img { position: absolute; inset: 0; }
+  .compare__img :global(picture) { display: block; height: 100%; }
+  .compare__img :global(img) { width: 100%; height: 100%; object-fit: cover; object-position: 50% 92%; }
+  .compare__on { clip-path: inset(0 0 0 var(--pos)); }
+  .compare__handle { position: absolute; top: 0; bottom: 0; left: var(--pos); width: 3px; translate: -50% 0; background: var(--accent); pointer-events: none; }
+  .compare__handle span { position: absolute; top: 50%; left: 50%; width: 2.75rem; height: 2.75rem; translate: -50% -50%; border-radius: var(--radius); background: var(--accent); }
+  .compare__handle span::before, .compare__handle span::after { content: ''; position: absolute; top: 50%; width: 0; height: 0; border-block: 6px solid transparent; translate: 0 -50%; }
+  .compare__handle span::before { left: 0.55rem; border-right: 7px solid var(--c-on-accent); }
+  .compare__handle span::after { right: 0.55rem; border-left: 7px solid var(--c-on-accent); }
+  .compare__range { position: absolute; inset: 0; width: 100%; height: 100%; cursor: ew-resize; margin: 0; appearance: none; -webkit-appearance: none; background: transparent; border-radius: var(--radius); }
+  .compare__range::-webkit-slider-thumb { -webkit-appearance: none; width: 44px; height: 100%; background: transparent; }
+  .compare__range::-moz-range-thumb { width: 44px; height: 100%; background: transparent; border: 0; }
+  .compare__range:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+  .compare__tag { position: absolute; top: 1rem; padding: 0.45rem 0.75rem; border-radius: 3px; background: rgb(9 11 15 / 0.85); font-family: var(--f-display); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; font-size: 0.9375rem; pointer-events: none; }
+  .compare__tag b { font-weight: 700; font-size: 1.25rem; margin-right: 0.2em; }
+  .compare__tag--off { left: 1rem; }
+  .compare__tag--on { right: 1rem; color: var(--accent); }
+  .rb-compare__cap { margin-top: 1rem; color: var(--c-muted); font-size: var(--t-s); max-width: 70ch; }
+
+  .rb-how__head { grid-column: 1 / span 8; }
+  .steps { grid-column: 1 / -1; list-style: none; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--gutter); }
+  .step { display: grid; grid-template-columns: auto 1fr; gap: 1.2rem; padding: 1.5rem 1.4rem 1.6rem; background: var(--c-panel); border-left: 3px solid var(--c-raised); border-radius: 0 var(--radius) var(--radius) 0; transition: background-color 0.25s, border-color 0.25s; }
+  .step.is-sel { border-left-color: var(--accent); background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 16%, var(--c-panel)), var(--c-panel) 70%); }
+  .step:nth-child(2) { margin-top: clamp(0rem, 4vw, 3rem); }
+  .step:nth-child(4) { margin-top: clamp(0rem, 4vw, 3rem); }
+  .step__n { font-family: var(--f-display); font-weight: 700; font-size: 3rem; line-height: 0.85; color: var(--accent); }
+  .step__t { font-family: var(--f-display); font-weight: 700; text-transform: uppercase; font-size: 1.6rem; line-height: 1; margin-bottom: 0.6rem; }
+  .step p { color: var(--c-muted); }
+  .step code { color: var(--c-fg); font-size: 0.9em; }
+
+  .rb-fig__label { grid-column: 1 / -1; margin-bottom: 1rem; }
+  .rb-fig__body { grid-column: 1 / -1; }
+
+  .rb-data__head { grid-column: 1 / span 9; }
+  .table-wrap { grid-column: 1 / -1; overflow-x: auto; margin-bottom: 2.5rem; }
+  table { width: 100%; border-collapse: collapse; font-family: var(--f-mono); font-size: 0.875rem; font-variant-numeric: tabular-nums; min-width: 40rem; }
+  caption { text-align: left; padding-bottom: 0.8rem; }
+  th, td { text-align: right; padding: 0.75rem 0.9rem; border-bottom: 1px solid var(--c-line); white-space: nowrap; }
+  th:first-child { text-align: left; }
+  thead th { font-family: var(--f-display); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; font-size: 0.8125rem; color: var(--c-muted); border-bottom-color: var(--c-line-strong); }
+  tbody th { font-family: var(--f-display); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; font-size: 1rem; color: var(--c-fg); }
+  td { color: var(--c-muted); }
+  td b { color: var(--c-fg); font-weight: 400; }
+  td .to { color: var(--c-dim); font-family: var(--f-body); }
+  td.hl { color: var(--accent); }
+  td.bad { color: var(--c-bad); }
+  tbody tr:first-child th { box-shadow: inset 3px 0 var(--accent); }
+  .rb-data__more { grid-column: 1 / -1; }
+
+  .rb-drop__head { grid-column: 1 / span 9; }
+  .drops { grid-column: 1 / span 7; list-style: none; padding: 0; display: grid; gap: 2rem; grid-row: span 2; }
+  .drop { display: grid; gap: 0.5rem; justify-items: start; padding-bottom: 2rem; border-bottom: 1px solid var(--c-line); }
+  .drop__t { font-family: var(--f-display); font-weight: 700; text-transform: uppercase; font-size: var(--t-l); line-height: 1; }
+  .drop__why { color: var(--c-muted); max-width: 60ch; }
+  .rb-drop :global(.rb-drop__shot) { grid-column: 9 / -1; grid-row: 2; position: sticky; top: 6rem; }
+  .rb-drop :global(.rb-drop__shot2) { grid-column: 9 / -1; grid-row: 3; align-self: start; }
+
+  @media (max-width: 767px) {
+    .rb-hero__title, .rb-hero__lede, .rb-how__head, .rb-data__head, .rb-data__more, .rb-drop__head, .drops { grid-column: 1 / -1; }
+    .rb-hero__lede { margin-top: 1.5rem; }
+    .steps { grid-template-columns: 1fr; }
+    .step:nth-child(2), .step:nth-child(4) { margin-top: 0; }
+    .compare { aspect-ratio: 4 / 3; }
+    .compare__img :global(img) { object-position: 50% 85%; }
+    table { min-width: 0; }
+    thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+    tbody tr { display: grid; grid-template-columns: 1fr 1fr; gap: 0.2rem 1rem; padding: 0.9rem 0; border-bottom: 1px solid var(--c-line-strong); }
+    tbody th { grid-column: 1 / -1; padding: 0 0 0.3rem; border: 0; box-shadow: none !important; }
+    td { display: block; text-align: left; padding: 0.2rem 0; border: 0; white-space: nowrap; }
+    td::before { display: block; content: attr(data-l); font-family: var(--f-display); text-transform: uppercase; letter-spacing: 0.06em; font-size: 0.75rem; color: var(--c-dim); }
+    .compare__tag { font-size: 0.75rem; top: 0.6rem; padding: 0.35rem 0.5rem; }
+    .compare__tag b { font-size: 1rem; }
+    .compare__tag .long { display: none; }
+    .compare__tag--off { left: 0.6rem; } .compare__tag--on { right: 0.6rem; }
+    .rb-drop :global(.rb-drop__shot), .rb-drop :global(.rb-drop__shot2) { grid-column: 1 / -1; grid-row: auto; position: static; margin-top: 1.5rem; }
+    .drops { grid-row: auto; }
+  }
+</style>

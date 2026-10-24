@@ -1,0 +1,181 @@
+/* Render budget figure: site palette on the kit's tokens. Everything scoped under .budget-fig. */
+.budget-fig.iso {
+  --bf-accent: var(--accent, var(--c-accent, #ffa838));
+  --bf-ground: #090b0f;
+  --bf-panel: #12161c;
+  --bf-raised: #212630;
+  --bf-ink: #edf1f6;
+  --bf-muted: #949eb0;
+  --bf-line: rgba(255, 255, 255, .09);
+  --bf-line-strong: rgba(255, 255, 255, .18);
+  --bf-twin: #2b313c;
+  --bf-shadow: rgba(2, 3, 5, .62);
+  --anatomy-card: var(--bf-panel);
+  --anatomy-paper: var(--bf-panel);
+  --anatomy-face: #1a1f27;
+  --anatomy-top: #1d232c;
+  --anatomy-shade-0: #0f1217;
+  --anatomy-shade-1: #12161c;
+  --anatomy-shade-2: #151a21;
+  --anatomy-shade-3: #191e26;
+  --anatomy-lit-top: color-mix(in srgb, var(--bf-accent) 78%, #000);
+  --anatomy-lit-shade: color-mix(in srgb, var(--bf-accent) 46%, #000);
+  --anatomy-hi: #cdd4de;
+  --anatomy-mid: #687284;
+  --anatomy-lo: #3d4452;
+  --anatomy-faint: #2a303a;
+  --anatomy-lit: var(--bf-accent);
+  --anatomy-dot: var(--bf-ink);
+  --anatomy-halo: #020305;
+  --anatomy-halo-opacity: .85;
+  --anatomy-text: var(--bf-muted);
+  --anatomy-muted: var(--bf-muted);
+  margin: 0;
+  color: var(--bf-muted);
+  font-family: 'Barlow', system-ui, sans-serif;
+}
+.budget-fig .bf-card {
+  position: relative;
+  padding: 16px 18px 14px;
+  background: var(--bf-panel);
+  border-radius: 4px;
+  box-shadow: inset 0 0 0 1px var(--bf-line);
+  overflow: hidden;
+}
+.budget-fig .bf-head,
+.budget-fig .bf-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.budget-fig .bf-fig,
+.budget-fig .bf-title,
+.budget-fig .bf-hint,
+.budget-fig .bf-presets button {
+  font-family: 'Barlow Condensed', 'Barlow', system-ui, sans-serif;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  font-size: 13px;
+  line-height: 1;
+}
+.budget-fig .bf-fig { color: var(--bf-ink); }
+.budget-fig .bf-title { color: var(--bf-muted); }
+.budget-fig .bf-hint { color: var(--bf-muted); font-size: 12px; }
+.budget-fig .bf-readout,
+.budget-fig .bf-keys b {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-weight: 400;
+  font-size: 12px;
+  color: var(--bf-ink);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.budget-fig .bf-stage {
+  margin: 10px -4px 6px;
+  border-radius: 4px;
+  touch-action: pan-y;
+  cursor: ew-resize;
+}
+.budget-fig .bf-stage:focus-visible,
+.budget-fig .bf-presets button:focus-visible {
+  outline: 2px solid var(--bf-accent);
+  outline-offset: 3px;
+}
+.budget-fig .iso-svg { overflow: visible; }
+.budget-fig .bf-foot { display: grid; gap: 12px; }
+.budget-fig .bf-presets {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  padding: 4px;
+  border-radius: 4px;
+  background: var(--bf-ground);
+  box-shadow: inset 0 0 0 1px var(--bf-line);
+}
+.budget-fig .bf-presets button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 9px 4px 8px;
+  border-radius: 3px;
+  color: var(--bf-muted);
+  background: transparent;
+  border: 0;
+  margin: 0;
+  cursor: pointer;
+  transition: background-color .28s cubic-bezier(.215, .61, .355, 1), color .28s cubic-bezier(.215, .61, .355, 1);
+}
+.budget-fig .bf-presets button span {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-weight: 400;
+  font-size: 11px;
+  letter-spacing: 0;
+  text-transform: none;
+  color: inherit;
+  opacity: .8;
+}
+@media (hover: hover) {
+  .budget-fig .bf-presets button:hover { color: var(--bf-ink); background: var(--bf-raised); }
+}
+.budget-fig .bf-presets button[aria-pressed="true"] {
+  color: var(--bf-ground);
+  background: var(--bf-accent);
+}
+.budget-fig .bf-live {
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+.budget-fig .bf-legend { display: grid; gap: 10px; margin-top: 12px; font-size: 14px; line-height: 1.55; }
+.budget-fig .bf-keys {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-weight: 500;
+}
+.budget-fig .bf-keys li { display: inline-flex; align-items: center; gap: 7px; }
+.budget-fig .bf-keys b { min-width: 1ch; }
+.budget-fig .bf-caption { margin: 0; color: var(--bf-muted); font-weight: 500; }
+.budget-fig .bf-sw {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  flex: none;
+  box-shadow: inset 0 0 0 1px var(--anatomy-hi);
+  background: var(--anatomy-top);
+}
+.budget-fig .bf-sw[data-sw="full"] { box-shadow: inset 0 0 0 1px var(--anatomy-hi), 3px 3px 0 0 rgba(0, 0, 0, .7); }
+.budget-fig .bf-sw[data-sw="faded"] {
+  box-shadow: none;
+  background: repeating-conic-gradient(var(--anatomy-hi) 0 25%, transparent 0 50%) 0 0 / 4px 4px;
+  opacity: .7;
+}
+.budget-fig .bf-sw[data-sw="twin"] { background: var(--bf-twin); box-shadow: inset 0 0 0 1px var(--anatomy-mid); }
+.budget-fig .bf-sw[data-sw="gone"] { background: transparent; box-shadow: inset 0 0 0 1px var(--anatomy-lo); }
+.budget-fig .bf-sw[data-sw="actor"] { border-radius: 6px; }
+.budget-fig .bf-sw[data-sw="collider"] { background: transparent; box-shadow: none; border: 1px dotted var(--anatomy-hi); }
+.budget-fig .bf-sw[data-sw="mark"] { width: 3px; height: 13px; border-radius: 1px; background: var(--bf-accent); box-shadow: none; }
+
+/* drawing */
+.budget-fig .bf-shadow { fill: var(--bf-shadow); stroke: none; }
+.budget-fig .iso-line.bf-mark-line { stroke: var(--bf-accent); stroke-opacity: .75; stroke-width: .8px; }
+.budget-fig .iso-line.bf-collider { stroke: var(--anatomy-mid); stroke-width: .8px; stroke-dasharray: .01 2.2; }
+.budget-fig .bf-mark > .iso-fill { fill: color-mix(in srgb, var(--bf-accent) 60%, #000); }
+.budget-fig .bf-glass { fill: #07090c; stroke: var(--anatomy-lo); stroke-width: .6px; }
+.budget-fig .bf-twin > .iso-fill,
+.budget-fig .bf-twin > .iso-top,
+.budget-fig .bf-twin > .iso-shade { fill: var(--bf-twin); }
+.budget-fig .bf-twin > .iso-edge { stroke: #4a5262; }
+
+@media (max-width: 520px) {
+  .budget-fig .bf-card { padding: 14px 12px 12px; }
+  .budget-fig .bf-stage { margin: 8px -14px 4px; }
+  .budget-fig .bf-stage .iso-svg { width: 106%; margin-left: -3%; }
+}

@@ -1,0 +1,47 @@
+---
+import Base from '../layouts/Base.astro';
+import Shot from '../components/Shot.astro';
+import pause from '../assets/shots/gallery-pause.webp';
+---
+<Base title="No screen" state="Missing screen" description="This address has no page. Go back, or open the main menu and pick a screen." footer={false}>
+  <section class="nf wrap">
+    <div class="grid">
+      <div class="nf__main">
+        <span class="eyebrow" data-reveal="fade" data-intro>Error 404</span>
+        <h1 class="display nf__title" data-split="chars" data-intro>No screen</h1>
+        <p class="lede nf__text">The screen stack asked for a screen nobody registered. Nothing broke: pop back, or pick a screen from the menu.</p>
+        <code class="nf__code">ScreenRegistry::id(path) == None</code>
+        <ul class="menu nf__menu" data-menu>
+          <li><button type="button" data-back>Back <small>Previous screen</small></button></li>
+          <li><a href="/" data-screen="Main menu">Main menu <small>Home</small></a></li>
+          <li><a href="/start/" data-screen="Start">Start <small>Cargo.toml and main.rs</small></a></li>
+        </ul>
+        <div class="keys" aria-hidden="true"><span><span class="kbd">Enter</span> Select</span><span><span class="kbd">Esc</span> Menu</span></div>
+      </div>
+      <div class="nf__side" aria-hidden="true">
+        <Shot src={pause} alt="" caption="Every other screen is registered." sizes="(min-width: 768px) 36vw, 100vw" />
+      </div>
+    </div>
+  </section>
+</Base>
+<script>
+  import { onPage } from '../engine';
+  onPage(() => {
+    const b = document.querySelector<HTMLButtonElement>('[data-back]');
+    if (!b) return;
+    const go = () => (history.length > 1 ? history.back() : location.assign('/'));
+    b.addEventListener('click', go);
+    return () => b.removeEventListener('click', go);
+  });
+</script>
+<style>
+  .nf { min-height: 100svh; display: grid; align-items: center; padding-block: 7rem 4rem; }
+  .nf__main { grid-column: 1 / span 7; display: grid; gap: 1.4rem; justify-items: start; }
+  .nf__side { grid-column: 8 / -1; align-self: center; }
+  .nf__side :global(.shot__frame) { opacity: 0.55; filter: grayscale(0.6); }
+  .nf__title { font-size: clamp(5rem, 1rem + 14vw, 14rem); }
+  .nf__text { max-width: 40ch; }
+  .nf__code { color: var(--accent); font-size: 0.875rem; }
+  .nf__menu { min-width: min(26rem, 100%); margin-top: 0.6rem; }
+  @media (max-width: 767px) { .nf__main { grid-column: 1 / -1; } .nf__side { display: none; } }
+</style>

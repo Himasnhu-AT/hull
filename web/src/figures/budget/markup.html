@@ -1,0 +1,31 @@
+<figure class="budget-fig iso" data-budget-figure>
+  <div class="bf-card">
+    <div class="bf-head" aria-hidden="true"><span class="bf-fig">Fig 1</span><span class="bf-title">Distance detail</span></div>
+    <div class="bf-stage" tabindex="0" role="slider" aria-label="Probe crate distance from the camera. Arrow keys move it along the bench, Shift moves 20 m." aria-valuemin="6" aria-valuemax="150" aria-valuenow="20" aria-valuetext="Probe at 20 m: full detail with a shadow">
+      <!--svg-->
+    </div>
+    <div class="bf-foot">
+      <div class="bf-presets" role="group" aria-label="Quality preset">
+        <button type="button" data-preset="low" aria-pressed="false">Low<span>×0.6</span></button>
+        <button type="button" data-preset="medium" aria-pressed="false">Medium<span>×0.8</span></button>
+        <button type="button" data-preset="high" aria-pressed="true">High<span>×1.0</span></button>
+        <button type="button" data-preset="ultra" aria-pressed="false">Ultra<span>×1.5</span></button>
+      </div>
+      <div class="bf-meta" aria-hidden="true"><span class="bf-hint">Pick a preset, drag the probe</span><span class="bf-readout" data-readout>50 · 60 · 80 · 170 m</span></div>
+    </div>
+    <p class="bf-live" aria-live="polite" data-live></p>
+  </div>
+  <figcaption class="bf-legend">
+    <ul class="bf-keys">
+      <li><i class="bf-sw" data-sw="full"></i>Full detail <b data-count="full"><!--count:full--></b></li>
+      <li><i class="bf-sw" data-sw="noshadow"></i>No shadow <b data-count="noshadow"><!--count:noshadow--></b></li>
+      <li><i class="bf-sw" data-sw="faded"></i>Dithered out <b data-count="faded"><!--count:faded--></b></li>
+      <li><i class="bf-sw" data-sw="twin"></i>Far twin <b data-count="twin"><!--count:twin--></b></li>
+      <li><i class="bf-sw" data-sw="gone"></i>Gone <b data-count="gone"><!--count:gone--></b></li>
+      <li><i class="bf-sw" data-sw="actor"></i>Actor, never changed</li>
+      <li><i class="bf-sw" data-sw="collider"></i>Collider, never touched</li>
+      <li><i class="bf-sw" data-sw="mark"></i>Markers: shadow, small props, far, view</li>
+    </ul>
+    <p class="bf-caption">The render budget sorts static scenery by its distance from the camera. Props smaller than 1.5 m stop casting shadows past 50 m and dither out past 60 m. Bigger pieces swap to a flat far twin past 80 m, tinted with their texture's average colour. Nothing draws past 170 m, where a game's fog turns opaque. Actors keep full detail and shadows, and colliders never change, so physics and AI still see the whole map. Each preset scales every range: Low 0.6, Medium 0.8, High 1.0, Ultra 1.5.</p>
+  </figcaption>
+</figure>

@@ -1,0 +1,109 @@
+---
+import { ClientRouter } from 'astro:transitions';
+import { site, games } from '../data/site';
+import PauseMenu from '../components/PauseMenu.astro';
+import Footer from '../components/Footer.astro';
+import Mark from '../components/Mark.astro';
+import '../styles/tokens.css';
+import '../styles/engine.css';
+import '../styles/site.css';
+
+interface Props {
+  title?: string;
+  description?: string;
+  image?: string;
+  state?: string;          // corner state label for this screen
+  accent?: string;         // pin the page to one accent (game pages)
+  footer?: boolean;
+  footerTitle?: string;
+  footerLede?: string;
+  footerCode?: string;
+  footerFile?: string;
+  jsonLd?: Record<string, unknown>;
+}
+const { title, description = site.description, image = '/og.png', state = 'Main menu', accent, footer = true, footerTitle, footerLede, footerCode, footerFile, jsonLd } = Astro.props;
+const fullTitle = title ? `${title} | ${site.name}` : `${site.name} | ${site.role}`;
+const canonical = new URL(Astro.url.pathname, Astro.site ?? site.url).href;
+const ogImage = new URL(image, Astro.site ?? site.url).href;
+const ld = jsonLd ?? {
+  '@context': 'https://schema.org',
+  '@type': 'SoftwareSourceCode',
+  name: site.name,
+  description: site.description,
+  programmingLanguage: 'Rust',
+  license: 'https://spdx.org/licenses/MIT.html',
+  runtimePlatform: `Bevy ${site.bevy}`,
+  url: site.url,
+};
+void games;
+---
+<!doctype html>
+<html lang="en" transition:animate="none" data-page-accent={accent}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{fullTitle}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+    <meta name="theme-color" content="#090b0f" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="sitemap" href="/sitemap-index.xml" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content={site.name} />
+    <meta property="og:title" content={fullTitle} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={ogImage} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={fullTitle} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={ogImage} />
+    <script type="application/ld+json" set:html={JSON.stringify(ld)} />
+    <link rel="preload" href="/fonts/barlow-condensed-700-normal.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/barlow-500-normal.woff2" as="font" type="font/woff2" crossorigin />
+    <slot name="head" />
+    <script is:inline>
+      (function () {
+        var h = document.documentElement;
+        h.classList.add('js');
+        if (!matchMedia('(prefers-reduced-motion: reduce)').matches) h.classList.add('motion');
+        // Accent before first paint: a game page pins its own, else the visitor's last pick.
+        var map = { shroud: '#ffa838', courier: '#ffc738', cyan: '#59d1ff', green: '#61e6b8', rose: '#ff7399' };
+        var pinned = h.getAttribute('data-page-accent');
+        var id = null;
+        try { id = localStorage.getItem('hull-accent'); } catch (e) {}
+        var hex = pinned || map[id];
+        if (hex) h.style.setProperty('--accent', hex);
+      })();
+    </script>
+    <ClientRouter fallback="swap" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <div id="curtain" transition:persist="curtain" aria-hidden="true"><div class="curtain__panel"><span class="eyebrow" data-curtain-eyebrow>Loading screen</span><span class="curtain__title" data-curtain-title></span></div></div>
+    <header class="frame" transition:persist="frame">
+      <div class="frame__id">
+        <a class="wordmark" href="/" aria-label={`${site.name} home`} data-screen="Main menu"><Mark />{site.name}</a>
+        <span class="label state" data-state-label data-default={state}>{state}</span>
+      </div>
+      <div class="frame__tools">
+        <span class="fps num" data-fps aria-hidden="true" title="This page's own frame rate, like the engine's FPS counter"><b data-fps-n>--</b> FPS <span data-fps-ms>-- ms</span></span>
+        <button class="menu-btn" type="button" aria-expanded="false" aria-controls="menu" data-menu-open>Menu <span class="kbd" aria-hidden="true">Esc</span></button>
+      </div>
+    </header>
+    <main id="main" tabindex="-1" data-state={state}>
+      <slot />
+    </main>
+    {footer && <Footer title={footerTitle} lede={footerLede} code={footerCode} file={footerFile} />}
+    <PauseMenu />
+    <script>
+      import { start } from '../engine/astro';
+      import { setupMotion } from '../motion/setup';
+      start(setupMotion);
+    </script>
+  </body>
+</html>

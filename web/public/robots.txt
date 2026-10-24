@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://hull.marl.studio/sitemap-index.xml

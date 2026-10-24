@@ -1,0 +1,25 @@
+---
+// Fig 1 on the render budget page: distance detail on a range bench.
+// Static art is pre-rendered by src/figures/budget/build.mjs (run: node src/figures/budget/build.mjs).
+import markup from '../figures/budget/markup.html?raw';
+import { svg, counts } from '../figures/budget/figure-svg.js';
+import '../figures/budget/budget.css';
+
+const html = markup
+  .replace('<!--svg-->', svg)
+  .replace(/<!--count:(\w+)-->/g, (_, tier: string) => String((counts as Record<string, number>)[tier] ?? 0));
+---
+
+<Fragment set:html={html} />
+
+<script>
+  import { onPage } from '../engine';
+  import { mountBudget } from '../figures/budget/live.js';
+
+  onPage(() => {
+    const el = document.querySelector<HTMLElement>('[data-budget-figure]');
+    if (!el) return;
+    const stop = mountBudget(el);
+    return () => stop();
+  });
+</script>
