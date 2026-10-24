@@ -176,23 +176,76 @@ fn face_camera(
 /// asset), a shadowed low afternoon [`Sun`], and cool ambient fill. Pair with a camera that has
 /// `AtmosphereSettings` / `Exposure { ev100: 13.0 }` for Shroud's look.
 pub fn sky_and_sun(commands: &mut Commands) {
-    commands.queue(|world: &mut World| {
-        let medium = world.get_resource_mut::<Assets<ScatteringMedium>>().map(|mut m| m.add(ScatteringMedium::earth(256, 256)));
+    sky_and_sun_with(commands, SunSetup::default());
+}
+
+/// Sun, shadow and ambient parameters for [`sky_and_sun_with`]. The default is Shroud's
+/// arena look (shadows to 90 m); open maps want a longer `shadow_distance` and more cascades.
+#[derive(Clone, Debug)]
+pub struct SunSetup {
+    /// Direction the sunlight travels (from the sun towards the ground).
+    pub direction: Vec3,
+    pub illuminance: f32,
+    pub color: Color,
+    pub cascades: usize,
+    pub first_cascade: f32,
+    /// Shadows end here (metres from the camera).
+    pub shadow_distance: f32,
+    pub ambient: Color,
+    pub ambient_brightness: f32,
+    /// Spawn the atmosphere (sky) entity; otherwise only `fallback_sky` as `ClearColor`.
+    pub atmosphere: bool,
+    pub fallback_sky: Color,
+}
+
+impl Default for SunSetup {
+    fn default() -> Self {
+        SunSetup {
+            direction: Vec3::new(30.0, -22.0, -26.0),
+            illuminance: lux::RAW_SUNLIGHT,
+            color: Color::srgb(1.0, 0.93, 0.84),
+            cascades: 3,
+            first_cascade: 10.0,
+            shadow_distance: 90.0,
+            ambient: Color::srgb(0.7, 0.78, 0.95),
+            ambient_brightness: 800.0,
+            atmosphere: true,
+            fallback_sky: Color::srgb(0.58, 0.62, 0.70),
+        }
+    }
+}
+
+/// [`sky_and_sun`] with explicit [`SunSetup`].
+pub fn sky_and_sun_with(commands: &mut Commands, s: SunSetup) {
+    let (atmosphere, fallback) = (s.atmosphere, s.fallback_sky);
+    commands.queue(move |world: &mut World| {
+        let medium = if atmosphere {
+            world.get_resource_mut::<Assets<ScatteringMedium>>().map(|mut m| m.add(ScatteringMedium::earth(256, 256)))
+        } else {
+            None
+        };
         match medium {
             Some(m) => {
                 world.spawn((Name::new("Atmosphere"), Atmosphere::earth(m)));
             }
-            None => world.insert_resource(ClearColor(Color::srgb(0.58, 0.62, 0.70))),
+            None => world.insert_resource(ClearColor(fallback)),
         }
     });
+    let dir = s.direction.try_normalize().unwrap_or(Vec3::NEG_Y);
     commands.spawn((
         Name::new("Sun"),
         Sun,
-        DirectionalLight { illuminance: lux::RAW_SUNLIGHT, shadow_maps_enabled: true, color: Color::srgb(1.0, 0.93, 0.84), ..default() },
-        CascadeShadowConfigBuilder { num_cascades: 3, first_cascade_far_bound: 10.0, maximum_distance: 90.0, ..default() }.build(),
-        Transform::from_xyz(-30.0, 22.0, 26.0).looking_at(Vec3::ZERO, Vec3::Y),
+        DirectionalLight { illuminance: s.illuminance, shadow_maps_enabled: true, color: s.color, ..default() },
+        CascadeShadowConfigBuilder {
+            num_cascades: s.cascades.max(1),
+            first_cascade_far_bound: s.first_cascade,
+            maximum_distance: s.shadow_distance,
+            ..default()
+        }
+        .build(),
+        Transform::default().looking_to(dir, if dir.y.abs() > 0.99 { Vec3::Z } else { Vec3::Y }),
     ));
-    commands.insert_resource(GlobalAmbientLight { color: Color::srgb(0.7, 0.78, 0.95), brightness: 800.0, ..default() });
+    commands.insert_resource(GlobalAmbientLight { color: s.ambient, brightness: s.ambient_brightness, ..default() });
 }
 
 // ---------------------------------------------------------------- textures
