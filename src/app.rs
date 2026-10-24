@@ -195,6 +195,8 @@ impl Plugin for EnginePlugin {
             .add_message::<crate::ui::screens::ScreenRequest>()
             .add_message::<crate::ui::screens::RebuildScreen>()
             .add_message::<crate::ui::menus::MenuEvent>()
+            // Registered even headless (no UI kit) so game systems can post toasts anywhere.
+            .add_message::<crate::ui::toast::Toast>()
             .add_plugins((
                 crate::flow::FlowPlugin,
                 crate::pause::PausePlugin,
@@ -203,6 +205,7 @@ impl Plugin for EnginePlugin {
                 crate::audio::EngineAudioPlugin,
                 crate::gfx::GfxPlugin,
                 crate::render_budget::RenderBudgetPlugin,
+                crate::chase::ChasePlugin,
             ));
         if o.ui && !o.headless {
             app.add_plugins(crate::ui::UiKitPlugin);
