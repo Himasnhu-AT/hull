@@ -55,7 +55,7 @@ pub mod prelude {
     pub use crate::cli::{GameSeed, arg_value, has_flag};
     pub use crate::flow::{AppState, Headless, has_visuals, in_game};
     pub use crate::gfx::{MainCamera, QualityPreset};
-    pub use crate::input::{Bindings, CursorCaptured, LookInput};
+    pub use crate::input::{Bindings, CaptureCursor, CursorCaptured, LookInput};
     pub use crate::pause::{PauseCtl, Paused, not_paused};
     pub use crate::paths::{AssetsDir, DataDir};
     pub use crate::render_budget::{Actor, FarLook, KeepDetail, RenderBudget, RenderStats, Scenery, SceneryRanges, SceneryStream};
