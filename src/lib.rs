@@ -32,6 +32,7 @@ pub mod app;
 pub mod audio;
 pub mod chase;
 pub mod cli;
+pub mod exit;
 pub mod flow;
 pub mod gfx;
 pub mod input;

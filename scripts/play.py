@@ -138,9 +138,9 @@ def main():
             if proc.poll() is not None:
                 sys.exit(f"game exited early; see {out}/game.log")
             continue
-        m = re.search(r"control: port=(\d+) key=(\S+)", line)
+        m = re.search(r"control: port=(\d+) key=(.+)$", line)
         if m:
-            port, key = int(m.group(1)), open(m.group(2)).read().strip()
+            port, key = int(m.group(1)), open(m.group(2).strip()).read().strip()
             break
     if port is None:
         proc.kill()
