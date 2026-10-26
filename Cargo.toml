@@ -12,6 +12,8 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 directories = "6"
 rand = "0.9"
+# vfx: instance buffer casting (already in the tree through bevy).
+bytemuck = { version = "1", features = ["derive"], optional = true }
 # devtools: test control port (TCP + MCP), offscreen rendering, perf stats.
 ashlar-control = { path = "/Users/himanshu/codes/synthai/ashlar/crates/control", optional = true }
 ashlar-command = { path = "/Users/himanshu/codes/synthai/ashlar/crates/command", optional = true }
@@ -46,6 +48,7 @@ hot_reload = ["bevy/file_watcher"]
 debug_names = ["bevy/debug"]
 # KTX2 + zstd loading for cooked textures (scripts/cook.py). Optional: recompiles Bevy.
 ktx2 = ["bevy/ktx2", "bevy/zstd_rust"]
+default = ["physics", "devtools", "trace", "vfx"]
 # avian3d: physics time is paused with the game; re-exported as `engine::avian3d`.
 physics = ["dep:avian3d"]
 # First-person controller (kinematic collide-and-slide + mouse look). Needs physics.
@@ -62,6 +65,8 @@ look_clustered_decals = ["look", "bevy/pbr_clustered_decals"]
 # Code-first character animation: state machines, blend spaces, layers/masks, root motion,
 # notifies, IK, springs, LOD (src/anim, docs/ANIM.md). Foot placement needs `physics` too.
 anim = []
+# Particles / visual effects (src/vfx, docs/VFX.md).
+vfx = ["dep:bytemuck"]
 
 [dev-dependencies]
 ashlar-control = { path = "/Users/himanshu/codes/synthai/ashlar/crates/control" }
@@ -101,3 +106,7 @@ required-features = ["look"]
 [[example]]
 name = "anim_demo"
 required-features = ["anim"]
+
+[[example]]
+name = "vfx_gallery"
+required-features = ["vfx"]

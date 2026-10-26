@@ -55,6 +55,8 @@ pub mod fps;
 pub mod look;
 #[cfg(feature = "trace")]
 pub mod trace;
+#[cfg(feature = "vfx")]
+pub mod vfx;
 
 pub use app::{EngineOptions, GameInfo, app, app_with};
 
@@ -80,5 +82,7 @@ pub mod prelude {
     pub use crate::fps::{FpsController, FpsInput, FpsLook, FpsMotor, FpsPlugin, FpsSet};
     #[cfg(feature = "look")]
     pub use crate::look::{Look, LookPlugin, LookTimeline, LookTransition, ReflectionProbe};
+    #[cfg(feature = "vfx")]
+    pub use crate::vfx::{EffectDef, EmitterDef, OnFinish, ParticleEffect, Vfx, VfxBudget, VfxLibrary, VfxPlugin, VfxStats};
     pub use bevy::prelude::*;
 }
