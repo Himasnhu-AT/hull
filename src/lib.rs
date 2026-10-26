@@ -61,6 +61,8 @@ pub mod fps;
 pub mod look;
 #[cfg(feature = "world")]
 pub mod world;
+#[cfg(feature = "net")]
+pub mod net;
 #[cfg(feature = "trace")]
 pub mod trace;
 #[cfg(feature = "vfx")]
@@ -111,5 +113,10 @@ pub mod prelude {
     };
     #[cfg(feature = "world")]
     pub use crate::world::{Heightfield, SpawnWorld, StreamMode, StreamSource, Terrain, WorldCells, WorldDesc, WorldOrigin, WorldPlugin, WorldSettings, WorldStats};
+    #[cfg(feature = "net")]
+    pub use crate::net::{
+        AlwaysRelevant, ClientId, FromClient, FromServer, LocalInput, NetAppExt, NetClient, NetClock, NetConfig, NetEvent, NetId, NetInput,
+        NetOwner, NetPriority, NetRole, NetSender, NetServer, NetSet, NetState, NetViewer, Replicated,
+    };
     pub use bevy::prelude::*;
 }

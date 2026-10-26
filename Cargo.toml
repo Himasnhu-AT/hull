@@ -28,6 +28,8 @@ image = { version = "0.25", default-features = false, features = ["png"], option
 # world: RON world descriptions and 16-bit PNG heightmaps (both already in Bevy's tree; no new features).
 ron = { version = "0.12", default-features = false, optional = true }
 png = { version = "0.18", default-features = false, optional = true }
+# net: compact serde wire format for replicated components / messages (pulls only cobs + serde).
+postcard = { version = "1", default-features = false, features = ["alloc"], optional = true }
 
 [features]
 # Dev defaults. Games depend with `default-features = false` and turn `devtools`/`trace` on
@@ -84,6 +86,8 @@ world = ["dep:ron", "dep:png"]
 actions = []
 # Localization: assets/locale/<lang>.ftl string tables, tr()/tr_args(), pseudo-locale.
 l10n = []
+# Multiplayer: transports, channels, replication, prediction (not in default: many games are single-player).
+net = ["dep:postcard"]
 
 [dev-dependencies]
 ashlar-control = { path = "/Users/himanshu/codes/synthai/ashlar/crates/control" }
@@ -139,3 +143,7 @@ required-features = ["ai", "devtools"]
 [[example]]
 name = "open_world"
 required-features = ["world"]
+
+[[example]]
+name = "net_demo"
+required-features = ["net"]
