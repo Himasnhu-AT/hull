@@ -21,6 +21,8 @@ sysinfo = { version = "0.38", default-features = false, features = ["system"], o
 libc = { version = "0.2", optional = true }
 # trace: crash / hang / frame-time reporting (no-op unless an endpoint is configured).
 ashlar-trace = { path = "/Users/himanshu/codes/synthai/ashlar/crates/trace", features = ["sysinfo"], optional = true }
+# net: compact serde wire format for replicated components / messages (pulls only cobs + serde).
+postcard = { version = "1", default-features = false, features = ["alloc"], optional = true }
 
 [features]
 # Dev defaults. Games depend with `default-features = false` and turn `devtools`/`trace` on
@@ -33,6 +35,8 @@ fps = ["physics"]
 # Control port + MCP, offscreen capture, perf overlay. Ship builds turn this off.
 devtools = ["dep:ashlar-control", "dep:ashlar-command", "dep:ashlar-mcp", "dep:sysinfo", "dep:libc"]
 trace = ["dep:ashlar-trace"]
+# Multiplayer: transports, channels, replication, prediction (not in default: many games are single-player).
+net = ["dep:postcard"]
 
 [dev-dependencies]
 ashlar-control = { path = "/Users/himanshu/codes/synthai/ashlar/crates/control" }
@@ -56,3 +60,7 @@ required-features = ["devtools"]
 [[example]]
 name = "metrics_demo"
 required-features = ["devtools"]
+
+[[example]]
+name = "net_demo"
+required-features = ["net"]

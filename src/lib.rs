@@ -47,6 +47,8 @@ pub mod ui;
 pub mod devtools;
 #[cfg(feature = "fps")]
 pub mod fps;
+#[cfg(feature = "net")]
+pub mod net;
 #[cfg(feature = "trace")]
 pub mod trace;
 
@@ -68,5 +70,10 @@ pub mod prelude {
     pub use crate::ui::theme::Theme;
     #[cfg(feature = "fps")]
     pub use crate::fps::{FpsController, FpsInput, FpsLook, FpsMotor, FpsPlugin, FpsSet};
+    #[cfg(feature = "net")]
+    pub use crate::net::{
+        AlwaysRelevant, ClientId, FromClient, FromServer, LocalInput, NetAppExt, NetClient, NetClock, NetConfig, NetEvent, NetId, NetInput,
+        NetOwner, NetPriority, NetRole, NetSender, NetServer, NetSet, NetState, NetViewer, Replicated,
+    };
     pub use bevy::prelude::*;
 }

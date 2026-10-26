@@ -80,7 +80,8 @@ pub struct EngineOptions {
 
 impl EngineOptions {
     pub fn from_args() -> Self {
-        let headless = dev_flag("headless");
+        // `--server` (feature `net`): dedicated server, always headless (works in ship builds).
+        let headless = dev_flag("headless") || (cfg!(feature = "net") && crate::cli::has_flag("server"));
         EngineOptions {
             headless,
             skip_menu: headless || dev_flag("play"),
@@ -218,6 +219,8 @@ impl Plugin for EnginePlugin {
         if o.devtools {
             app.add_plugins(crate::devtools::DevtoolsPlugin);
         }
+        #[cfg(feature = "net")]
+        app.add_plugins(crate::net::NetPlugin::default());
         // Last: its panic hook must wrap Bevy's.
         #[cfg(feature = "trace")]
         if o.trace {
