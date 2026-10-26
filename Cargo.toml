@@ -12,6 +12,8 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 directories = "6"
 rand = "0.9"
+# vfx: instance buffer casting (already in the tree through bevy).
+bytemuck = { version = "1", features = ["derive"], optional = true }
 # devtools: test control port (TCP + MCP), offscreen rendering, perf stats.
 ashlar-control = { path = "/Users/himanshu/codes/synthai/ashlar/crates/control", optional = true }
 ashlar-command = { path = "/Users/himanshu/codes/synthai/ashlar/crates/command", optional = true }
@@ -25,7 +27,7 @@ ashlar-trace = { path = "/Users/himanshu/codes/synthai/ashlar/crates/trace", fea
 [features]
 # Dev defaults. Games depend with `default-features = false` and turn `devtools`/`trace` on
 # through their own `dev` feature, so ship builds carry none of it (docs/PORTING.md, "Ship builds").
-default = ["physics", "devtools", "trace"]
+default = ["physics", "devtools", "trace", "vfx"]
 # avian3d: physics time is paused with the game; re-exported as `engine::avian3d`.
 physics = ["dep:avian3d"]
 # First-person controller (kinematic collide-and-slide + mouse look). Needs physics.
@@ -33,6 +35,8 @@ fps = ["physics"]
 # Control port + MCP, offscreen capture, perf overlay. Ship builds turn this off.
 devtools = ["dep:ashlar-control", "dep:ashlar-command", "dep:ashlar-mcp", "dep:sysinfo", "dep:libc"]
 trace = ["dep:ashlar-trace"]
+# Particles / visual effects (src/vfx, docs/VFX.md).
+vfx = ["dep:bytemuck"]
 
 [dev-dependencies]
 ashlar-control = { path = "/Users/himanshu/codes/synthai/ashlar/crates/control" }
@@ -56,3 +60,7 @@ required-features = ["devtools"]
 [[example]]
 name = "metrics_demo"
 required-features = ["devtools"]
+
+[[example]]
+name = "vfx_gallery"
+required-features = ["vfx"]

@@ -49,6 +49,8 @@ pub mod devtools;
 pub mod fps;
 #[cfg(feature = "trace")]
 pub mod trace;
+#[cfg(feature = "vfx")]
+pub mod vfx;
 
 pub use app::{EngineOptions, GameInfo, app, app_with};
 
@@ -68,5 +70,7 @@ pub mod prelude {
     pub use crate::ui::theme::Theme;
     #[cfg(feature = "fps")]
     pub use crate::fps::{FpsController, FpsInput, FpsLook, FpsMotor, FpsPlugin, FpsSet};
+    #[cfg(feature = "vfx")]
+    pub use crate::vfx::{EffectDef, EmitterDef, OnFinish, ParticleEffect, Vfx, VfxBudget, VfxLibrary, VfxPlugin, VfxStats};
     pub use bevy::prelude::*;
 }
