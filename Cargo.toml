@@ -21,11 +21,19 @@ sysinfo = { version = "0.38", default-features = false, features = ["system"], o
 libc = { version = "0.2", optional = true }
 # trace: crash / hang / frame-time reporting (no-op unless an endpoint is configured).
 ashlar-trace = { path = "/Users/himanshu/codes/synthai/ashlar/crates/trace", features = ["sysinfo"], optional = true }
+# world: RON world descriptions and 16-bit PNG heightmaps (both already in Bevy's tree; no new features).
+ron = { version = "0.12", default-features = false, optional = true }
+png = { version = "0.18", default-features = false, optional = true }
 
 [features]
 # Dev defaults. Games depend with `default-features = false` and turn `devtools`/`trace` on
 # through their own `dev` feature, so ship builds carry none of it (docs/PORTING.md, "Ship builds").
-default = ["physics", "devtools", "trace"]
+default = [
+    "physics",
+    "devtools",
+    "trace",
+    "world",
+]
 # avian3d: physics time is paused with the game; re-exported as `engine::avian3d`.
 physics = ["dep:avian3d"]
 # First-person controller (kinematic collide-and-slide + mouse look). Needs physics.
@@ -33,6 +41,8 @@ fps = ["physics"]
 # Control port + MCP, offscreen capture, perf overlay. Ship builds turn this off.
 devtools = ["dep:ashlar-control", "dep:ashlar-command", "dep:ashlar-mcp", "dep:sysinfo", "dep:libc"]
 trace = ["dep:ashlar-trace"]
+# Large worlds: terrain, scatter, cell streaming, HLOD, floating origin, worlds as data (docs/WORLD.md).
+world = ["dep:ron", "dep:png"]
 
 [dev-dependencies]
 ashlar-control = { path = "/Users/himanshu/codes/synthai/ashlar/crates/control" }
@@ -56,3 +66,7 @@ required-features = ["devtools"]
 [[example]]
 name = "metrics_demo"
 required-features = ["devtools"]
+
+[[example]]
+name = "open_world"
+required-features = ["world"]

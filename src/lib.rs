@@ -47,6 +47,8 @@ pub mod ui;
 pub mod devtools;
 #[cfg(feature = "fps")]
 pub mod fps;
+#[cfg(feature = "world")]
+pub mod world;
 #[cfg(feature = "trace")]
 pub mod trace;
 
@@ -68,5 +70,7 @@ pub mod prelude {
     pub use crate::ui::theme::Theme;
     #[cfg(feature = "fps")]
     pub use crate::fps::{FpsController, FpsInput, FpsLook, FpsMotor, FpsPlugin, FpsSet};
+    #[cfg(feature = "world")]
+    pub use crate::world::{Heightfield, SpawnWorld, StreamMode, StreamSource, Terrain, WorldCells, WorldDesc, WorldOrigin, WorldPlugin, WorldSettings, WorldStats};
     pub use bevy::prelude::*;
 }
