@@ -25,6 +25,9 @@ libc = { version = "0.2", optional = true }
 ashlar-trace = { path = "/Users/himanshu/codes/synthai/ashlar/crates/trace", features = ["sysinfo"], optional = true }
 # devkit golden images: PNG decode/encode. Same version + features Bevy already builds (no new copy).
 image = { version = "0.25", default-features = false, features = ["png"], optional = true }
+# world: RON world descriptions and 16-bit PNG heightmaps (both already in Bevy's tree; no new features).
+ron = { version = "0.12", default-features = false, optional = true }
+png = { version = "0.18", default-features = false, optional = true }
 
 [features]
 # Dev defaults. Games depend with `default-features = false` and turn `devtools`/`trace` on
@@ -36,6 +39,7 @@ default = [
     "devkit",
     "look",
     "anim",
+    "world",
 ]
 # AI-friendly dev loop: ECS inspector commands, scenario test kit, perf assertions, scope
 # profiling, JSON hot reload, save slots, asset checks (docs/DEVKIT.md).
@@ -73,6 +77,8 @@ vfx = ["dep:bytemuck"]
 ai = ["physics"]
 # Audio middleware: buses, snapshots, ducking, cues, voice limits, 3D, occlusion, music, captions (src/sound/).
 sound = []
+# Large worlds: terrain, scatter, cell streaming, HLOD, floating origin, worlds as data (docs/WORLD.md).
+world = ["dep:ron", "dep:png"]
 
 [dev-dependencies]
 ashlar-control = { path = "/Users/himanshu/codes/synthai/ashlar/crates/control" }
@@ -124,3 +130,7 @@ required-features = ["vfx"]
 [[example]]
 name = "ai_crowd"
 required-features = ["ai", "devtools"]
+
+[[example]]
+name = "open_world"
+required-features = ["world"]

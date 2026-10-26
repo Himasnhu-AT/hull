@@ -1,0 +1,21 @@
+[
+  {"sleep": 6},
+  {"cmd": "world.stats"},
+  {"cmd": "cam.pose", "params": {"name": "overview"}},
+  {"sleep": 5},
+  {"shot": "overview"},
+  {"cmd": "cam.pose", "params": {"name": "valley"}},
+  {"sleep": 5},
+  {"shot": "valley"},
+  {"cmd": "cam.pose", "params": {"name": "ground"}},
+  {"sleep": 5},
+  {"shot": "ground"},
+  {"cmd": "cam.pose", "params": {"name": "forest"}},
+  {"sleep": 5},
+  {"shot": "forest"},
+  {"cmd": "cam.pose", "params": {"name": "fly"}},
+  {"sleep": 6},
+  {"shot": "fly"},
+  {"cmd": "world.stats"},
+  {"cmd": "world.cells"}
+]

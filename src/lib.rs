@@ -55,6 +55,8 @@ pub mod devtools;
 pub mod fps;
 #[cfg(feature = "look")]
 pub mod look;
+#[cfg(feature = "world")]
+pub mod world;
 #[cfg(feature = "trace")]
 pub mod trace;
 #[cfg(feature = "vfx")]
@@ -99,5 +101,7 @@ pub mod prelude {
         Quantize, Rolloff, SoundClip, SoundConfig, SoundCtl, SoundCue, SoundCues, SoundListener, SoundPlugin, SoundSettings, SoundStats,
         SoundZone, Steal, VoiceId,
     };
+    #[cfg(feature = "world")]
+    pub use crate::world::{Heightfield, SpawnWorld, StreamMode, StreamSource, Terrain, WorldCells, WorldDesc, WorldOrigin, WorldPlugin, WorldSettings, WorldStats};
     pub use bevy::prelude::*;
 }

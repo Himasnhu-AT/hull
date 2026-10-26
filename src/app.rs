@@ -217,6 +217,8 @@ impl Plugin for EnginePlugin {
         app.add_plugins(crate::ai::AiPlugin);
         #[cfg(feature = "sound")]
         app.add_plugins(crate::sound::SoundPlugin);
+        #[cfg(feature = "world")]
+        app.add_plugins(crate::world::WorldPlugin);
         if !o.headless {
             // Avoids a pipelined-rendering deadlock on exit (see `exit.rs`).
             app.add_plugins(crate::exit::CleanExitPlugin);
