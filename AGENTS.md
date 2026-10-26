@@ -32,6 +32,14 @@ from the shell.
 | `src/devkit/` | inspector (`ecs.*`), scenario test kit, replay, golden images, perf budgets, bench JSON, `profile_scope!`, JSON hot reload, saves, asset checks: **docs/DEVKIT.md** |
 | `src/settings.rs`, `src/ui/` | persisted settings + generated settings screen, menus, UI kit |
 | `src/gfx.rs`, `src/render_budget/` | quality presets, PBR loading, culling / LOD budget |
+| `src/look/` | sun / sky / fog / exposure / grading / lens as data, presets, probes, decals, tiers (`look.*`): **docs/LOOK.md** |
+| `src/anim/` | animation state machines, blend spaces, layers, root motion, notifies, IK (`anim.*`): **docs/ANIM.md** |
+| `src/vfx/` | particle effects, presets, budgets (`vfx.*`): **docs/VFX.md** |
+| `src/ai/` | navmesh baking, paths, crowds, behaviour trees, utility AI, perception (`ai.*`): **docs/AI.md** |
+| `src/sound/`, `src/audio.rs` | mixer buses, snapshots, ducking, cues, 3D, occlusion, music, captions (`sound.*`): **docs/SOUND.md** |
+| `src/world/` | terrain, scatter, cell streaming, HLOD, floating origin, worlds as data (`world.*`): **docs/WORLD.md** |
+| `src/actions/`, `src/l10n/` | action mapping, gamepad, rebinding, accessibility; localization (`actions.*`, `l10n.*`): **docs/ACTIONS.md**, **docs/L10N.md** |
+| `src/net/` | multiplayer, feature `net` (off by default; test with `--features net`) (`net.*`): **docs/NET.md** |
 | `docs/PORTING.md` | conventions, devtools, metrics, ship builds, render budget measurements |
 | `tests/*.rs` | headless `App::update()` tests and control-port tests (they spawn an example) |
 | `scripts/play.py` | build + launch a game offscreen, run a JSON steps file over the port, save screenshots |
