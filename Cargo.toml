@@ -50,6 +50,7 @@ debug_names = ["bevy/debug"]
 ktx2 = ["bevy/ktx2", "bevy/zstd_rust"]
 default = ["physics", "devtools", "trace", "vfx"]
 default = ["physics", "devtools", "trace", "ai"]
+default = ["physics", "devtools", "trace", "sound"]
 # avian3d: physics time is paused with the game; re-exported as `engine::avian3d`.
 physics = ["dep:avian3d"]
 # First-person controller (kinematic collide-and-slide + mouse look). Needs physics.
@@ -70,6 +71,8 @@ anim = []
 vfx = ["dep:bytemuck"]
 # Navigation (tiled navmesh baking, paths, crowds), behaviour trees, utility AI, perception.
 ai = ["physics"]
+# Audio middleware: buses, snapshots, ducking, cues, voice limits, 3D, occlusion, music, captions (src/sound/).
+sound = []
 
 [dev-dependencies]
 ashlar-control = { path = "/Users/himanshu/codes/synthai/ashlar/crates/control" }
@@ -89,6 +92,10 @@ required-features = ["devtools"]
 [[example]]
 name = "ui_gallery"
 required-features = ["devtools"]
+
+[[example]]
+name = "sound_demo"
+required-features = ["sound"]
 
 [[example]]
 name = "metrics_demo"

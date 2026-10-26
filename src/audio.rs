@@ -13,8 +13,16 @@
 //! ```
 //! Looping sounds: [`play_loop`] spawns a sink tagged with its [`AudioCategory`] and
 //! [`SinkGain`]; the engine re-volumes it live when settings change.
+//!
+//! With the `sound` feature (default) both calls are routed into [`crate::sound`]: each becomes
+//! a voice on the matching bus (sfx / music / ambience / ui), so it gets bus volumes, mix
+//! snapshots, ducking and the voice limit. Same signatures; `play_loop`'s entity still stops
+//! the loop when despawned and re-volumes it through its [`SinkGain`]. For cues, captions,
+//! music and 3D control use `crate::sound` directly.
 
-use bevy::audio::{AudioSinkPlayback, PlaybackSettings, SpatialListener, Volume};
+#[cfg(not(feature = "sound"))]
+use bevy::audio::PlaybackSettings;
+use bevy::audio::{AudioSinkPlayback, SpatialListener, Volume};
 use bevy::prelude::*;
 use rand::Rng;
 
@@ -124,15 +132,23 @@ pub fn play(commands: &mut Commands, lib: &SoundLibrary, vol: &Volumes, name: &s
     let Some(handle) = lib.pick(name) else { return };
     let mut rng = rand::rng();
     let speed = rng.random_range(0.93..1.07);
-    let gain = volume * rng.random_range(0.88..1.0) * vol.gain(category);
-    let mut settings = PlaybackSettings::DESPAWN.with_volume(Volume::Linear(gain)).with_speed(speed);
-    match at {
-        Some(p) => {
-            settings = settings.with_spatial(true);
-            commands.spawn((AudioPlayer::new(handle), settings, category, Transform::from_translation(p)));
-        }
-        None => {
-            commands.spawn((AudioPlayer::new(handle), settings, category));
+    #[cfg(feature = "sound")]
+    {
+        let gain = volume * rng.random_range(0.88..1.0);
+        commands.queue(move |w: &mut World| crate::sound::legacy::play_source(w, handle, category, gain, speed, at));
+    }
+    #[cfg(not(feature = "sound"))]
+    {
+        let gain = volume * rng.random_range(0.88..1.0) * vol.gain(category);
+        let mut settings = PlaybackSettings::DESPAWN.with_volume(Volume::Linear(gain)).with_speed(speed);
+        match at {
+            Some(p) => {
+                settings = settings.with_spatial(true);
+                commands.spawn((AudioPlayer::new(handle), settings, category, Transform::from_translation(p)));
+            }
+            None => {
+                commands.spawn((AudioPlayer::new(handle), settings, category));
+            }
         }
     }
 }
@@ -143,8 +159,17 @@ pub fn play_loop(commands: &mut Commands, vol: &Volumes, handle: Handle<AudioSou
     if vol.muted {
         return None;
     }
-    let settings = PlaybackSettings::LOOP.with_volume(Volume::Linear(volume * vol.gain(category)));
-    Some(commands.spawn((AudioPlayer::new(handle), settings, category, SinkGain(volume))).id())
+    #[cfg(feature = "sound")]
+    {
+        let e = commands.spawn((category, SinkGain(volume), Name::new("Sound loop"))).id();
+        commands.queue(move |w: &mut World| crate::sound::legacy::start_loop(w, e, handle, category, volume));
+        Some(e)
+    }
+    #[cfg(not(feature = "sound"))]
+    {
+        let settings = PlaybackSettings::LOOP.with_volume(Volume::Linear(volume * vol.gain(category)));
+        Some(commands.spawn((AudioPlayer::new(handle), settings, category, SinkGain(volume))).id())
+    }
 }
 
 pub struct EngineAudioPlugin;

@@ -59,6 +59,8 @@ pub mod look;
 pub mod trace;
 #[cfg(feature = "vfx")]
 pub mod vfx;
+#[cfg(feature = "sound")]
+pub mod sound;
 
 pub use app::{EngineOptions, GameInfo, app, app_with};
 
@@ -91,5 +93,11 @@ pub mod prelude {
     pub use crate::look::{Look, LookPlugin, LookTimeline, LookTransition, ReflectionProbe};
     #[cfg(feature = "vfx")]
     pub use crate::vfx::{EffectDef, EmitterDef, OnFinish, ParticleEffect, Vfx, VfxBudget, VfxLibrary, VfxPlugin, VfxStats};
+    #[cfg(feature = "sound")]
+    pub use crate::sound::{
+        Attenuation, BusId, Caption, DuckRule, MixSnapshot, Mixer, Music, MusicBeat, MusicStem, MusicTrack, MusicTransition, Pick, PlayParams,
+        Quantize, Rolloff, SoundClip, SoundConfig, SoundCtl, SoundCue, SoundCues, SoundListener, SoundPlugin, SoundSettings, SoundStats,
+        SoundZone, Steal, VoiceId,
+    };
     pub use bevy::prelude::*;
 }
