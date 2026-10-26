@@ -21,11 +21,29 @@ sysinfo = { version = "0.38", default-features = false, features = ["system"], o
 libc = { version = "0.2", optional = true }
 # trace: crash / hang / frame-time reporting (no-op unless an endpoint is configured).
 ashlar-trace = { path = "/Users/himanshu/codes/synthai/ashlar/crates/trace", features = ["sysinfo"], optional = true }
+# devkit golden images: PNG decode/encode. Same version + features Bevy already builds (no new copy).
+image = { version = "0.25", default-features = false, features = ["png"], optional = true }
 
 [features]
 # Dev defaults. Games depend with `default-features = false` and turn `devtools`/`trace` on
 # through their own `dev` feature, so ship builds carry none of it (docs/PORTING.md, "Ship builds").
-default = ["physics", "devtools", "trace"]
+default = [
+    "physics",
+    "devtools",
+    "trace",
+    "devkit",
+]
+# AI-friendly dev loop: ECS inspector commands, scenario test kit, perf assertions, scope
+# profiling, JSON hot reload, save slots, asset checks (docs/DEVKIT.md).
+devkit = ["dep:image"]
+# Tracy profiling through Bevy (`bevy/trace_tracy`). Optional: recompiles Bevy, never in default.
+profile = ["bevy/trace_tracy"]
+# Asset hot reload through Bevy's file watcher (`bevy/file_watcher`). Optional: recompiles Bevy.
+hot_reload = ["bevy/file_watcher"]
+# System / entity debug names in `ecs.systems` etc. (`bevy/debug`). Optional: recompiles Bevy.
+debug_names = ["bevy/debug"]
+# KTX2 + zstd loading for cooked textures (scripts/cook.py). Optional: recompiles Bevy.
+ktx2 = ["bevy/ktx2", "bevy/zstd_rust"]
 # avian3d: physics time is paused with the game; re-exported as `engine::avian3d`.
 physics = ["dep:avian3d"]
 # First-person controller (kinematic collide-and-slide + mouse look). Needs physics.
@@ -56,3 +74,11 @@ required-features = ["devtools"]
 [[example]]
 name = "metrics_demo"
 required-features = ["devtools"]
+
+[[example]]
+name = "devkit_demo"
+required-features = ["devkit"]
+
+[[example]]
+name = "devkit_cli"
+required-features = ["devkit"]

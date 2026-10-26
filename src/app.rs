@@ -218,6 +218,8 @@ impl Plugin for EnginePlugin {
         if o.devtools {
             app.add_plugins(crate::devtools::DevtoolsPlugin);
         }
+        #[cfg(feature = "devkit")]
+        app.add_plugins(crate::devkit::DevkitPlugin);
         // Last: its panic hook must wrap Bevy's.
         #[cfg(feature = "trace")]
         if o.trace {

@@ -1,0 +1,18 @@
+[
+  {"cmd": "ecs.query", "params": {"components": ["Spinner"], "limit": 2}, "expect": {"ok": true, "result.count": 25}},
+  {"shot": "before"},
+  {"write": "data/tuning.json", "json": {"speed": 4.0, "color": [0.2, 0.5, 0.95]}},
+  {"sleep": 1.5},
+  {"cmd": "devkit.reload", "expect": {"result.watches.0.last.ok": true}},
+  {"cmd": "ecs.res.get", "params": {"name": "Tuning"}, "expect": {"result.value.speed": 4.0}},
+  {"cmd": "devkit.scopes"},
+  {"cmd": "engine.pause"},
+  {"sleep": 0.5},
+  {"shot": "paused-a"},
+  {"sleep": 0.5},
+  {"shot": "paused-b"},
+  {"cmd": "save.write", "params": {"slot": "slot1", "label": "demo"}},
+  {"sleep": 1.0},
+  {"cmd": "save.list", "expect": {"result.slots.0.slot": "slot1", "result.slots.0.meta.thumbnail": "slot1.png"}},
+  {"cmd": "perf.stats"}
+]
