@@ -32,6 +32,7 @@ default = [
     "devtools",
     "trace",
     "devkit",
+    "look",
 ]
 # AI-friendly dev loop: ECS inspector commands, scenario test kit, perf assertions, scope
 # profiling, JSON hot reload, save slots, asset checks (docs/DEVKIT.md).
@@ -51,6 +52,12 @@ fps = ["physics"]
 # Control port + MCP, offscreen capture, perf overlay. Ship builds turn this off.
 devtools = ["dep:ashlar-control", "dep:ashlar-command", "dep:ashlar-mcp", "dep:sysinfo", "dep:libc"]
 trace = ["dep:ashlar-trace"]
+# Code-first scene look (sun/sky/fog/exposure/grading/lens), probes, decals: src/look, docs/LOOK.md.
+look = []
+# PCSS soft shadows for the look sun (forwards to a non-default Bevy feature: recompiles Bevy).
+look_pcss = ["look", "bevy/experimental_pbr_pcss"]
+# Clustered (projector) decals for the look; needs bindless textures (not on Metal). Recompiles Bevy.
+look_clustered_decals = ["look", "bevy/pbr_clustered_decals"]
 
 [dev-dependencies]
 ashlar-control = { path = "/Users/himanshu/codes/synthai/ashlar/crates/control" }
@@ -82,3 +89,7 @@ required-features = ["devkit"]
 [[example]]
 name = "devkit_cli"
 required-features = ["devkit"]
+
+[[example]]
+name = "look_showcase"
+required-features = ["look"]

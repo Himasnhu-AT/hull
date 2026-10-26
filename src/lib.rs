@@ -49,6 +49,8 @@ pub mod devkit;
 pub mod devtools;
 #[cfg(feature = "fps")]
 pub mod fps;
+#[cfg(feature = "look")]
+pub mod look;
 #[cfg(feature = "trace")]
 pub mod trace;
 
@@ -72,5 +74,7 @@ pub mod prelude {
     pub use crate::devkit::{HotReloadAppExt, PerfBudget, SaveConfig, SaveEvent, SavePlugin, SaveRequest, Scenario, WatchPath};
     #[cfg(feature = "fps")]
     pub use crate::fps::{FpsController, FpsInput, FpsLook, FpsMotor, FpsPlugin, FpsSet};
+    #[cfg(feature = "look")]
+    pub use crate::look::{Look, LookPlugin, LookTimeline, LookTransition, ReflectionProbe};
     pub use bevy::prelude::*;
 }
