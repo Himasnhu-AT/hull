@@ -207,6 +207,8 @@ impl Plugin for EnginePlugin {
                 crate::render_budget::RenderBudgetPlugin,
                 crate::chase::ChasePlugin,
             ));
+        #[cfg(feature = "look")]
+        app.add_plugins(crate::look::LookPlugin);
         if !o.headless {
             // Avoids a pipelined-rendering deadlock on exit (see `exit.rs`).
             app.add_plugins(crate::exit::CleanExitPlugin);

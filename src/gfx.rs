@@ -2,10 +2,12 @@
 //!
 //! - Tag the game's camera with [`MainCamera`]; on `Camera3d` main cameras the engine adds the
 //!   quality bundle for `CoreSettings.quality` (from [`QualityPreset`]: FXAA or TAA, SSAO,
-//!   bloom, directional shadow-map size) plus `Msaa::Off`, keeps FOV in sync with
+//!   bloom, directional shadow-map size, shadow filtering, contact shadows, SSR) plus `Msaa::Off`, keeps FOV in sync with
 //!   `CoreSettings.fov_deg` (perspective only), and re-applies when settings change. The spatial
-//!   audio listener is attached by `audio`. The engine never touches `Exposure`,
-//!   `DistanceFog`, `Tonemapping` or atmosphere components (games own the look).
+//!   audio listener is attached by `audio`. Without a `look::Look` resource (feature `look`)
+//!   the engine never touches `Exposure`, `DistanceFog`, `Tonemapping` or atmosphere
+//!   components (games own the look); with one, `look` does. [`prune_prepasses`] drops
+//!   prepasses only a removed feature needed.
 //! - Textures: [`load_pbr`] (+ CPU mip generation through [`PendingMips`]), [`world_uv_cuboid`].
 //! - Helpers: [`FaceCamera`] billboards, [`sky_and_sun`] for a ready-made outdoor look.
 //!
@@ -17,7 +19,13 @@ use bevy::image::{ImageAddressMode, ImageLoaderSettings, ImageSampler, ImageSamp
 use bevy::light::atmosphere::ScatteringMedium;
 use bevy::light::{Atmosphere, CascadeShadowConfigBuilder, DirectionalLightShadowMap, light_consts::lux};
 use bevy::mesh::VertexAttributeValues;
-use bevy::pbr::{ScreenSpaceAmbientOcclusion, ScreenSpaceAmbientOcclusionQualityLevel};
+use bevy::core_pipeline::prepass::{DeferredPrepass, DepthPrepass, MotionVectorPrepass, NormalPrepass};
+use bevy::light::ShadowFilteringMethod;
+use bevy::pbr::{
+    ContactShadows, DefaultOpaqueRendererMethod, ScreenSpaceAmbientOcclusion, ScreenSpaceAmbientOcclusionQualityLevel,
+    ScreenSpaceReflections,
+};
+use bevy::post_process::motion_blur::MotionBlur;
 use bevy::platform::collections::HashSet;
 use bevy::post_process::bloom::Bloom;
 use bevy::prelude::*;
@@ -26,6 +34,7 @@ use bevy::render::render_resource::TextureFormat;
 
 use crate::flow::has_visuals;
 use crate::paths::AssetsDir;
+use crate::render_budget::stats::BudgetDepthPrepass;
 use crate::settings::{CoreSettings, GraphicsQuality};
 
 /// The camera the player sees through (one per app).
@@ -33,7 +42,13 @@ use crate::settings::{CoreSettings, GraphicsQuality};
 pub struct MainCamera;
 
 /// Per-quality camera features (Low: no SSAO/bloom, FXAA, small shadows … Ultra: best SSAO,
-/// big shadows). Indexed by [`GraphicsQuality::index`]. Games may override the resource.
+/// big shadows, contact shadows, SSR). Indexed by [`GraphicsQuality::index`]. Games may override
+/// the resource (build it with `..default()`).
+///
+/// [`apply_camera_quality`] applies the camera-wide fields (AA, SSAO, bloom, shadow map size,
+/// shadow filtering, contact shadows, SSR). The `look` module (feature `look`) reads the
+/// "look tier" fields (volumetric fog, env lighting, auto exposure, lens / post effects, sky
+/// quality, probe refresh) to gate what a [`crate::look::Look`] asks for.
 #[derive(Resource, Clone, Debug)]
 pub struct QualityPreset {
     pub ssao: [bool; 4],
@@ -41,17 +56,50 @@ pub struct QualityPreset {
     /// TAA when true, FXAA when false.
     pub taa: [bool; 4],
     pub shadow_map_size: [usize; 4],
-    /// Bloom strength when enabled.
+    /// Bloom strength when enabled (a `Look` overrides it with its own bloom tuning).
     pub bloom_intensity: f32,
     /// GPU occlusion culling on the main camera (adds a depth prepass when the camera has none;
     /// see `render_budget`). Only used where the GPU supports it.
     pub occlusion_culling: [bool; 4],
     /// Multiplier on `render_budget::SceneryRanges` (scenery detail and streaming distances).
     pub detail_scale: [f32; 4],
+    /// Shadow-map filtering on the main camera. `Temporal` falls back to `Gaussian` without TAA.
+    pub shadow_filter: [ShadowFilteringMethod; 4],
+    /// Screen-space contact shadows: `ContactShadows` on the camera (+ depth prepass) and
+    /// `contact_shadows_enabled` on [`Sun`] lights.
+    pub contact_shadows: [bool; 4],
+    /// Screen-space reflections. While any main camera has SSR the default opaque renderer
+    /// method is switched to deferred (SSR reads the G-buffer); off again → forward.
+    pub ssr: [bool; 4],
+    /// Look tier: volumetric fog / light shafts (`Look::volumetric`).
+    pub volumetric_fog: [bool; 4],
+    /// Look tier: volumetric fog ray-march steps.
+    pub volumetric_steps: [u32; 4],
+    /// Look tier: image-based ambient + reflections from the sky (atmosphere or generated
+    /// cubemap). Off → flat ambient only.
+    pub env_light: [bool; 4],
+    /// Look tier: cubemap size (px) of environment lighting generated from the atmosphere.
+    pub env_map_size: [u32; 4],
+    /// Look tier: atmosphere sky-view / aerial-perspective samples per ray.
+    pub sky_samples: [u32; 4],
+    /// Look tier: histogram auto exposure (`Look::exposure.auto`); off → manual `ev100`.
+    pub auto_exposure: [bool; 4],
+    /// Look tier: depth of field and motion blur (`Look::lens`).
+    pub camera_fx: [bool; 4],
+    /// Look tier: chromatic aberration and vignette (`Look::lens`).
+    pub post_fx: [bool; 4],
+    /// Look tier: depth of field uses the bokeh (true) or the cheaper gaussian (false) mode.
+    pub bokeh: [bool; 4],
+    /// Look tier: frames between realtime reflection-probe face updates (0 = bake once, never
+    /// refresh). See `look::ReflectionProbe`.
+    pub probe_refresh: [u32; 4],
+    /// Look tier: PCSS soft sun shadows (only with the `look_pcss` cargo feature).
+    pub soft_shadows: [bool; 4],
 }
 
 impl Default for QualityPreset {
     fn default() -> Self {
+        use ShadowFilteringMethod::{Gaussian, Hardware2x2, Temporal};
         QualityPreset {
             ssao: [false, false, true, true],
             bloom: [false, true, true, true],
@@ -60,6 +108,20 @@ impl Default for QualityPreset {
             bloom_intensity: 0.12,
             occlusion_culling: [true, true, true, true],
             detail_scale: [0.6, 0.8, 1.0, 1.5],
+            shadow_filter: [Hardware2x2, Gaussian, Gaussian, Temporal],
+            contact_shadows: [false, false, true, true],
+            ssr: [false, false, false, true],
+            volumetric_fog: [false, false, true, true],
+            volumetric_steps: [16, 24, 32, 64],
+            env_light: [true, true, true, true],
+            env_map_size: [64, 128, 256, 512],
+            sky_samples: [8, 12, 16, 24],
+            auto_exposure: [false, true, true, true],
+            camera_fx: [false, false, true, true],
+            post_fx: [false, true, true, true],
+            bokeh: [false, false, false, true],
+            probe_refresh: [0, 0, 4, 1],
+            soft_shadows: [false, false, false, true],
         }
     }
 }
@@ -82,33 +144,61 @@ pub struct Sun;
 
 pub struct GfxPlugin;
 
+/// Order of the camera quality systems in `Update`: [`apply_camera_quality`] (`Apply`), then
+/// systems that tune what it added (`Look`: the `look` module), then [`prune_prepasses`].
+#[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum QualitySet {
+    Apply,
+    Look,
+    Prune,
+}
+
 impl Plugin for GfxPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<PendingMips>()
             .init_resource::<QualityPreset>()
-            .add_systems(Update, (generate_mips, face_camera, apply_camera_quality, apply_fov).run_if(has_visuals));
+            .add_systems(
+                Update,
+                (generate_mips, face_camera, apply_camera_quality.in_set(QualitySet::Apply), apply_fov, prune_prepasses.in_set(QualitySet::Prune))
+                    .run_if(has_visuals),
+            )
+            .configure_sets(Update, (QualitySet::Apply, QualitySet::Look, QualitySet::Prune).chain());
     }
 }
 
-/// Adds/removes AA, SSAO and bloom on `Camera3d` main cameras when they appear, when
-/// `CoreSettings.quality` changes, or when [`QualityPreset`] changes; sets shadow-map size.
+/// Adds/removes AA, SSAO, bloom, contact shadows and SSR on `Camera3d` main cameras and sets
+/// their shadow filtering when they appear, when `CoreSettings.quality` changes, or when
+/// [`QualityPreset`] changes; sets shadow-map size and `contact_shadows_enabled` on [`Sun`]s.
 pub fn apply_camera_quality(
     mut commands: Commands,
     settings: Res<CoreSettings>,
     preset: Res<QualityPreset>,
-    cams: Query<(Entity, Option<&AppliedQuality>), (With<MainCamera>, With<Camera3d>)>,
+    cams: Query<
+        (Entity, Option<&AppliedQuality>, (Has<DepthPrepass>, Has<BudgetDepthPrepass>, Has<NormalPrepass>, Has<MotionVectorPrepass>, Has<DeferredPrepass>)),
+        (With<MainCamera>, With<Camera3d>),
+    >,
     shadow_map: Option<ResMut<DirectionalLightShadowMap>>,
+    mut suns: Query<(Ref<Sun>, &mut DirectionalLight)>,
+    renderer: Option<ResMut<DefaultOpaqueRendererMethod>>,
+    mut materials: Option<ResMut<Assets<StandardMaterial>>>,
+    mut deferred_for_ssr: Local<bool>,
 ) {
     let q = settings.quality;
     let i = q.index();
     let force = preset.is_changed();
     let mut applied_any = false;
-    for (e, applied) in &cams {
+    let mut any_ssr = None;
+    for (e, applied, (depth, budget_depth, normal, motion, deferred)) in &cams {
         if !force && applied.is_some_and(|a| a.0 == q) {
+            any_ssr = Some(any_ssr.unwrap_or(false) | preset.ssr[i]);
             continue;
         }
         applied_any = true;
         let mut ec = commands.entity(e);
+        if applied.is_none() {
+            // Prepasses the game put there itself are never pruned (see `prune_prepasses`).
+            ec.insert(GamePrepasses { depth: depth && !budget_depth, normal, motion, deferred });
+        }
         ec.insert((AppliedQuality(q), Msaa::Off));
         if preset.taa[i] {
             ec.remove::<Fxaa>().insert(TemporalAntiAliasing::default());
@@ -130,12 +220,104 @@ pub fn apply_camera_quality(
         } else {
             ec.remove::<Bloom>();
         }
+        let filter = match preset.shadow_filter[i] {
+            ShadowFilteringMethod::Temporal if !preset.taa[i] => ShadowFilteringMethod::Gaussian,
+            f => f,
+        };
+        ec.insert(filter);
+        if preset.contact_shadows[i] {
+            ec.insert(ContactShadows::default());
+        } else {
+            ec.remove::<ContactShadows>();
+        }
+        if preset.ssr[i] {
+            ec.insert(ScreenSpaceReflections::default());
+        } else {
+            ec.remove::<ScreenSpaceReflections>();
+        }
+        any_ssr = Some(any_ssr.unwrap_or(false) | preset.ssr[i]);
+    }
+    for (tag, mut light) in &mut suns {
+        if (applied_any || tag.is_added() || settings.is_changed()) && light.contact_shadows_enabled != preset.contact_shadows[i] {
+            light.contact_shadows_enabled = preset.contact_shadows[i];
+        }
+    }
+    // SSR shades from the G-buffer: opaque materials go deferred while it's on. Materials bake
+    // their render method when prepared, so they're touched to re-prepare.
+    // Only switches back to forward what it switched to deferred itself.
+    if let (Some(want), Some(mut method)) = (any_ssr, renderer)
+        && want != *deferred_for_ssr
+    {
+        *deferred_for_ssr = want;
+        if want {
+            method.set_to_deferred();
+        } else {
+            method.set_to_forward();
+        }
+        if let Some(mats) = materials.as_mut() {
+            let ids: Vec<_> = mats.ids().collect();
+            for id in ids {
+                let _ = mats.get_mut(id);
+            }
+        }
     }
     if (applied_any || settings.is_changed())
         && let Some(mut shadow_map) = shadow_map
         && shadow_map.size != preset.shadow_map_size[i]
     {
         shadow_map.size = preset.shadow_map_size[i];
+    }
+}
+
+/// Prepasses a main camera had before the quality system first touched it (kept forever).
+#[derive(Component, Clone, Copy, Debug, Default)]
+pub struct GamePrepasses {
+    pub depth: bool,
+    pub normal: bool,
+    pub motion: bool,
+    pub deferred: bool,
+}
+
+/// Put on a main camera to keep its depth prepass (forward decals need one, see `look`).
+#[derive(Component, Clone, Copy, Debug, Default)]
+pub struct KeepDepthPrepass;
+
+/// Removes depth / normal / deferred prepasses that only a since-removed feature needed (SSAO,
+/// TAA, contact shadows, SSR, motion blur, occlusion culling), so turning a feature off also
+/// drops its prepass cost.
+/// Prepasses the game added itself ([`GamePrepasses`]) stay.
+pub fn prune_prepasses(
+    mut commands: Commands,
+    cams: Query<
+        (
+            Entity,
+            &GamePrepasses,
+            (Has<DepthPrepass>, Has<NormalPrepass>, Has<MotionVectorPrepass>, Has<DeferredPrepass>),
+            (Has<ScreenSpaceAmbientOcclusion>, Has<TemporalAntiAliasing>, Has<ContactShadows>, Has<ScreenSpaceReflections>),
+            (Has<MotionBlur>, Has<BudgetDepthPrepass>, Has<KeepDepthPrepass>),
+        ),
+        With<MainCamera>,
+    >,
+) {
+    for (e, game, (depth, normal, motion, deferred), (ssao, taa, contact, ssr), (blur, budget, keep)) in &cams {
+        let need_depth = game.depth || ssao || taa || contact || ssr || blur || budget || keep;
+        let need_normal = game.normal || ssao;
+        let need_motion = game.motion || taa || blur;
+        let need_deferred = game.deferred || ssr;
+        let mut ec = commands.entity(e);
+        if depth && !need_depth {
+            ec.remove::<DepthPrepass>();
+        }
+        if normal && !need_normal {
+            ec.remove::<NormalPrepass>();
+        }
+        // Motion vectors stay: Bevy 0.19 keeps drawing the skybox's cached
+        // `background_motion_vectors_pipeline` into the pass for a frame after they go, which is a
+        // fatal wgpu validation error. (They're cheap without TAA / motion blur reading them.)
+        let _ = (motion, need_motion);
+        if deferred && !need_deferred {
+            ec.remove::<DeferredPrepass>();
+        }
     }
 }
 
