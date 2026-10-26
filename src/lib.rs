@@ -49,6 +49,8 @@ pub mod devtools;
 pub mod fps;
 #[cfg(feature = "trace")]
 pub mod trace;
+#[cfg(feature = "sound")]
+pub mod sound;
 
 pub use app::{EngineOptions, GameInfo, app, app_with};
 
@@ -68,5 +70,11 @@ pub mod prelude {
     pub use crate::ui::theme::Theme;
     #[cfg(feature = "fps")]
     pub use crate::fps::{FpsController, FpsInput, FpsLook, FpsMotor, FpsPlugin, FpsSet};
+    #[cfg(feature = "sound")]
+    pub use crate::sound::{
+        Attenuation, BusId, Caption, DuckRule, MixSnapshot, Mixer, Music, MusicBeat, MusicStem, MusicTrack, MusicTransition, Pick, PlayParams,
+        Quantize, Rolloff, SoundClip, SoundConfig, SoundCtl, SoundCue, SoundCues, SoundListener, SoundPlugin, SoundSettings, SoundStats,
+        SoundZone, Steal, VoiceId,
+    };
     pub use bevy::prelude::*;
 }
