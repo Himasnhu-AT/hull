@@ -42,6 +42,11 @@ default = [
     "look",
     "anim",
     "world",
+    "vfx",
+    "ai",
+    "sound",
+    "actions",
+    "l10n",
 ]
 # AI-friendly dev loop: ECS inspector commands, scenario test kit, perf assertions, scope
 # profiling, JSON hot reload, save slots, asset checks (docs/DEVKIT.md).
@@ -54,10 +59,6 @@ hot_reload = ["bevy/file_watcher"]
 debug_names = ["bevy/debug"]
 # KTX2 + zstd loading for cooked textures (scripts/cook.py). Optional: recompiles Bevy.
 ktx2 = ["bevy/ktx2", "bevy/zstd_rust"]
-default = ["physics", "devtools", "trace", "vfx"]
-default = ["physics", "devtools", "trace", "ai"]
-default = ["physics", "devtools", "trace", "sound"]
-default = ["physics", "devtools", "trace", "actions", "l10n"]
 # avian3d: physics time is paused with the game; re-exported as `engine::avian3d`.
 physics = ["dep:avian3d"]
 # First-person controller (kinematic collide-and-slide + mouse look). Needs physics.
