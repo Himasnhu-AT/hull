@@ -209,6 +209,8 @@ impl Plugin for EnginePlugin {
             ));
         #[cfg(feature = "look")]
         app.add_plugins(crate::look::LookPlugin);
+        #[cfg(feature = "anim")]
+        app.add_plugins(crate::anim::AnimPlugin);
         if !o.headless {
             // Avoids a pipelined-rendering deadlock on exit (see `exit.rs`).
             app.add_plugins(crate::exit::CleanExitPlugin);

@@ -33,6 +33,7 @@ default = [
     "trace",
     "devkit",
     "look",
+    "anim",
 ]
 # AI-friendly dev loop: ECS inspector commands, scenario test kit, perf assertions, scope
 # profiling, JSON hot reload, save slots, asset checks (docs/DEVKIT.md).
@@ -58,6 +59,9 @@ look = []
 look_pcss = ["look", "bevy/experimental_pbr_pcss"]
 # Clustered (projector) decals for the look; needs bindless textures (not on Metal). Recompiles Bevy.
 look_clustered_decals = ["look", "bevy/pbr_clustered_decals"]
+# Code-first character animation: state machines, blend spaces, layers/masks, root motion,
+# notifies, IK, springs, LOD (src/anim, docs/ANIM.md). Foot placement needs `physics` too.
+anim = []
 
 [dev-dependencies]
 ashlar-control = { path = "/Users/himanshu/codes/synthai/ashlar/crates/control" }
@@ -93,3 +97,7 @@ required-features = ["devkit"]
 [[example]]
 name = "look_showcase"
 required-features = ["look"]
+
+[[example]]
+name = "anim_demo"
+required-features = ["anim"]
