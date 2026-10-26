@@ -26,6 +26,12 @@
 //! //           read MenuEvent for Custom actions and "pause" / "resume" / "main_menu".
 //! ```
 
+#[cfg(feature = "actions")]
+pub mod accessibility;
+#[cfg(feature = "actions")]
+pub mod colorblind;
+#[cfg(feature = "actions")]
+pub mod controls_screen;
 pub mod fps_counter;
 pub mod menus;
 pub mod screens;
@@ -58,6 +64,46 @@ pub enum UiSet {
     Paint,
 }
 
+/// Translate an engine UI literal ("Settings", "Resume", a setting's label): with feature
+/// `l10n` the current language's text for the key whose fallback-language text is `s`
+/// ([`crate::l10n::tr_literal`]), else `s` unchanged. Strings with no table entry (game text,
+/// numbers) come back as they are.
+pub fn tl(s: &str) -> std::borrow::Cow<'_, str> {
+    #[cfg(feature = "l10n")]
+    {
+        crate::l10n::tr_literal(s)
+    }
+    #[cfg(not(feature = "l10n"))]
+    {
+        std::borrow::Cow::Borrowed(s)
+    }
+}
+
+/// Footer key hints: the gamepad set when the player used a gamepad last (feature `actions`).
+pub fn device_hints<'a>(world: &World, kbm: &[(&'a str, &'a str)], pad: &[(&'a str, &'a str)]) -> Vec<(&'a str, &'a str)> {
+    #[cfg(feature = "actions")]
+    {
+        controls_screen::hints(world, kbm, pad)
+    }
+    #[cfg(not(feature = "actions"))]
+    {
+        let _ = (world, pad);
+        kbm.to_vec()
+    }
+}
+
+/// A formatted engine string: the current language's `key` with `args` (feature `l10n`, when
+/// the key exists), else `english()`.
+pub fn tl_fmt(key: &str, args: &[(&str, String)], english: impl FnOnce() -> String) -> String {
+    #[cfg(feature = "l10n")]
+    if crate::l10n::has_key(key) {
+        let args: Vec<(&str, crate::l10n::Arg)> = args.iter().map(|(k, v)| (*k, crate::l10n::Arg::Str(v.clone()))).collect();
+        return crate::l10n::tr_with(key, &args);
+    }
+    let _ = (key, args);
+    english()
+}
+
 /// Run condition: UI exists (not `--headless`). Missing `Headless` counts as visible.
 pub fn ui_visible(h: Option<Res<Headless>>) -> bool {
     !h.is_some_and(|h| h.0)
@@ -77,6 +123,8 @@ impl Plugin for UiKitPlugin {
                 fps_counter::FpsCounterPlugin,
             ))
             .add_systems(Update, fallback_camera.run_if(ui_visible));
+        #[cfg(feature = "actions")]
+        app.add_plugins((accessibility::A11yUiPlugin, controls_screen::ControlsScreenPlugin));
         // Built-in screens, unless the game registered its own under the same id.
         let builtins: [(&'static str, screens::ScreenBuilder); 3] =
             [("main", menus::build_main), ("settings", settings_screen::build), ("pause", menus::build_pause)];

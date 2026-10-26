@@ -131,7 +131,9 @@ pub struct FpsMotor {
     pub eye_offset: f32,
 }
 
-/// Keys read by [`FpsSet::Input`].
+/// Keys read by [`FpsSet::Input`]. With feature `actions` the controller reads the "move",
+/// "sprint", "jump", "crouch" actions instead; a game that changes `FpsKeys` before startup
+/// gets those keys as the actions' keyboard defaults.
 #[derive(Resource, Clone, Debug)]
 pub struct FpsKeys {
     pub forward: KeyCode,
@@ -179,6 +181,14 @@ impl Plugin for FpsPlugin {
                     move_controllers.in_set(FpsSet::Move).run_if(not_paused),
                 ),
             );
+        #[cfg(feature = "actions")]
+        {
+            use crate::actions::AddAction;
+            for def in crate::actions::fps_actions() {
+                app.add_action(def);
+            }
+            app.add_systems(Startup, fps_keys_to_actions);
+        }
         let mut b = app.world_mut().resource_mut::<Bindings>();
         b.set("Move", "W A S D");
         b.set("Look", "Mouse");
@@ -188,6 +198,41 @@ impl Plugin for FpsPlugin {
     }
 }
 
+/// With `actions`: the rebindable "move", "sprint", "jump", "crouch" actions (keyboard +
+/// gamepad; sprint/crouch follow the accessibility hold/toggle option) + [`LookInput`].
+#[cfg(feature = "actions")]
+fn keyboard_to_input(actions: Option<Res<crate::actions::ActionState>>, look: Res<LookInput>, mut q: Query<&mut FpsInput, Without<ExternalInput>>) {
+    let Some(actions) = actions else { return };
+    let mv = actions.axis2d("move").clamp_length_max(1.0);
+    let (sprint, jump, crouch) = (actions.pressed("sprint"), actions.pressed("jump"), actions.pressed("crouch"));
+    for mut input in &mut q {
+        *input = FpsInput { move_axis: mv, look: input.look + Vec2::new(look.yaw, look.pitch), sprint, jump, crouch };
+    }
+}
+
+/// `FpsKeys` changed by the game (before startup) → the keyboard bindings of the FPS actions,
+/// as their defaults (so "reset" goes back to the game's keys, and saved overrides still win).
+#[cfg(feature = "actions")]
+fn fps_keys_to_actions(keys: Res<FpsKeys>, mut map: ResMut<crate::actions::ActionMap>) {
+    use crate::actions::{Binding, Device};
+    let d = FpsKeys::default();
+    if keys.forward == d.forward && keys.back == d.back && keys.left == d.left && keys.right == d.right && keys.sprint == d.sprint && keys.jump == d.jump && keys.crouch == d.crouch {
+        return;
+    }
+    let mut set = |name: &str, kbm: Vec<Binding>| {
+        if let Some(a) = map.get_mut(name) {
+            let pad: Vec<Binding> = a.defaults.iter().filter(|b| b.device() == Device::Gamepad).cloned().collect();
+            a.defaults = kbm.into_iter().chain(pad).collect();
+            a.def.bindings = a.defaults.clone();
+        }
+    };
+    set("move", vec![Binding::keys4(keys.forward, keys.back, keys.left, keys.right)]);
+    set("sprint", keys.sprint.iter().map(|k| Binding::key(*k)).collect());
+    set("jump", keys.jump.iter().map(|k| Binding::key(*k)).collect());
+    set("crouch", keys.crouch.iter().map(|k| Binding::key(*k)).collect());
+}
+
+#[cfg(not(feature = "actions"))]
 fn keyboard_to_input(keys: Res<ButtonInput<KeyCode>>, map: Res<FpsKeys>, look: Res<LookInput>, mut q: Query<&mut FpsInput, Without<ExternalInput>>) {
     let axis = |neg: KeyCode, pos: KeyCode| (keys.pressed(pos) as i32 - keys.pressed(neg) as i32) as f32;
     let mv = Vec2::new(axis(map.left, map.right), axis(map.back, map.forward)).clamp_length_max(1.0);

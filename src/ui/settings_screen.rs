@@ -122,9 +122,16 @@ pub fn build(world: &mut World, root: Entity) {
     let fields: Vec<FieldDef> = tab.map(|tb| reg.tab_fields(tb).cloned().collect()).unwrap_or_default();
     let in_game = world.get_resource::<State<AppState>>().is_some_and(|s| *s.get() == AppState::InGame);
     let can_reset = !fields.is_empty() && world.get_resource::<SettingsDefaults>().is_some_and(|d| !d.0.is_empty());
-    let show_bindings = tab == Some("Controls") && !bindings.0.is_empty();
+    // With actions, the "Controls" panel (current bindings + "Rebind controls") replaces the
+    // read-only list.
+    #[cfg(feature = "actions")]
+    let has_actions = world.contains_resource::<crate::actions::ActionMap>();
+    #[cfg(not(feature = "actions"))]
+    let has_actions = false;
+    let show_bindings = tab == Some("Controls") && !bindings.0.is_empty() && !has_actions;
     let tab_panel = tab.and_then(|tb| world.get_resource::<SettingsPanels>()?.0.iter().find(|(k, _)| *k == tb).map(|p| p.1));
 
+    let pad = super::device_hints(world, &[("k", "")], &[("p", "")])[0].0 == "p";
     let mut side = None;
     world.commands().entity(root).with_children(|p| {
         // Stronger dim than the main menu: this is a reading screen.
@@ -189,9 +196,13 @@ pub fn build(world: &mut World, root: Entity) {
         });
         let mut hints: Vec<(&str, &str)> = Vec::new();
         if tabs.len() > 1 {
-            hints.push(("Q / E", "Switch tab"));
+            hints.push((if pad { "LB / RB" } else { "Q / E" }, "Switch tab"));
         }
-        hints.extend([("W / S", "Select"), ("A / D", "Adjust"), ("Esc", "Back")]);
+        if pad {
+            hints.extend([("D-pad", "Select"), ("A", "Adjust"), ("B", "Back")]);
+        } else {
+            hints.extend([("W / S", "Select"), ("A / D", "Adjust"), ("Esc", "Back")]);
+        }
         spawn_footer(p, &t, &hints);
     });
     world.flush();
@@ -226,22 +237,35 @@ pub fn build(world: &mut World, root: Entity) {
 /// What the "About" card says for a field: (title, body, detail).
 pub fn describe(def: &FieldDef, value: f32) -> (String, String, String) {
     let detail = match &def.kind {
-        FieldKind::Toggle => "Enter toggles it; D turns it on, A off.".to_string(),
-        FieldKind::Slider { min, max, format, .. } => format!("{} to {}. A / D steps, or drag the bar.", format(*min), format(*max)),
-        FieldKind::Choice { options } => format!("{}. A / D to choose.", options.join(" \u{b7} ")),
+        FieldKind::Toggle => super::tl("Enter toggles it; D turns it on, A off.").into_owned(),
+        FieldKind::Slider { min, max, format, .. } => super::tl_fmt("settings-slider-help", &[("min", format(*min)), ("max", format(*max))], || {
+            format!("{} to {}. A / D steps, or drag the bar.", format(*min), format(*max))
+        }),
+        FieldKind::Choice { options } => {
+            let list = options.iter().map(|o| super::tl(o).into_owned()).collect::<Vec<_>>().join(" \u{b7} ");
+            super::tl_fmt("settings-choice-help", &[("options", list.clone())], || format!("{list}. A / D to choose."))
+        }
         FieldKind::Cards { options } => {
             let i = normalize(&def.kind, value) as usize;
-            options.get(i).map_or_else(String::new, |(name, blurb)| if blurb.is_empty() { name.to_string() } else { format!("{name}: {blurb}") })
+            options.get(i).map_or_else(String::new, |(name, blurb)| {
+                let (name, blurb) = (super::tl(name), super::tl(blurb));
+                if blurb.is_empty() { name.into_owned() } else { format!("{name}: {blurb}") }
+            })
         }
-        FieldKind::Swatches { colors } => format!("{} colours. A / D to pick.", colors.len()),
+        FieldKind::Swatches { colors } => {
+            super::tl_fmt("settings-swatch-help", &[("n", colors.len().to_string())], || format!("{} colours. A / D to pick.", colors.len()))
+        }
     };
     let body = match (&def.kind, def.hint.is_empty()) {
-        (_, false) => def.hint.to_string(),
+        (_, false) => super::tl(def.hint).into_owned(),
         // "#3" says nothing; the swatch row already shows the colour.
         (FieldKind::Swatches { .. }, true) => String::new(),
-        (_, true) => format!("Currently {}.", format_value(&def.kind, value)),
+        (_, true) => {
+            let v = format_value(&def.kind, value);
+            super::tl_fmt("settings-currently", &[("value", v.clone())], || format!("Currently {v}."))
+        }
     };
-    (def.label.to_uppercase(), body, detail)
+    (super::tl(def.label).to_uppercase(), body, detail)
 }
 
 /// Keep the "About this setting" card on the focused row.
@@ -260,7 +284,7 @@ fn update_about_card(
     let def = focus.0.and_then(|e| rows.get(e).ok()).and_then(|r| reg.as_deref()?.field(r.0));
     let (a, b, c) = match def {
         Some(d) => describe(d, values.get(d.key)),
-        None => ("SETTINGS".into(), "Changes apply right away and are saved automatically.".into(), String::new()),
+        None => (super::tl("Settings").to_uppercase(), super::tl("Changes apply right away and are saved automatically.").into_owned(), String::new()),
     };
     set_texts(titles.iter_mut(), &a);
     set_texts(bodies.iter_mut(), &b);
@@ -285,7 +309,7 @@ pub fn quality_presets_panel(world: &mut World, slot: Entity) {
             for (i, name) in ["Low", "Medium", "High", "Ultra"].iter().enumerate() {
                 card.spawn((Node { flex_direction: FlexDirection::Column, padding: UiRect::vertical(px(3)), ..default() }, Pickable::IGNORE))
                     .with_children(|r| {
-                        r.spawn(text(name.to_uppercase(), label(SIZE_LABEL), t.text));
+                        r.spawn(text(super::tl(name).to_uppercase(), label(SIZE_LABEL), t.text));
                         r.spawn(text(preset_summary(&q, i), body(SIZE_TINY + 1.0), t.text_muted));
                     });
             }
@@ -295,10 +319,13 @@ pub fn quality_presets_panel(world: &mut World, slot: Entity) {
 
 /// One line per preset: "Temporal AA, ambient occlusion, bloom, 2048 px shadows."
 pub fn preset_summary(q: &QualityPreset, i: usize) -> String {
-    let aa = if q.taa[i] { "Temporal AA" } else { "FXAA" };
-    let ao = if q.ssao[i] { "ambient occlusion" } else { "no ambient occlusion" };
-    let bloom = if q.bloom[i] { "bloom" } else { "no bloom" };
-    format!("{aa}, {ao}, {bloom}, {} px shadows.", q.shadow_map_size[i])
+    let aa = super::tl(if q.taa[i] { "Temporal AA" } else { "FXAA" });
+    let ao = super::tl(if q.ssao[i] { "ambient occlusion" } else { "no ambient occlusion" });
+    let bloom = super::tl(if q.bloom[i] { "bloom" } else { "no bloom" });
+    let px = q.shadow_map_size[i].to_string();
+    super::tl_fmt("quality-summary", &[("aa", aa.to_string()), ("ao", ao.to_string()), ("bloom", bloom.to_string()), ("px", px.clone())], || {
+        format!("{aa}, {ao}, {bloom}, {px} px shadows.")
+    })
 }
 
 /// Apply a pending "Reset tab": defaults come from a scratch world built by [`SettingsDefaults`].
@@ -318,7 +345,8 @@ pub(crate) fn reset_tab(world: &mut World) {
         }
     }
     world.write_message(SaveSettings);
-    world.write_message(Toast::new(format!("{tab} reset to defaults")));
+    let shown = super::tl(tab).into_owned();
+    world.write_message(Toast::new(super::tl_fmt("settings-tab-reset", &[("tab", shown.clone())], || format!("{shown} reset to defaults"))));
 }
 
 #[cfg(test)]

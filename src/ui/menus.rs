@@ -91,6 +91,7 @@ pub fn build_main(world: &mut World, root: Entity) {
     let cfg = world.get_resource::<MenuConfig>().cloned().unwrap_or_default();
     let (name, tagline, version) = world.get_resource::<GameInfo>().map_or(("", "", ""), |i| (i.title, i.tagline, i.version));
     let nav = items(&cfg.main_items);
+    let footer = super::device_hints(world, &[("W / S", "Navigate"), ("Enter", "Select")], &[("D-pad", "Navigate"), ("A", "Select")]);
     let mut slot = None;
     world.commands().entity(root).with_children(|p| {
         menu_backdrop(p, &t, 0.0, 1.0);
@@ -125,7 +126,7 @@ pub fn build_main(world: &mut World, root: Entity) {
                 .id(),
             );
         }
-        spawn_footer(p, &t, &[("W / S", "Navigate"), ("Enter", "Select")]);
+        spawn_footer(p, &t, &footer);
         if !version.is_empty() {
             p.spawn((
                 text(format!("v{version}"), body(SIZE_TINY), t.text_dim),
@@ -148,6 +149,11 @@ pub fn build_pause(world: &mut World, root: Entity) {
         None => world.get_resource::<GameInfo>().map_or("", |i| i.title).to_string(),
     };
     let nav = items(&cfg.pause_items);
+    let footer = super::device_hints(
+        world,
+        &[("W / S", "Navigate"), ("Enter", "Select"), ("Esc", "Resume")],
+        &[("D-pad", "Navigate"), ("A", "Select"), ("B", "Resume")],
+    );
     let mut slot = None;
     world.commands().entity(root).with_children(|p| {
         menu_backdrop(p, &t, 0.55, 0.95);
@@ -169,7 +175,7 @@ pub fn build_pause(world: &mut World, root: Entity) {
                 col.spawn(text(cfg.pause_note, body(SIZE_SMALL), t.text_dim));
             }
         });
-        spawn_footer(p, &t, &[("W / S", "Navigate"), ("Enter", "Select"), ("Esc", "Resume")]);
+        spawn_footer(p, &t, &footer);
     });
     world.flush();
     if let (Some(build), Some(slot)) = (cfg.pause_header, slot) {

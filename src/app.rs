@@ -219,6 +219,10 @@ impl Plugin for EnginePlugin {
         app.add_plugins(crate::sound::SoundPlugin);
         #[cfg(feature = "world")]
         app.add_plugins(crate::world::WorldPlugin);
+        #[cfg(feature = "actions")]
+        app.add_plugins(crate::actions::ActionsPlugin);
+        #[cfg(feature = "l10n")]
+        app.add_plugins(crate::l10n::L10nPlugin);
         if !o.headless {
             // Avoids a pipelined-rendering deadlock on exit (see `exit.rs`).
             app.add_plugins(crate::exit::CleanExitPlugin);

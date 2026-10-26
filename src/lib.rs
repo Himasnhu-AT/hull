@@ -49,8 +49,12 @@ pub mod ui;
 pub mod devkit;
 #[cfg(feature = "ai")]
 pub mod ai;
+#[cfg(feature = "actions")]
+pub mod actions;
 #[cfg(feature = "devtools")]
 pub mod devtools;
+#[cfg(feature = "l10n")]
+pub mod l10n;
 #[cfg(feature = "fps")]
 pub mod fps;
 #[cfg(feature = "look")]
@@ -89,6 +93,10 @@ pub mod prelude {
         AiConfig, AiPlugin, Blackboard, BehaviorTree, Bt, BtAgent, BtCtx, BtStatus, NavAgent, NavAgentState, NavIgnore, NavLink, NavMeshSettings,
         NavMeshes, NavMotion, NavPathQueue, NavSource, NavStatus, Noise, OffMeshLink, Perceivable, Perceiver, Perception, UtilityAi,
     };
+    #[cfg(feature = "actions")]
+    pub use crate::actions::{Accessibility, ActionDef, ActionKind, ActionMap, ActionState, AddAction, Binding, InputContexts, Rumble, Stick, Trigger};
+    #[cfg(feature = "l10n")]
+    pub use crate::l10n::{Locale, Tr, tr, tr_args};
     #[cfg(feature = "fps")]
     pub use crate::fps::{FpsController, FpsInput, FpsLook, FpsMotor, FpsPlugin, FpsSet};
     #[cfg(feature = "look")]

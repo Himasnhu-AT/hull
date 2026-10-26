@@ -4,12 +4,14 @@
 //!   [`crate::cli::test_driven`] and [`CaptureCursor`] is true; released in menus / pause. If it gets lost while it should be
 //!   captured (focus loss, Cmd-Tab), a left click re-captures it.
 //! - [`LookInput`] each frame: mouse delta × `CoreSettings.sensitivity` (× invert Y), zero when
-//!   not captured. Games read it for camera look (radians per frame, already scaled).
+//!   not captured. With feature `actions` it comes from the rebindable "look" action (mouse +
+//!   gamepad right stick), see `crate::actions`. Games read it for camera look (radians per frame, already scaled).
 //!   Test-driven runs never capture the cursor, so there motion counts whenever the game is in
 //!   `InGame` and not paused (the control port injects `MouseMotion`).
 //! - [`Bindings`]: action name → keys, shown read-only in the Controls tab (games add theirs).
 //!   The engine adds "Pause / back" = "Esc".
 
+#[cfg(not(feature = "actions"))]
 use bevy::input::mouse::AccumulatedMouseMotion;
 use bevy::prelude::*;
 use bevy::window::{CursorGrabMode, CursorOptions, PrimaryWindow};
@@ -117,6 +119,7 @@ fn cursor_policy(
     }
 }
 
+#[cfg(not(feature = "actions"))]
 fn look_input(
     motion: Option<Res<AccumulatedMouseMotion>>,
     captured: Res<CursorCaptured>,
@@ -129,6 +132,31 @@ fn look_input(
         || (crate::cli::test_driven() && !paused.0 && state.is_some_and(|s| *s.get() == AppState::InGame));
     let delta = motion.map(|m| m.delta).unwrap_or_default();
     *look = if active { look_from_motion(delta, &settings) } else { LookInput::default() };
+}
+
+/// With `actions`: the "look" action (mouse motion + right stick, rebindable) × sensitivity /
+/// invert. Mouse look still needs the captured cursor (or a test-driven run); the stick works
+/// whenever the gameplay context is live.
+#[cfg(feature = "actions")]
+fn look_input(
+    actions: Option<Res<crate::actions::ActionState>>,
+    captured: Res<CursorCaptured>,
+    state: Option<Res<State<AppState>>>,
+    paused: Res<Paused>,
+    settings: Res<CoreSettings>,
+    mut look: ResMut<LookInput>,
+) {
+    let mouse_ok = captured.0
+        || (crate::cli::test_driven() && !paused.0 && state.is_some_and(|s| *s.get() == AppState::InGame));
+    let d = actions.as_ref().and_then(|a| a.get("look").copied()).unwrap_or_default();
+    let ok = d.active && (mouse_ok || d.device == crate::actions::Device::Gamepad);
+    *look = if ok { look_from_action(d.value, &settings) } else { LookInput::default() };
+}
+
+/// "look" action value (radians at sensitivity 1, y up) → [`LookInput`].
+pub fn look_from_action(v: Vec2, settings: &CoreSettings) -> LookInput {
+    let invert = if settings.invert_y { -1.0 } else { 1.0 };
+    LookInput { yaw: v.x * settings.sensitivity, pitch: v.y * settings.sensitivity * invert }
 }
 
 /// Mouse counts → radians: x right = yaw right, y down = pitch down (unless inverted).

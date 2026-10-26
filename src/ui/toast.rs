@@ -133,7 +133,7 @@ fn spawn_toasts(
                 Pickable::IGNORE,
             ))
             .with_children(|c| {
-                c.spawn((ToastText(t.text), text(toast.title.to_uppercase(), label(21.0), Color::NONE)));
+                c.spawn((ToastText(t.text), text(super::tl(&toast.title).to_uppercase(), label(21.0), Color::NONE)));
                 if !toast.body.is_empty() {
                     c.spawn((ToastText(t.text_muted), text(toast.body.clone(), body(SIZE_SMALL), Color::NONE)));
                 }
