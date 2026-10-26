@@ -135,6 +135,18 @@ impl<G: GameSettings> Plugin for SettingsPlugin<G> {
     }
 }
 
+/// Persist resource `T` as its own section `key` of settings.json (engine subsystems such as
+/// input bindings, accessibility and language use this; games can too). Loads `T` now (missing
+/// or invalid section → `T::default()`), inserts it, and saves it with the rest when it changes.
+/// Call after `EnginePlugin` (or `CoreSettingsPlugin`). Re-registering a key replaces it.
+pub fn add_settings_section<T: GameSettings>(app: &mut App, key: &'static str) {
+    let mut store = store_mut(app);
+    let value: T = store.decode(key);
+    store.sections.retain(|(k, _)| *k != key);
+    store.sections.push((key, serialize_resource::<T>));
+    app.insert_resource(value).add_systems(PostUpdate, mark_dirty::<T>.in_set(SettingsSet::Track));
+}
+
 /// Placeholder for games without their own settings.
 #[derive(Resource, Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct NoGameSettings;

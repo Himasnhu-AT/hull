@@ -1,6 +1,8 @@
 //! Widgets + focus/navigation. Owner: ui stream.
 //! Keyboard: arrows/WASD move focus, Enter/Space activate, A/D or ←/→ adjust, Q/E/Tab switch
 //! tabs, Esc/Backspace back. Mouse: hover focuses, click activates, drag sliders, wheel scrolls.
+//! Gamepad (feature `actions`): d-pad / left stick move and adjust (held = auto-repeat), A
+//! accepts, B / Menu goes back, LB / RB switch tabs.
 //!
 //! - [`Focusable`] entities form one vertical list (by `order`); Up/Down moves focus, the mouse
 //!   focuses whatever it hovers.
@@ -195,10 +197,10 @@ pub fn cycle_value(kind: &FieldKind, v: f32) -> f32 {
 pub fn format_value(kind: &FieldKind, v: f32) -> String {
     let i = normalize(kind, v) as usize;
     match kind {
-        FieldKind::Toggle => if v > 0.5 { "ON" } else { "OFF" }.to_string(),
+        FieldKind::Toggle => super::tl(if v > 0.5 { "ON" } else { "OFF" }).into_owned(),
         FieldKind::Slider { format, .. } => format(v),
-        FieldKind::Choice { options } => options.get(i).map_or_else(String::new, |s| s.to_string()),
-        FieldKind::Cards { options } => options.get(i).map_or_else(String::new, |s| s.0.to_string()),
+        FieldKind::Choice { options } => options.get(i).map_or_else(String::new, |s| super::tl(s).into_owned()),
+        FieldKind::Cards { options } => options.get(i).map_or_else(String::new, |s| super::tl(s.0).into_owned()),
         FieldKind::Swatches { .. } => format!("#{}", i + 1),
     }
 }
@@ -379,7 +381,7 @@ pub fn nav_button(p: &mut ChildSpawnerCommands, t: &Theme, label_text: &str, act
             BackgroundColor(CLEAR),
             Pickable::IGNORE,
         ));
-        b.spawn(text(label_text.to_uppercase(), label(SIZE_NAV), t.text_muted));
+        b.spawn(text(super::tl(label_text).to_uppercase(), label(SIZE_NAV), t.text_muted));
     });
 }
 
@@ -419,7 +421,7 @@ pub fn action_button(
         },
         BackgroundColor(CLEAR),
         BorderColor::all(CLEAR),
-        children![text(label_text.to_uppercase(), label(if primary { 28.0 } else { 22.0 }), t.text)],
+        children![text(super::tl(label_text).to_uppercase(), label(if primary { 28.0 } else { 22.0 }), t.text)],
     ));
     if let Some(order) = order {
         e.insert(Focusable { order });
@@ -443,7 +445,7 @@ pub fn tab_button(p: &mut ChildSpawnerCommands, t: &Theme, label_text: &str, ind
         BackgroundColor(CLEAR),
     ))
     .with_children(|b| {
-        b.spawn(text(label_text.to_uppercase(), label(26.0), if active { t.text } else { t.text_dim }));
+        b.spawn(text(super::tl(label_text).to_uppercase(), label(26.0), if active { t.text } else { t.text_dim }));
         b.spawn((
             Node { width: percent(100), height: px(3), ..default() },
             BackgroundColor(if active { t.accent } else { CLEAR }),
@@ -540,7 +542,7 @@ fn spawn_segments(p: &mut ChildSpawnerCommands, t: &Theme, key: &'static str, op
     p.spawn((Node { width: percent(100), column_gap: px(4), ..default() }, Pickable::IGNORE)).with_children(|r| {
         for (i, o) in options.iter().enumerate() {
             r.spawn((Button, Segment { key, index: i }, segment_look(t), segment_node(), BackgroundColor(CLEAR), BorderColor::all(CLEAR)))
-                .with_child(text(o.to_uppercase(), label(19.0), t.text_muted));
+                .with_child(text(super::tl(o).to_uppercase(), label(19.0), t.text_muted));
         }
     });
 }
@@ -652,7 +654,7 @@ pub fn card_row(p: &mut ChildSpawnerCommands, t: &Theme, def: &FieldDef, order: 
                     BackgroundColor(t.line),
                     Pickable::IGNORE,
                 ));
-                c.spawn(text(title_text.to_uppercase(), display(32.0), t.text_muted));
+                c.spawn(text(super::tl(title_text).to_uppercase(), display(32.0), t.text_muted));
                 if !blurb.is_empty() {
                     c.spawn((text(*blurb, body(SIZE_SMALL), t.text_muted), KeepColor));
                 }
@@ -662,6 +664,11 @@ pub fn card_row(p: &mut ChildSpawnerCommands, t: &Theme, def: &FieldDef, order: 
 }
 
 // ---- plugin ----
+
+/// Whatever feeds navigation runs before the widgets read it (the action system with
+/// feature `actions`).
+#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
+pub struct NavInputSet;
 
 pub struct WidgetsPlugin;
 
@@ -676,7 +683,7 @@ impl Plugin for WidgetsPlugin {
             .add_message::<UiActivated>()
             .add_message::<NavBack>()
             .add_message::<SaveSettings>()
-            .add_systems(PreUpdate, keyboard_nav.run_if(super::ui_visible).after(bevy::input::InputSystems))
+            .add_systems(PreUpdate, keyboard_nav.run_if(super::ui_visible).after(bevy::input::InputSystems).after(NavInputSet))
             .add_systems(
                 Update,
                 (
@@ -694,7 +701,56 @@ impl Plugin for WidgetsPlugin {
     }
 }
 
-fn keyboard_nav(keys: Option<Res<ButtonInput<KeyCode>>>, mut q: ResMut<NavQueue>) {
+/// Held direction auto-repeat: first repeat after this, then every [`NAV_REPEAT`] seconds.
+pub const NAV_REPEAT_DELAY: f32 = 0.38;
+pub const NAV_REPEAT: f32 = 0.11;
+
+#[cfg(feature = "actions")]
+#[derive(Default)]
+struct NavRepeat {
+    dir: Option<NavInput>,
+    timer: f32,
+}
+
+/// With `actions` (and an `ActionState`): menu navigation from the "menu" context actions
+/// (`ui.navigate` = arrows / WASD / d-pad / left stick with auto-repeat, `ui.accept`,
+/// `ui.back`, `ui.next_tab`, `ui.prev_tab`) plus the gameplay "pause" action (Esc / Menu
+/// button → Back, which opens the pause menu). Falls back to fixed keys without it.
+fn keyboard_nav(
+    keys: Option<Res<ButtonInput<KeyCode>>>,
+    #[cfg(feature = "actions")] actions: Option<Res<crate::actions::ActionState>>,
+    #[cfg(feature = "actions")] time: Res<Time<Real>>,
+    #[cfg(feature = "actions")] mut repeat: Local<NavRepeat>,
+    mut q: ResMut<NavQueue>,
+) {
+    #[cfg(feature = "actions")]
+    if let Some(a) = actions {
+        let v = a.axis2d("ui.navigate");
+        let dir = if v.length() < 0.5 {
+            None
+        } else if v.y.abs() >= v.x.abs() {
+            Some(if v.y > 0.0 { NavInput::Up } else { NavInput::Down })
+        } else {
+            Some(if v.x > 0.0 { NavInput::Right } else { NavInput::Left })
+        };
+        if dir != repeat.dir {
+            repeat.dir = dir;
+            repeat.timer = NAV_REPEAT_DELAY;
+            q.0.extend(dir);
+        } else if let Some(d) = dir {
+            repeat.timer -= time.delta_secs();
+            if repeat.timer <= 0.0 {
+                repeat.timer += NAV_REPEAT;
+                q.0.push(d);
+            }
+        }
+        for (name, n) in [("ui.accept", NavInput::Accept), ("ui.back", NavInput::Back), ("pause", NavInput::Back), ("ui.next_tab", NavInput::NextTab), ("ui.prev_tab", NavInput::PrevTab)] {
+            if a.just_pressed(name) {
+                q.0.push(n);
+            }
+        }
+        return;
+    }
     let Some(keys) = keys else { return };
     let map = [
         (KeyCode::ArrowUp, NavInput::Up),

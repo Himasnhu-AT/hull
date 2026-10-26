@@ -43,8 +43,12 @@ pub mod render_budget;
 pub mod settings;
 pub mod ui;
 
+#[cfg(feature = "actions")]
+pub mod actions;
 #[cfg(feature = "devtools")]
 pub mod devtools;
+#[cfg(feature = "l10n")]
+pub mod l10n;
 #[cfg(feature = "fps")]
 pub mod fps;
 #[cfg(feature = "trace")]
@@ -66,6 +70,10 @@ pub mod prelude {
     pub use crate::render_budget::{Actor, FarLook, KeepDetail, RenderBudget, RenderStats, Scenery, SceneryRanges, SceneryStream};
     pub use crate::settings::{CoreSettings, FieldDef, FieldKind, GameSettings, GraphicsQuality, RegisterSettings, SettingsPlugin, WindowModeSetting};
     pub use crate::ui::theme::Theme;
+    #[cfg(feature = "actions")]
+    pub use crate::actions::{Accessibility, ActionDef, ActionKind, ActionMap, ActionState, AddAction, Binding, InputContexts, Rumble, Stick, Trigger};
+    #[cfg(feature = "l10n")]
+    pub use crate::l10n::{Locale, Tr, tr, tr_args};
     #[cfg(feature = "fps")]
     pub use crate::fps::{FpsController, FpsInput, FpsLook, FpsMotor, FpsPlugin, FpsSet};
     pub use bevy::prelude::*;

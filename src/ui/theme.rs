@@ -68,6 +68,25 @@ impl Default for Theme {
 }
 
 impl Theme {
+    /// Accessibility variant: opaque near-black surfaces, white text, bright yellow focus,
+    /// strong outlines.
+    pub fn high_contrast() -> Self {
+        Theme {
+            bg: Color::srgb(0.0, 0.0, 0.0),
+            panel: Color::srgba(0.0, 0.0, 0.0, 0.97),
+            raised: Color::srgba(0.16, 0.16, 0.16, 1.0),
+            line: Color::srgba(1.0, 1.0, 1.0, 0.45),
+            line_strong: Color::srgba(1.0, 1.0, 1.0, 0.85),
+            text: Color::srgb(1.0, 1.0, 1.0),
+            text_muted: Color::srgb(0.88, 0.88, 0.88),
+            text_dim: Color::srgb(0.75, 0.75, 0.75),
+            accent: Color::srgb(1.0, 0.86, 0.0),
+            on_accent: Color::srgb(0.0, 0.0, 0.0),
+            good: Color::srgb(0.3, 1.0, 0.75),
+            bad: Color::srgb(1.0, 0.45, 0.35),
+            info: Color::srgb(0.45, 0.85, 1.0),
+        }
+    }
     /// Same theme with another accent (keeps everything else).
     pub fn with_accent(mut self, accent: Color) -> Self {
         self.accent = accent;
@@ -154,8 +173,12 @@ pub fn override_font(world: &mut World, role: FontRole, ttf: Vec<u8>) {
     }
 }
 
+/// Bevy's default `RemSize`: theme sizes are authored in px at this rem, and stored as rem so
+/// the accessibility text size (which sets `RemSize`) scales every themed text.
+pub const REM_PX: f32 = 20.0;
+
 fn font(handle: Handle<Font>, size: f32) -> TextFont {
-    TextFont::from_font_size(size).with_font(handle)
+    TextFont::from_font_size(bevy::text::FontSize::Rem(size / REM_PX)).with_font(handle)
 }
 
 pub fn body(size: f32) -> TextFont {
@@ -173,14 +196,21 @@ pub fn display(size: f32) -> TextFont {
 
 // ---- bundles ----
 
-/// A text node: `(Text, TextFont, TextColor)`, ignored by picking.
+/// A text node: `(Text, TextFont, TextColor)`, ignored by picking. Engine literals are
+/// translated ([`super::tl`]): text whose fallback-language table entry exists shows in the
+/// current language; anything else is shown as given.
 pub fn text(s: impl Into<String>, font: TextFont, color: Color) -> impl Bundle {
+    let s: String = s.into();
+    let s = match super::tl(&s) {
+        std::borrow::Cow::Borrowed(_) => s,
+        std::borrow::Cow::Owned(t) => t,
+    };
     (Text::new(s), font, TextColor(color), Pickable::IGNORE)
 }
 
 /// Small upper-case section label ("DIFFICULTY").
 pub fn eyebrow(s: &str, color: Color) -> impl Bundle {
-    text(s.to_uppercase(), label(SIZE_LABEL), color)
+    text(super::tl(s).to_uppercase(), label(SIZE_LABEL), color)
 }
 
 /// Eyebrow with a short accent bar in front (brand lines, screen kickers).
@@ -280,7 +310,7 @@ pub fn menu_column(row_gap: f32) -> impl Bundle {
 /// Big display title with the tight margins display type needs ("SETTINGS", "PAUSED").
 pub fn title(s: &str, size: f32, color: Color) -> impl Bundle {
     (
-        text(s.to_uppercase(), display(size), color),
+        text(super::tl(s).to_uppercase(), display(size), color),
         Node { margin: UiRect::new(px(-size * 0.04), px(0), px(-size * 0.1), px(-size * 0.08)), ..default() },
     )
 }
@@ -309,7 +339,7 @@ pub fn key_cap(t: &Theme, key: &str) -> impl Bundle {
         BorderColor::all(t.line_strong),
         BackgroundColor(Color::srgba(1.0, 1.0, 1.0, 0.04)),
         Pickable::IGNORE,
-        children![text(key.to_uppercase(), label(SIZE_TINY), t.text)],
+        children![text(super::tl(key).to_uppercase(), label(SIZE_TINY), t.text)],
     )
 }
 
