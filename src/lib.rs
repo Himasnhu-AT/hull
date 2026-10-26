@@ -47,6 +47,8 @@ pub mod ui;
 
 #[cfg(feature = "devkit")]
 pub mod devkit;
+#[cfg(feature = "ai")]
+pub mod ai;
 #[cfg(feature = "devtools")]
 pub mod devtools;
 #[cfg(feature = "fps")]
@@ -78,6 +80,11 @@ pub mod prelude {
     pub use crate::devkit::{HotReloadAppExt, PerfBudget, SaveConfig, SaveEvent, SavePlugin, SaveRequest, Scenario, WatchPath};
     #[cfg(feature = "anim")]
     pub use crate::anim::{AnimConfig, AnimGraphDef, AnimLayer, AnimNotify, AnimPlugin, AnimState, Animator, ClipBuilder, Mannequin, RigDef, RootMotion, RootMotionDelta, Skeleton};
+    #[cfg(feature = "ai")]
+    pub use crate::ai::{
+        AiConfig, AiPlugin, Blackboard, BehaviorTree, Bt, BtAgent, BtCtx, BtStatus, NavAgent, NavAgentState, NavIgnore, NavLink, NavMeshSettings,
+        NavMeshes, NavMotion, NavPathQueue, NavSource, NavStatus, Noise, OffMeshLink, Perceivable, Perceiver, Perception, UtilityAi,
+    };
     #[cfg(feature = "fps")]
     pub use crate::fps::{FpsController, FpsInput, FpsLook, FpsMotor, FpsPlugin, FpsSet};
     #[cfg(feature = "look")]

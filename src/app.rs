@@ -213,6 +213,8 @@ impl Plugin for EnginePlugin {
         app.add_plugins(crate::anim::AnimPlugin);
         #[cfg(feature = "vfx")]
         app.add_plugins(crate::vfx::VfxPlugin);
+        #[cfg(feature = "ai")]
+        app.add_plugins(crate::ai::AiPlugin);
         if !o.headless {
             // Avoids a pipelined-rendering deadlock on exit (see `exit.rs`).
             app.add_plugins(crate::exit::CleanExitPlugin);

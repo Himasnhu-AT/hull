@@ -1,0 +1,13 @@
+[
+  {"sleep": 3},
+  {"cmd": "ai.nav.stats"},
+  {"shot": "ai-plain"},
+  {"cmd": "ai.nav.debug", "params": {"on": true}},
+  {"sleep": 1.5},
+  {"shot": "ai-debug"},
+  {"cmd": "ai.noise", "params": {"pos": [0, 0, 0], "radius": 40}},
+  {"sleep": 1},
+  {"cmd": "ai.bt", "params": {}},
+  {"cmd": "ai.stats"},
+  {"cmd": "perf.stats"}
+]

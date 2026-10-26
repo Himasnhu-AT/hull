@@ -49,6 +49,7 @@ debug_names = ["bevy/debug"]
 # KTX2 + zstd loading for cooked textures (scripts/cook.py). Optional: recompiles Bevy.
 ktx2 = ["bevy/ktx2", "bevy/zstd_rust"]
 default = ["physics", "devtools", "trace", "vfx"]
+default = ["physics", "devtools", "trace", "ai"]
 # avian3d: physics time is paused with the game; re-exported as `engine::avian3d`.
 physics = ["dep:avian3d"]
 # First-person controller (kinematic collide-and-slide + mouse look). Needs physics.
@@ -67,6 +68,8 @@ look_clustered_decals = ["look", "bevy/pbr_clustered_decals"]
 anim = []
 # Particles / visual effects (src/vfx, docs/VFX.md).
 vfx = ["dep:bytemuck"]
+# Navigation (tiled navmesh baking, paths, crowds), behaviour trees, utility AI, perception.
+ai = ["physics"]
 
 [dev-dependencies]
 ashlar-control = { path = "/Users/himanshu/codes/synthai/ashlar/crates/control" }
@@ -110,3 +113,7 @@ required-features = ["anim"]
 [[example]]
 name = "vfx_gallery"
 required-features = ["vfx"]
+
+[[example]]
+name = "ai_crowd"
+required-features = ["ai", "devtools"]
