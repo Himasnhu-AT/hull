@@ -30,6 +30,9 @@ steps.json: a list of steps, each one of
   {"cmd": "input.key", "params": {"key": "w", "action": "down"}}
   {"shot": "name"}            -> DIR/name.png (windowed / offscreen only)
   {"shot": "name", "cmd": "metrics.screenshot"}  -> same through another screenshot command
+  {"write": "data/tuning.json", "json": {...}}      -> write a file under DIR (hot reload)
+  {"cmd": "ecs.query", "params": {...}, "expect": {"result.count": 25}}
+                              -> exit 1 at the end if a reply field (dotted path) differs
 Every reply is printed as one JSON line.
 """
 import json, os, re, shutil, socket, subprocess, sys, tempfile, time
@@ -147,6 +150,7 @@ def main():
         sys.exit("no `control:` line from the game")
 
     c = Port(port, key)
+    failed = []
     ready = opt(args, "--ready", "engine.state:state=" + ("MainMenu" if menu else "InGame"))
     shot_cmd, quit_cmd = "screenshot", "engine.quit"
     if not c.call("engine.state").get("ok"):
@@ -171,11 +175,24 @@ def main():
             if "sleep" in st:
                 time.sleep(st["sleep"])
                 continue
+            if "write" in st:
+                # Write a file under DIR (e.g. data/tuning.json to exercise hot reload).
+                path = os.path.join(out, st["write"])
+                os.makedirs(os.path.dirname(path), exist_ok=True)
+                with open(path, "w") as f:
+                    f.write(json.dumps(st["json"]) if "json" in st else st.get("text", ""))
+                print(json.dumps({"wrote": path}), flush=True)
+                continue
             if "shot" in st:
                 r = c.call(st.get("cmd", shot_cmd), {"path": os.path.join(out, st["shot"] + ".png")})
             else:
                 r = c.call(st["cmd"], st.get("params", {}))
             print(json.dumps(r)[:2000], flush=True)
+            for k, want in (st.get("expect") or {}).items():
+                got = dig(r, k)
+                if got != want:
+                    failed.append(f"{st.get('cmd')}: {k} = {got!r}, want {want!r}")
+                    print(f"EXPECT FAILED: {failed[-1]}", file=sys.stderr, flush=True)
         c.call(quit_cmd)
     finally:
         try:
@@ -183,6 +200,20 @@ def main():
         except subprocess.TimeoutExpired:
             proc.kill()
     print(f"output: {out}")
+    if failed:
+        sys.exit(f"{len(failed)} expectation(s) failed")
+
+
+def dig(v, path):
+    """`result.entities.0.name` -> v["result"]["entities"][0]["name"] (None if missing)."""
+    for part in path.split("."):
+        if isinstance(v, list) and part.isdigit() and int(part) < len(v):
+            v = v[int(part)]
+        elif isinstance(v, dict) and part in v:
+            v = v[part]
+        else:
+            return None
+    return v
 
 
 main()

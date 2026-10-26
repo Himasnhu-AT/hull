@@ -43,6 +43,8 @@ pub mod render_budget;
 pub mod settings;
 pub mod ui;
 
+#[cfg(feature = "devkit")]
+pub mod devkit;
 #[cfg(feature = "devtools")]
 pub mod devtools;
 #[cfg(feature = "fps")]
@@ -66,6 +68,8 @@ pub mod prelude {
     pub use crate::render_budget::{Actor, FarLook, KeepDetail, RenderBudget, RenderStats, Scenery, SceneryRanges, SceneryStream};
     pub use crate::settings::{CoreSettings, FieldDef, FieldKind, GameSettings, GraphicsQuality, RegisterSettings, SettingsPlugin, WindowModeSetting};
     pub use crate::ui::theme::Theme;
+    #[cfg(feature = "devkit")]
+    pub use crate::devkit::{HotReloadAppExt, PerfBudget, SaveConfig, SaveEvent, SavePlugin, SaveRequest, Scenario, WatchPath};
     #[cfg(feature = "fps")]
     pub use crate::fps::{FpsController, FpsInput, FpsLook, FpsMotor, FpsPlugin, FpsSet};
     pub use bevy::prelude::*;
