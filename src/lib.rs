@@ -28,6 +28,8 @@ pub use bevy;
 #[cfg(feature = "physics")]
 pub use avian3d;
 
+#[cfg(feature = "anim")]
+pub mod anim;
 pub mod app;
 pub mod audio;
 pub mod chase;
@@ -66,6 +68,8 @@ pub mod prelude {
     pub use crate::render_budget::{Actor, FarLook, KeepDetail, RenderBudget, RenderStats, Scenery, SceneryRanges, SceneryStream};
     pub use crate::settings::{CoreSettings, FieldDef, FieldKind, GameSettings, GraphicsQuality, RegisterSettings, SettingsPlugin, WindowModeSetting};
     pub use crate::ui::theme::Theme;
+    #[cfg(feature = "anim")]
+    pub use crate::anim::{AnimConfig, AnimGraphDef, AnimLayer, AnimNotify, AnimPlugin, AnimState, Animator, ClipBuilder, Mannequin, RigDef, RootMotion, RootMotionDelta, Skeleton};
     #[cfg(feature = "fps")]
     pub use crate::fps::{FpsController, FpsInput, FpsLook, FpsMotor, FpsPlugin, FpsSet};
     pub use bevy::prelude::*;
