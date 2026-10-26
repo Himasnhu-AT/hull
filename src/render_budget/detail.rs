@@ -53,7 +53,8 @@ pub enum DetailTier {
 }
 
 /// Keep this scenery piece (or mesh) at full detail and shadows at any distance.
-#[derive(Component, Clone, Copy, Debug, Default)]
+#[derive(Component, Reflect, Clone, Copy, Debug, Default)]
+#[reflect(Component)]
 pub struct KeepDetail;
 
 /// The far version of a scenery mesh: what draws beyond [`SceneryRanges::far`]. `None` fields

@@ -23,7 +23,8 @@ use crate::gfx::MainCamera;
 use crate::input::{Bindings, LookInput};
 use crate::pause::not_paused;
 
-#[derive(Component, Clone, Debug)]
+#[derive(Component, Reflect, Clone, Debug)]
+#[reflect(Component)]
 pub struct FpsController {
     pub walk_speed: f32,
     pub sprint_speed: f32,
@@ -109,7 +110,8 @@ pub struct FpsInput {
 pub struct ExternalInput;
 
 /// Look angles in radians. `yaw = 0` faces −Z.
-#[derive(Component, Clone, Copy, Debug, Default)]
+#[derive(Component, Reflect, Clone, Copy, Debug, Default)]
+#[reflect(Component)]
 pub struct FpsLook {
     pub yaw: f32,
     pub pitch: f32,
@@ -122,7 +124,8 @@ pub struct FpsViewKick {
     pub yaw: f32,
 }
 
-#[derive(Component, Clone, Copy, Debug, Default)]
+#[derive(Component, Reflect, Clone, Copy, Debug, Default)]
+#[reflect(Component)]
 pub struct FpsMotor {
     pub velocity: Vec3,
     pub grounded: bool,

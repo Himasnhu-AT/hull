@@ -59,13 +59,15 @@ pub use pacing::FramePacing;
 pub use stream::{SceneryStream, StreamItem};
 
 /// Moves or matters up close: rendered at full detail whenever visible.
-#[derive(Component, Clone, Copy, Debug, Default)]
+#[derive(Component, Reflect, Clone, Copy, Debug, Default)]
+#[reflect(Component)]
 pub struct Actor;
 
 /// Static world visuals: eligible for streaming, distance detail levels and shadow trimming.
 /// Put it on the root of a piece (its mesh children are covered too). Scenery is assumed not to
 /// move; after moving one, remove and re-insert `Scenery`.
-#[derive(Component, Clone, Copy, Debug, Default)]
+#[derive(Component, Reflect, Clone, Copy, Debug, Default)]
+#[reflect(Component)]
 pub struct Scenery;
 
 /// What the renderer did this frame (and running totals). Fields may be added; never renamed.

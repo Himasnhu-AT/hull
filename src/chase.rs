@@ -18,7 +18,8 @@ use crate::input::LookInput;
 use crate::pause::Paused;
 
 /// Follows `target` from behind. Distances in metres, rates in 1/s (higher = stiffer).
-#[derive(Component, Clone, Debug)]
+#[derive(Component, Reflect, Clone, Debug)]
+#[reflect(Component)]
 pub struct ChaseCamera {
     pub target: Entity,
     pub active: bool,

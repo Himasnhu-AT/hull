@@ -38,7 +38,8 @@ use crate::render_budget::stats::BudgetDepthPrepass;
 use crate::settings::{CoreSettings, GraphicsQuality};
 
 /// The camera the player sees through (one per app).
-#[derive(Component, Clone, Copy, Debug, Default)]
+#[derive(Component, Reflect, Clone, Copy, Debug, Default)]
+#[reflect(Component)]
 pub struct MainCamera;
 
 /// Per-quality camera features (Low: no SSAO/bloom, FXAA, small shadows … Ultra: best SSAO,
@@ -135,7 +136,8 @@ pub struct PendingMips(pub HashSet<AssetId<Image>>);
 pub struct AppliedQuality(pub GraphicsQuality);
 
 /// Rotates the entity to face the [`MainCamera`] (or any `Camera3d`) every frame, keeping its roll.
-#[derive(Component, Clone, Copy, Debug, Default)]
+#[derive(Component, Reflect, Clone, Copy, Debug, Default)]
+#[reflect(Component)]
 pub struct FaceCamera;
 
 /// Marker on the directional light spawned by [`sky_and_sun`].
