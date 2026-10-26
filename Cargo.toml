@@ -25,7 +25,7 @@ ashlar-trace = { path = "/Users/himanshu/codes/synthai/ashlar/crates/trace", fea
 [features]
 # Dev defaults. Games depend with `default-features = false` and turn `devtools`/`trace` on
 # through their own `dev` feature, so ship builds carry none of it (docs/PORTING.md, "Ship builds").
-default = ["physics", "devtools", "trace"]
+default = ["physics", "devtools", "trace", "ai"]
 # avian3d: physics time is paused with the game; re-exported as `engine::avian3d`.
 physics = ["dep:avian3d"]
 # First-person controller (kinematic collide-and-slide + mouse look). Needs physics.
@@ -33,6 +33,8 @@ fps = ["physics"]
 # Control port + MCP, offscreen capture, perf overlay. Ship builds turn this off.
 devtools = ["dep:ashlar-control", "dep:ashlar-command", "dep:ashlar-mcp", "dep:sysinfo", "dep:libc"]
 trace = ["dep:ashlar-trace"]
+# Navigation (tiled navmesh baking, paths, crowds), behaviour trees, utility AI, perception.
+ai = ["physics"]
 
 [dev-dependencies]
 ashlar-control = { path = "/Users/himanshu/codes/synthai/ashlar/crates/control" }
@@ -56,3 +58,7 @@ required-features = ["devtools"]
 [[example]]
 name = "metrics_demo"
 required-features = ["devtools"]
+
+[[example]]
+name = "ai_crowd"
+required-features = ["ai", "devtools"]

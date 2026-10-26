@@ -43,6 +43,8 @@ pub mod render_budget;
 pub mod settings;
 pub mod ui;
 
+#[cfg(feature = "ai")]
+pub mod ai;
 #[cfg(feature = "devtools")]
 pub mod devtools;
 #[cfg(feature = "fps")]
@@ -66,6 +68,11 @@ pub mod prelude {
     pub use crate::render_budget::{Actor, FarLook, KeepDetail, RenderBudget, RenderStats, Scenery, SceneryRanges, SceneryStream};
     pub use crate::settings::{CoreSettings, FieldDef, FieldKind, GameSettings, GraphicsQuality, RegisterSettings, SettingsPlugin, WindowModeSetting};
     pub use crate::ui::theme::Theme;
+    #[cfg(feature = "ai")]
+    pub use crate::ai::{
+        AiConfig, AiPlugin, Blackboard, BehaviorTree, Bt, BtAgent, BtCtx, BtStatus, NavAgent, NavAgentState, NavIgnore, NavLink, NavMeshSettings,
+        NavMeshes, NavMotion, NavPathQueue, NavSource, NavStatus, Noise, OffMeshLink, Perceivable, Perceiver, Perception, UtilityAi,
+    };
     #[cfg(feature = "fps")]
     pub use crate::fps::{FpsController, FpsInput, FpsLook, FpsMotor, FpsPlugin, FpsSet};
     pub use bevy::prelude::*;
