@@ -36,14 +36,17 @@ pub struct LookConfig {
     pub sky_cubemap_size: u32,
     /// While a gradient sky animates, rebuild its cubemap at most this often (Hz).
     pub sky_rebuild_hz: f32,
-    /// Stop refiltering a static sky's env light after the GPU filtered it this many times
-    /// (0 = refilter every frame, Bevy's behaviour).
+    /// Frames the GPU filters a freshly created sky env light before it is frozen (later
+    /// refreshes take 2–3 frames). 0 = never freeze: refilter every frame, Bevy's behaviour.
     pub freeze_env_after: u32,
+    /// While the sky changes (day cycle, blends, sun moves), refilter its env light at most
+    /// this often (Hz). Each refresh costs one filter pass over 2–3 frames.
+    pub env_refresh_hz: f32,
 }
 
 impl Default for LookConfig {
     fn default() -> Self {
-        LookConfig { sky_cubemap_size: 256, sky_rebuild_hz: 10.0, freeze_env_after: 4 }
+        LookConfig { sky_cubemap_size: 256, sky_rebuild_hz: 10.0, freeze_env_after: 4, env_refresh_hz: 10.0 }
     }
 }
 
@@ -116,9 +119,20 @@ pub struct LookState {
     sky_want: Option<(SkyGradient, [f32; 16])>,
     sky_job: Option<SkyJob>,
     spare: Option<Vec<u8>>,
-    /// The look was applied since `freeze_env` last looked.
+    /// What the sky env worker filters, and the worker ([`SkyEnvWorker`]).
+    env_key: Option<EnvKey>,
+    env_worker: Option<Entity>,
+    /// The filtered sky env maps every look camera uses: (diffuse, specular).
+    env_maps: Option<(Handle<Image>, Handle<Image>)>,
+    /// The sky changed since its env light was last filtered.
     env_dirty: bool,
-    env_filtered_at: u32,
+    /// `EnvFilterCounter` when the current filtering started (None = frozen / idle).
+    env_filter_from: Option<u32>,
+    /// Filtered frames the current filtering needs.
+    env_frames: u32,
+    env_started_at: f64,
+    /// Finished sky env filterings (first fill + refreshes).
+    pub env_refilters: u64,
     /// Loaded cubemap-mode images: (path, cubemap, diffuse, specular).
     cubemap: Option<(String, Handle<Image>, Option<Handle<Image>>, Option<Handle<Image>>)>,
     curve: Option<(u32, Handle<AutoExposureCompensationCurve>)>,
@@ -163,6 +177,7 @@ pub fn apply_look(world: &mut World, mut cams: Local<Vec<(Entity, bool)>>) {
     world.insert_resource(GlobalAmbientLight { color: look.ambient.color.color(), brightness: look.ambient.brightness, affects_lightmapped_meshes: true });
     let captures = cams.iter().any(|(_, main)| !main);
     let sky = prepare_sky(world, &look, &tier, elapsed, captures);
+    sync_env_worker(world, &sky.env);
     apply_fog_volume(world, &look, &tier);
     let curve = exposure_curve(world, &look);
 
@@ -172,7 +187,6 @@ pub fn apply_look(world: &mut World, mut cams: Local<Vec<(Entity, bool)>>) {
 
     let mut st = world.resource_mut::<LookState>();
     st.applies += 1;
-    st.env_dirty = true;
     st.last_apply_us = t0.elapsed().as_secs_f32() * 1e6;
 }
 
@@ -322,13 +336,11 @@ fn prepare_sky(world: &mut World, look: &Look, tier: &Tier, now: f64, captures: 
         }
         // Probe captures see the gradient approximation of the sky: per-view atmosphere LUTs
         // are costly, and a camera that is active for single frames trips Bevy's atmosphere
-        // bind groups.
+        // bind groups. Their env light is the main camera's (filtered once, shared).
+        out.capture_env = out.env.clone();
         if captures && has_images {
             let h = gradient_cubemap(world, look, now);
             out.capture_skybox = Some((h.clone(), k.brightness));
-            if env_on {
-                out.capture_env = Env::Generated { image: h, intensity: k.brightness * look.ambient.env_intensity };
-            }
         }
         return out;
     }
@@ -415,6 +427,10 @@ pub fn pump_sky(mut st: ResMut<LookState>, config: Res<LookConfig>, time: Res<Ti
         {
             st.spare = img.data.replace(data);
             st.sky_key = Some(key);
+            // The env light filtered from this cubemap is now stale.
+            if st.env_key.is_some() && st.env_key == st.sky_image.as_ref().map(|h| EnvKey::Source(h.id())) {
+                st.env_dirty = true;
+            }
         }
     }
     let now = time.elapsed_secs_f64();
@@ -565,6 +581,7 @@ pub(crate) fn distance_fog(f: &FogLook) -> Option<DistanceFog> {
 }
 
 fn apply_camera(world: &mut World, e: Entity, main: bool, look: &Look, tier: &Tier, sky_out: &SkyOut, curve: Option<&Handle<AutoExposureCompensationCurve>>) {
+    let maps = world.resource::<LookState>().env_maps.clone();
     let capture_view;
     let sky = if main {
         sky_out
@@ -599,57 +616,23 @@ fn apply_camera(world: &mut World, e: Entity, main: bool, look: &Look, tier: &Ti
     );
     put(&mut em, sky.skybox.as_ref().map(|(image, brightness)| Skybox { image: Some(image.clone()), brightness: *brightness, rotation: Quat::IDENTITY }));
 
-    // Environment light. Bevy turns `AtmosphereEnvironmentMapLight` into a private marker plus
-    // a `GeneratedEnvironmentMapLight` once and never again, so it stays on the camera for good;
-    // other skies swap the generated light's source (the atmosphere's cubemap is remembered in
-    // `LookAtmosphereEnv`) and `EnvironmentMapLight` is dropped whenever the source changes so
-    // Bevy rebuilds the filtered maps at the new size.
-    let gen_map = em.get::<GeneratedEnvironmentMapLight>().map(|g| g.environment_map.id());
-    let _ = gen_map;
-    // (Re)starts GPU filtering of `image`; the filtered maps are kept (and refiltered in
-    // place) while the source stays the same, see `freeze_env`.
-    let set_generated = |em: &mut EntityWorldMut, image: &Handle<Image>, intensity: f32| {
-        if em.get::<LookEnvSource>().map(|s| s.0) != Some(image.id()) {
-            em.remove::<EnvironmentMapLight>();
-            em.insert(LookEnvSource(image.id()));
-        }
-        put(em, Some(GeneratedEnvironmentMapLight { environment_map: image.clone(), intensity, ..default() }));
-    };
+    // Environment light: sky sources are filtered once by the shared `SkyEnvWorker`; cameras
+    // only get its filtered maps (no per-camera GPU filtering).
     match &sky.env {
         Env::None => {
-            em.remove::<(GeneratedEnvironmentMapLight, EnvironmentMapLight, LookEnvSource)>();
+            em.remove::<(GeneratedEnvironmentMapLight, EnvironmentMapLight, LookSkyEnv)>();
         }
-        Env::Atmosphere { size, intensity } => {
-            let remembered = em.get::<LookAtmosphereEnv>().map(|a| a.0.clone());
-            match em.get_mut::<AtmosphereEnvironmentMapLight>() {
-                Some(mut a) => {
-                    if a.intensity != *intensity {
-                        a.intensity = *intensity;
-                    }
-                }
-                // The size is fixed from here on (see above).
-                None => {
-                    em.remove::<(GeneratedEnvironmentMapLight, EnvironmentMapLight, LookEnvSource)>();
-                    em.insert(AtmosphereEnvironmentMapLight { intensity: *intensity, size: UVec2::splat(*size), ..default() });
-                }
-            }
-            match (gen_map, remembered) {
-                (_, Some(atmo)) => set_generated(&mut em, &atmo, *intensity),
-                // Bevy's own generated light (not yet remembered): keep, sync intensity.
-                (Some(_), None) => {
-                    if let Some(mut g) = em.get_mut::<GeneratedEnvironmentMapLight>()
-                        && g.intensity != *intensity
-                    {
-                        g.intensity = *intensity;
-                    }
-                }
-                (None, None) => {}
+        Env::Atmosphere { intensity, .. } | Env::Generated { intensity, .. } => {
+            em.remove::<GeneratedEnvironmentMapLight>();
+            put(&mut em, Some(LookSkyEnv(*intensity)));
+            // Until the worker has filtered the new sky the previous maps stay.
+            if let Some((diffuse, specular)) = &maps {
+                set_env_maps(&mut em, diffuse, specular, *intensity);
             }
         }
-        Env::Generated { image, intensity } => set_generated(&mut em, image, *intensity),
         Env::Prefiltered { diffuse, specular, intensity } => {
-            em.remove::<(GeneratedEnvironmentMapLight, LookEnvSource)>();
-            put(&mut em, Some(EnvironmentMapLight { diffuse_map: diffuse.clone(), specular_map: specular.clone(), intensity: *intensity, ..default() }));
+            em.remove::<(GeneratedEnvironmentMapLight, LookSkyEnv)>();
+            set_env_maps(&mut em, diffuse, specular, *intensity);
         }
     }
 
@@ -724,56 +707,192 @@ fn apply_camera(world: &mut World, e: Entity, main: bool, look: &Look, tier: &Ti
     put(&mut em, (post && lens.film_grain > 0.0).then(|| FilmGrain { intensity: lens.film_grain, time: grain_time, ..default() }));
 }
 
-/// Which source cubemap a camera's current `EnvironmentMapLight` maps were filtered from.
-#[derive(Component, Clone, Copy, Debug, PartialEq)]
-pub struct LookEnvSource(pub AssetId<Image>);
+/// Sets a camera's `EnvironmentMapLight` (only when it differs, so change detection stays quiet).
+fn set_env_maps(em: &mut EntityWorldMut, diffuse: &Handle<Image>, specular: &Handle<Image>, intensity: f32) {
+    if let Some(cur) = em.get::<EnvironmentMapLight>()
+        && cur.diffuse_map == *diffuse
+        && cur.specular_map == *specular
+        && cur.intensity == intensity
+    {
+        return;
+    }
+    em.insert(EnvironmentMapLight { diffuse_map: diffuse.clone(), specular_map: specular.clone(), intensity, ..default() });
+}
 
-/// Frames in which Bevy's env-map filter ran for a main camera (counted in the render world).
+/// On look cameras whose env light is the shared, filtered sky: that light's intensity.
+#[derive(Component, Clone, Copy, Debug, PartialEq)]
+pub struct LookSkyEnv(pub f32);
+
+/// What the sky env worker filters.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum EnvKey {
+    /// Bevy's atmosphere env cubemap at this face size.
+    Atmosphere(u32),
+    /// A cubemap image (gradient sky, KTX2 sky).
+    Source(AssetId<Image>),
+}
+
+/// Hidden entity that filters the sky's env light once for every look camera (main and probe
+/// captures). Bevy's `GeneratedEnvironmentMapLight` refilters every frame (on a camera, once per
+/// camera); the worker only carries it while the sky changed and drops it again (frozen) once the
+/// GPU filtered the new sky, so a static sky costs nothing per frame. Atmosphere skies put
+/// `AtmosphereEnvironmentMapLight` on the worker: Bevy renders the sky into its cubemap (a cheap
+/// pass) and the worker filters that.
+#[derive(Component, Clone, Debug, Default)]
+pub struct SkyEnvWorker {
+    /// The cubemap being filtered (Bevy's atmosphere cubemap once Bevy made it).
+    source: Option<Handle<Image>>,
+    /// Filters Bevy's atmosphere env cubemap.
+    pub atmosphere: bool,
+}
+
+/// Frames in which Bevy's env-map filter ran for the [`SkyEnvWorker`] (counted in the render
+/// world, only once every pipeline it needs is ready).
 #[derive(Resource, Clone, Default)]
 pub struct EnvFilterCounter(pub std::sync::Arc<std::sync::atomic::AtomicU32>);
 
-/// Stops refiltering a main camera's sky env light once the GPU has filtered the current sky
-/// `LookConfig::freeze_env_after` times (the filtered maps stay on the GPU). Bevy refilters a
-/// `GeneratedEnvironmentMapLight` every frame (≈ 1 ms at 256² on an M5 Pro) although a sky only
-/// changes with the look; the next apply re-inserts it.
-pub fn freeze_env(
+/// (Re)creates the sky env worker when the env source changes and marks the sky dirty.
+fn sync_env_worker(world: &mut World, env: &Env) {
+    let key = match env {
+        Env::Atmosphere { size, .. } => Some(EnvKey::Atmosphere(*size)),
+        Env::Generated { image, .. } => Some(EnvKey::Source(image.id())),
+        Env::None | Env::Prefiltered { .. } => None,
+    };
+    let first = world.resource::<LookConfig>().freeze_env_after.max(2);
+    let (old_key, old_worker) = {
+        let st = world.resource::<LookState>();
+        (st.env_key, st.env_worker)
+    };
+    if key == old_key {
+        // The atmosphere follows the sun and the look; a cubemap source is marked dirty when its
+        // pixels change (`pump_sky`).
+        if matches!(key, Some(EnvKey::Atmosphere(_))) {
+            world.resource_mut::<LookState>().env_dirty = true;
+        }
+        return;
+    }
+    if let Some(w) = old_worker
+        && let Ok(e) = world.get_entity_mut(w)
+    {
+        e.despawn();
+    }
+    // Same-size sources filter into the maps the cameras already use (no flash, no realloc).
+    let size = match env {
+        Env::Atmosphere { size, .. } => Some(*size),
+        Env::Generated { image, .. } => world.get_resource::<Assets<Image>>().and_then(|i| i.get(image)).map(|i| i.texture_descriptor.size.width),
+        _ => None,
+    };
+    let mut st = world.resource_mut::<LookState>();
+    st.env_key = key;
+    st.env_worker = None;
+    st.env_filter_from = None;
+    let Some(key) = key else {
+        st.env_maps = None;
+        st.env_dirty = false;
+        return;
+    };
+    let maps = st.env_maps.clone();
+    let reuse = maps.filter(|(_, spec)| {
+        let w = world.get_resource::<Assets<Image>>().and_then(|i| i.get(spec)).map(|i| i.texture_descriptor.size.width);
+        w.is_some() && w == size
+    });
+    let mut w = match (key, env) {
+        (EnvKey::Atmosphere(size), _) => world.spawn((
+            Name::new("SkyEnvFilter"),
+            SkyEnvWorker { source: None, atmosphere: true },
+            AtmosphereEnvironmentMapLight { intensity: 1.0, size: UVec2::splat(size), ..default() },
+        )),
+        (_, Env::Generated { image, .. }) => world.spawn((
+            Name::new("SkyEnvFilter"),
+            SkyEnvWorker { source: Some(image.clone()), atmosphere: false },
+            GeneratedEnvironmentMapLight { environment_map: image.clone(), intensity: 1.0, ..default() },
+        )),
+        _ => unreachable!(),
+    };
+    if let Some((diffuse, specular)) = reuse {
+        w.insert(EnvironmentMapLight { diffuse_map: diffuse, specular_map: specular, intensity: 1.0, ..default() });
+    }
+    let id = w.id();
+    let mut st = world.resource_mut::<LookState>();
+    st.env_worker = Some(id);
+    st.env_dirty = true;
+    // The atmosphere cubemap needs its own pipeline and the view's LUTs first.
+    st.env_frames = if matches!(key, EnvKey::Atmosphere(_)) { first + 4 } else { first };
+    st.env_started_at = f64::NEG_INFINITY;
+}
+
+/// Run condition for [`drive_sky_env`].
+pub fn sky_env_busy(st: Res<LookState>) -> bool {
+    st.env_worker.is_some() && (st.env_dirty || st.env_filter_from.is_some())
+}
+
+/// Filters the sky env light when the sky changed (at most `LookConfig::env_refresh_hz` times a
+/// second), hands the filtered maps to the look cameras, then freezes the worker. Runs only
+/// while there is something to filter.
+pub fn drive_sky_env(
     mut commands: Commands,
     config: Res<LookConfig>,
     counter: Res<EnvFilterCounter>,
+    time: Res<Time<Real>>,
     mut st: ResMut<LookState>,
-    cams: Query<Entity, (With<MainCamera>, With<GeneratedEnvironmentMapLight>, With<EnvironmentMapLight>, With<LookEnvSource>)>,
+    mut workers: Query<(&mut SkyEnvWorker, Option<&GeneratedEnvironmentMapLight>, Option<&EnvironmentMapLight>)>,
+    mut cams: Query<(Entity, &LookSkyEnv, Option<&EnvironmentMapLight>), Without<SkyEnvWorker>>,
 ) {
+    let Some(we) = st.env_worker else { return };
+    let Ok((mut worker, generated, filtered)) = workers.get_mut(we) else { return };
+    if let Some(g) = generated
+        && worker.source.as_ref().map(|h| h.id()) != Some(g.environment_map.id())
+    {
+        worker.source = Some(g.environment_map.clone());
+    }
     let now = counter.0.load(std::sync::atomic::Ordering::Relaxed);
-    if st.env_dirty {
+    let t = time.elapsed_secs_f64();
+    let Some(from) = st.env_filter_from else {
+        if !st.env_dirty || t - st.env_started_at < 1.0 / config.env_refresh_hz.max(0.1) as f64 {
+            return;
+        }
+        if generated.is_none() {
+            // An atmosphere worker gets its generated light from Bevy the first time.
+            let Some(source) = worker.source.clone() else { return };
+            commands.entity(we).insert(GeneratedEnvironmentMapLight { environment_map: source, intensity: 1.0, ..default() });
+        }
         st.env_dirty = false;
-        st.env_filtered_at = now;
+        st.env_filter_from = Some(now);
+        st.env_started_at = t;
+        return;
+    };
+    if now < from + st.env_frames {
         return;
     }
-    // Animated skies (blends, timelines, a rebuilding gradient) keep filtering.
-    if config.freeze_env_after == 0 || st.sky_job.is_some() || st.sky_want.is_some() || now < st.env_filtered_at + config.freeze_env_after {
-        return;
+    let Some(filtered) = filtered else { return };
+    st.env_filter_from = None;
+    st.env_refilters += 1;
+    // A refresh: Bevy's atmosphere cubemap is rendered after the filter in a frame, so the
+    // atmosphere needs one frame more.
+    st.env_frames = if worker.atmosphere { 3 } else { 2 };
+    if config.freeze_env_after > 0 {
+        commands.entity(we).remove::<GeneratedEnvironmentMapLight>();
     }
-    for e in &cams {
-        commands.entity(e).remove::<GeneratedEnvironmentMapLight>();
-    }
-}
-
-/// The cubemap Bevy renders the atmosphere into for a camera's env light (remembered so the
-/// look can switch back to it after a gradient / cubemap sky).
-#[derive(Component, Clone, Debug)]
-pub struct LookAtmosphereEnv(pub Handle<Image>);
-
-/// Remembers the atmosphere env cubemap as soon as Bevy creates it.
-pub fn remember_atmosphere_env(
-    mut commands: Commands,
-    st: Res<LookState>,
-    cams: Query<(Entity, &GeneratedEnvironmentMapLight), (With<AtmosphereEnvironmentMapLight>, Without<LookAtmosphereEnv>, Changed<GeneratedEnvironmentMapLight>)>,
-) {
-    for (e, g) in &cams {
-        let ours = st.sky_image.as_ref().is_some_and(|h| h.id() == g.environment_map.id())
-            || st.cubemap.as_ref().is_some_and(|c| c.1.id() == g.environment_map.id());
-        if !ours {
-            commands.entity(e).insert(LookAtmosphereEnv(g.environment_map.clone()));
+    let (diffuse, specular) = (filtered.diffuse_map.clone(), filtered.specular_map.clone());
+    for (e, env, cur) in &mut cams {
+        if cur.is_none_or(|c| c.diffuse_map != diffuse || c.specular_map != specular || c.intensity != env.0) {
+            commands.entity(e).insert(EnvironmentMapLight { diffuse_map: diffuse.clone(), specular_map: specular.clone(), intensity: env.0, ..default() });
         }
     }
+    st.env_maps = Some((diffuse, specular));
+}
+
+/// `look.get` summary of the sky env light.
+pub fn env_state_json(st: &LookState) -> serde_json::Value {
+    serde_json::json!({
+        "source": match st.env_key {
+            Some(EnvKey::Atmosphere(size)) => format!("atmosphere {size}"),
+            Some(EnvKey::Source(_)) => "cubemap".to_string(),
+            None => "none".to_string(),
+        },
+        "filtering": st.env_filter_from.is_some(),
+        "dirty": st.env_dirty,
+        "ready": st.env_maps.is_some(),
+        "refilters": st.env_refilters,
+    })
 }

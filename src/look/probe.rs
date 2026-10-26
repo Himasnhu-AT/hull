@@ -173,8 +173,8 @@ pub(super) fn plugin(app: &mut App) {
     let Some(render_app) = app.get_sub_app_mut(RenderApp) else { return };
     render_app
         .init_resource::<ExtractedProbes>()
-        .init_resource::<ExtractedMainCams>()
-        .add_systems(ExtractSchedule, (extract_probes, extract_main_cams))
+        .init_resource::<ExtractedSkyEnv>()
+        .add_systems(ExtractSchedule, (extract_probes, extract_sky_env))
         .add_systems(Render, count_filtered.after(RenderSystems::PrepareBindGroups).before(RenderSystems::Render))
         .add_systems(RenderGraph, copy_probe_faces.after(RenderGraphSystems::Submit).before(RenderGraphSystems::Finish));
 }
@@ -474,17 +474,17 @@ struct ExtractedProbe {
 #[derive(Resource, Default)]
 struct ExtractedProbes(Vec<ExtractedProbe>);
 
-/// Render entities of main cameras (for `apply::EnvFilterCounter`).
+/// Render entity of the sky env worker and whether it filters the atmosphere (for
+/// `apply::EnvFilterCounter`).
 #[derive(Resource, Default)]
-struct ExtractedMainCams(Vec<Entity>, super::apply::EnvFilterCounter);
+struct ExtractedSkyEnv(Option<(Entity, bool)>, super::apply::EnvFilterCounter);
 
-fn extract_main_cams(
-    mut out: ResMut<ExtractedMainCams>,
+fn extract_sky_env(
+    mut out: ResMut<ExtractedSkyEnv>,
     counter: Extract<Option<Res<super::apply::EnvFilterCounter>>>,
-    cams: Extract<Query<&RenderEntity, With<crate::gfx::MainCamera>>>,
+    workers: Extract<Query<(&RenderEntity, &super::apply::SkyEnvWorker)>>,
 ) {
-    out.0.clear();
-    out.0.extend(cams.iter().map(|r| r.id()));
+    out.0 = workers.iter().next().map(|(r, w)| (r.id(), w.atmosphere));
     if let Some(c) = counter.as_ref() {
         out.1 = (**c).clone();
     }
@@ -504,10 +504,11 @@ fn extract_probes(mut out: ResMut<ExtractedProbes>, probes: Extract<Query<(&Prob
 }
 
 /// Counts frames in which Bevy's env-map filter had everything it needs for a probe (and for
-/// the main cameras' sky env light).
+/// the sky env worker; an atmosphere one also needs Bevy's atmosphere cubemap pipeline).
 fn count_filtered(
     probes: Res<ExtractedProbes>,
-    main_cams: Res<ExtractedMainCams>,
+    sky_env: Res<ExtractedSkyEnv>,
+    mut atmosphere_ready: Local<bool>,
     pipelines: Option<Res<bevy::pbr::generate::GeneratorPipelines>>,
     cache: Res<bevy::render::render_resource::PipelineCache>,
     envs: Query<(), With<bevy::pbr::generate::RenderEnvironmentMap>>,
@@ -522,8 +523,16 @@ fn count_filtered(
             pr.shared.filtered.fetch_add(1, Ordering::Relaxed);
         }
     }
-    if main_cams.0.iter().any(|e| envs.contains(*e)) {
-        main_cams.1.0.fetch_add(1, Ordering::Relaxed);
+    let Some((worker, atmosphere)) = sky_env.0 else { return };
+    if atmosphere && !*atmosphere_ready {
+        use bevy::render::render_resource::{CachedPipelineState, PipelineDescriptor};
+        *atmosphere_ready = cache.pipelines().any(|p| {
+            matches!(&p.descriptor, PipelineDescriptor::ComputePipelineDescriptor(d) if d.label.as_deref() == Some("environment_pipeline"))
+                && matches!(p.state, CachedPipelineState::Ok(_))
+        });
+    }
+    if envs.contains(worker) && (!atmosphere || *atmosphere_ready) {
+        sky_env.1.0.fetch_add(1, Ordering::Relaxed);
     }
 }
 

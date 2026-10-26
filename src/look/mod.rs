@@ -72,9 +72,8 @@ impl Plugin for LookPlugin {
                     )
                         .before(apply::apply_look),
                     apply::apply_look.run_if(apply::look_dirty),
-                    apply::freeze_env.run_if(resource_exists::<Look>).after(apply::apply_look),
                     apply::pump_sky.run_if(apply::sky_busy).after(apply::apply_look),
-                    apply::remember_atmosphere_env.run_if(any_with_component::<bevy::light::AtmosphereEnvironmentMapLight>),
+                    apply::drive_sky_env.run_if(apply::sky_env_busy).after(apply::pump_sky),
                     grain::animate_grain.run_if(any_with_component::<grain::FilmGrain>),
                     apply::follow_fog_volume.run_if(any_with_component::<apply::LookFogVolume>).after(apply::apply_look),
                     decal::keep_depth_for_decals

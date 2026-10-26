@@ -102,7 +102,7 @@ fn camera_components(world: &mut World) -> Value {
 fn look_get(world: &mut World, _: Value) -> Result<Value, String> {
     let tier = Tier::of(world.resource::<QualityPreset>(), world.resource::<CoreSettings>().quality);
     let st = world.resource::<LookState>();
-    let state = json!({"applies": st.applies, "last_apply_us": st.last_apply_us});
+    let state = json!({"applies": st.applies, "last_apply_us": st.last_apply_us, "env": crate::look::apply::env_state_json(st)});
     Ok(json!({
         "look": world.get_resource::<Look>().map(|l| serde_json::to_value(l).unwrap_or(Value::Null)),
         "presets": Look::PRESETS,

@@ -180,8 +180,9 @@ inflated, deltas likely inflated too); the rest ran on a quiet GPU (High baselin
 | contact shadows | +0.35 (+0.20..+0.42) |
 | TAA instead of FXAA | +0.13 (−0.05..+0.24) |
 | bloom | +1.20..+1.83 (two runs) |
-| sky env light (atmosphere 256²), refiltered every frame (Bevy default) | +1.05 (+0.93..+1.12) |
-| sky env light, static sky (look freezes it after filtering) | ≈ 0 (−0.31; −0.78..+0.01) |
+| sky env light, **before the fix below**: atmosphere sky, env light on the main camera | ≈ +15 ms frame time (26 → 10.7 ms p50 when turned off) |
+| sky env light, gradient sky, refiltered every frame (Bevy default) | +1.05 (+0.93..+1.12) |
+| sky env light, any static sky (filtered once on `SkyEnvFilter`, then frozen) | ≈ 0 |
 | atmosphere sky instead of the gradient cubemap | +0.11 (−0.02..+0.21) |
 | distance fog | +0.09 (+0.04..+0.15) |
 | volumetric fog, 32 steps, 80 m box | +3.17 (+2.93..+3.40) |
@@ -205,15 +206,31 @@ Takeaways: volumetric fog and realtime probes are the expensive pieces (High+ on
 Low–Medium); bloom is the most expensive "cheap-looking" effect at 1080p; freezing static env
 maps removes ~1 ms/frame that Bevy spends by default.
 
+**Sky env light fix (integration).** The rows above were measured on the gradient sky. With the
+default `clear_day` atmosphere sky, Bevy's `AtmosphereEnvironmentMapLight` on the main camera was
+re-rendered and refiltered every frame: `look_showcase` ran at p50 ≈ 26 ms (High) and the
+`env_light` toggle alone saved ≈ 15 ms. Now one hidden `SkyEnvFilter` entity
+(`apply::SkyEnvWorker`) filters the sky once, hands the filtered maps to every look camera as a
+plain `EnvironmentMapLight` and drops its `GeneratedEnvironmentMapLight` (frozen). It refilters
+only when the sky changes, at most `LookConfig::env_refresh_hz` (10 Hz) during blends and day
+cycles. Probe captures share the same maps. `look.get` reports it under `state.env`.
+
+| `look_showcase`, outdoor, clear_day, 1080p uncapped (frame p50 / p95 ms) | before | after |
+|---|---|---|
+| High | 26.1 / 31.6 | 10.0 / 11.8 |
+| Low | — | 5.0 / 5.6 |
+| High, dusk preset | — | 10.6 / 16.3 |
+| High, day cycle at 2000× (sky refiltered at 10 Hz) | — | 11.3 / 17.5 |
+
 ## Bevy 0.19 workarounds (in `look`/`gfx`)
 
 - **Atmosphere removal** (`src/look/fixes.rs`): Bevy never clears a view's extracted atmosphere
   or its sky-pass uniforms when a camera loses `AtmosphereSettings`; the stale sky keeps
   rendering (white haze at night after a dusk → night switch). The look removes them in the
   render world.
-- **Atmosphere env light** is converted by Bevy once into a private marker; it can't be resized
-  or re-added, so the look keeps it on the camera and swaps the generated light's source
-  (`LookAtmosphereEnv` remembers the atmosphere cubemap).
+- **Atmosphere env light** is converted by Bevy once into a private marker and then re-rendered
+  and refiltered every frame. The look puts it on a hidden `SkyEnvFilter` entity instead of
+  the camera, filters on demand, and freezes it (see "Sky env light fix" above).
 - **Probe capture cameras** never get the atmosphere (single-frame-active views trip Bevy's
   atmosphere bind groups; per-view LUTs are costly); they see the gradient approximation.
 - **Motion-vector prepass is never pruned**: removing it leaves Bevy's cached skybox motion-vector
@@ -229,6 +246,9 @@ maps removes ~1 ms/frame that Bevy spends by default.
   behind the box; use small boxes (rooms, valleys), not the whole sky. Its box edge can show
   against the sky outdoors.
   Shafts are strongest looking towards the sun (forward scattering); side-on they are subtle.
+- At dusk (low sun) the atmosphere sky shows a curved band in the upper sky. It was there before
+  the env-light fix and stays when volumetric fog is off (it changes shape with distance fog).
+  Not yet investigated.
 - Gradient skies are CPU-built cubemaps: stars are texel-sized (≈ 0.35° at 256²).
 - Reflection probes: no blending between overlapping probes beyond Bevy's, captures see the
   gradient sky approximation, SH diffuse is order 2 (soft), realtime probes cost GPU every frame.
