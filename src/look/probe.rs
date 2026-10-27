@@ -92,6 +92,8 @@ struct ProbeRun {
     fresh_faces: u8,
     readback_in_flight: bool,
     diffuse_updates: u32,
+    /// Faces captured since the specular map was last filtered (realtime probes).
+    spec_faces: u8,
 }
 
 impl ReflectionProbe {
@@ -330,15 +332,35 @@ fn drive_probes(
         }
 
         // Specular: the worker filters while captures land; a baked probe freezes after the GPU
-        // filtered its latest capture twice.
-        let settled = want == 0 && refresh == 0 && p.warmups_left == 0 && p.copies_seen > 0 && filtered >= p.filtered_at_copy + 2 && !p.readback_in_flight;
+        // filtered its latest capture twice. A realtime probe filters once per full cycle of
+        // fresh faces instead of every frame: each filter re-creates Bevy's bind groups and
+        // buffers, which cost ~3 GB of Metal driver memory and frame time at High.
+        let latest_filtered = p.copies_seen > 0 && filtered >= p.filtered_at_copy + 2;
         let (working, worker_env) = workers.get(targets.worker).unwrap_or((false, None));
-        if settled && working {
-            p.frozen = true;
-            commands.entity(targets.worker).remove::<GeneratedEnvironmentMapLight>();
-        } else if want != 0 && !working {
-            p.frozen = false;
+        let start = |commands: &mut Commands| {
             commands.entity(targets.worker).insert(GeneratedEnvironmentMapLight { environment_map: targets.cube.clone(), intensity: 1.0, ..default() });
+        };
+        if refresh == 0 {
+            let settled = want == 0 && p.warmups_left == 0 && latest_filtered && !p.readback_in_flight;
+            if settled && working {
+                p.frozen = true;
+                commands.entity(targets.worker).remove::<GeneratedEnvironmentMapLight>();
+            } else if want != 0 && !working {
+                p.frozen = false;
+                start(&mut commands);
+            }
+        } else {
+            p.frozen = false;
+            p.spec_faces |= want;
+            if p.spec_faces == 0b11_1111 {
+                // A full set of fresh faces: (keep) filtering until it has seen the last copy.
+                p.spec_faces = 0;
+                if !working {
+                    start(&mut commands);
+                }
+            } else if working && want == 0 && latest_filtered && p.warmups_left == 0 {
+                commands.entity(targets.worker).remove::<GeneratedEnvironmentMapLight>();
+            }
         }
 
         let ev = cams.get(targets.cameras[0]).map(|c| c.2.ev100).unwrap_or(Exposure::EV100_BLENDER);

@@ -172,15 +172,12 @@ mod devtools {
 
     use super::super::pacing::PacingSystems;
     use super::super::{EffectiveRanges, RenderBudget, RenderStats};
-    use super::super::RenderBudgetSystems;
-    use crate::devtools::{AddControlCommand, Metrics, PerfAppExt, params};
+    use crate::devtools::{AddControlCommand, Metrics, params};
 
     pub(super) fn register(app: &mut App) {
-        // Wall time from the first to the last system of each set (an upper bound: other
-        // systems may run in parallel in between).
-        app.perf_span(PostUpdate, RenderBudgetSystems::Stream, "budget.stream")
-            .perf_span(PostUpdate, RenderBudgetSystems::Detail, "budget.detail")
-            .perf_span(PostUpdate, RenderBudgetSystems::Stats, "budget.stats");
+        // No `perf_span`s here: their wall-time window takes in Bevy's visibility systems
+        // running alongside (they read 1-3 ms for ~0.3 ms of work). The budget's own CPU time
+        // is `render.cpu_us` (`BudgetCpu`).
         // Headless runs have no renderer: nothing to report (and a game may record its own).
         app.add_systems(Last, record_metrics.after(PacingSystems).run_if(crate::flow::has_visuals))
             .add_control_command("render.stats", "Render budget counters, switches and distances", params(&[]), render_stats)
