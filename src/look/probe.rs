@@ -333,8 +333,8 @@ fn drive_probes(
 
         // Specular: the worker filters while captures land; a baked probe freezes after the GPU
         // filtered its latest capture twice. A realtime probe filters once per full cycle of
-        // fresh faces instead of every frame: each filter re-creates Bevy's bind groups and
-        // buffers, which cost ~3 GB of Metal driver memory and frame time at High.
+        // fresh faces instead of every frame: each filter re-creates Bevy's bind groups, uniform
+        // buffers and placeholder textures, and a filter of an unchanged cube is wasted GPU time.
         let latest_filtered = p.copies_seen > 0 && filtered >= p.filtered_at_copy + 2;
         let (working, worker_env) = workers.get(targets.worker).unwrap_or((false, None));
         let start = |commands: &mut Commands| {

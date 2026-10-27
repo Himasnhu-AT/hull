@@ -429,7 +429,12 @@ impl Plugin for MetricsPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Metrics>()
             .add_systems(First, begin_frame)
-            .add_systems(Last, record_engine);
+            .add_systems(Last, (record_engine, record_gpu_objects));
+        let objects = GpuObjects::default();
+        app.insert_resource(objects.clone());
+        if let Some(render_app) = app.get_sub_app_mut(bevy::render::RenderApp) {
+            render_app.insert_resource(objects).add_systems(bevy::render::Render, sample_gpu_objects);
+        }
         super::metrics_history::build(app);
         super::metrics_window::build(app);
     }
@@ -437,6 +442,36 @@ impl Plugin for MetricsPlugin {
     fn finish(&self, app: &mut App) {
         super::metrics_history::finish(app);
         super::metrics_window::finish(app);
+    }
+}
+
+/// Live wgpu objects, sampled about once a second in the render world. Leaks and per-frame
+/// churn of GPU objects show here (`gpu.buffers`, `gpu.bind_groups`, ...) before they show as
+/// memory.
+#[derive(Resource, Clone, Default)]
+pub struct GpuObjects(Arc<std::sync::Mutex<Option<[u32; GPU_OBJECT_KEYS.len()]>>>);
+
+const GPU_OBJECT_KEYS: [&str; 7] =
+    ["gpu.buffers", "gpu.textures", "gpu.texture_views", "gpu.bind_groups", "gpu.render_pipelines", "gpu.compute_pipelines", "gpu.samplers"];
+
+fn sample_gpu_objects(instance: Res<bevy::render::renderer::RenderInstance>, out: Res<GpuObjects>, mut last: Local<Option<std::time::Instant>>) {
+    if last.is_some_and(|t| t.elapsed().as_secs_f32() < 1.0) {
+        return;
+    }
+    *last = Some(std::time::Instant::now());
+    let Some(r) = instance.0.generate_report() else { return };
+    let h = r.hub_report();
+    let n = [&h.buffers, &h.textures, &h.texture_views, &h.bind_groups, &h.render_pipelines, &h.compute_pipelines, &h.samplers]
+        .map(|x| x.num_kept_from_user as u32);
+    if let Ok(mut slot) = out.0.lock() {
+        *slot = Some(n);
+    }
+}
+
+fn record_gpu_objects(objects: Res<GpuObjects>, mut m: ResMut<Metrics>) {
+    let Some(n) = objects.0.lock().ok().and_then(|mut s| s.take()) else { return };
+    for (k, v) in GPU_OBJECT_KEYS.iter().zip(n) {
+        m.record(k, v as f64);
     }
 }
 

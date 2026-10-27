@@ -75,8 +75,17 @@ fn player_z(w: &mut World) -> f32 {
     q.single(w).map(|t| t.translation.z).unwrap_or(f32::NAN)
 }
 
+/// `CountingAlloc` counts the whole process: tests in this binary run one at a time so another
+/// test's allocations never land in an allocation budget.
+static SERIAL: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+fn serial() -> std::sync::MutexGuard<'static, ()> {
+    SERIAL.lock().unwrap_or_else(|e| e.into_inner())
+}
+
 #[test]
 fn fixed_timestep_input_and_wait() {
+    let _serial = serial();
     let mut s = scenario();
     s.step(2);
     assert_eq!(*s.res::<State<AppState>>().get(), AppState::InGame);
@@ -102,6 +111,7 @@ fn fixed_timestep_input_and_wait() {
 
 #[test]
 fn record_then_replay_is_deterministic() {
+    let _serial = serial();
     // Scripted run, recorded through the live recorder.
     let script = InputLog::new().hold(KeyCode::KeyW, 5, 30).hold(KeyCode::KeyW, 60, 12).at(70, InputEvent::Motion { dx: 4.0, dy: 0.0 });
     let mut a = scenario();
@@ -129,6 +139,7 @@ fn record_then_replay_is_deterministic() {
 #[cfg(feature = "devtools")]
 #[test]
 fn inspector_commands_in_process() {
+    let _serial = serial();
     let mut s = scenario();
     s.step(2);
     let all = s.call("ecs.query", json!({"components": ["Transform"], "with": ["Name"]})).unwrap();
@@ -199,6 +210,7 @@ fn inspector_commands_in_process() {
 
 #[test]
 fn hot_reload_json_resource() {
+    let _serial = serial();
     let mut s = Scenario::new(info())
         .plugin(ToyGame)
         .setup(|app| {
@@ -235,6 +247,7 @@ fn hot_reload_json_resource() {
 
 #[test]
 fn save_plugin_slots_autosave_and_migration() {
+    let _serial = serial();
     let dir = std::env::temp_dir().join(format!("engine-devkit-save-{}-{}", std::process::id(), rand::random::<u32>()));
     // A v1 save written by an "older build": {lvl, gold}.
     engine::devkit::SaveStore::new(dir.join("saves"), 1)
@@ -298,6 +311,7 @@ fn save_plugin_slots_autosave_and_migration() {
 
 #[test]
 fn perf_budget_with_counting_allocator() {
+    let _serial = serial();
     let mut s = scenario();
     s.step(30); // warmup
     s.reset_frame_times();
@@ -326,6 +340,7 @@ fn perf_budget_with_counting_allocator() {
 #[test]
 #[ignore]
 fn bench_headless_toy() {
+    let _serial = serial();
     let mut s = scenario();
     s.step(60);
     s.reset_frame_times();
@@ -344,6 +359,7 @@ fn png_header(w: u32, h: u32) -> Vec<u8> {
 
 #[test]
 fn asset_check_finds_problems() {
+    let _serial = serial();
     let root = std::env::temp_dir().join(format!("engine-devkit-assets-{}-{}", std::process::id(), rand::random::<u32>()));
     let assets = root.join("assets");
     let src = root.join("src");
@@ -384,6 +400,7 @@ fn asset_check_finds_problems() {
 #[test]
 #[ignore]
 fn bench_devkit_costs() {
+    let _serial = serial();
     use std::time::Instant;
     // profile_scope! enter + exit.
     let n = 1_000_000;

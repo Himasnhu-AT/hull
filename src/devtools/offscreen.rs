@@ -34,7 +34,44 @@ impl Plugin for OffscreenPlugin {
         let rendering = app.world().contains_resource::<Assets<Image>>() && app.is_plugin_added::<bevy::render::RenderPlugin>();
         if enabled() && rendering {
             app.add_systems(PostUpdate, retarget_cameras.before(bevy::camera::CameraUpdateSystems));
+            if let Some(render_app) = app.get_sub_app_mut(bevy::render::RenderApp) {
+                render_app.init_resource::<InFlight>().add_systems(
+                    bevy::render::Render,
+                    limit_frames_in_flight.in_set(bevy::render::RenderSystems::Cleanup),
+                );
+            }
         }
+    }
+}
+
+/// Frames the CPU may run ahead of the GPU (a window's swapchain allows about the same).
+pub const FRAMES_IN_FLIGHT: u64 = 2;
+
+/// Frames submitted / finished on the GPU.
+#[derive(Resource, Default)]
+struct InFlight {
+    submitted: u64,
+    done: std::sync::Arc<std::sync::atomic::AtomicU64>,
+}
+
+/// With no swapchain nothing makes the CPU wait for the GPU: in a GPU-bound scene frames queue
+/// up without limit, the Metal driver holds gigabytes of command buffers in flight, and frame
+/// times measure how fast the CPU submits, not how fast the GPU renders. Wait like a swapchain.
+fn limit_frames_in_flight(
+    mut f: ResMut<InFlight>,
+    device: Res<bevy::render::renderer::RenderDevice>,
+    queue: Res<bevy::render::renderer::RenderQueue>,
+) {
+    use std::sync::atomic::Ordering;
+    let done = f.done.clone();
+    queue.on_submitted_work_done(move || {
+        done.fetch_add(1, Ordering::Relaxed);
+    });
+    f.submitted += 1;
+    let t0 = std::time::Instant::now();
+    while f.submitted - f.done.load(Ordering::Relaxed) > FRAMES_IN_FLIGHT && t0.elapsed().as_secs() < 2 {
+        let _ = device.poll(bevy::render::render_resource::PollType::Poll);
+        std::thread::sleep(std::time::Duration::from_micros(100));
     }
 }
 
