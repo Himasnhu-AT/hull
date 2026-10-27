@@ -159,9 +159,10 @@ impl Plugin for GfxPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<PendingMips>()
             .init_resource::<QualityPreset>()
+            .init_resource::<SsrDeferred>()
             .add_systems(
                 Update,
-                (generate_mips, face_camera, apply_camera_quality.in_set(QualitySet::Apply), apply_fov, prune_prepasses.in_set(QualitySet::Prune))
+                (generate_mips, face_camera, apply_camera_quality.in_set(QualitySet::Apply), apply_fov, prune_prepasses.in_set(QualitySet::Prune), deferred_side_views.after(QualitySet::Prune))
                     .run_if(has_visuals),
             )
             .configure_sets(Update, (QualitySet::Apply, QualitySet::Look, QualitySet::Prune).chain());
@@ -227,8 +228,11 @@ pub fn apply_camera_quality(
     mut suns: Query<(Ref<Sun>, &mut DirectionalLight)>,
     renderer: Option<ResMut<DefaultOpaqueRendererMethod>>,
     mut materials: Option<ResMut<Assets<StandardMaterial>>>,
-    mut deferred_for_ssr: Local<bool>,
+    mut deferred_for_ssr: ResMut<SsrDeferred>,
 ) {
+    if deferred_for_ssr.grace > 0 {
+        deferred_for_ssr.grace -= 1;
+    }
     let q = settings.quality;
     let i = q.index();
     let force = preset.is_changed();
@@ -292,9 +296,10 @@ pub fn apply_camera_quality(
     // their render method when prepared, so they're touched to re-prepare.
     // Only switches back to forward what it switched to deferred itself.
     if let (Some(want), Some(mut method)) = (any_ssr, renderer)
-        && want != *deferred_for_ssr
+        && want != deferred_for_ssr.on
     {
-        *deferred_for_ssr = want;
+        deferred_for_ssr.on = want;
+        deferred_for_ssr.grace = if want { 0 } else { SsrDeferred::GRACE };
         if want {
             method.set_to_deferred();
         } else {
@@ -303,7 +308,10 @@ pub fn apply_camera_quality(
         if let Some(mats) = materials.as_mut() {
             let ids: Vec<_> = mats.ids().collect();
             for id in ids {
-                let _ = mats.get_mut(id);
+                // `get_mut` alone doesn't count as a change (only a write does): mark it.
+                if let Some(m) = mats.get_mut(id) {
+                    m.into_inner();
+                }
             }
         }
     }
@@ -312,6 +320,52 @@ pub fn apply_camera_quality(
         && shadow_map.size != preset.shadow_map_size[i]
     {
         shadow_map.size = preset.shadow_map_size[i];
+    }
+}
+
+/// Whether [`apply_camera_quality`] switched opaque materials to deferred (for SSR).
+#[derive(Resource, Default, Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SsrDeferred {
+    pub on: bool,
+    /// Frames left in which views keep their deferred prepass after switching back to forward:
+    /// materials re-prepare a few frames later, and a deferred material in a view without a
+    /// deferred prepass panics in Bevy 0.19.
+    pub grace: u32,
+}
+
+impl SsrDeferred {
+    /// Frames views keep their deferred prepass after SSR goes off.
+    pub const GRACE: u32 = 10;
+    /// Whether 3D views need a deferred prepass now.
+    pub fn views_need_it(&self) -> bool {
+        self.on || self.grace > 0
+    }
+}
+
+/// Marks a non-main 3D camera that got a deferred prepass from [`deferred_side_views`].
+#[derive(Component)]
+pub struct SsrSideDeferred;
+
+/// While SSR has switched materials to deferred, every other 3D camera (reflection-probe
+/// captures, extra views) needs a deferred prepass too: Bevy 0.19 panics on a deferred material
+/// in a view without one (`prepass/mod.rs`, `opaque_deferred_phase.unwrap()`). Added here and
+/// removed again [`SsrDeferred::GRACE`] frames after SSR goes off.
+pub fn deferred_side_views(
+    mut commands: Commands,
+    ssr: Res<SsrDeferred>,
+    cams: Query<(Entity, Has<DeferredPrepass>, Has<DepthPrepass>, Has<SsrSideDeferred>), (With<Camera3d>, Without<MainCamera>)>,
+) {
+    let need = ssr.views_need_it();
+    for (e, deferred, depth, ours) in &cams {
+        if need && !deferred {
+            let mut ec = commands.entity(e);
+            ec.insert((DeferredPrepass, SsrSideDeferred));
+            if !depth {
+                ec.insert(DepthPrepass);
+            }
+        } else if !need && ours {
+            commands.entity(e).remove::<(DeferredPrepass, SsrSideDeferred)>();
+        }
     }
 }
 
@@ -344,12 +398,15 @@ pub fn prune_prepasses(
         ),
         With<MainCamera>,
     >,
+    ssr_deferred: Option<Res<SsrDeferred>>,
 ) {
+    // Deferred materials need a deferred (and depth) prepass in every view until they're forward again.
+    let materials_deferred = ssr_deferred.is_some_and(|d| d.views_need_it());
     for (e, game, (depth, normal, motion, deferred), (ssao, taa, contact, ssr), (blur, budget, keep)) in &cams {
-        let need_depth = game.depth || ssao || taa || contact || ssr || blur || budget || keep;
+        let need_depth = game.depth || ssao || taa || contact || ssr || blur || budget || keep || materials_deferred;
         let need_normal = game.normal || ssao;
         let need_motion = game.motion || taa || blur;
-        let need_deferred = game.deferred || ssr;
+        let need_deferred = game.deferred || ssr || materials_deferred;
         let mut ec = commands.entity(e);
         if depth && !need_depth {
             ec.remove::<DepthPrepass>();
