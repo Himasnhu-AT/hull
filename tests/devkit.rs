@@ -378,11 +378,12 @@ fn asset_check_finds_problems() {
     let _ = std::fs::remove_dir_all(root);
 }
 
-/// Cost numbers for docs/DEVKIT.md: `cargo test --test devkit measure -- --ignored --nocapture`.
+/// Cost numbers for docs/DEVKIT.md: `cargo test --test devkit bench_devkit -- --ignored --nocapture`.
+/// Also writes the `devkit_costs` bench report.
 #[cfg(feature = "devtools")]
 #[test]
 #[ignore]
-fn measure_devkit_costs() {
+fn bench_devkit_costs() {
     use std::time::Instant;
     // profile_scope! enter + exit.
     let n = 1_000_000;
@@ -391,7 +392,9 @@ fn measure_devkit_costs() {
         engine::profile_scope!("measure.scope");
         std::hint::black_box(());
     }
-    println!("profile_scope!: {:.1} ns per scope", t.elapsed().as_nanos() as f64 / f64::from(n));
+    let scope_ns = t.elapsed().as_nanos() as f64 / f64::from(n);
+    println!("profile_scope!: {scope_ns:.1} ns per scope");
+    let mut rep = engine::devkit::BenchReport::new("devkit_costs").value("profile_scope.ns", scope_ns);
 
     let mut s = Scenario::new(info())
         .plugin(ToyGame)
@@ -404,10 +407,14 @@ fn measure_devkit_costs() {
     s.step(10);
     let t = Instant::now();
     let r = s.call("ecs.query", json!({"components": ["Transform", "Mover"], "limit": 10000})).unwrap();
-    println!("ecs.query 10k entities x 2 components -> JSON: {:.2} ms (count {})", t.elapsed().as_secs_f64() * 1e3, r["count"]);
+    let ms = t.elapsed().as_secs_f64() * 1e3;
+    println!("ecs.query 10k entities x 2 components -> JSON: {ms:.2} ms (count {})", r["count"]);
+    rep = rep.value("ecs_query.10k_full.ms", ms);
     let t = Instant::now();
     let r = s.call("ecs.query", json!({"components": ["Mover"], "limit": 10})).unwrap();
-    println!("ecs.query 10k matched, 10 returned: {:.3} ms ({})", t.elapsed().as_secs_f64() * 1e3, r["returned"]);
+    let ms = t.elapsed().as_secs_f64() * 1e3;
+    println!("ecs.query 10k matched, 10 returned: {ms:.3} ms ({})", r["returned"]);
+    rep = rep.value("ecs_query.10k_limit10.ms", ms);
 
     // Save write + read of a big resource.
     let dir = s.data_dir().join("measure-saves");
@@ -418,13 +425,15 @@ fn measure_devkit_costs() {
     let w = t.elapsed();
     let t = Instant::now();
     let back = store.read::<Vec<Progress>>("big").unwrap();
+    let read = t.elapsed();
     println!(
         "save 10k records ({} KB): write {:.2} ms, read+verify {:.2} ms ({} back)",
         saved.bytes / 1024,
         w.as_secs_f64() * 1e3,
-        t.elapsed().as_secs_f64() * 1e3,
+        read.as_secs_f64() * 1e3,
         back.data.len()
     );
+    rep = rep.value("save.10k.write_ms", w.as_secs_f64() * 1e3).value("save.10k.read_ms", read.as_secs_f64() * 1e3);
 
     // Hot reload poll: one stat per watched file.
     let f = s.data_dir().join("poll.json");
@@ -433,5 +442,7 @@ fn measure_devkit_costs() {
     for _ in 0..10_000 {
         std::hint::black_box(std::fs::metadata(&f).ok());
     }
-    println!("hot reload poll: {:.2} µs per watched file", t.elapsed().as_secs_f64() * 1e6 / 10_000.0);
+    let poll_us = t.elapsed().as_secs_f64() * 1e6 / 10_000.0;
+    println!("hot reload poll: {poll_us:.2} µs per watched file");
+    rep.value("hot_reload_poll.us", poll_us).write().unwrap();
 }

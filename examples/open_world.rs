@@ -18,10 +18,8 @@
 
 use bevy::input::mouse::MouseMotion;
 use bevy::pbr::{DistanceFog, FogFalloff};
-use bevy::winit::UpdateMode;
 use engine::cli::{arg_value, has_flag};
 use engine::prelude::*;
-use engine::render_budget::FramePacing;
 use engine::world::desc::{Group, TerrainDesc};
 use engine::world::scatter::{ScatterCollider, ScatterRender};
 use engine::world::*;
@@ -230,10 +228,6 @@ fn main() {
     // The render budget's scenery ranges only matter for untagged scenery here; keep its view
     // beyond the fog so nothing of ours is cut.
     app.insert_resource(SceneryRanges { view: 4000.0, ..default() });
-    if has_flag("uncapped") {
-        app.world_mut().resource_mut::<FramePacing>().gameplay.unfocused_mode = UpdateMode::Continuous;
-        app.world_mut().resource_mut::<engine::settings::CoreSettings>().vsync = false;
-    }
     let pose = arg_value("pose").and_then(|p| Pose::parse(&p)).unwrap_or(Pose::Fly);
     #[cfg(feature = "devtools")]
     {

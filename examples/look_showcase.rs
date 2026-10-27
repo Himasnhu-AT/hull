@@ -11,11 +11,9 @@
 
 use bevy::light::ClusteredDecal;
 use bevy::pbr::decal::ForwardDecalMaterial;
-use bevy::winit::UpdateMode;
 use engine::cli::{arg_value, has_flag};
 use engine::look::{ReflectionProbe, decal_image, decal_material, spawn_decal};
 use engine::prelude::*;
-use engine::render_budget::FramePacing;
 use engine::settings::{CoreSettings, GraphicsQuality};
 
 fn info() -> GameInfo {
@@ -56,10 +54,6 @@ fn main() {
     }
     if let Some(q) = arg_value("quality").and_then(|q| quality(&q)) {
         app.world_mut().resource_mut::<CoreSettings>().quality = q;
-    }
-    if has_flag("uncapped") {
-        app.world_mut().resource_mut::<FramePacing>().gameplay.unfocused_mode = UpdateMode::Continuous;
-        app.world_mut().resource_mut::<CoreSettings>().vsync = false;
     }
     let (eye, at) = arg_value("pose").and_then(|p| pose(&p)).unwrap_or_else(|| pose("outdoor").unwrap());
     app.insert_resource(Pose(eye, at));
@@ -186,7 +180,7 @@ fn spawn_scene(
         children![(PointLight { intensity: 120_000.0, range: 12.0, color: Color::srgb(1.0, 0.8, 0.6), shadow_maps_enabled: true, ..default() }, bevy::light::NotShadowCaster)],
     ));
     // A poster as a clustered decal (projects along local +Z onto the back wall). Only drawn
-    // with `--features look_clustered_decals` on GPUs with bindless textures (not macOS).
+    // with `--features look_clustered_decals`.
     let poster = images.add(decal_image(128, |uv| {
         let stripe = ((uv.x + uv.y) * 8.0).fract() < 0.5;
         if stripe { [0.1, 0.5, 0.9, 1.0] } else { [0.95, 0.95, 0.9, 1.0] }

@@ -22,10 +22,8 @@ use bevy::image::{ImageAddressMode, ImageSampler, ImageSamplerDescriptor};
 use bevy::pbr::{DistanceFog, FogFalloff};
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 use bevy::asset::RenderAssetUsages;
-use bevy::winit::UpdateMode;
 use engine::cli::{arg_value, has_flag};
 use engine::prelude::*;
-use engine::render_budget::FramePacing;
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 
@@ -96,10 +94,6 @@ fn main() {
     }
     // Scenery is gone where the fog is opaque, so the view edge is invisible.
     app.insert_resource(SceneryRanges { view: 200.0, ..default() });
-    if has_flag("uncapped") {
-        app.world_mut().resource_mut::<FramePacing>().gameplay.unfocused_mode = UpdateMode::Continuous;
-        app.world_mut().resource_mut::<engine::settings::CoreSettings>().vsync = false;
-    }
     let start = arg_value("pose").and_then(|p| pose(&p)).unwrap_or_default();
     #[cfg(feature = "devtools")]
     {

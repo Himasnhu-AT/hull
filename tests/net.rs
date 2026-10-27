@@ -554,7 +554,8 @@ fn udp_transport_end_to_end() {
 }
 
 /// Client-side cost: one client `App` receiving 500 moving entities at 60 Hz (apply +
-/// interpolation), and a predicted player replaying under 100 ms RTT.
+/// interpolation), and a predicted player replaying under 100 ms RTT. Writes the
+/// `net_client_apply` bench report.
 /// `cargo test --features net --test net -- --ignored --nocapture bench`
 #[test]
 #[ignore]
@@ -595,23 +596,33 @@ fn bench_client_apply_500_entities() {
         p.rollbacks,
         p.checks,
     );
+    engine::devkit::BenchReport::new("net_client_apply")
+        .value("client.frame_ms", client_t / frames as f64 * 1000.0)
+        .value("client.worst_ms", worst * 1000.0)
+        .value("server.frame_ms", server_t / frames as f64 * 1000.0)
+        .value("down_kbps", f64::from(st.recv_bytes_per_sec) / 1024.0)
+        .value("up_kbps", f64::from(st.send_bytes_per_sec) / 1024.0)
+        .write()
+        .unwrap();
     assert_eq!(client_view(&mut n.clients[0]).len(), 501);
 }
 
-/// 64 clients × 500 moving entities on loopback; prints CPU and bandwidth.
+/// 64 clients × 500 moving entities on loopback; prints CPU and bandwidth and writes the
+/// `net_64_clients` bench report.
 /// `cargo test --features net --test net -- --ignored --nocapture bench`
 #[test]
 #[ignore]
 fn bench_64_clients_500_entities() {
-    let rows: [(&str, Option<f32>, bool, u32, bool); 6] = [
-        ("moving, 128 KB/s cap", None, true, 128 * 1024, true),
-        ("moving, 128 KB/s cap, no delta", None, true, 128 * 1024, false),
-        ("moving, uncapped (full 60 Hz)", None, true, 4 << 20, true),
-        ("moving, uncapped, no delta", None, true, 4 << 20, false),
-        ("moving, 60 m relevancy, 128 KB/s", Some(60.0), true, 128 * 1024, true),
-        ("static", None, false, 128 * 1024, true),
+    let rows = [
+        ("capped", "moving, 128 KB/s cap", None, true, 128 * 1024, true),
+        ("capped_nodelta", "moving, 128 KB/s cap, no delta", None, true, 128 * 1024, false),
+        ("uncapped", "moving, uncapped (full 60 Hz)", None, true, 4 << 20, true),
+        ("uncapped_nodelta", "moving, uncapped, no delta", None, true, 4 << 20, false),
+        ("relevancy60", "moving, 60 m relevancy, 128 KB/s", Some(60.0), true, 128 * 1024, true),
+        ("static", "static", None, false, 128 * 1024, true),
     ];
-    for (label, radius, moving, bps, delta) in rows {
+    let mut rep = engine::devkit::BenchReport::new("net_64_clients");
+    for (key, label, radius, moving, bps, delta) in rows {
         let lo = LoopbackNet::new();
         let mut cfg = NetConfig { relevancy_radius: radius, delta_compression: delta, snapshot_bytes_per_tick: 64 * 1024, ..default() };
         cfg.connection.bytes_per_sec = bps;
@@ -680,7 +691,13 @@ fn bench_64_clients_500_entities() {
             st.entity_updates,
             st.parts,
         );
+        rep = rep
+            .value(&format!("{key}.server_frame_ms"), total / frames as f64 * 1000.0)
+            .value(&format!("{key}.server_worst_ms"), worst * 1000.0)
+            .value(&format!("{key}.snapshot_ms"), snap_us / frames as f64 / 1000.0)
+            .value(&format!("{key}.client_down_kbps"), per_client / 1024.0);
     }
+    rep.write().unwrap();
 }
 
 /// The `net.*` control commands, called in-process the way the control port calls them.

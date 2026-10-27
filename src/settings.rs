@@ -420,7 +420,7 @@ fn apply_window(settings: Res<CoreSettings>, mut windows: Query<&mut Window, Wit
     }
     let test_run = crate::cli::test_driven();
     for mut w in &mut windows {
-        let present = if settings.vsync { PresentMode::AutoVsync } else { PresentMode::AutoNoVsync };
+        let present = if settings.vsync && !crate::cli::uncapped() { PresentMode::AutoVsync } else { PresentMode::AutoNoVsync };
         if w.present_mode != present {
             w.present_mode = present;
         }

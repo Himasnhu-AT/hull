@@ -345,10 +345,12 @@ fn control_commands() {
 }
 
 /// Bake time and per-frame cost for 100 / 500 agents (numbers for docs/AI.md):
-/// `cargo test --release --test ai -- --ignored --nocapture perf`
+/// `cargo test --release --test ai -- --ignored --nocapture bench`; also writes the `ai` bench
+/// report (`python3 -I scripts/bench.py run`).
 #[test]
 #[ignore]
-fn perf_report() {
+fn bench_ai() {
+    let mut rep = engine::devkit::BenchReport::new("ai");
     for (size, crates) in [(50.0f32, 60), (150.0, 600)] {
         let mut app = build("perf-bake", AiConfig::default());
         let mut c = app.world_mut().commands();
@@ -372,6 +374,11 @@ fn perf_report() {
             n.last_bake.cpu_us as f64 / 1000.0,
             n.last_gather_us as f64 / 1000.0
         );
+        let key = format!("bake.{}m", size as u32 * 2);
+        rep = rep
+            .value(&format!("{key}.wall_ms"), n.last_bake.wall_us as f64 / 1000.0)
+            .value(&format!("{key}.cpu_ms"), n.last_bake.cpu_us as f64 / 1000.0)
+            .value(&format!("{key}.gather_ms"), n.last_gather_us as f64 / 1000.0);
         // Path queries.
         let mut q = NavQuery::new();
         let t0 = Instant::now();
@@ -383,7 +390,9 @@ fn perf_report() {
                 len += p.length();
             }
         }
-        println!("  200 cross-map paths: {:.3} ms each (avg len {:.0} m)", t0.elapsed().as_secs_f64() * 1000.0 / 200.0, len / 200.0);
+        let path_ms = t0.elapsed().as_secs_f64() * 1000.0 / 200.0;
+        println!("  200 cross-map paths: {path_ms:.3} ms each (avg len {:.0} m)", len / 200.0);
+        rep = rep.value(&format!("path.{}m.ms", size as u32 * 2), path_ms);
     }
     for n in [100usize, 500] {
         // Behaviour trees (every frame) + perception (everyone sees everyone, 64 rays/frame).
@@ -423,6 +432,9 @@ fn perf_report() {
             rays / frames,
             cands
         );
+        rep = rep
+            .value(&format!("think.n{n}.bt_ms"), think as f64 / 1000.0 / frames as f64)
+            .value(&format!("think.n{n}.perception_ms"), sense as f64 / 1000.0 / frames as f64);
     }
     for n in [100usize, 500] {
         let mut app = build("perf-crowd", AiConfig::default());
@@ -459,5 +471,10 @@ fn perf_report() {
             s.agents_moving,
             s.neighbor_checks
         );
+        rep = rep
+            .value(&format!("crowd.n{n}.steer_ms"), steer as f64 / 1000.0 / frames as f64)
+            .value(&format!("crowd.n{n}.path_ms"), path as f64 / 1000.0 / frames as f64)
+            .value(&format!("crowd.n{n}.frame_ms"), frame);
     }
+    rep.write().unwrap();
 }

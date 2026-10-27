@@ -398,7 +398,8 @@ fn control_commands_drive_and_report() {
 }
 
 /// `cargo test --test sound -- --ignored --nocapture bench`: DSP and logic cost (numbers in
-/// docs/SOUND.md). Dev profile: the engine crate builds at opt-level 1.
+/// docs/SOUND.md). Dev profile: the engine crate builds at opt-level 1. Writes the `sound` bench
+/// report.
 #[test]
 #[ignore]
 fn bench_dsp_and_logic() {
@@ -447,5 +448,12 @@ fn bench_dsp_and_logic() {
     let st = stats(&logic);
     let busy = frame(&mut logic);
     println!("logic: active {} virtual {} (occlusion rays 8/frame): {:.3} ms/frame vs {:.3} idle → {:.3} ms", st.active, st.virtual_voices, busy, idle, busy - idle);
+    engine::devkit::BenchReport::new("sound")
+        .value("dsp.48voices.core_pct", dsp / 10.0 * 100.0)
+        .value("logic.busy_ms", busy)
+        .value("logic.idle_ms", idle)
+        .value("logic.delta_ms", busy - idle)
+        .write()
+        .unwrap();
     let _ = std::fs::remove_dir_all(dir);
 }

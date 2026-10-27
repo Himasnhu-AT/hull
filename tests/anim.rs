@@ -407,10 +407,11 @@ fn control_commands() {
 
 /// CPU cost headless (no rendering): `memgate -- cargo test --test anim bench -- --ignored
 /// --nocapture`. Prints ms per `App::update()` for N walking mannequins, LOD off/on, camera at
-/// one corner of the grid.
+/// one corner of the grid. Writes the `anim_crowd_cpu` bench report (the last pass per LOD setting).
 #[test]
 #[ignore]
 fn bench_crowd_cpu() {
+    let mut rep = engine::devkit::BenchReport::new("anim_crowd_cpu");
     for n in [100usize, 500] {
         let mut w = setup("bench");
         let empty = {
@@ -418,6 +419,7 @@ fn bench_crowd_cpu() {
             w.run(120);
             t.elapsed().as_secs_f64() * 1000.0 / 120.0
         };
+        rep = rep.value(&format!("n{n}.empty_ms"), empty);
         let side = (n as f32).sqrt().ceil() as usize;
         let mut roots = Vec::new();
         for i in 0..n {
@@ -452,6 +454,12 @@ fn bench_crowd_cpu() {
                 post / frames as f64,
                 posed as f64 / frames as f64
             );
+            let key = format!("n{n}.lod{}", u8::from(lod));
+            rep = rep
+                .value(&format!("{key}.frame_ms"), ms)
+                .value(&format!("{key}.anim_us"), adv / frames as f64)
+                .value(&format!("{key}.post_us"), post / frames as f64);
         }
     }
+    rep.write().unwrap();
 }

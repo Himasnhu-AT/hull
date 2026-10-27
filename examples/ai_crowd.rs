@@ -19,11 +19,6 @@ use rand::rngs::StdRng;
 
 fn main() {
     let mut app = engine::app(GameInfo::new("engine-ai-crowd", "AI Crowd").tagline("Navmesh, crowds, behaviour trees."));
-    // `--uncapped`: vsync off, full speed unfocused (frame-time measurements offscreen).
-    if has_flag("uncapped") {
-        app.world_mut().resource_mut::<engine::render_budget::FramePacing>().gameplay.unfocused_mode = bevy::winit::UpdateMode::Continuous;
-        app.world_mut().resource_mut::<engine::settings::CoreSettings>().vsync = false;
-    }
     app.add_systems(Startup, spawn).add_systems(Update, (wander, color_guards)).run();
 }
 

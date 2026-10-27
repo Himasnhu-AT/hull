@@ -260,9 +260,5 @@ fn camera(time: Res<Time<Real>>, pose: Res<CamPose>, mut q: Query<&mut Transform
 #[allow(dead_code)]
 fn main() {
     let mut app = engine::app_with(info(), EngineOptions { ui: false, ..EngineOptions::from_args() });
-    if has_flag("uncapped") {
-        app.world_mut().resource_mut::<engine::render_budget::FramePacing>().gameplay.unfocused_mode = bevy::winit::UpdateMode::Continuous;
-        app.world_mut().resource_mut::<engine::settings::CoreSettings>().vsync = false;
-    }
     app.add_plugins(GalleryPlugin).run();
 }

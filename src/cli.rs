@@ -1,6 +1,8 @@
 //! Command-line helpers shared by engine and games. Owner: core stream.
 //! Engine flags: `--headless`, `--offscreen`, `--control <port>`, `--play` (skip the menu),
-//! `--quit-after <s>`, `--seed <n>`, `--mute`, `--sound`, `--volume <0..1>`, `--crash-test`.
+//! `--quit-after <s>`, `--seed <n>`, `--mute`, `--sound`, `--volume <0..1>`, `--crash-test`,
+//! `--uncapped` (vsync off and full speed while unfocused: frame-time benchmarks in hidden
+//! `--offscreen` windows; never saved to settings).
 //!
 //! Those engine flags are test/debug tools: they are read through [`dev_flag`] / [`dev_value`],
 //! which only see the command line when the `devtools` feature is on. A ship build
@@ -45,6 +47,11 @@ pub fn dev_value(name: &str) -> Option<String> {
 /// change window mode, never play sound unless `--sound`. Always `false` in ship builds.
 pub fn test_driven() -> bool {
     dev_flag("control") || dev_flag("offscreen") || dev_flag("mcp")
+}
+
+/// `--uncapped` (devtools builds): no vsync, no frame pacing while unfocused, for benchmarks.
+pub fn uncapped() -> bool {
+    dev_flag("uncapped")
 }
 
 /// RNG seed for the run: `--seed <n>` for deterministic tests (devtools builds), otherwise random.

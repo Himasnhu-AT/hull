@@ -60,9 +60,13 @@ impl Default for FramePacing {
         let focused = UpdateMode::reactive_low_power(Duration::from_secs_f64(1.0 / 30.0));
         // Hidden test windows are never focused: keep them responsive.
         let unfocused = if crate::cli::test_driven() { focused } else { UpdateMode::reactive_low_power(Duration::from_secs_f64(1.0 / 8.0)) };
+        let mut gameplay = WinitSettings::game();
+        if crate::cli::uncapped() {
+            gameplay.unfocused_mode = UpdateMode::Continuous;
+        }
         FramePacing {
             enabled: true,
-            gameplay: WinitSettings::game(),
+            gameplay,
             menus: WinitSettings { focused_mode: focused, unfocused_mode: unfocused },
             idle_skip_hz: 60.0,
             idle_skip_max: 30,

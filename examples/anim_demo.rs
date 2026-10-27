@@ -15,12 +15,10 @@
 
 use std::f32::consts::TAU;
 
-use bevy::winit::UpdateMode;
 use engine::anim::mannequin::{MannequinVisual, RUN_SPEED, WALK_SPEED};
 use engine::anim::*;
-use engine::cli::{arg_value, has_flag};
+use engine::cli::arg_value;
 use engine::prelude::*;
-use engine::render_budget::FramePacing;
 
 fn info() -> GameInfo {
     GameInfo::new("engine-anim-demo", "Anim demo").tagline("Code-first animation.")
@@ -48,10 +46,6 @@ const FOLLOW: CamPose = CamPose(Vec3::new(3.5, 2.0, -3.5), Vec3::NAN);
 
 fn main() {
     let mut app = engine::app_with(info(), EngineOptions { ui: false, ..EngineOptions::from_args() });
-    if has_flag("uncapped") {
-        app.world_mut().resource_mut::<FramePacing>().gameplay.unfocused_mode = UpdateMode::Continuous;
-        app.world_mut().resource_mut::<engine::settings::CoreSettings>().vsync = false;
-    }
     app.insert_resource(FOLLOW)
         .add_systems(Startup, setup)
         .add_systems(Update, (drive_hero, drive_walkers, move_orb, follow_cam).run_if(in_game));

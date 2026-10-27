@@ -243,7 +243,7 @@ fn on_save(mut ev: MessageReader<SaveEvent>) { .. }       // Saved / Loaded / De
 ## Measurements
 
 Apple M5 Pro, dev profile (engine opt-level 1, deps opt-level 3), measured 2026-10-26 with
-`cargo test --test devkit measure -- --ignored --nocapture` and the perf test:
+`cargo test --test devkit bench_devkit -- --ignored --nocapture` and the perf test:
 
 | What | Cost |
 |---|---|

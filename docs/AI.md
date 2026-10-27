@@ -196,7 +196,7 @@ Metrics (dev builds): `ai.agents`, `ai.steer_ms`, `ai.path_ms`, `ai.path_queries
 ## Measurements
 Apple M5 Pro, dev profile: engine code at opt-level 1, dependencies at 3. A release build is
 faster still. Headless numbers come from `cargo test --test ai -- --ignored --nocapture
-perf_report`.
+bench_ai`, which also writes the `ai` bench report (`scripts/bench.py`).
 
 **Bake** (`AsyncComputeTaskPool`, all tiles):
 | level | tiles | polys | wall ms | CPU ms (all threads) | main-thread gather |
