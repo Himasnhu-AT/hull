@@ -49,7 +49,8 @@ saved to settings, so any game can be measured the same way.
   `metrics.sessions` (history across runs, `data/metrics/sessions.jsonl`).
 - **In tests**: `Scenario::assert_budget(&PerfBudget { p95_frame_ms, max_entities,
   p95_allocs_per_frame, .. })` (see DEVKIT.md). Frame-time budgets in tests are sensitive to
-  machine load (`perf_budget_with_counting_allocator` failed once under load, passes alone).
+  machine load. `CountingAlloc` counts the whole process, so a test binary with allocation
+  budgets runs its tests one at a time (see `tests/devkit.rs`).
 
 ### Reading the keys
 
@@ -62,6 +63,7 @@ saved to settings, so any game can be measured the same way.
 | `gpu.frame_ms` | this process's GPU busy time per frame |
 | `gpu.alloc_mb` | this process's Metal allocations |
 | `gpu.mem_mb` | **device-wide** GPU memory in use (all apps): don't compare across runs |
+| `gpu.buffers`, `gpu.textures`, `gpu.texture_views`, `gpu.bind_groups`, `gpu.render_pipelines`, `gpu.compute_pipelines`, `gpu.samplers` | live wgpu objects (≈1 Hz): a leak or per-frame churn of GPU objects shows here first |
 | `mem.footprint_mb` | phys_footprint (Activity Monitor "Memory"; includes Metal memory) |
 | `cpu.main_pct` / `cpu.render_pct` | main / render thread, % of one core |
 | `render.cpu_us`, `world.cpu_us`, `ai.*_ms`, `anim.*`, `sound.*` | subsystems' own measured CPU time |
@@ -122,9 +124,9 @@ Same setup, machine quiet (load under 7.5 for every scene; `--direct`, no memgat
 | scene | fps | frame p50 | p95 | p99 | GPU ms | main % | mem MB | entities | vs baseline |
 |---|---|---|---|---|---|---|---|---|---|
 | look_low | 229 | 4.3 | 4.8 | 5.1 | 3.8 | 25 | 819 | 797 | p99 −43 % |
-| look_high | 130 | 7.2 | 10.4 | 11.8 | 7.5 | 16 | 4019 | 799 | fps +31 %, GPU −18 % |
-| look_dusk | 127 | 7.5 | 11.2 | 12.4 | 7.6 | 16 | 4054 | 799 | fps +34 %, GPU −19 % |
-| look_ultra | 65 | 15.4 | 16.8 | 17.4 | 14.9 | 10 | 4360 | 799 | runs (crashed before) |
+| look_high | 130 | 7.2 | 10.4 | 11.8 | 7.5 | 16 | 1015 ¹ | 799 | fps +31 %, GPU −18 % |
+| look_dusk | 127 | 7.5 | 11.2 | 12.4 | 7.6 | 16 | 1050 ¹ | 799 | fps +34 %, GPU −19 % |
+| look_ultra | 65 | 15.4 | 16.8 | 17.4 | 14.9 | 10 | 1437 ¹ | 799 | runs (crashed before) |
 | open_world | 238 | 4.1 | 4.7 | **5.6** | 3.7 | 23 | 1102 | 34 835 | fps ×2, p99 48.5 → 5.6, 0 hitches |
 | render_budget | 328 | 3.0 | 3.6 | 3.9 | 2.8 | 27 | 678 | 5 005 | p95 −35 % |
 | ai_crowd | 328 | 2.9 | 3.2 | 3.4 | 2.6 | 30 | 710 | 1 161 | p95 −20 % |
@@ -134,11 +136,15 @@ Same setup, machine quiet (load under 7.5 for every scene; `--direct`, no memgat
 | sound_demo | 368 | 2.7 | 3.2 | 3.9 | 2.5 | 32 | 634 | 738 | p95 −13 % |
 | ui_gallery | 318 | 3.0 | 3.4 | 3.7 | 2.8 | 30 | 698 | 740 | p95 −13 % |
 
+¹ Memory from commit 617d3e5 (offscreen frame pacing). Three later runs on a busy machine
+(load 11–26, other projects' builds) agreed within 5 % on memory; their frame times are not
+comparable and are not shown. A quiet full re-run of the suite is still to do.
+
 `bench.py compare` flags `open_world` `cpu.render_pct` +17 %: the render thread runs twice as
 many frames per second; its cost per frame fell. Gains in scenes the fixes didn't touch
 (render_budget, vfx, ui) suggest the baseline machine wasn't fully idle either; the look and
 open_world gains are the fixes. One busy run showed `anim_demo` at 2.5 GB; the quiet re-run
-was 756 MB (not reproduced).
+was 756 MB: GPU contention plus the missing offscreen frame pacing (fixed below).
 
 ## Found and fixed by the benchmarks
 
@@ -146,16 +152,20 @@ was 756 MB (not reproduced).
 |---|---|---|---|
 | `look_ultra` crashed at start; leaving Ultra crashed | SSR switches materials to deferred by "touching" every material with `Assets::get_mut`, which in Bevy 0.19 is **not** a change unless written through: materials kept their old render method; probe capture views had no deferred prepass | mark materials changed (`into_inner`); side 3D views get a deferred prepass while SSR is on; every view keeps it 10 frames after leaving | all tier switches work; SSR actually sees deferred materials when Ultra is entered at runtime |
 | `open_world`: a 10.5 s stall after loading, hitches of 50–160 ms every second while flying, 4 cores busy | the AI plugin (on by default) triangulated every streamed terrain collider on the main thread and re-baked navmesh tiles, in a demo with no agents | navmesh tracking/baking start only when a `NavAgent` / `NavSource` exists (or `AiConfig::bake_without_agents`) | 36 → 7 hitches per run, no stall |
-| `look_high` memory 3.9 GB vs 0.9 GB on Low | the realtime reflection probe ran Bevy's env-map filter every frame (bind groups and buffers re-created each time) | filter once per full cycle of fresh faces | ~100 → ~28 filters/s, ~100 → ~130 fps; memory still swings to 2–4 GB with a realtime probe (see limits) |
+| `look_high` spent its frame on the reflection probe | the realtime probe ran Bevy's env-map filter every frame (bind groups, buffers and placeholder textures re-created each time) | filter once per full cycle of fresh faces | ~100 → ~28 filters/s, ~100 → ~130 fps |
+| `look_high` / `look_dusk` / `look_ultra` at 4.0–4.4 GB vs 0.8 GB on Low | **offscreen runs had no frame pacing**: with no swapchain nothing made the CPU wait for the GPU, so in GPU-bound scenes frames queued without limit and the Metal driver held ~35 000 command-buffer regions (`footprint`: `IOAccelerator (graphics)`), swinging 0.4 ↔ 2.3 GB as it purged. wgpu itself held only ~200 buffers (`gpu.buffers`). Offscreen frame times in GPU-bound scenes measured submission, not rendering | `--offscreen` waits like a swapchain (2 frames in flight, `devtools/offscreen.rs`) | High 4.0 → 1.05 GB, dusk 4.1 → 1.06 GB, Ultra 4.4 → 1.5 GB; same frame time when not GPU-bound (render_budget 3.23 ms both) |
+| `perf_budget_with_counting_allocator` flaky | `CountingAlloc` counts the whole process: parallel tests' allocations landed in its per-frame budget | tests in `tests/devkit.rs` run one at a time | 0 failures in 6 runs (binary 4.7 s → 0.4 s) |
+| `open_world` 50–90 ms hitches while flying | render-world stalls in specialize / mesh prepare the frame after scatter spawned up to 3000 entities, or any number of big merged grass meshes (each counted as one item) | `max_items_per_frame` 3000 → 1000, merged clusters cost one per 500 vertices | at most 1000 new mesh entities per frame; see limits |
 | `span.budget.*` read 1–3 ms per frame | the span's wall-time window took in Bevy's visibility systems | spans removed; `render.cpu_us` is the real cost (0.3 ms in `open_world`) | no phantom costs in reports |
 
 ## Known limits
 
-- **Realtime reflection probes** (High: one face every 4 frames; Ultra: every frame) still raise
-  `mem.footprint_mb` to 2–4 GB on macOS while they run (process Metal allocations +375 MB);
-  frozen (`look.probe {"refresh": 0}`) the same scene sits at ~1.0 GB. Not traced further:
-  shadows off, filter throttled and readbacks excluded didn't change it. Bake probes
-  (`probe_refresh: 0`) when nothing in the room moves.
-- `open_world`: none in the 20 s bench window, but a few 50–125 ms hitches can still show up
-  when flying into new cells (cell / scatter streaming on the main thread, see WORLD.md).
+- A realtime reflection probe still costs ~250 MB over a baked one (six face targets and their
+  per-view textures): High 1.05 GB vs Low 0.8 GB.
+- `open_world`: none in the 20 s bench window. Over a 60 s flight a few 40–90 ms frames remain
+  when flying into new scatter; on a loaded machine they couldn't be told apart from
+  contention, so the effect of the spawn budget is unmeasured. Spawning stays on the main
+  thread (see WORLD.md).
+- Benchmarks on this Mac share it with other projects' release builds. `--direct` skips the
+  wait for a quiet machine: re-run any scene the suite flags as busy before trusting it.
 - Numbers are dev profile on one machine; ship builds (`--release`, no devtools) are faster.
