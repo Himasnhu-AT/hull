@@ -115,7 +115,7 @@ Rendering, per rule, in clusters of `cluster` metres spawned while the camera is
   No per-cluster meshes for these rules: an earlier version merged the far tier per cluster,
   and the constant alloc/free of differently sized meshes while flying fragmented Bevy's mesh
   slab allocator into 2.8–5 GB footprint spikes (steady 1.2 GB after the change).
-- `ScatterSettings::max_items_per_frame` (3000) caps entities spawned per frame, so a pose
+- `ScatterSettings::max_items_per_frame` (1000; a merged cluster costs one per 500 vertices) caps what spawns per frame, so a pose
   change or teleport doesn't spike.
 - Dithered `VisibilityRange` fades. Cluster origins sit at the cluster centre on the ground:
   Bevy's GPU dither measures distance to the mesh *origin*, so an origin at y = 0 under a
@@ -203,7 +203,7 @@ Metrics (dev builds): `world.cpu_us`, `world.terrain_triangles`, `world.terrain_
 flight, max_lod 6, view_distance ∞, colliders), `streaming` (mode Resident, load 400 m,
 unload 480 m, 2 loads/frame, coarse_step 8, coarse_margin 0.05), `scatter` (enabled,
 distance_scale 1, follow_quality, 16 builds in flight, hysteresis 16 m, resident false,
-max_items_per_frame 3000),
+max_items_per_frame 1000; a merged cluster costs one item per 500 vertices),
 `hlod` (enabled, distance 320, view 4000, voxel 1 m, hysteresis 24), `origin` (off, 2048, 256).
 
 ## Example and measurements

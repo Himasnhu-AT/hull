@@ -532,7 +532,7 @@ fn stream_clusters(
         if let Some(mesh) = built.merged {
             // Merged rule: one mesh for the whole cluster.
             c.vertices += mesh.count_vertices() as u32;
-            item_budget(1, &mut spawn_left);
+            item_budget(mesh.count_vertices() / super::MERGED_VERTICES_PER_ITEM, &mut spawn_left);
             let aabb = mesh.compute_aabb().unwrap_or_default();
             let mut mesh = mesh;
             mesh.asset_usage = RenderAssetUsages::RENDER_WORLD;

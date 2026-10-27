@@ -138,6 +138,10 @@ impl Default for StreamingSettings {
     }
 }
 
+/// Vertices of a merged scatter cluster that cost one item of
+/// [`ScatterSettings::max_items_per_frame`].
+pub const MERGED_VERTICES_PER_ITEM: usize = 500;
+
 /// Scatter visuals.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ScatterSettings {
@@ -152,13 +156,15 @@ pub struct ScatterSettings {
     pub hysteresis: f32,
     /// Spawn every cluster up front instead of by distance (baseline / small maps).
     pub resident: bool,
-    /// Instanced items (or merged clusters) spawned per frame at most.
+    /// Spawn budget per frame: one per instanced item, one per [`MERGED_VERTICES_PER_ITEM`]
+    /// vertices of a merged cluster. Every new mesh entity costs render-world work (extract,
+    /// specialize, upload) in the frame it appears; 3000 at once read as 20–60 ms hitches.
     pub max_items_per_frame: usize,
 }
 
 impl Default for ScatterSettings {
     fn default() -> Self {
-        ScatterSettings { enabled: true, distance_scale: 1.0, follow_quality: true, max_builds_in_flight: 16, hysteresis: 16.0, resident: false, max_items_per_frame: 3000 }
+        ScatterSettings { enabled: true, distance_scale: 1.0, follow_quality: true, max_builds_in_flight: 16, hysteresis: 16.0, resident: false, max_items_per_frame: 1000 }
     }
 }
 
