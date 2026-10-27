@@ -1,3 +1,0 @@
-# Share Shroud's target dir: Bevy compiles once for the engine and every game (disk is tight).
-[build]
-target-dir = "/Users/himanshu/codes/game/shroud/target"

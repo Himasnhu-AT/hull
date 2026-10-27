@@ -8,10 +8,13 @@ from the shell.
 
 - **Run every cargo command through `memgate`** (it queues heavy jobs machine-wide and kills
   runaways): `memgate -- cargo check --lib`.
-- One shared target dir for the engine, its worktrees and the games
-  (`.cargo/config.toml` → `/Users/himanshu/codes/game/shroud/target`), so Bevy is already
-  built. "Blocking waiting for file lock" means another build is running; wait. Never run
-  `cargo clean`.
+- Share one target dir between the engine, its worktrees and the games so Bevy builds once:
+  put `[build] target-dir = "<abs path>"` in `.cargo/config.toml` (gitignored, per machine;
+  new worktrees need a copy). "Blocking waiting for file lock" means another build is
+  running; wait. Never run `cargo clean`.
+- `ashlar-*` (control port, MCP, trace) come from github.com/Himasnhu-AT/ashlar at a pinned
+  `rev`. To try local ashlar changes, add a `[patch."https://github.com/Himasnhu-AT/ashlar"]`
+  section with `path = ...` entries to your local `.cargo/config.toml`; never commit it.
 - Never change Bevy's feature set in the default build: it recompiles all of Bevy (~5 GB).
   Optional engine features that do so on purpose: `profile` (Tracy), `hot_reload` (asset file
   watcher), `ktx2`, `debug_names`.
@@ -43,7 +46,8 @@ from the shell.
 | `docs/PORTING.md` | conventions, devtools, metrics, ship builds, render budget measurements |
 | `tests/*.rs` | headless `App::update()` tests and control-port tests (they spawn an example) |
 | `scripts/play.py` | build + launch a game offscreen, run a JSON steps file over the port, save screenshots |
-| `scripts/bench.py`, `scripts/cook.py`, `scripts/package.sh` | benches, texture cooking, ship packaging |
+| `scripts/bench.py`, `scripts/perf_suite.py` | headless CPU benches; scene benchmarks (GPU frame time, CPU, memory) with regression check: **docs/PERF.md** |
+| `scripts/cook.py`, `scripts/package.sh` | texture cooking, ship packaging |
 
 ## Drive a running game (control port)
 

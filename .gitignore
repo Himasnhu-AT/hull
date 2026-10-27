@@ -1,3 +1,7 @@
 /target
 .DS_Store
 .claude/worktrees/
+# per-machine cargo settings (e.g. a shared target-dir)
+/.cargo/config.toml
+# benchmark reports (scripts/bench.py, scripts/perf_suite.py)
+/target-bench/

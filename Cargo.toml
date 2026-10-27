@@ -15,14 +15,14 @@ rand = "0.9"
 # vfx: instance buffer casting (already in the tree through bevy).
 bytemuck = { version = "1", features = ["derive"], optional = true }
 # devtools: test control port (TCP + MCP), offscreen rendering, perf stats.
-ashlar-control = { path = "/Users/himanshu/codes/synthai/ashlar/crates/control", optional = true }
-ashlar-command = { path = "/Users/himanshu/codes/synthai/ashlar/crates/command", optional = true }
-ashlar-mcp = { path = "/Users/himanshu/codes/synthai/ashlar/crates/mcp", optional = true }
+ashlar-control = { git = "https://github.com/Himasnhu-AT/ashlar", rev = "561745aaf96e07a0efe2ed61f37b0a365f46a530", optional = true }
+ashlar-command = { git = "https://github.com/Himasnhu-AT/ashlar", rev = "561745aaf96e07a0efe2ed61f37b0a365f46a530", optional = true }
+ashlar-mcp = { git = "https://github.com/Himasnhu-AT/ashlar", rev = "561745aaf96e07a0efe2ed61f37b0a365f46a530", optional = true }
 sysinfo = { version = "0.38", default-features = false, features = ["system"], optional = true }
 # devtools perf monitor: process/thread CPU, memory footprint, GPU probes (macOS/Linux FFI).
 libc = { version = "0.2", optional = true }
 # trace: crash / hang / frame-time reporting (no-op unless an endpoint is configured).
-ashlar-trace = { path = "/Users/himanshu/codes/synthai/ashlar/crates/trace", features = ["sysinfo"], optional = true }
+ashlar-trace = { git = "https://github.com/Himasnhu-AT/ashlar", rev = "561745aaf96e07a0efe2ed61f37b0a365f46a530", features = ["sysinfo"], optional = true }
 # devkit golden images: PNG decode/encode. Same version + features Bevy already builds (no new copy).
 image = { version = "0.25", default-features = false, features = ["png"], optional = true }
 # world: RON world descriptions and 16-bit PNG heightmaps (both already in Bevy's tree; no new features).
@@ -70,7 +70,7 @@ trace = ["dep:ashlar-trace"]
 look = []
 # PCSS soft shadows for the look sun (forwards to a non-default Bevy feature: recompiles Bevy).
 look_pcss = ["look", "bevy/experimental_pbr_pcss"]
-# Clustered (projector) decals for the look; needs bindless textures (not on Metal). Recompiles Bevy.
+# Clustered (projector) decals for the look. Recompiles Bevy.
 look_clustered_decals = ["look", "bevy/pbr_clustered_decals"]
 # Code-first character animation: state machines, blend spaces, layers/masks, root motion,
 # notifies, IK, springs, LOD (src/anim, docs/ANIM.md). Foot placement needs `physics` too.
@@ -91,7 +91,7 @@ l10n = []
 net = ["dep:postcard"]
 
 [dev-dependencies]
-ashlar-control = { path = "/Users/himanshu/codes/synthai/ashlar/crates/control" }
+ashlar-control = { git = "https://github.com/Himasnhu-AT/ashlar", rev = "561745aaf96e07a0efe2ed61f37b0a365f46a530" }
 
 [profile.dev]
 opt-level = 1
