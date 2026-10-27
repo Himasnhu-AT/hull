@@ -21,7 +21,8 @@ fn temp_dir(tag: &str) -> PathBuf {
 
 fn build(tag: &str, cfg: AiConfig) -> App {
     let mut app = engine::app_with(GameInfo::new("aitest", "AI Test"), EngineOptions::headless_test(temp_dir(tag)));
-    app.insert_resource(bevy::time::TimeUpdateStrategy::ManualDuration(STEP)).insert_resource(cfg);
+    // Most tests bake a level before any agent exists.
+    app.insert_resource(bevy::time::TimeUpdateStrategy::ManualDuration(STEP)).insert_resource(AiConfig { bake_without_agents: true, ..cfg });
     app.finish();
     app.cleanup();
     app
@@ -95,6 +96,28 @@ fn bakes_from_colliders_and_finds_paths() {
     let p = path(&app, a, top);
     assert!(p.complete, "{:?}", p.points);
     assert!(p.points.iter().any(|pt| pt.offmesh.is_some()));
+}
+
+#[test]
+fn no_bake_until_something_needs_a_navmesh() {
+    // Default config: colliders alone cost nothing (no triangulation, no bake)…
+    let mut app = engine::app_with(GameInfo::new("aitest", "AI Test"), EngineOptions::headless_test(temp_dir("lazy")));
+    app.insert_resource(bevy::time::TimeUpdateStrategy::ManualDuration(STEP));
+    app.finish();
+    app.cleanup();
+    level(&mut app);
+    run(&mut app, 60);
+    {
+        let n = app.world().resource::<NavMeshes>();
+        assert_eq!(n.generation, 0);
+        assert!(!n.is_baking());
+    }
+    assert_eq!(app.world().resource::<engine::ai::nav::sources::SourceCache>().source_count(), 0);
+    // …until the first agent appears; then the existing colliders are picked up and baked.
+    app.world_mut().spawn((NavAgent::default(), Transform::from_xyz(-10.0, 0.0, 0.0)));
+    wait_baked(&mut app);
+    assert!(app.world().resource::<engine::ai::nav::sources::SourceCache>().source_count() >= 3);
+    assert!(path(&app, Vec3::new(-10.0, 0.0, -10.0), Vec3::new(10.0, 0.0, -10.0)).length() > 20.0);
 }
 
 #[test]

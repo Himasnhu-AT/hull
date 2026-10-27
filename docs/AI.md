@@ -27,6 +27,11 @@ NavLink ──sync_links──▶ NavMeshes (one per agent type) ◀──┘ sw
   tagged `NavIgnore` and `NavAgent`s are skipped.
 - `NavSource` adds a kinematic or dynamic collider (a door, a pushable crate), or a plain `Mesh3d`
   with no collider (its asset must keep `MAIN_WORLD` usage).
+- **Nothing runs until something needs a navmesh**: tracking and baking start when the first
+  `NavAgent` or `NavSource` appears or `NavMeshes::request_full_rebake()` is called (then stay
+  on); `AiConfig::bake_without_agents = true` starts them at once (games that only run their own
+  `NavQuery`s). Before this, the `open_world` demo (no AI) triangulated every streamed terrain
+  collider on the main thread and kept 4 cores busy re-baking tiles while flying.
 - Pure code: `NavGeometry` (a triangle soup with `push_box` / `push_quad` / `push_indexed`), then
   `nav::bake_mesh(&settings, &mut geom)`. No ECS is needed, which suits tools and unit tests.
 
@@ -255,5 +260,7 @@ Going from 0 to 100 agents adds about 1.3 ms. That is the rendering and render-b
   `guard`, and actions get no `on_halt` callback. Keep action state in the blackboard.
 - Perception: no peripheral or vision-strength falloff, no team attitudes beyond "same team is
   ignored", and hearing isn't occluded.
+- New geometry below the mesh's lowest point (`origin_y`) rebakes every tile of that agent type,
+  not just the dirty ones: on rolling streamed terrain that can mean repeated full bakes.
 - A bake job snapshots all sources overlapping the dirty tiles on the main thread. That is cheap
   (≤ 0.3 ms at 600 colliders), but source triangles are cached per entity in memory.

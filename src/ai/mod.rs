@@ -50,6 +50,11 @@ pub struct AiConfig {
     pub agent_types: Vec<NavMeshSettings>,
     /// Bake automatically when sources appear or change.
     pub auto_bake: bool,
+    /// Track sources and bake even before any [`NavAgent`] or [`NavSource`] exists (games that
+    /// only run their own `NavQuery`s). Off: a game without AI pays nothing — no collider
+    /// triangulation, no bakes — until the first agent / `NavSource` appears or
+    /// [`NavMeshes::request_full_rebake`] is called; from then on baking stays on.
+    pub bake_without_agents: bool,
     /// Wait this long after the last source change before rebaking (debounce, seconds).
     pub rebake_delay: f32,
     /// Bake on `AsyncComputeTaskPool` (results applied when ready); `false` = in-frame.
@@ -74,6 +79,7 @@ impl Default for AiConfig {
         AiConfig {
             agent_types: vec![NavMeshSettings::default()],
             auto_bake: true,
+            bake_without_agents: false,
             rebake_delay: 0.2,
             async_bake: true,
             bake_threads: 0,
@@ -147,7 +153,8 @@ impl Plugin for AiPlugin {
                 (nav::sources::track_sources, nav::sources::sync_links, nav::sources::schedule_bakes, nav::sources::poll_bakes)
                     .chain()
                     .in_set(NavBakeSet)
-                    .after(TransformSystems::Propagate),
+                    .after(TransformSystems::Propagate)
+                    .run_if(nav::sources::nav_wanted),
             )
             .add_systems(PostUpdate, debug::draw_debug.run_if(debug::debug_enabled).after(NavBakeSet));
         #[cfg(feature = "devtools")]

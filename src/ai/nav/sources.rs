@@ -158,6 +158,13 @@ fn mesh_tris(mesh: &Mesh, gt: &GlobalTransform) -> Option<Vec<[Vec3; 3]>> {
 }
 
 /// Keeps [`SourceCache`] in sync with colliders/meshes and records dirty regions.
+/// Whether anything needs a navmesh yet (see [`AiConfig::bake_without_agents`]). Until then
+/// source tracking and baking don't run; when they start, change detection still sees every
+/// collider that already exists.
+pub(crate) fn nav_wanted(cfg: Res<AiConfig>, navs: Res<NavMeshes>, agents: Query<(), With<NavAgent>>, sources: Query<(), With<NavSource>>) -> bool {
+    cfg.bake_without_agents || navs.generation > 0 || navs.baking || navs.full_requested || !agents.is_empty() || !sources.is_empty()
+}
+
 pub(crate) fn track_sources(
     colliders: Query<
         (Entity, &Collider, &GlobalTransform, Option<&RigidBody>, Has<NavSource>),
