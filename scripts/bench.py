@@ -2,7 +2,7 @@
 """Run the engine's / a game's bench tests and compare results across commits.
 
   python3 -I scripts/bench.py run [--test devkit] [--filter bench] [--out DIR]
-        [--manifest PATH] [--package P] [--release]
+        [--manifest PATH] [--package P] [--features F] [--release]
       Runs `cargo test --test <t> <filter> -- --ignored` (through memgate) with
       ENGINE_BENCH_DIR=DIR/<commit>[-dirty]. Each bench test writes one JSON report
       (engine::devkit::BenchReport). Default DIR: target-bench/ in the cwd.
@@ -74,6 +74,8 @@ def cmd_run(args):
         cmd += ["--manifest-path", opt(args, "--manifest")]
     if "--package" in args:
         cmd += ["-p", opt(args, "--package")]
+    if "--features" in args:
+        cmd += ["--features", opt(args, "--features")]
     if "--release" in args:
         cmd.append("--release")
     cmd += ["--test", opt(args, "--test", "devkit"), opt(args, "--filter", "bench"), "--", "--ignored", "--nocapture", "--test-threads=1"]
