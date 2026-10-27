@@ -4,6 +4,7 @@ metrics, write one report per scene, and compare with the previous run.
 
   python3 -I scripts/perf_suite.py run [--scenes a,b] [--secs 20] [--warmup 8] [--out DIR]
         [--features F] [--no-build] [--threshold 15] [--base DIR|none] [--max-load N] [--max-wait S]
+        [--direct]
   python3 -I scripts/perf_suite.py list
 
 run: builds the examples once (through memgate), then for each scene launches the binary with
@@ -21,8 +22,12 @@ Before each scene it waits (up to --max-wait s, default 600) until the 1-minute 
 is under --max-load (default: half the cores), records the load in the report, and warns when a
 scene ran on a busy machine: other builds make frame times meaningless. Re-run a scene before
 trusting a small change.
+--direct: build and run without memgate and don't wait for a quiet machine (the load is still
+recorded and warned about).
 """
 import json, os, re, shutil, socket, subprocess, sys, time
+
+GATE = ["memgate", "--"]  # emptied by --direct
 
 # name: (example, args, setup commands, description)
 SCENES = {
@@ -65,7 +70,7 @@ def stats(xs):
 
 
 def build(examples, features):
-    cmd = ["memgate", "--", "cargo", "build", "--message-format=json-render-diagnostics"]
+    cmd = [*GATE, "cargo", "build", "--message-format=json-render-diagnostics"]
     if features:
         cmd += ["--features", features]
     for e in examples:
@@ -121,7 +126,7 @@ def run_scene(name, exe, out, secs, warmup):
     shutil.copy2(exe, local)  # the shared target dir can be rebuilt under us
     env = dict(os.environ)
     env[re.sub(r"[^A-Za-z0-9]", "_", example).upper() + "_DATA_DIR"] = os.path.join(d, "data")
-    cmd = ["memgate", "--", local, "--control", "0", "--offscreen", "--uncapped", "--play", "--mute", "--seed", "1", *args]
+    cmd = [*GATE, local, "--control", "0", "--offscreen", "--uncapped", "--play", "--mute", "--seed", "1", *args]
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=open(os.path.join(d, "game.log"), "w"), text=True, env=env)
     try:
         port = None
@@ -190,6 +195,10 @@ def previous_run(out, current):
 
 
 def cmd_run(args):
+    global GATE
+    direct = "--direct" in args
+    if direct:
+        GATE = []
     names = (opt(args, "--scenes") or ",".join(SCENES)).split(",")
     for n in names:
         if n not in SCENES:
@@ -209,7 +218,7 @@ def cmd_run(args):
     busy = []
     for n in names:
         print(f"[{n}] {SCENES[n][3]}", file=sys.stderr, flush=True)
-        load_before = wait_quiet(max_load, float(opt(args, "--max-wait", "600")))
+        load_before = os.getloadavg()[0] if direct else wait_quiet(max_load, float(opt(args, "--max-wait", "600")))
         try:
             metrics = run_scene(n, exes[SCENES[n][0]], out, secs, warmup)
         except Exception as e:  # keep going: one broken scene shouldn't hide the rest
@@ -236,7 +245,7 @@ def cmd_run(args):
     if not base:
         print("\nno earlier run to compare with (this one is the baseline)")
         return
-    print(f"\ncompare with {base}:")
+    print(f"\ncompare with {base}:", flush=True)  # before the child writes to the same file
     rc = subprocess.call([sys.executable, "-I", os.path.join(os.path.dirname(os.path.abspath(__file__)), "bench.py"), "compare",
                           base, out, "--threshold", opt(args, "--threshold", "15"), "--keys", ",".join(WATCH)])
     sys.exit(rc)
