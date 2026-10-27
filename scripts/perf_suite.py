@@ -3,7 +3,7 @@
 metrics, write one report per scene, and compare with the previous run.
 
   python3 -I scripts/perf_suite.py run [--scenes a,b] [--secs 20] [--warmup 8] [--out DIR]
-        [--features F] [--no-build] [--threshold 15] [--base DIR|none]
+        [--features F] [--no-build] [--threshold 15] [--base DIR|none] [--max-load N] [--max-wait S]
   python3 -I scripts/perf_suite.py list
 
 run: builds the examples once (through memgate), then for each scene launches the binary with
@@ -17,7 +17,10 @@ target-bench), in the shape `scripts/bench.py` reads (it also holds the headless
 After the run it prints a table and compares with --base (default: the newest other run in
 DIR that has scene reports) on the keys that matter (frame time, GPU time per frame, main
 thread CPU, memory), and exits 1 if any p95 got worse by more than --threshold percent.
-Numbers come from a shared, busy machine: re-run a scene before trusting a small change.
+Before each scene it waits (up to --max-wait s, default 600) until the 1-minute load average
+is under --max-load (default: half the cores), records the load in the report, and warns when a
+scene ran on a busy machine: other builds make frame times meaningless. Re-run a scene before
+trusting a small change.
 """
 import json, os, re, shutil, socket, subprocess, sys, time
 
@@ -98,6 +101,16 @@ class Port:
                                  "params": {"command": command, "params": params or {}}}) + "\n")
         self.f.flush()
         return json.loads(self.f.readline())
+
+
+def wait_quiet(max_load, max_wait):
+    """Waits (up to max_wait s) until the 1-minute load average is under max_load. Other builds
+    on a shared machine (outside memgate too) make frame times meaningless."""
+    t0 = time.time()
+    while os.getloadavg()[0] > max_load and time.time() - t0 < max_wait:
+        print(f"  machine busy (load {os.getloadavg()[0]:.1f} > {max_load:.1f}), waiting...", file=sys.stderr, flush=True)
+        time.sleep(15)
+    return os.getloadavg()[0]
 
 
 def run_scene(name, exe, out, secs, warmup):
@@ -192,21 +205,30 @@ def cmd_run(args):
     examples = sorted({SCENES[n][0] for n in names})
     exes = prebuilt(examples) if "--no-build" in args else build(examples, opt(args, "--features"))
     reports = {}
+    max_load = float(opt(args, "--max-load", str((os.cpu_count() or 8) / 2)))
+    busy = []
     for n in names:
         print(f"[{n}] {SCENES[n][3]}", file=sys.stderr, flush=True)
+        load_before = wait_quiet(max_load, float(opt(args, "--max-wait", "600")))
         try:
             metrics = run_scene(n, exes[SCENES[n][0]], out, secs, warmup)
         except Exception as e:  # keep going: one broken scene shouldn't hide the rest
             print(f"[{n}] FAILED: {e}", file=sys.stderr)
             continue
+        load_after = os.getloadavg()[0]
+        if max(load_before, load_after) > max_load:
+            busy.append(f"{n} (load {load_before:.0f}/{load_after:.0f})")
         report = {"name": f"scene.{n}", "commit": commit, "profile": "dev", "unix_time": int(time.time()),
                   "frames": 0, "metrics": metrics, "values": {},
+                  "machine": {"load_before": round(load_before, 1), "load_after": round(load_after, 1), "cores": os.cpu_count()},
                   "scene": {"example": SCENES[n][0], "args": SCENES[n][1], "secs": secs, "warmup": warmup}}
         with open(os.path.join(out, f"scene.{n}.json"), "w") as f:
             json.dump(report, f, indent=1)
         reports[f"scene.{n}"] = metrics
     print(f"\nreports: {out}\n")
     table(reports)
+    if busy:
+        print(f"\nWARNING: the machine was busy during {', '.join(busy)}; those numbers are not comparable.")
     base = opt(args, "--base")
     if base == "none":
         return
