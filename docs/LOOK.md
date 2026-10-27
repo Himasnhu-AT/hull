@@ -98,7 +98,7 @@ to gate what a `Look` asks for. Defaults (Low / Medium / High / Ultra):
 | `bokeh` | – | – | – | ✓ | look: DOF mode |
 | `volumetric_fog` / `volumetric_steps` | – / 16 | – / 24 | ✓ / 32 | ✓ / 64 | look |
 | `probe_refresh` | 0 (bake) | 0 (bake) | 4 | 1 | look: frames per probe face update |
-| `soft_shadows` | – | – | – | ✓ | look: PCSS, only with cargo feature `look_pcss` |
+| `soft_shadows` | – | – | – | ✓ | look: PCSS, only with cargo feature `look_pcss` (≈ +4 ms at 1080p) |
 
 Nothing expensive runs at Low: no SSAO, bloom, TAA, contact shadows, SSR, volumetrics, post or
 camera effects, and probes bake once and freeze. Change the resource (`..default()`) to retune.
@@ -131,8 +131,9 @@ vectors stay, see "Bevy workarounds").
 - **Decals** (`src/look/decal.rs`): `decal_image(size, |uv| rgba)` makes a texture from a
   closure, `decal_material(base, depth_fade)` + `spawn_decal(..)` a forward decal (unit quad,
   local +Y normal). The look keeps a depth prepass on 3D cameras while decals exist. Clustered
-  decals (`ClusteredDecal`) need the `look_clustered_decals` feature (Bevy's
-  `pbr_clustered_decals`) and bindless textures, which Bevy 0.19 disables on Metal.
+  decals (`ClusteredDecal`, projector boxes shaded in the PBR pass) need the
+  `look_clustered_decals` feature (Bevy's `pbr_clustered_decals`); checked on macOS / Metal
+  (the showcase's striped poster in the room). Without the feature they are not drawn.
 
 ## Control commands (feature `devtools`)
 
@@ -236,19 +237,32 @@ cycles. Probe captures share the same maps. `look.get` reports it under `state.e
 - **Motion-vector prepass is never pruned**: removing it leaves Bevy's cached skybox motion-vector
   pipeline drawing into a pass without that attachment (fatal wgpu validation error).
 - **Forward decals** need a depth prepass in *every* view that draws them (probe cameras too).
+- **Sectional colour grading** (`gfx::fix_sectional_grading`): Bevy's tonemapping shader blends
+  the shadow→midtone margin with the *highlight* settings instead of the shadow ones, so any
+  shadow lift / gamma / gain / saturation jumps where scene brightness crosses
+  `midtones_range.x - 0.1`. With `dusk`'s `shadows.lift = 0.01` that drew a hard curved band
+  across the sky (and across the ground with a higher sun). `gfx` patches the one line when
+  the shader loads (any game, with or without `look`); a unit test fails if a Bevy upgrade
+  changes that code, so the patch can be dropped.
+
+### Soft shadows (PCSS, feature `look_pcss`)
+
+`SunLook::soft_shadow_size` (default 10) is Bevy's `soft_shadow_size`: the penumbra grows with
+it times the occluder–receiver gap in shadow-map depth, so useful values are large (5 subtle,
+10 natural, 20 very soft; the old default 0.02 did nothing). Only the Ultra tier turns it on,
+where shadows use `ShadowFilteringMethod::Temporal` + TAA; forced on with Gaussian filtering
+(`look.feature soft_shadows on` at High) it is visibly noisy. `look_showcase`, outdoor,
+clear_day, Ultra, 1080p uncapped: hard 10.5 ms p50 → soft 14.6 ms (size 5–20 cost the same).
 
 ## Known limits
 
-- PCSS soft shadows (`look_pcss`) and clustered decals (`look_clustered_decals`) forward to
-  non-default Bevy features; they are wired but were not built or tested (they recompile Bevy).
+- `look_pcss` and `look_clustered_decals` turn on non-default Bevy features: the first build
+  recompiles Bevy (≈ 3 min, a separate copy in the target dir).
 - The atmosphere env-map resolution is fixed when first created (later tier changes keep it).
 - Volumetric fog in Bevy dims the sun inside the box by the box's radius and darkens what's
   behind the box; use small boxes (rooms, valleys), not the whole sky. Its box edge can show
   against the sky outdoors.
   Shafts are strongest looking towards the sun (forward scattering); side-on they are subtle.
-- At dusk (low sun) the atmosphere sky shows a curved band in the upper sky. It was there before
-  the env-light fix and stays when volumetric fog is off (it changes shape with distance fog).
-  Not yet investigated.
 - Gradient skies are CPU-built cubemaps: stars are texel-sized (≈ 0.35° at 256²).
 - Reflection probes: no blending between overlapping probes beyond Bevy's, captures see the
   gradient sky approximation, SH diffuse is order 2 (soft), realtime probes cost GPU every frame.

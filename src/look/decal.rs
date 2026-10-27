@@ -6,8 +6,7 @@
 //!   (`gfx::KeepDepthPrepass`).
 //! - **Clustered decals** (`ClusteredDecal`): Bevy's projector boxes (along local +Z), shaded in
 //!   the main PBR pass. They need the `look_clustered_decals` cargo feature (Bevy's
-//!   `pbr_clustered_decals`) and bindless textures, which Bevy 0.19 disables on Metal; elsewhere
-//!   they are skipped silently. Spawn `(ClusteredDecal { base_color_texture: Some(img), .. }, Transform)`.
+//!   `pbr_clustered_decals`; works on macOS / Metal); without it they are not drawn. Spawn `(ClusteredDecal { base_color_texture: Some(img), .. }, Transform)`.
 
 use bevy::asset::RenderAssetUsages;
 use bevy::image::{ImageAddressMode, ImageSampler, ImageSamplerDescriptor};

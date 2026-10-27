@@ -194,7 +194,9 @@ pub struct SunLook {
     /// Apparent disk diameter in degrees for the atmosphere sky (0 hides the disk).
     pub disk_size_deg: f32,
     pub disk_intensity: f32,
-    /// PCSS light size (radians-ish, Bevy's `soft_shadow_size`); feature `look_pcss` + tier.
+    /// PCSS light size (Bevy's `soft_shadow_size`; feature `look_pcss`, tier `soft_shadows`).
+    /// Penumbra grows with this times the occluder–receiver distance in shadow-map depth, so
+    /// useful values are large: 5 subtle, 10 natural, 20 very soft (0 = hard shadows).
     pub soft_shadow_size: f32,
 }
 
@@ -212,7 +214,7 @@ impl Default for SunLook {
             first_cascade: 8.0,
             disk_size_deg: 0.53,
             disk_intensity: 1.0,
-            soft_shadow_size: 0.02,
+            soft_shadow_size: 10.0,
         }
     }
 }

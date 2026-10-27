@@ -165,6 +165,50 @@ impl Plugin for GfxPlugin {
                     .run_if(has_visuals),
             )
             .configure_sets(Update, (QualitySet::Apply, QualitySet::Look, QualitySet::Prune).chain());
+        if app.is_plugin_added::<bevy::render::RenderPlugin>() {
+            app.add_systems(PreUpdate, patch_grading_shader);
+        }
+    }
+}
+
+/// The buggy lines in Bevy 0.19's `tonemapping_shared.wgsl` (`sectional_color_grading`).
+const GRADING_BUG: &str = "levels.y = ((level - midtone_range.x) * LEVEL_MARGIN_DIV) + 0.5;\n        levels.z = 1.0 - levels.y;";
+const GRADING_FIX: &str = "levels.y = ((level - midtone_range.x) * LEVEL_MARGIN_DIV) + 0.5;\n        levels.x = 1.0 - levels.y;";
+
+/// Fixes Bevy 0.19's sectional colour grading in `source`, or `None` if it has nothing to fix.
+///
+/// Between shadows and midtones Bevy blends the midtone settings with the *highlight* ones
+/// (`levels.z`) instead of the shadow ones, so any shadow lift / gamma / gain / saturation
+/// jumps where scene brightness crosses `midtones_range.x - 0.1`: a hard curved band across a
+/// smooth sky or floor (it showed up in the `dusk` look, which lifts shadows).
+pub fn fix_sectional_grading(source: &str) -> Option<String> {
+    source.contains(GRADING_BUG).then(|| source.replacen(GRADING_BUG, GRADING_FIX, 1))
+}
+
+/// Patches the tonemapping shader library once it has loaded (see [`fix_sectional_grading`]).
+/// The pipeline cache recompiles the shaders that import it. A newer Bevy without the bug (or
+/// with different code) is left alone.
+fn patch_grading_shader(mut events: MessageReader<AssetEvent<Shader>>, mut shaders: ResMut<Assets<Shader>>, mut done: Local<bool>) {
+    if *done {
+        events.clear();
+        return;
+    }
+    for ev in events.read() {
+        let AssetEvent::LoadedWithDependencies { id } = ev else { continue };
+        let Some(shader) = shaders.get(*id) else { continue };
+        let bevy::shader::Source::Wgsl(src) = &shader.source else { continue };
+        if !src.contains("fn sectional_color_grading") {
+            continue;
+        }
+        *done = true;
+        match fix_sectional_grading(src) {
+            Some(fixed) => {
+                if let Some(mut shader) = shaders.get_mut(*id) {
+                    shader.source = bevy::shader::Source::Wgsl(fixed.into());
+                }
+            }
+            None => debug!("gfx: sectional colour grading has no known bug to patch (newer Bevy?)"),
+        }
     }
 }
 
@@ -564,6 +608,31 @@ mod tests {
     use super::*;
     use bevy::asset::RenderAssetUsages;
     use bevy::render::render_resource::{Extent3d, TextureDimension};
+
+    #[test]
+    fn sectional_grading_fix_blends_shadows_not_highlights() {
+        let buggy = "} else if (level < midtone_range.x + LEVEL_MARGIN) {\n        levels.y = ((level - midtone_range.x) * LEVEL_MARGIN_DIV) + 0.5;\n        levels.z = 1.0 - levels.y;\n    } else if (level < midtone_range.y - LEVEL_MARGIN) {\n        levels.y = 1.0;\n    } else if (level < midtone_range.y + LEVEL_MARGIN) {\n        levels.z = ((level - midtone_range.y) * LEVEL_MARGIN_DIV) + 0.5;\n        levels.y = 1.0 - levels.z;";
+        let fixed = fix_sectional_grading(buggy).expect("patched");
+        assert!(fixed.contains("levels.x = 1.0 - levels.y;"));
+        // the midtone → highlight blend is right already and stays
+        assert!(fixed.contains("levels.z = ((level - midtone_range.y) * LEVEL_MARGIN_DIV) + 0.5;\n        levels.y = 1.0 - levels.z;"));
+        assert_eq!(fix_sectional_grading(&fixed), None);
+    }
+
+    /// Guards the patch against a Bevy upgrade: the shipped shader must still contain the
+    /// exact buggy lines (else drop the patch if Bevy fixed it, or update it).
+    #[test]
+    fn bevy_tonemapping_shader_still_has_the_patched_bug() {
+        let Some(dir) = std::env::var_os("CARGO_HOME").map(std::path::PathBuf::from).or_else(|| std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join(".cargo"))) else { return };
+        let Ok(regs) = std::fs::read_dir(dir.join("registry/src")) else { return };
+        for reg in regs.flatten() {
+            let f = reg.path().join("bevy_core_pipeline-0.19.1/src/tonemapping/tonemapping_shared.wgsl");
+            if let Ok(src) = std::fs::read_to_string(&f) {
+                assert!(fix_sectional_grading(&src).is_some(), "{} no longer has the grading bug", f.display());
+                return;
+            }
+        }
+    }
 
     #[test]
     fn mips_cover_full_chain() {
