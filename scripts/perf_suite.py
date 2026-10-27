@@ -11,7 +11,7 @@ run: builds the examples once (through memgate), then for each scene launches th
 until it is in game, runs the scene's setup commands, waits --warmup seconds, then reads
 `metrics.dump` once a second for --secs seconds. Each key's 1 s samples become one stat
 ({n,min,avg,p50,p95,p99,max}); `perf.stats` adds the last ~600 frames' percentiles as
-`frame.ring_ms`. Reports go to DIR/<commit>[-dirty]/scene.<name>.json (default DIR:
+`frame.ring_ms`. Reports go to DIR/<commit>[-dirty]-<time>/scene.<name>.json (default DIR:
 target-bench), in the shape `scripts/bench.py` reads (it also holds the headless CPU benches).
 
 After the run it prints a table and compares with --base (default: the newest other run in
@@ -186,7 +186,8 @@ def cmd_run(args):
     commit = git("rev-parse", "--short", "HEAD") or "nogit"
     if git("status", "--porcelain", "--untracked-files=no"):
         commit += "-dirty"
-    out = os.path.join(root, commit)
+    # One folder per run (several runs of one commit never overwrite each other).
+    out = os.path.join(root, f"{commit}-{time.strftime('%Y%m%d-%H%M%S')}")
     os.makedirs(out, exist_ok=True)
     examples = sorted({SCENES[n][0] for n in names})
     exes = prebuilt(examples) if "--no-build" in args else build(examples, opt(args, "--features"))
