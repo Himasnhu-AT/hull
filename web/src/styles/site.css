@@ -232,3 +232,28 @@ html.frame-away .frame { translate: 0 -110%; }
 .row.is-sel { border-left-color: var(--accent); background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 16%, var(--c-panel)), var(--c-panel) 65%); }
 .row.is-sel .row__label { color: var(--c-fg); }
 @media (max-width: 767px) { .row { flex-direction: column; align-items: flex-start; gap: 0.6rem; } }
+
+/* Data tables (render budget, performance): mono numbers, stacked cards on phones. */
+  .table-wrap { grid-column: 1 / -1; overflow-x: auto; margin-bottom: 2.5rem; }
+  table { width: 100%; border-collapse: collapse; font-family: var(--f-mono); font-size: 0.875rem; font-variant-numeric: tabular-nums; min-width: 40rem; }
+  caption { text-align: left; padding-bottom: 0.8rem; }
+  th, td { text-align: right; padding: 0.75rem 0.9rem; border-bottom: 1px solid var(--c-line); white-space: nowrap; }
+  th:first-child { text-align: left; }
+  thead th { font-family: var(--f-display); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; font-size: 0.8125rem; color: var(--c-muted); border-bottom-color: var(--c-line-strong); }
+  tbody th { font-family: var(--f-display); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; font-size: 1rem; color: var(--c-fg); }
+  td { color: var(--c-muted); }
+  td b { color: var(--c-fg); font-weight: 400; }
+  td .to { color: var(--c-dim); font-family: var(--f-body); }
+  td.hl { color: var(--accent); }
+  td.bad { color: var(--c-bad); }
+  tbody tr:first-child th { box-shadow: inset 3px 0 var(--accent); }
+@media (max-width: 767px) {
+    table { min-width: 0; }
+    thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+    tbody tr { display: grid; grid-template-columns: 1fr 1fr; gap: 0.2rem 1rem; padding: 0.9rem 0; border-bottom: 1px solid var(--c-line-strong); }
+    tbody th { grid-column: 1 / -1; padding: 0 0 0.3rem; border: 0; box-shadow: none !important; }
+    td { display: block; text-align: left; padding: 0.2rem 0; border: 0; white-space: nowrap; }
+    td::before { display: block; content: attr(data-l); font-family: var(--f-display); text-transform: uppercase; letter-spacing: 0.06em; font-size: 0.75rem; color: var(--c-dim); }
+}
+.foot__src { font-size: var(--t-xs); color: var(--c-muted); }
+.foot__src a { display: inline-flex; align-items: center; min-height: 1.5rem; padding: 0.15rem 0.1rem; }

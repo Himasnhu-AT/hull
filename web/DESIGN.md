@@ -2,21 +2,28 @@
 
 ## Phase 0: Brief
 
-- **Subject:** `engine`, a Rust crate on Bevy 0.19.1 + avian3d 0.7 that gives a game its whole
-  shell (bootstrap, states, settings, menus, pause, UI kit, input, audio, quality presets, FPS
-  and chase cameras, MeshKit, render budget, devtools, ship builds).
+- **Subject:** `engine`, a code-first Rust engine on Bevy 0.19.1 + avian3d 0.7. It started as a
+  game's whole shell (bootstrap, states, settings, menus, pause, UI kit, input, audio, quality
+  presets, FPS and chase cameras, MeshKit, render budget, devtools, ship builds) and has since
+  grown the systems a game needs after that: look (lighting as data), anim, vfx, ai, sound,
+  world, actions + l10n, net (opt-in) and the devkit, each a cargo feature with its own doc and
+  measurements, plus scene benchmarks with a regression check (docs/PERF.md).
 - **Pitch (owner's words):** "pick this engine, build game fast, without doing re-setup of everything."
 - **Audience:** Rust and Bevy developers starting a game, game-jam teams, people who already
   rebuilt the same menu/settings/pause code twice.
-- **Job:** explain what it is in 3 seconds, prove it with two shipped-looking games and measured
-  numbers, and get people to `Cargo.toml` + `main.rs`.
+- **Job:** explain what it is in 3 seconds, prove it with two shipped-looking games, real captures
+  of each system and measured numbers, and get people to `Cargo.toml` + `main.rs`.
 - **Assets:** real 1920×1080 captures of Shroud and Courier, plus fresh captures from the engine
-  examples (`ui_gallery` in five accents, `render_budget` on/off, `metrics_demo` with run history).
+  examples (`ui_gallery` in five accents, `render_budget` on/off, `metrics_demo` with run history,
+  and for the systems `look_showcase` High and dusk, `anim_demo`, `vfx_gallery`, `ai_crowd`,
+  `open_world`; list in README.md).
 - **Language:** English. **Constraints:** static, no deploy, port 4401, pnpm, memgate for builds.
 - **Assumptions (placeholder: true in `src/data/site.ts`):**
   - Public name: working name **Hull** (the shell a game is built inside). Placeholder.
-  - Repo URL, docs URL, crates.io page, studio ("Marl Studio" / "Marl Games" under consideration).
-  - License is real: `MIT OR Apache-2.0` (engine Cargo.toml). Not on crates.io yet (path dependency).
+  - Production URL and studio ("Marl Studio" / "Marl Games" under consideration).
+  - Real: the public repo https://github.com/Himasnhu-AT/hull and its `docs/` folder (linked from
+    each tab, the footer and the Performance page). License `MIT OR Apache-2.0` (engine Cargo.toml).
+    Not on crates.io yet: the Cargo snippet is a git dependency.
   - No stars, users or testimonials.
 
 ## Phase 1: Concepts
@@ -130,12 +137,22 @@ INSIDE / settings-screen layout (tabs + rows)       one layout family: tabbed ro
 row: label + hint ........................ value chip
                                          side panel "About this setting"
 
+SYSTEMS / same settings-screen layout, second tab set   (added with the subsystems)
+pair: look_showcase High | the same yard at dusk, offset like the Shroud/Courier pair,
+      caption code `app.insert_resource(Look::dusk())` (the "one line changed" idea again)
+[LOOK] [ANIM] [VFX] [AI] [SOUND] [WORLD] [NET]
+side panel: real capture, or a measured number from the doc when there is no capture,
+            then the cargo feature and a link to the doc
+
 CODE / asymmetric pair
 code panel (main.rs, 6 lines) cols 1-7 | text cols 9-12
 
 PROOF / gallery wall of two games
 Shroud (big image 8 cols) + numbers 13,467 → 7,833
 Courier (big image 8 cols, mirrored) + 3,150 lines, 8.3 ms
+
+PERFORMANCE teaser / data facts (same fact rows as the budget)
+open_world p99 48.5 → 5.6 ms, look High 99 → 130 fps, look Ultra crashed → 65 fps   link: Performance
 
 RENDER BUDGET teaser / data facts
 40,231 → 480 meshes drawn, 4.54 → 3.07 ms p95, 85–92% → 21–32%   link: Render budget
@@ -146,6 +163,10 @@ metrics window capture edge to edge, caption + chips
 FOOTER finale
 START.  cargo snippet  links  license
 ```
+Performance (`/performance/`): hero statement (p99 48.5 → 5.6) → open_world capture → 12-scene
+table (scene + what it stresses, fps, p50/p95/p99, GPU, memory, entities, vs baseline) → what the
+first run caught (the render budget's step cards) → headless CPU benches + the commands → known
+limits → links to every doc.
 Render budget (`/render-budget/`): hero statement → before/after split (drag) → distance tiers figure
 → measurements table → tried and dropped → zero config.
 Games (`/games/shroud/`, `/games/courier/`): title + meta → hero capture → what the engine gave
@@ -164,7 +185,9 @@ If time runs short it ships as an inline SVG diagram drawn by hand instead.
 - "Dark dev tool with an orange accent" is where a generic model lands. Changed: the accent is the visitor's
   and swaps real captures; layout idioms (settings rows, tabs, key-hint bar, selection bar, pause menu)
   come from the engine's own UI, so the site could not belong to another product.
-- Generic feature grid of cards: replaced with the settings-screen tab layout.
+- Generic feature grid of cards: replaced with the settings-screen tab layout. When the engine grew
+  nine subsystems, they became a second tab set (Systems) rather than a grid of feature cards;
+  the shell tabs kept their place and gained Input and Devkit.
 - Generic testimonial/logo row: replaced with two real games and their line counts.
 
 ### Idle decisions (Phase 3)
@@ -196,6 +219,12 @@ If time runs short it ships as an inline SVG diagram drawn by hand instead.
 | 4 | 7.4 (7/8/7/8) | code without long lines, game-card title bar, h1 = name only, picture sizing |
 | 5 | 7.1 (7/7/7/8) | Start code collapsed by an over-broad nowrap rule (fixed), 404 side capture, per-page closer code |
 | 6 | 7.1 (7/7/7/8) | phone overlap on render budget, hint contrast on hovered rows |
+
+| 7 (subsystems update, no critic) | — | Systems tab set, Performance page, new captures; phone bench table clipped long values (fixed); tabs wrap on phones instead of scrolling sideways |
+
+Pass 7 numbers: audit 0 FAIL / 0 WARN, heaviest page `/` ~627 KB by the audit's count (every `<img>`
+summed, lazy and hidden-tab ones included; was ~527 KB before the two new sections), throttled
+mobile LCP 0.9 to 2.0 s, CLS ≤ 0.003, 0 axe violations, no overflow, nothing hidden in reduced motion.
 
 Every pass: 0 audit FAIL, 0 console errors, 0 serious axe (after pass 1), no overflow, no hidden text
 under reduced motion, `noHoverChange` empty, throttled mobile LCP 0.9 to 1.6 s, CLS ≤ 0.003.

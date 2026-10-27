@@ -5,7 +5,8 @@ import AccentPicker from './AccentPicker.astro';
 const path = Astro.url.pathname;
 const current = (href: string) => (href === path ? 'page' : undefined);
 const hints: Record<string, string> = {
-  '/': 'Main menu', '/#inside': 'What the shell gives you', '/render-budget/': 'Measured on a 40k-prop city',
+  '/': 'Main menu', '/#inside': 'What the shell gives you', '/#systems': 'From lighting to multiplayer',
+  '/performance/': 'Benchmarks, before and after', '/render-budget/': 'Measured on a 40k-prop city',
   '/games/shroud/': 'Indoor FPS', '/games/courier/': 'Hover-bike delivery', '/start/': 'Cargo.toml and main.rs',
 };
 ---

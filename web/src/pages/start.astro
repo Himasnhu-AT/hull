@@ -20,7 +20,7 @@ const ship = `scripts/package.sh --manifest Cargo.toml --package mygame --bin my
 ${code.ship}`;
 
 const steps = [
-  { id: 'add', title: 'Add the crate', text: 'Depend on the engine with its defaults off and pick features: physics (avian3d) and fps (the first-person controller). Name bevy yourself with no features, so its derive macros resolve; the engine picks every feature. Your dev feature turns the debug tools on.', note: 'Not on crates.io yet: a path dependency for now.', code: code.cargo, file: 'Cargo.toml', lang: 'toml' as const },
+  { id: 'add', title: 'Add the crate', text: 'Depend on the engine with its defaults off and pick the systems you use: physics (avian3d), fps (the first-person controller), look, anim, vfx, ai, sound, world, actions and l10n. net is opt-in. Name bevy yourself with no features, so its derive macros resolve; the engine picks every Bevy feature. Your dev feature turns the debug tools and the devkit on.', note: 'Not on crates.io yet: a git dependency on the public repo.', code: code.cargo, file: 'Cargo.toml', lang: 'toml' as const },
   { id: 'main-rs', title: 'Write main.rs', text: 'One call builds the window or headless app, CLI flags, data and asset folders, settings, the main menu and the pause menu. Add your game as a plugin and put its flow under AppState::InGame.', code: code.main, file: 'src/main.rs', lang: 'rust' as const },
   { id: 'settings', title: 'Add your settings', text: 'Your section is a serde struct. It is saved next to the core settings in settings.json, 0.6 s after the last change and on exit. A corrupt file is moved aside and defaults load.', code: settingsStruct, file: 'src/main.rs', lang: 'rust' as const },
   { id: 'rows', title: 'Put them on screen', text: 'Each FieldDef is a row on the generated settings screen: Toggle, Slider, Choice, Cards or Swatches, on the tab you name. Reset tab restores the defaults.', code: code.setting, file: 'courier/src/settings.rs', lang: 'rust' as const },
@@ -29,7 +29,7 @@ const steps = [
   { id: 'ship', title: 'Ship without the tools', text: 'Build with `--no-default-features`. The debug tools live in the ashlar crates (control port, MCP, trace); the packaging script fails if any of them is still in the tree or the binary, and copies only the binary and assets.', code: ship, file: 'terminal', lang: 'sh' as const },
 ];
 ---
-<Base title="Start" state="Start" footerTitle="Now build<br />the game" footerLede="The shell is done. Everything from here on is gameplay." description="Start a Bevy 0.19 game on Hull: the Cargo.toml lines, a six-line main.rs, settings as FieldDefs, menu branding, test runs and a ship build without debug tools.">
+<Base title="Start" state="Start" footerTitle="Now build<br />the game" footerLede="The shell is done. Everything from here on is gameplay." description="Start a Bevy 0.19 game on Hull: Cargo.toml and features, a six-line main.rs, settings, menu branding, test runs and a ship build without debug tools.">
   <header class="st-hero wrap">
     <div class="grid">
       <span class="eyebrow st-eyebrow" data-reveal="fade" data-intro>Start</span>
@@ -44,13 +44,14 @@ const steps = [
           {steps.map((s, i) => <li><a href={`#${s.id}`}><span class="num st-n">{i + 1}</span> {s.title}</a></li>)}
         </ul>
         <p class="st-facts label">Bevy {site.bevy} · avian3d {site.avian} · {site.license}</p>
+        {site.docs && <p class="st-facts label"><a class="link st-doc" href={site.docs} rel="noopener">Every doc on GitHub</a></p>}
       </nav>
       <ol class="st-steps">
         {steps.map((s, i) => (
           <li id={s.id} class="st-step">
             <div class="st-step__head"><span class="st-step__n num">{String(i + 1).padStart(2, '0')}</span><h2 class="h-l">{s.title}</h2></div>
             <p class="body st-step__text">{s.text.split(/`([^`]+)`/).map((part, j) => (j % 2 ? <code>{part}</code> : part))}</p>
-            {s.note && <p class="st-step__note"><span class="chip">Placeholder</span> {s.note}</p>}
+            {s.note && <p class="st-step__note"><span class="chip">Git</span> {s.note}</p>}
             <Code code={s.code} file={s.file} lang={s.lang} />
           </li>
         ))}
@@ -67,6 +68,7 @@ const steps = [
   .st-body { align-items: start; }
   .st-index { grid-column: 1 / span 3; position: sticky; top: 6rem; }
   .st-index .menu { --menu-size: 1.3rem; }
+  .st-doc { display: inline-flex; align-items: center; min-height: 1.6rem; }
   .st-n { display: inline-block; min-width: 1.2em; color: var(--accent); }
   .st-facts { margin-top: 1.5rem; padding-left: 0.6rem; text-transform: none; letter-spacing: 0; font-family: var(--f-body); font-weight: 500; }
   .st-steps { grid-column: 5 / -1; list-style: none; padding: 0; display: grid; gap: clamp(4rem, 8vw, 6.5rem); }

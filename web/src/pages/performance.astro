@@ -1,0 +1,194 @@
+---
+import Base from '../layouts/Base.astro';
+import Shot from '../components/Shot.astro';
+import Code from '../components/Code.astro';
+import { bench, doc, scene, fmt, vsBase, change } from '../data/site';
+import worldFly from '../assets/shots/world-fly.webp';
+import aiCrowd from '../assets/shots/ai-crowd.webp';
+
+const run = `python3 -I scripts/perf_suite.py list      # the scenes
+python3 -I scripts/perf_suite.py run       # all scenes, ~10 min; compares with the last run
+python3 -I scripts/perf_suite.py run --scenes look_high,open_world --secs 30
+python3 -I scripts/bench.py run --test anim   # headless CPU benches: ai, devkit, sound, net
+python3 -I scripts/bench.py compare target-bench/<old> target-bench/<new>`;
+
+// Everything numeric below comes from `bench` in src/data/site.ts.
+const n = bench.scenes.length;
+const hero = bench.headline[0];
+const heroChange = change(hero.scene, hero.key);
+const ow = scene('open_world');
+const ai = scene('ai_crowd');
+const keyLabel: Record<string, string> = { fps: 'fps', p50: 'p50 ms', p95: 'p95 ms', p99: 'p99 ms', gpu: 'GPU ms', mem: 'Mem MB' };
+---
+<Base title="Performance" state="Performance" footerTitle="Measure<br />every run" footerLede="The same suite runs before every perf-sensitive merge. A non-zero exit names the scene and the key that got worse." footerCode={`python3 -I scripts/perf_suite.py run\n# exit 1: a p95 got worse by more than 15%`} footerFile="terminal" description={`Hull's scene benchmarks: ${n} engine examples measured offscreen at 1080p, the headless CPU benches, what the first run found and the numbers before and after.`}>
+  <section class="pf-hero wrap" aria-labelledby="pf-title">
+    <div class="grid">
+      <span class="eyebrow pf-hero__eyebrow" data-reveal="fade" data-intro>Performance</span>
+      <h1 id="pf-title" class="pf-hero__title h-xl" data-split="lines" data-intro>{hero.key} <span class="num">{heroChange.from}</span>{hero.key === 'fps' ? '' : ' ms'}.<br />Now <span class="pf-accent num">{heroChange.to}</span>.</h1>
+      <p class="lede pf-hero__lede" data-reveal="fade" data-intro data-delay="0.15">{n} scenes from the engine's own examples, run offscreen at full speed and read over the control port once a second, plus headless benches for each system. The first run found a crash, a stall and a wasted filter pass. Below: the numbers after the fixes, against the baseline.</p>
+      <p class="label pf-hero__rig">{bench.rig}</p>
+    </div>
+  </section>
+
+  <section class="pf-shot wrap" aria-label="The open world scene">
+    <Shot src={worldFly} alt="Flying over the open_world example: green valleys with pine forests, a village of small houses and a tower, snowy peaks on the horizon" caption={`open_world --pose fly: 4 × 4 km of terrain, ${fmt('ent', ow.after.ent)} entities, p99 ${fmt('p99', ow.after.p99)} ms`} source="examples/open_world.rs" sizes="(min-width: 768px) 88vw, 100vw" formats={['webp']} eager />
+  </section>
+
+  <section class="pf-data wrap section" aria-labelledby="scenes-title">
+    <div class="grid">
+      <header class="section-head pf-head">
+        <span class="eyebrow">Scene benchmarks</span>
+        <h2 id="scenes-title" class="h-xl" data-split="lines">{n} scenes, after the fixes</h2>
+        <p class="body">Each scene launches its example with <code>--offscreen --uncapped --play --mute --seed 1</code>, waits 8 s, then samples <code>metrics.dump</code> every second for 20 s. Frame p50, p95 and p99 cover the last ~600 frames. GPU ms is this process's GPU busy time per frame; memory is the process footprint, Metal included.</p>
+      </header>
+      <div class="table-wrap pf-table">
+        <table>
+          <caption><span class="label">Commit {bench.commit}, {bench.machine}. Baseline: commit {bench.baseCommit}</span></caption>
+          <thead><tr><th scope="col">Scene</th><th scope="col">fps</th><th scope="col">p50 ms</th><th scope="col">p95</th><th scope="col">p99</th><th scope="col">GPU ms</th><th scope="col">Mem MB</th><th scope="col">Entities</th><th scope="col">vs baseline</th></tr></thead>
+          <tbody>
+            {bench.scenes.map((r) => (
+              <tr>
+                <th scope="row">{r.scene}<span class="pf-what">{r.what}</span></th>
+                <td data-l="fps"><b>{fmt('fps', r.after.fps)}</b></td><td data-l="p50 ms">{fmt('p50', r.after.p50)}</td><td data-l="p95 ms">{fmt('p95', r.after.p95)}</td><td data-l="p99 ms">{fmt('p99', r.after.p99)}</td>
+                <td data-l="GPU ms">{fmt('gpu', r.after.gpu)}</td><td data-l="Mem MB">{fmt('mem', r.after.mem)}</td><td data-l="Entities">{fmt('ent', r.after.ent)}</td>
+                <td class="hl pf-vs" data-l="vs baseline">{vsBase(r)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p class="pf-note">{bench.sceneNote} The suite records the machine load for every scene and warns when one ran on a busy machine.</p>
+    </div>
+  </section>
+
+  <section class="pf-fixed wrap section" aria-labelledby="fixed-title">
+    <div class="grid">
+      <header class="section-head pf-head">
+        <span class="eyebrow">Found by the benchmarks</span>
+        <h2 id="fixed-title" class="h-xl" data-split="lines">What the first run caught</h2>
+      </header>
+      <ol class="fixes" data-select-rows>
+        {bench.fixed.map((f, i) => (
+          <li class:list={['step', i === 0 && 'is-sel']}>
+            <span class="step__n num">{i + 1}</span>
+            <div>
+              <span class="chip">{f.tag}</span>
+              <h3 class="step__t">{f.finding}</h3>
+              <p><span class="fix__k">Cause</span> {f.cause}</p>
+              <p><span class="fix__k">Fix</span> {f.fix}</p>
+              {f.show.length > 0 && (
+                <dl class="fix__nums">
+                  {f.show.map((m) => { const c = change(m.scene, m.key); return (
+                    <div><dt>{m.scene} {keyLabel[m.key]}</dt><dd class="num"><s><span class="sr-only">from </span>{c.from}</s> <b><span class="sr-only">to </span>{c.to}</b>{c.pct && <span class="fix__pct"> {c.pct}</span>}</dd></div>
+                  ); })}
+                </dl>
+              )}
+            </div>
+          </li>
+        ))}
+      </ol>
+    </div>
+  </section>
+
+  <section class="pf-bench wrap section" aria-labelledby="bench-title">
+    <div class="grid">
+      <header class="section-head pf-head">
+        <span class="eyebrow">Headless CPU benches</span>
+        <h2 id="bench-title" class="h-xl" data-split="lines">Systems without a window</h2>
+        <p class="body">The <code>#[ignore]</code> bench tests time each system on its own, with no rendering. {bench.benchNote}</p>
+      </header>
+      <div class="table-wrap pf-table pf-bench-t">
+        <table>
+          <thead><tr><th scope="col">Bench</th><th scope="col">Baseline, {bench.baseCommit}</th><th scope="col">After, {bench.benchCommit}</th></tr></thead>
+          <tbody>
+            {bench.benches.map((r) => (
+              <tr><th scope="row">{r.bench}</th><td data-l="Baseline">{r.before}</td><td class="hl" data-l="After">{r.after}</td></tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="pf-bench pf-run wrap section" aria-labelledby="run-title">
+    <div class="grid">
+      <header class="section-head pf-head">
+        <span class="eyebrow">Reproduce</span>
+        <h2 id="run-title" class="h-xl" data-split="lines">Run it yourself</h2>
+        <p class="body"><code>perf_suite.py run</code> builds the examples once, runs every scene, writes one JSON report per scene under <code>target-bench/</code> and compares with the previous run. It exits 1 when a key got worse by more than the threshold. <code>bench.py run</code> does the same for the headless benches.</p>
+      </header>
+      <Shot class="pf-bench__shot" src={aiCrowd} alt="The ai_crowd arena from above: walls, crates, a raised platform and a crowd of blue agents spread across the floor" caption={`ai_crowd: 200 agents at ${fmt('fps', ai.after.fps)} fps, p95 ${fmt('p95', ai.after.p95)} ms`} source="examples/ai_crowd.rs" sizes="(min-width: 1024px) 40vw, 100vw" formats={['webp']} widths={[640, 960, 1440]} />
+      <div class="pf-bench__run">
+        <Code code={run} file="terminal" lang="sh" />
+      </div>
+    </div>
+  </section>
+
+  <section class="pf-limits wrap section" aria-labelledby="limits-title">
+    <div class="grid">
+      <header class="section-head pf-head">
+        <span class="eyebrow">Known limits</span>
+        <h2 id="limits-title" class="h-xl" data-split="lines">Not solved yet</h2>
+      </header>
+      <ul class="rows pf-limits__rows">
+        {bench.limits.map((l) => <li class="row"><div class="row__text"><span class="row__hint pf-limit">{l}</span></div></li>)}
+      </ul>
+      <p class="pf-src">Source: <a class="link" href={doc('PERF.md')} rel="noopener">docs/PERF.md</a>. Each system's own measurements are in its doc: <a class="link" href={doc('LOOK.md')} rel="noopener">LOOK</a>, <a class="link" href={doc('ANIM.md')} rel="noopener">ANIM</a>, <a class="link" href={doc('VFX.md')} rel="noopener">VFX</a>, <a class="link" href={doc('AI.md')} rel="noopener">AI</a>, <a class="link" href={doc('SOUND.md')} rel="noopener">SOUND</a>, <a class="link" href={doc('WORLD.md')} rel="noopener">WORLD</a>, <a class="link" href={doc('NET.md')} rel="noopener">NET</a>.</p>
+    </div>
+  </section>
+</Base>
+
+<style>
+  .pf-hero { padding-top: clamp(6.5rem, 10vw, 8.5rem); padding-bottom: clamp(1.5rem, 3vw, 2.5rem); }
+  .pf-hero__eyebrow { grid-column: 1 / -1; margin-bottom: 1.2rem; }
+  .pf-hero__title { grid-column: 1 / span 8; font-size: clamp(3.2rem, 1rem + 6.4vw, 7.5rem); }
+  .pf-accent { color: var(--accent); }
+  .pf-hero__lede { grid-column: 9 / -1; align-self: end; }
+  .pf-hero__rig { grid-column: 1 / -1; margin-top: 1.2rem; text-transform: none; letter-spacing: 0; font-family: var(--f-body); font-weight: 500; }
+
+  .pf-head { grid-column: 1 / span 9; }
+  .pf-table th .pf-what { display: block; margin-top: 0.15rem; font-family: var(--f-body); text-transform: none; letter-spacing: 0; font-weight: 500; font-size: var(--t-xs); color: var(--c-muted); }
+  .pf-table td.pf-vs { text-align: left; }
+  .pf-note { grid-column: 1 / span 8; color: var(--c-muted); font-size: var(--t-s); max-width: 70ch; }
+
+  .fixes { grid-column: 1 / -1; list-style: none; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--gutter); }
+  .step { display: grid; grid-template-columns: auto 1fr; gap: 1.2rem; padding: 1.5rem 1.4rem 1.6rem; background: var(--c-panel); border-left: 3px solid var(--c-raised); border-radius: 0 var(--radius) var(--radius) 0; transition: background-color 0.25s, border-color 0.25s; }
+  .step.is-sel { border-left-color: var(--accent); background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 16%, var(--c-panel)), var(--c-panel) 70%); }
+  .step:nth-child(2n) { margin-top: clamp(0rem, 4vw, 3rem); }
+  .step__n { font-family: var(--f-display); font-weight: 700; font-size: 3rem; line-height: 0.85; color: var(--accent); }
+  .step__t { font-family: var(--f-display); font-weight: 700; text-transform: uppercase; font-size: 1.6rem; line-height: 1; margin: 0.7rem 0 0.7rem; }
+  .step p { color: var(--c-muted); }
+  .step p + p { margin-top: 0.6rem; }
+  .fix__nums { display: flex; flex-wrap: wrap; gap: 0.6rem 1.6rem; margin-top: 1rem; padding-top: 0.9rem; border-top: 1px solid var(--c-line); }
+  .fix__nums dt { font-family: var(--f-display); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; font-size: var(--t-xs); color: var(--c-muted); }
+  .fix__nums dd { font-family: var(--f-display); font-weight: 700; font-size: 1.6rem; line-height: 1.1; }
+  .fix__nums s { color: var(--c-dim); font-weight: 600; font-size: 1.15rem; text-decoration-thickness: 2px; }
+  .fix__nums b { color: var(--accent); }
+  .fix__pct { font-size: var(--t-xs); color: var(--c-muted); font-weight: 600; letter-spacing: 0.04em; }
+  .fix__k { font-family: var(--f-display); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; font-size: var(--t-xs); color: var(--c-fg); margin-right: 0.4em; }
+
+  .pf-bench :global(.pf-bench__shot) { grid-column: 1 / span 5; }
+  .pf-bench__run { grid-column: 6 / -1; min-width: 0; }
+
+  .pf-limits__rows { grid-column: 1 / span 9; }
+  .pf-limit { color: var(--c-fg); }
+  .pf-src { grid-column: 1 / span 9; margin-top: 2rem; color: var(--c-muted); font-size: var(--t-s); line-height: 2.1; }
+  .pf-src a { display: inline-block; padding-block: 0.2rem; }
+
+  @media (max-width: 1023px) {
+    .pf-bench :global(.pf-bench__shot), .pf-bench__run { grid-column: 1 / -1; }
+    .pf-bench__run { margin-top: 1.5rem; }
+  }
+  @media (max-width: 767px) {
+    .pf-hero__title, .pf-hero__lede, .pf-head, .pf-note, .pf-limits__rows, .pf-src { grid-column: 1 / -1; }
+    .pf-hero__lede { margin-top: 1.5rem; }
+    .fixes { grid-template-columns: 1fr; }
+    .step:nth-child(2n) { margin-top: 0; }
+    .step { grid-template-columns: 1fr; gap: 0.6rem; }
+    .step__n { font-size: 2.2rem; }
+    .pf-table tbody tr { grid-template-columns: 1fr 1fr 1fr; }
+    .pf-table td.pf-vs { grid-column: 1 / -1; white-space: normal; }
+    .pf-bench-t tbody tr { grid-template-columns: 1fr; }
+    .pf-bench-t td { white-space: normal; }
+  }
+</style>

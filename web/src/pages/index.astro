@@ -3,8 +3,9 @@ import Base from '../layouts/Base.astro';
 import Shot from '../components/Shot.astro';
 import Code from '../components/Code.astro';
 import AccentPicker from '../components/AccentPicker.astro';
+import Tabs from '../components/Tabs.astro';
 import { Picture } from 'astro:assets';
-import { site, accents, inside, code, budget, games } from '../data/site';
+import { site, accents, inside, systems, code, budget, bench, change, games } from '../data/site';
 import shotSettingsGame from '../assets/shots/gallery-settings-game.webp';
 import shotPause from '../assets/shots/gallery-pause.webp';
 import shotRoad from '../assets/shots/courier-road.webp';
@@ -19,6 +20,13 @@ import shroudFight from '../assets/shots/shroud-firefight.webp';
 import courierTown from '../assets/shots/courier-town.webp';
 import streetOff from '../assets/shots/budget-overview-off.webp';
 import streetOn from '../assets/shots/budget-overview-on.webp';
+import lookHigh from '../assets/shots/look-high.webp';
+import lookDusk from '../assets/shots/look-dusk.webp';
+import lookMetals from '../assets/shots/look-metals.webp';
+import animCrowd from '../assets/shots/anim-crowd.webp';
+import vfxExplosion from '../assets/shots/vfx-explosion.webp';
+import aiNavmesh from '../assets/shots/ai-navmesh.webp';
+import worldForest from '../assets/shots/world-forest.webp';
 
 const tabShots = {
   shell: { src: shotSettingsGame, alt: 'The settings screen the engine generates from FieldDefs: difficulty cards, a toggle, crosshair colour swatches and a slider', cap: 'Generated settings screen, Gameplay tab' },
@@ -26,12 +34,27 @@ const tabShots = {
   play: { src: shotRoad, alt: 'Courier: a hover bike on a valley road seen from the chase camera, low-poly trees and hills', cap: 'ChaseCamera and MeshKit in Courier' },
   render: { src: shotOverview, alt: 'A city of grey blocks and thousands of small props seen from above, drawn with the render budget on', cap: '40k props, 480 meshes drawn' },
   dev: { src: shotMetricsLive, alt: 'The metrics window: four large charts for frame time, CPU, GPU and memory, then rows of metrics with sparklines', cap: 'Metrics window, F4' },
-} as const;
+};
+const W: ('webp')[] = ['webp'];
+const systemShots = {
+  look: { src: lookMetals, alt: 'Five spheres in gold, chrome, copper, steel and red plastic in front of pillars with neon strips, reflecting the sky', cap: 'Metals and plastics, High tier', source: 'look_showcase', formats: W },
+  anim: { src: animCrowd, alt: 'Procedural mannequins walking and waving on a plain, with spring antennas on their heads and shadows on the ground', cap: 'Procedural mannequins, --crowd 40', source: 'anim_demo', formats: W },
+  vfx: { src: vfxExplosion, alt: 'The explosion preset on a dark ground: an orange fireball, spark streaks and a flat shockwave ring', cap: 'The explosion preset', source: 'vfx_gallery', formats: W },
+  ai: { src: aiNavmesh, alt: 'An arena from above with walls and crates, a crowd of blue agents, the navmesh outlined in blue and agent paths drawn in yellow', cap: 'Navmesh and paths, debug view on', source: 'ai_crowd', formats: W },
+  world: { src: worldForest, alt: 'Low-poly broadleaf trees, pines, rocks and grass on a meadow, hills and snowy peaks behind', cap: 'Scattered forest, ground level', source: 'open_world', formats: W },
+};
 const gameShots = { shroud: shroudFight, courier: courierTown };
 const gameAlts = {
   shroud: 'Shroud: first-person view of a desert yard, a pistol in hand, two squad members behind a low wall',
   courier: 'Courier: a hover bike entering a small town square with houses and a tower',
 };
+const nScenes = bench.scenes.length;
+const headline = bench.headline.map((h) => {
+  const c = change(h.scene, h.key);
+  const also = h.also ? change(h.also, h.key) : null;
+  const extra = also ? `${h.also}: ${also.from} to ${also.to}${also.pct ? ` (${also.pct})` : ''}` : '';
+  return { unit: h.unit, from: c.from, to: c.to, note: extra ? `${h.note}. ${extra}` : h.note };
+});
 const arrow = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 8h11M9 4l4 4-4 4" stroke="currentColor" stroke-width="2" fill="none"/></svg>';
 ---
 <Base state="Main menu">
@@ -39,16 +62,17 @@ const arrow = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 8h11M9 4l
   <section class="hero wrap" aria-labelledby="hero-title">
     <div class="hero__grid grid">
       <div class="hero__menu">
-        <span class="eyebrow" data-reveal="fade" data-intro>Game shell for Bevy {site.bevy}</span>
+        <span class="eyebrow" data-reveal="fade" data-intro>Code-first engine on Bevy {site.bevy}</span>
         <div class="hero__title">
-          <h1 id="hero-title" class="display hero__name"><span data-split="chars" data-intro>{site.name}</span><span class="sr-only">, the game shell for Bevy</span></h1>
+          <h1 id="hero-title" class="display hero__name"><span data-split="chars" data-intro>{site.name}</span><span class="sr-only">, a code-first game engine on Bevy</span></h1>
           <p class="hero__tag" data-reveal="fade" data-intro data-delay="0.12">Start your Bevy game at gameplay, not at the settings menu.</p>
         </div>
         <nav aria-label="Main menu" data-reveal="up" data-intro data-delay="0.2">
           <ul class="menu hero__items" data-menu>
             <li><a href="/start/" data-screen="Start">Start <small>Cargo.toml and main.rs</small></a></li>
-            <li><a href="#inside">Inside <small>Settings, menus, cameras, devtools</small></a></li>
-            <li><a href="/render-budget/" data-screen="Render budget">Render budget <small>40,231 meshes down to 480</small></a></li>
+            <li><a href="#inside">Inside <small>Settings, menus, input, devtools</small></a></li>
+            <li><a href="#systems">Systems <small>Look, anim, VFX, AI, sound, worlds, net</small></a></li>
+            <li><a href="/performance/" data-screen="Performance">Performance <small>{nScenes} scenes, measured</small></a></li>
             <li><a href="#games">Games <small>Shroud and Courier</small></a></li>
           </ul>
         </nav>
@@ -79,8 +103,8 @@ const arrow = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 8h11M9 4l
   <section class="statement wrap section" aria-labelledby="why-title">
     <div class="grid">
       <h2 id="why-title" class="label statement__label">Why</h2>
-      <p class="statement__text" data-split="lines">Every Bevy game begins by rebuilding the same shell: a main menu, a settings screen that saves, Esc to pause, volume sliders, quality presets, a way to test it. Hull ships that shell, so the first commit is gameplay.</p>
-      <p class="statement__note">The crate is called <code>{site.crate}</code> today. Hull is a working name.</p>
+      <p class="statement__text" data-split="lines">Every Bevy game begins by rebuilding the same shell: a main menu, a settings screen that saves, Esc to pause, volume sliders, quality presets, a way to test it. Hull ships that shell, and the systems a game grows into after it, so the first commit is gameplay.</p>
+      <p class="statement__note">Everything is Rust or small JSON files: no editor, no binary scene assets. The crate is called <code>{site.crate}</code> today; Hull is a working name.</p>
     </div>
   </section>
 
@@ -91,41 +115,24 @@ const arrow = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 8h11M9 4l
         <span class="eyebrow">Options</span>
         <h2 id="inside-title" class="h-xl" data-split="lines">Inside the shell</h2>
       </header>
-      <div class="inside__tabs" data-tabs>
-        <div class="tablist" role="tablist" aria-label="Parts of the engine">
-          {inside.map((t, i) => (
-            <button class="tab" role="tab" id={`tab-${t.id}`} aria-controls={`panel-${t.id}`} aria-selected={i === 0 ? 'true' : 'false'} tabindex={i === 0 ? 0 : -1} type="button">{t.label}</button>
-          ))}
-          <span class="tablist__line" data-tab-line aria-hidden="true"></span>
-        </div>
-        {inside.map((t) => {
-          const s = tabShots[t.id as keyof typeof tabShots];
-          return (
-            <div class="tabpanel" role="tabpanel" id={`panel-${t.id}`} aria-labelledby={`tab-${t.id}`}>
-              <h3 class="tabpanel__title">{t.label}</h3>
-              <ul class="rows" data-select-rows>
-                {t.rows.map((r, j) => (
-                  <li class:list={['row', j === 0 && 'is-sel']}>
-                    <div class="row__text">
-                      <span class="row__label">{r.label}</span>
-                      <span class="row__hint">{r.hint}</span>
-                      {r.code && <code class="row__code">{r.code}</code>}
-                    </div>
-                    <span class="chip">{r.value}</span>
-                  </li>
-                ))}
-              </ul>
-              <aside class="about panel" aria-label={`About ${t.label}`}>
-                <span class="label" data-about-label>About this tab</span>
-                <p class="about__title" data-about-title>{t.title}</p>
-                <p class="about__text" data-about-text>{t.about}</p>
-                <Shot src={s.src} alt={s.alt} caption={s.cap} sizes="(min-width: 1024px) 28vw, 100vw" />
-              </aside>
-            </div>
-          );
-        })}
-        <div class="keys inside__keys" aria-hidden="true"><span><span class="kbd">Q / E</span> Switch tab</span></div>
+      <Tabs tabs={inside} shots={tabShots} label="Parts of the shell" />
+    </div>
+  </section>
+
+  <!-- SYSTEMS: same settings layout, one tab per subsystem -->
+  <section id="systems" class="systems wrap section" aria-labelledby="systems-title">
+    <div class="grid">
+      <header class="section-head systems__head">
+        <span class="eyebrow">Systems</span>
+        <h2 id="systems-title" class="h-xl" data-split="lines">Then the game grows</h2>
+        <p class="lede">Lighting, animation, particles, AI, sound, big worlds and multiplayer. Each is a cargo feature, each can be inspected and driven over the control port, and each does almost no work until something uses it.</p>
+      </header>
+      <div class="looks">
+        <Shot class="looks__a" src={lookHigh} alt="The look_showcase yard at midday: metal and plastic spheres between pillars with neon strips, a blue sky, crisp shadows" caption="clear_day, High" source="look_showcase --quality high" sizes="(min-width: 768px) 46vw, 100vw" formats={W} widths={[640, 960, 1440]} />
+        <Shot class="looks__b" src={lookDusk} alt="The same yard at dusk: a low orange sun, long shadows, warm haze over the ground" caption="dusk, High" source="--look dusk" sizes="(min-width: 768px) 46vw, 100vw" formats={W} widths={[640, 960, 1440]} />
+        <code class="looks__code">app.insert_resource(Look::dusk())</code>
       </div>
+      <Tabs tabs={systems} shots={systemShots} label="Engine systems" />
     </div>
   </section>
 
@@ -178,6 +185,28 @@ const arrow = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 8h11M9 4l
           </li>
         ))}
       </ul>
+    </div>
+  </section>
+
+  <!-- PERFORMANCE: facts -->
+  <section class="perf wrap section" aria-labelledby="perf-title">
+    <div class="grid">
+      <header class="section-head budget__head">
+        <span class="eyebrow">Performance</span>
+        <h2 id="perf-title" class="h-xl" data-split="lines">Benchmarked, then fixed</h2>
+        <p class="lede">{nScenes} scenes from the engine's own examples run offscreen at full speed. The first run found a crash at Ultra, a 10-second stall in the open world and a reflection probe re-filtered every frame. Before and after:</p>
+      </header>
+      <dl class="facts">
+        {headline.map((b) => (
+          <div class="fact">
+            <dt class="fact__unit label">{b.unit}</dt>
+            <dd class="fact__nums"><s class="num"><span class="sr-only">from </span>{b.from}</s><span class="fact__to num"><span class="sr-only">to </span>{b.to}</span></dd>
+            <dd class="fact__note">{b.note}</dd>
+          </div>
+        ))}
+      </dl>
+      <p class="budget__rig">{bench.rig}. Commit {bench.commit} against {bench.baseCommit}.</p>
+      <a class="btn perf__btn" href="/performance/" data-screen="Performance"><span class="btn__label">All benchmarks</span><Fragment set:html={arrow} /></a>
     </div>
   </section>
 
@@ -266,26 +295,12 @@ const arrow = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 8h11M9 4l
 
   /* INSIDE */
   .inside__head { grid-column: 1 / -1; }
-  .inside__tabs { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); column-gap: var(--gutter); }
-  .tablist { grid-column: 1 / -1; position: relative; display: flex; gap: clamp(0.25rem, 1.2vw, 1.4rem); margin-left: -0.55em; border-bottom: 1px solid var(--c-line-strong); margin-bottom: 2rem; overflow-x: auto; scrollbar-width: none; }
-  .tab { position: relative; isolation: isolate; padding: 0.7rem 0.55em 0.8rem; font-weight: 600; font-size: clamp(1.1rem, 0.95rem + 0.5vw, 1.5rem); letter-spacing: 0.04em; color: var(--c-muted); white-space: nowrap; transition: color 0.2s; }
-  .tab[aria-selected='true'] { color: var(--c-fg); }
-  .tab::before { content: ''; position: absolute; inset: 0.3rem 0 0.4rem; z-index: -1; border-left: 3px solid var(--accent); background: var(--accent-bar); border-radius: 0 var(--radius) var(--radius) 0; scale: 0 1; transform-origin: left; transition: scale 0.3s var(--ease-soft); }
-  @media (hover: hover) { .tab:hover { color: var(--c-fg); } .tab:hover::before { scale: 1 1; } }
-  .tab:focus-visible::before { scale: 1 1; }
-  .tab { transition: color 0.2s; }
-  .tablist__line { position: absolute; left: 0; bottom: 0; height: 3px; width: 0; background: var(--accent); }
-  :global(html:not(.js)) .tablist { display: none; }
-  .tabpanel { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); column-gap: var(--gutter); row-gap: 1.5rem; align-items: start; }
-  :global(html:not(.js)) .tabpanel { margin-bottom: 3rem; }
-  .tabpanel[hidden] { display: none; }
-  .tabpanel__title { grid-column: 1 / -1; font-family: var(--f-display); text-transform: uppercase; font-weight: 700; font-size: 1.5rem; }
-  :global(.is-tabs) .tabpanel__title { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
-  .tabpanel .rows { grid-column: 1 / span 8; }
-  .about { grid-column: 9 / -1; padding: 1.2rem 1.2rem 1.3rem; display: grid; gap: 0.5rem; position: sticky; top: 6rem; }
-  .about__title { font-family: var(--f-display); font-weight: 700; text-transform: uppercase; font-size: 1.6rem; line-height: 1; }
-  .about__text { color: var(--c-muted); font-size: var(--t-s); margin-bottom: 0.6rem; }
-  .inside__keys { grid-column: 1 / -1; margin-top: 1.8rem; }
+  .systems__head { grid-column: 1 / span 9; }
+  .looks { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); column-gap: var(--gutter); row-gap: 1rem; margin-bottom: clamp(3rem, 6vw, 5rem); }
+  .looks :global(.looks__a) { grid-column: 1 / span 6; }
+  .looks :global(.looks__b) { grid-column: 7 / span 6; margin-top: clamp(2rem, 6vw, 6rem); }
+  .looks__code { grid-column: 7 / span 6; font-size: 0.8rem; color: var(--accent); overflow-wrap: anywhere; }
+  .perf__btn { grid-column: 1 / -1; justify-self: start; margin-top: 2rem; }
 
   /* CODE */
   .code-sec__panels { grid-column: 1 / span 7; display: grid; gap: 1rem; min-width: 0; }
@@ -349,8 +364,6 @@ const arrow = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 8h11M9 4l
   @media (max-width: 1023px) {
     .hero__menu { grid-column: 1 / span 6; }
     .hero__media { grid-column: 7 / -1; }
-    .tabpanel .rows { grid-column: 1 / span 7; }
-    .about { grid-column: 8 / -1; }
   }
   @media (max-width: 767px) {
     .hero { padding-top: 5.5rem; align-items: start; min-height: auto; }
@@ -358,9 +371,8 @@ const arrow = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 8h11M9 4l
     .hero__name { font-size: clamp(6rem, 34vw, 9rem); }
     .hero__keys { display: none; }
     .statement__label, .statement__text, .statement__note { grid-column: 1 / -1; }
-    .tabpanel .rows, .about { grid-column: 1 / -1; }
-    .about { position: static; }
-    .inside__keys { display: none; }
+    .systems__head { grid-column: 1 / -1; }
+    .looks :global(.looks__a), .looks :global(.looks__b), .looks__code { grid-column: 1 / -1; margin-top: 0; }
     .code-sec__panels, .code-sec__text { grid-column: 1 / -1; }
     .code-sec__text { order: -1; margin-bottom: 1.5rem; }
     .games__head, .budget__head, .dev__head { grid-column: 1 / -1; }

@@ -2,7 +2,7 @@
 import { site, nav } from '../data/site';
 import Code from './Code.astro';
 interface Props { title?: string; lede?: string; code?: string; file?: string }
-const { title = 'Start at<br />gameplay', lede = 'Add the crate, write your plugin, run it. The menus, settings and pause are already on screen.', code: pageCode, file = 'src/main.rs' } = Astro.props;
+const { title = 'Start at<br />gameplay', lede = 'Add the crate, pick the systems you need, write your plugin, run it. The menus, settings and pause are already on screen.', code: pageCode, file = 'src/main.rs' } = Astro.props;
 const year = 2026;
 const snippet = `fn main() {
     engine::app(GameInfo::new("orbs", "Orbs"))
@@ -22,7 +22,7 @@ const snippet = `fn main() {
         <a class="btn btn--primary" href="/start/" data-screen="Start"><span class="btn__label">Start a game</span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 8h11M9 4l4 4-4 4" stroke="currentColor" stroke-width="2" fill="none"/></svg></a>
         <a class="btn" href="/render-budget/" data-screen="Render budget"><span class="btn__label">Read the numbers</span></a>
       </div>
-      <p class="label" style="text-transform:none;letter-spacing:0">Source and docs are not public yet. License {site.license}.</p>
+      <p class="foot__src"><a class="link" href={site.repo} rel="noopener">Source on GitHub</a> · <a class="link" href={site.docs} rel="noopener">Docs</a> · License {site.license}</p>
     </div>
     <div class="foot__code"><Code code={pageCode ?? snippet} file={file} /></div>
     <div class="foot__links">

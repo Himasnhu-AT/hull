@@ -34,6 +34,7 @@ const ld = jsonLd ?? {
   license: 'https://spdx.org/licenses/MIT.html',
   runtimePlatform: `Bevy ${site.bevy}`,
   url: site.url,
+  ...(site.repo ? { codeRepository: site.repo } : {}),
 };
 void games;
 ---
