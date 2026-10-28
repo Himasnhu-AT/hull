@@ -312,8 +312,32 @@ impl Inputs {
     }
 
     /// A hash of what lies within `area` (shapes overlapping it, points inside it, the
-    /// surface): cells whose inputs didn't change keep their cached output.
+    /// surface): cells whose inputs didn't change keep their cached output. Hashes the whole
+    /// surface each call: per-cell callers should use [`Inputs::surface_hash`] once and
+    /// [`Inputs::shapes_hash_in`] per cell.
     pub fn hash_in(&self, area: Area) -> u64 {
+        mix_hash(self.shapes_hash_in(area), self.surface_hash())
+    }
+
+    /// The surface's hash (a heightfield is hashed in full: compute it once per input set).
+    pub fn surface_hash(&self) -> u64 {
+        let mut h = Fnv::default();
+        match &self.surface {
+            None => h.u(0),
+            Some(Surface::Plane(y)) => h.f(&[*y]),
+            Some(Surface::Heightfield { origin, cell, width, heights }) => {
+                h.f(&[origin.x, origin.y, *cell]);
+                h.u(*width as u64);
+                for v in heights {
+                    h.f(&[*v]);
+                }
+            }
+        }
+        h.0
+    }
+
+    /// A hash of the shapes and points within `area` (not the surface).
+    pub fn shapes_hash_in(&self, area: Area) -> u64 {
         let mut h = Fnv::default();
         for (name, s) in &self.sets {
             h.str(name);
@@ -344,20 +368,13 @@ impl Inputs {
                 }
             }
         }
-        match &self.surface {
-            None => h.u(0),
-            Some(Surface::Plane(y)) => h.f(&[*y]),
-            Some(Surface::Heightfield { origin, cell, width, heights }) => {
-                h.f(&[origin.x, origin.y, *cell]);
-                h.u(*width as u64);
-                // The heightfield as a whole (rarely changes; cheap enough to hash).
-                for v in heights {
-                    h.f(&[*v]);
-                }
-            }
-        }
+        h.u(1);
         h.0
     }
+}
+
+fn mix_hash(a: u64, b: u64) -> u64 {
+    crate::mix64(a ^ b.rotate_left(29))
 }
 
 /// An XZ box (min inclusive, max exclusive): a cell or the area being evaluated.

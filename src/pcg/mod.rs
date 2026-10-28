@@ -178,6 +178,10 @@ struct Cell {
 pub struct PcgCells {
     cells: HashMap<IVec2, Cell>,
     graph_hash: u64,
+    /// The input set (by pointer) and cell size the keys below were computed for: keys are
+    /// only recomputed when the volume's inputs, graph or cells change.
+    keyed: Option<(usize, u64, u32)>,
+    keys: HashMap<IVec2, u64>,
 }
 
 /// Marks a cell's root entity.
@@ -255,10 +259,24 @@ fn schedule_cells(
             continue;
         };
         let Some(g) = graph_of(v, &assets) else { continue };
-        let ghash = g.hash();
-        let halo = g.halo(&v.inputs);
-        cells.graph_hash = ghash;
         let size = v.cell.max(1.0);
+        let stamp = (Arc::as_ptr(&v.inputs) as usize, Arc::as_ptr(&g) as usize as u64, size.to_bits());
+        if cells.keyed != Some(stamp) {
+            // Inputs, graph or cell size changed: recompute every cell's key (the surface hash
+            // once, the shapes per cell).
+            let ghash = g.hash();
+            let halo = g.halo(&v.inputs);
+            let surf = v.inputs.surface_hash();
+            cells.graph_hash = ghash;
+            let keys: HashMap<IVec2, u64> = cells_of(v.area, size)
+                .map(|k| {
+                    let area = Area::cell(k.x, k.y, size).intersect(v.area);
+                    (k, mix64(ghash ^ mix64(v.inputs.shapes_hash_in(area.expand(halo)) ^ surf.rotate_left(29))))
+                })
+                .collect();
+            cells.keys = keys;
+            cells.keyed = Some(stamp);
+        }
         let wanted: Vec<IVec2> = cells_of(v.area, size).collect();
         // Cells no longer in the area: drop them.
         cells.cells.retain(|k, c| {
@@ -270,7 +288,7 @@ fn schedule_cells(
         });
         for k in wanted {
             let area = Area::cell(k.x, k.y, size).intersect(v.area);
-            let key = mix64(ghash ^ v.inputs.hash_in(area.expand(halo)));
+            let key = cells.keys.get(&k).copied().unwrap_or(0);
             let c = cells.cells.entry(k).or_insert(Cell { key: 0, output: None, task: None, root: None, spawned_with: None });
             if c.task.is_some() {
                 running += 1;
@@ -292,8 +310,7 @@ fn schedule_cells(
         let Some(g) = graph_of(v, &assets) else { continue };
         let size = v.cell.max(1.0);
         let area = Area::cell(k.x, k.y, size).intersect(v.area);
-        let halo = g.halo(&v.inputs);
-        let key = mix64(cells.graph_hash ^ v.inputs.hash_in(area.expand(halo)));
+        let key = cells.keys.get(&k).copied().unwrap_or(0);
         let inputs = v.inputs.clone();
         let task = pool.spawn(async move {
             let t0 = std::time::Instant::now();
@@ -450,16 +467,20 @@ fn spawn_output(
                         warn_once!("pcg: no catalog mesh `{name}`");
                         continue;
                     };
+                    // Merged meshes are built around their points' centre and placed there, so
+                    // distance culling (VisibilityRange measures from the entity's position)
+                    // sees where they really are.
+                    let center = idx.iter().map(|&k| p.pos[k]).sum::<Vec3>() / idx.len().max(1) as f32;
                     let merged = meshes.as_deref_mut().and_then(|ms| {
                         let src = ms.get(&m.mesh)?;
                         (idx.len() >= settings.merge_min_count && src.count_vertices() <= settings.merge_max_vertices)
-                            .then(|| merge(src, idx.iter().map(|&k| tf(k))))
+                            .then(|| merge(src, idx.iter().map(|&k| Transform { translation: p.pos[k] - center, ..tf(k) })))
                             .flatten()
                             .map(|mesh| ms.add(mesh))
                     });
                     match merged {
                         Some(h) => {
-                            let mut e = commands.spawn((Name::new(format!("pcg {name}")), Mesh3d(h), MeshMaterial3d(m.material.clone()), Transform::default(), Scenery));
+                            let mut e = commands.spawn((Name::new(format!("pcg {name}")), Mesh3d(h), MeshMaterial3d(m.material.clone()), Transform::from_translation(center), Scenery));
                             if !s.def.shadows {
                                 e.insert(bevy::light::NotShadowCaster);
                             }
