@@ -8,3 +8,7 @@
 
 # graft's local graph cache — regenerable, not committed (run `graft build`).
 /graft/
+
+# Benchmarks: Godot import cache, raw results
+bench/godot/.godot/
+bench/results/

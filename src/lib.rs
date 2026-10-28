@@ -43,6 +43,7 @@ pub mod pause;
 pub mod paths;
 pub mod render_budget;
 pub mod settings;
+pub mod threads;
 pub mod ui;
 
 #[cfg(feature = "devkit")]

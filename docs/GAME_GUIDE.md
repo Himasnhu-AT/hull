@@ -159,7 +159,16 @@ first-shot stalls. Send it immediately after the load, not a second later.
   and sudden square pulses (= a big texture being rebuilt).
 - The governor's memory steps start when footprint passes 60% of RAM.
 
-### 3.9 Frame pacing and hitches
+### 3.9 Threads
+- The engine caps Bevy's task pools at `DEFAULT_WORKER_THREADS` (6) workers and sets thread
+  priorities (`engine::threads`): one worker per core made 4 000 physics boxes drop from 60 to
+  ~19 fps and kept cores busy waking threads. Override with `EngineOptions::worker_threads` or
+  `ENGINE_THREADS=n`; measure before raising it.
+- Your own background threads (AI training, simulation, baking) go at
+  `threads::set_current(Qos::Utility)` or `Background`, few of them, and are cancelled without
+  blocking the main thread.
+
+### 3.10 Frame pacing and hitches
 - Menus and pause pace reactively; gameplay is continuous. `RenderBudget::idle_skip` can skip
   drawing unchanged frames (send `RequestRedraw` from time-animated shaders).
 - Hitch sources seen so far: pipeline compiles (3.3, 3.6), shadow texture rebuilds (3.4),

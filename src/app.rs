@@ -76,7 +76,17 @@ pub struct EngineOptions {
     pub devtools: bool,
     /// Add `TracePlugin` (feature `trace`).
     pub trace: bool,
+    /// Worker threads for Bevy's task pools (compute + async + IO). `None`: the engine default,
+    /// [`DEFAULT_WORKER_THREADS`] (or the `ENGINE_THREADS` environment variable).
+    pub worker_threads: Option<usize>,
 }
+
+/// Default cap on task-pool worker threads. Bevy starts one per core (15 on an M5 Pro); they
+/// then fight the main and render threads for cores and every system wakes several of them.
+/// Measured (examples/bench_compare, release, 60 fps): 4 000 physics boxes went from 54 ms
+/// average frames (p95 126 ms) with Bevy's default to a steady 16.7 ms with 6 workers; 20 000
+/// static cubes went from 0.76 to 0.49 cores busy.
+pub const DEFAULT_WORKER_THREADS: usize = 6;
 
 impl EngineOptions {
     pub fn from_args() -> Self {
@@ -90,6 +100,7 @@ impl EngineOptions {
             ui: true,
             devtools: true,
             trace: true,
+            worker_threads: None,
         }
     }
 
@@ -104,6 +115,7 @@ impl EngineOptions {
             ui: false,
             devtools: false,
             trace: false,
+            worker_threads: None,
         }
     }
 }
@@ -123,7 +135,7 @@ pub fn app_with(info: GameInfo, mut options: EngineOptions) -> App {
     let mut app = App::new();
     if options.headless {
         app.add_plugins((
-            MinimalPlugins.set(ScheduleRunnerPlugin::run_loop(Duration::from_secs_f64(1.0 / 60.0))),
+            MinimalPlugins.set(ScheduleRunnerPlugin::run_loop(Duration::from_secs_f64(1.0 / 60.0))).set(task_pools(options.worker_threads)),
             bevy::log::LogPlugin::default(),
             TransformPlugin,
             bevy::diagnostic::DiagnosticsPlugin,
@@ -155,13 +167,42 @@ pub fn app_with(info: GameInfo, mut options: EngineOptions) -> App {
                     ..default()
                 })
                 .set(asset_plugin)
-                .set(render_plugin()),
+                .set(render_plugin())
+                .set(task_pools(options.worker_threads)),
         );
     }
     #[cfg(feature = "physics")]
     app.add_plugins(avian3d::prelude::PhysicsPlugins::default());
     app.add_plugins(EnginePlugin { info, options });
     app
+}
+
+/// Bevy's task pools with at most `n` workers in total (default [`DEFAULT_WORKER_THREADS`],
+/// `ENGINE_THREADS=n` overrides), never more than the machine has.
+fn task_pools(n: Option<usize>) -> bevy::app::TaskPoolPlugin {
+    let env = std::env::var("ENGINE_THREADS").ok().and_then(|v| v.parse::<usize>().ok());
+    let cores = std::thread::available_parallelism().map_or(4, |c| c.get());
+    let n = env.or(n).unwrap_or(DEFAULT_WORKER_THREADS).clamp(1, cores);
+    let mut o = bevy::app::TaskPoolOptions::with_num_threads(n);
+    use crate::threads::{Qos, set_current};
+    o.compute.on_thread_spawn = Some(std::sync::Arc::new(|| {
+        set_current(Qos::UserInitiated);
+    }));
+    o.async_compute.on_thread_spawn = Some(std::sync::Arc::new(|| {
+        set_current(Qos::Utility);
+    }));
+    o.io.on_thread_spawn = Some(std::sync::Arc::new(|| {
+        set_current(Qos::Utility);
+    }));
+    bevy::app::TaskPoolPlugin { task_pool_options: o }
+}
+
+/// Runs on the render thread (pipelined rendering): give it top priority, once.
+fn render_thread_qos(mut done: Local<bool>) {
+    if !*done {
+        *done = true;
+        crate::threads::set_current(crate::threads::Qos::UserInteractive);
+    }
 }
 
 /// Bevy's render plugin with wgpu's indirect-draw validation off in debug builds too (Bevy
@@ -194,6 +235,11 @@ impl EnginePlugin {
 
 impl Plugin for EnginePlugin {
     fn build(&self, app: &mut App) {
+        // The main thread sets the frame rate: top priority (the render thread gets it below).
+        crate::threads::set_current(crate::threads::Qos::UserInteractive);
+        if let Some(render) = app.get_sub_app_mut(bevy::render::RenderApp) {
+            render.add_systems(bevy::render::Render, render_thread_qos);
+        }
         let o = &self.options;
         let data = o.data_dir.clone().unwrap_or_else(|| crate::paths::data_dir(&self.info));
         if let Err(e) = std::fs::create_dir_all(&data) {
