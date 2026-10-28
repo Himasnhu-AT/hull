@@ -79,7 +79,7 @@ fn retarget_cameras(
     mut commands: Commands,
     mut images: ResMut<Assets<Image>>,
     target: Option<Res<OffscreenTarget>>,
-    cams: Query<(Entity, &RenderTarget, Has<MainCamera>, Has<IsDefaultUiCamera>), With<Camera>>,
+    cams: Query<(Entity, &RenderTarget, Has<MainCamera>, Has<IsDefaultUiCamera>, Has<crate::ui::UiFallbackCamera>), With<Camera>>,
 ) {
     let to_window = |t: &RenderTarget| matches!(t, RenderTarget::Window(WindowRef::Primary));
     if !cams.iter().any(|(_, t, ..)| to_window(t)) {
@@ -97,24 +97,53 @@ fn retarget_cameras(
         }
     };
     // Keep the game's choice of UI camera; else the main camera; else the first retargeted one.
+    // The menu's fallback camera comes last: it is despawned as soon as a game camera exists,
+    // so keeping the tag on it (it got it in an earlier frame) would leave the UI with no camera.
     let mut ui_cam = cams
         .iter()
-        .find(|(.., is_ui)| *is_ui)
-        .or_else(|| cams.iter().find(|(_, _, main, _)| *main))
+        .find(|&(.., is_ui, fallback)| is_ui && !fallback)
+        .or_else(|| cams.iter().find(|&(_, _, main, ..)| main))
         .map(|(e, ..)| e);
-    for (e, t, ..) in &cams {
+    let mut fallback_cam = None;
+    for (e, t, .., fallback) in &cams {
         if to_window(t) {
             commands.entity(e).insert(RenderTarget::from(handle.clone()));
-            ui_cam.get_or_insert(e);
+            if fallback {
+                fallback_cam.get_or_insert(e);
+            } else {
+                ui_cam.get_or_insert(e);
+            }
         }
     }
+    let ui_cam = ui_cam.or_else(|| cams.iter().find(|&(.., is_ui, fallback)| is_ui && fallback).map(|(e, ..)| e)).or(fallback_cam);
     // Exactly one default UI camera: without a window target, UI only renders through it.
-    for (e, _, _, is_ui) in &cams {
+    for (e, _, _, is_ui, _) in &cams {
         if is_ui && Some(e) != ui_cam {
             commands.entity(e).remove::<IsDefaultUiCamera>();
         }
     }
     if let Some(e) = ui_cam {
         commands.entity(e).insert(IsDefaultUiCamera);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A game UI camera that appears while the menu's fallback camera (tagged in an earlier
+    /// frame) still exists keeps the UI tag.
+    #[test]
+    fn game_ui_camera_wins_over_the_fallback() {
+        let mut app = App::new();
+        app.init_resource::<Assets<Image>>().add_systems(Update, retarget_cameras);
+        let window = || RenderTarget::Window(WindowRef::Primary);
+        let fallback = app.world_mut().spawn((Camera::default(), window(), crate::ui::UiFallbackCamera)).id();
+        app.update();
+        assert!(app.world().entity(fallback).contains::<IsDefaultUiCamera>());
+        let map = app.world_mut().spawn((Camera::default(), window(), IsDefaultUiCamera)).id();
+        app.update();
+        assert!(app.world().entity(map).contains::<IsDefaultUiCamera>());
+        assert!(!app.world().entity(fallback).contains::<IsDefaultUiCamera>());
     }
 }
