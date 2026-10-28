@@ -56,6 +56,8 @@ const MAX_RUN_ROWS: usize = 12;
 /// Sparkline size, logical px.
 const SPARK: (f32, f32) = (150.0, 18.0);
 const FEAT_H: f32 = 72.0;
+/// Height of a summary tile's chart.
+const TILE_H: f32 = 40.0;
 
 const FONT_BODY: Handle<Font> = uuid_handle!("8d0f0c4e-3b7a-4f61-9a43-6b1e2d7c5a01");
 const FONT_LABEL: Handle<Font> = uuid_handle!("8d0f0c4e-3b7a-4f61-9a43-6b1e2d7c5a02");
@@ -72,15 +74,10 @@ impl Default for MetricsWindowKey {
     }
 }
 
-/// Keys drawn as the big charts at the top (missing keys are skipped).
-#[derive(Resource, Clone, Debug)]
+/// Extra keys drawn as big charts under the summary tiles (missing keys are skipped). Empty by
+/// default: the tiles cover frame, CPU, GPU, memory and quality.
+#[derive(Resource, Clone, Debug, Default)]
 pub struct MetricsFeatured(pub Vec<&'static str>);
-
-impl Default for MetricsFeatured {
-    fn default() -> Self {
-        MetricsFeatured(vec!["frame.ms", "cpu.process_pct", "gpu.pct", "mem.footprint_mb"])
-    }
-}
 
 /// Rows of the runs table: `(key, stat)` with stat one of min/avg/p50/p95/max. A key ending
 /// in `.` is a prefix (`("span.", "avg")` = every span). Games add theirs:
@@ -171,6 +168,8 @@ struct Slot(usize);
 #[derive(Clone, Debug, PartialEq)]
 enum SlotKind {
     Info,
+    /// Summary tile line: 0 = big value, 1..=3 = detail lines.
+    Tile(Tile, u8),
     FeatValue(&'static str),
     FeatStats(&'static str),
     FeatAxis(usize),
@@ -179,6 +178,60 @@ enum SlotKind {
     RunHead(usize, u8),
     RunVal(usize, usize),
     RunDelta(usize, usize),
+}
+
+/// The summary tiles at the top, in order.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Tile {
+    Frame,
+    Cpu,
+    Gpu,
+    Limit,
+    Mem,
+    Quality,
+}
+
+impl Tile {
+    const ALL: [Tile; 6] = [Tile::Frame, Tile::Cpu, Tile::Gpu, Tile::Limit, Tile::Mem, Tile::Quality];
+
+    fn title(self) -> &'static str {
+        match self {
+            Tile::Frame => "FRAME",
+            Tile::Cpu => "CPU",
+            Tile::Gpu => "GPU",
+            Tile::Limit => "BOTTLENECK",
+            Tile::Mem => "MEMORY",
+            Tile::Quality => "QUALITY",
+        }
+    }
+
+    /// Key charted in the tile (`None`: detail lines instead).
+    fn chart(self) -> Option<&'static str> {
+        match self {
+            Tile::Frame => Some("frame.ms"),
+            Tile::Cpu => Some("cpu.machine_pct"),
+            Tile::Gpu => Some("gpu.frame_ms"),
+            Tile::Limit => None,
+            Tile::Mem => Some("mem.footprint_mb"),
+            Tile::Quality => Some("render.governor_level"),
+        }
+    }
+}
+
+/// Values the tiles need from outside the metrics store.
+#[derive(Default)]
+struct Live {
+    budget_ms: f32,
+    target_fps: f32,
+    ram_mb: Option<f32>,
+    quality: Option<String>,
+    governor_on: bool,
+    level: usize,
+    levels: usize,
+    memory_level: usize,
+    scale: f32,
+    last: Option<(crate::render_budget::GovernorReason, Option<crate::render_budget::GovernorStep>)>,
+    memory_budget_mb: Option<f32>,
 }
 
 struct ChartInfo {
@@ -405,6 +458,7 @@ fn refresh(
     mut cams: Query<&mut Camera, With<MetricsCamera>>,
     mut texts: Query<(&Slot, &mut Text, &mut TextColor)>,
     mut images: ResMut<Assets<Image>>,
+    live: LiveParams,
 ) {
     let Some(cam) = view.camera else { return };
     let Ok(mut camera) = cams.get_mut(cam) else { return };
@@ -462,12 +516,13 @@ fn refresh(
 
     // Runs: this run first, then the past newest first.
     let quality = settings.map(|s| format!("{:?}", s.quality));
-    let cur = run.as_ref().map(|r| current(&m, r, quality, "running"));
+    let cur = run.as_ref().map(|r| current(&m, r, quality.clone(), "running"));
     let runs: Vec<&SessionSummary> = cur.iter().chain(past.iter().rev()).collect();
     let rows = view.plan.as_ref().map(|p| p.rows.clone()).unwrap_or_default();
     // One 60 s summary per key per redraw (each sorts up to a minute of samples).
     let recent: std::collections::HashMap<&'static str, Summary> = m.keys().filter_map(|k| m.recent(k).map(|s| (k, s))).collect();
-    let ctx = FillCtx { m: &m, recent: &recent, runs: &runs, rows: &rows, palette: &palette, view: &view };
+    let live = live.get();
+    let ctx = FillCtx { m: &m, recent: &recent, runs: &runs, rows: &rows, palette: &palette, view: &view, live: &live };
     for (slot, mut text, mut color) in &mut texts {
         let Some(kind) = view.slots.get(slot.0) else { continue };
         let (s, c) = ctx.fill(kind);
@@ -486,6 +541,47 @@ fn refresh(
     view.cost_ms = if view.redraws == 0 { ms } else { view.cost_ms + 0.2 * (ms - view.cost_ms) };
     view.redraws += 1;
     m.record("perf.metrics_view_ms", ms as f64);
+}
+
+/// Resources behind [`Live`].
+#[derive(bevy::ecs::system::SystemParam)]
+struct LiveParams<'w> {
+    governor: Option<Res<'w, crate::render_budget::QualityGovernor>>,
+    state: Option<Res<'w, crate::render_budget::GovernorState>>,
+    scale: Option<Res<'w, crate::render_budget::RenderScale>>,
+    settings: Option<Res<'w, crate::settings::CoreSettings>>,
+}
+
+impl LiveParams<'_> {
+    fn get(&self) -> Live {
+        let target_fps = self.governor.as_ref().map_or(60.0, |g| g.target_fps).max(1.0);
+        let st = self.state.as_deref();
+        Live {
+            budget_ms: 1000.0 / target_fps,
+            target_fps,
+            ram_mb: ram_mb(),
+            quality: self.settings.as_ref().map(|s| format!("{:?}", s.quality)),
+            governor_on: self.governor.as_ref().is_some_and(|g| g.enabled),
+            level: st.map_or(0, |s| s.level),
+            levels: self.governor.as_ref().map_or(0, |g| g.steps.len()),
+            memory_level: st.map_or(0, |s| s.memory_level),
+            scale: self.scale.as_ref().map_or(1.0, |s| s.applied),
+            last: st.and_then(|s| s.last_reason.map(|r| (r, s.last_step))),
+            memory_budget_mb: st.and_then(|s| s.memory_budget_mb).or_else(|| ram_mb().map(|r| r * 0.6)),
+        }
+    }
+}
+
+/// Physical RAM (MB), read once.
+fn ram_mb() -> Option<f32> {
+    static RAM: std::sync::OnceLock<Option<f32>> = std::sync::OnceLock::new();
+    *RAM.get_or_init(crate::render_budget::governor::ram_mb)
+}
+
+/// Logical CPU cores, read once.
+fn cores() -> usize {
+    static N: std::sync::OnceLock<usize> = std::sync::OnceLock::new();
+    *N.get_or_init(|| std::thread::available_parallelism().map_or(1, |n| n.get()))
 }
 
 /// Group order in the body; others follow alphabetically.
@@ -687,6 +783,49 @@ fn build_ui(
                 p.spawn(text(format!("{key:?} hide · wheel scrolls · last {WINDOW_SECS:.0} s"), font(body, 13.0), t.text_dim));
             });
 
+        // Summary tiles.
+        {
+            let n = Tile::ALL.len() as f32;
+            let card_w = ((w - 32.0 - 10.0 * (n - 1.0)) / n).floor();
+            let chart_w = (card_w - 24.0).max(60.0);
+            p.spawn(Node { column_gap: px(10), ..default() }).with_children(|p| {
+                for tile in Tile::ALL {
+                    let (mut node, bg) = ui.panel();
+                    node.width = px(card_w);
+                    node.row_gap = px(3);
+                    p.spawn((node, bg)).with_children(|p| {
+                        p.spawn(Node { justify_content: JustifyContent::SpaceBetween, align_items: AlignItems::Baseline, ..default() })
+                            .with_children(|p| {
+                                p.spawn(text(tile.title(), font(label, 14.0), t.text_muted));
+                                let s = ui.slot(SlotKind::Tile(tile, 0));
+                                p.spawn((s, text("", font(label, 22.0), t.text)));
+                            });
+                        match tile.chart() {
+                            Some(k) => {
+                                let (h, _) = ui.chart(k, chart_w, TILE_H, (chart_w / 2.0) as usize);
+                                p.spawn((
+                                    ImageNode::new(h),
+                                    Node { width: px(chart_w), height: px(TILE_H), border_radius: BorderRadius::all(px(3)), ..default() },
+                                    BackgroundColor(t.raised),
+                                ));
+                            }
+                            None => {
+                                p.spawn(Node { flex_direction: FlexDirection::Column, height: px(TILE_H), justify_content: JustifyContent::Center, ..default() })
+                                    .with_children(|p| {
+                                        let s = ui.slot(SlotKind::Tile(tile, 3));
+                                        p.spawn((s, text("", font(body, 13.0), t.text)));
+                                    });
+                            }
+                        }
+                        for line in 1..=2 {
+                            let s = ui.slot(SlotKind::Tile(tile, line));
+                            p.spawn((s, text("", font(body, 12.0), t.text_muted)));
+                        }
+                    });
+                }
+            });
+        }
+
         // Featured charts.
         if !plan.featured.is_empty() {
             let n = plan.featured.len() as f32;
@@ -837,6 +976,7 @@ struct FillCtx<'a> {
     rows: &'a [(String, &'static str)],
     palette: &'a Palette,
     view: &'a MetricsView,
+    live: &'a Live,
 }
 
 impl FillCtx<'_> {
@@ -845,6 +985,7 @@ impl FillCtx<'_> {
         let m = self.m;
         match kind {
             SlotKind::Info => (self.info(), t.text_muted),
+            SlotKind::Tile(tile, line) => self.tile(*tile, *line),
             SlotKind::FeatValue(k) | SlotKind::RowValue(k) => match m.latest(k) {
                 Some(v) => (with_unit(k, v), self.palette.value(m.threshold(k), v)),
                 None => ("—".into(), t.text_dim),
@@ -870,6 +1011,139 @@ impl FillCtx<'_> {
                 None => ("—".into(), t.text_dim),
             },
             SlotKind::RunDelta(r, c) => self.run_delta(*r, *c),
+        }
+    }
+
+    fn tile(&self, tile: Tile, line: u8) -> (String, Color) {
+        let t = &self.palette.t;
+        let m = self.m;
+        let l = self.live;
+        let get = |k: &str| m.latest(k);
+        let avg = |k: &str| self.recent.get(k).map(|s| s.avg);
+        let none = (String::new(), t.text_dim);
+        let dash = ("—".to_string(), t.text_dim);
+        let frame_ms = get("frame.fps").filter(|f| *f > 0.0).map(|f| 1000.0 / f).or_else(|| avg("frame.ms"));
+        let gb = |mb: f64| format!("{:.1} GB", mb / 1024.0);
+        match (tile, line) {
+            (Tile::Frame, 0) => match get("frame.fps") {
+                Some(f) => (format!("{f:.0} fps"), crate::ui::fps_counter::fps_color(t, f as f32)),
+                None => dash,
+            },
+            (Tile::Frame, 1) => match frame_ms {
+                Some(ms) => (format!("{ms:.1} ms · p95 {}", get("frame.p95_ms").map_or("—".into(), |v| format!("{v:.1} ms"))), t.text_muted),
+                None => none,
+            },
+            (Tile::Frame, 2) => (format!("budget {:.1} ms ({:.0} fps) · hitches {}", l.budget_ms, l.target_fps, get("frame.hitches").map_or(0.0, |v| v)), t.text_dim),
+            (Tile::Cpu, 0) => match get("cpu.machine_pct") {
+                Some(p) => (format!("{p:.0}%"), self.palette.value(m.threshold("cpu.machine_pct"), p)),
+                None => dash,
+            },
+            (Tile::Cpu, 1) => match get("cpu.cores") {
+                Some(c) => (format!("{c:.1} of {} cores", cores()), t.text_muted),
+                None => none,
+            },
+            (Tile::Cpu, 2) => match (get("cpu.main_ms"), get("cpu.render_ms")) {
+                (Some(a), Some(b)) => (format!("main {a:.1} ms · render {b:.1} ms"), t.text_muted),
+                (Some(a), None) => (format!("main {a:.1} ms"), t.text_muted),
+                _ => none,
+            },
+            (Tile::Gpu, 0) => match get("gpu.frame_ms") {
+                Some(v) => (format!("{v:.1} ms"), self.palette.value(Some(Threshold { amber: l.budget_ms as f64 * 0.8, red: l.budget_ms as f64 }), v)),
+                None => dash,
+            },
+            (Tile::Gpu, 1) => match get("gpu.process_pct") {
+                Some(p) => (format!("busy {p:.0}% of the time"), t.text_muted),
+                None => none,
+            },
+            (Tile::Gpu, 2) => match (get("gpu.pct"), get("gpu.alloc_mb")) {
+                (Some(d), Some(a)) => (format!("device {d:.0}% · alloc {}", gb(a)), t.text_dim),
+                (Some(d), None) => (format!("device {d:.0}% (all apps)"), t.text_dim),
+                _ => none,
+            },
+            (Tile::Limit, _) => self.limit(line, frame_ms),
+            (Tile::Mem, 0) => match get("mem.footprint_mb") {
+                Some(v) => (gb(v), self.palette.value(m.threshold("mem.footprint_mb"), v)),
+                None => dash,
+            },
+            (Tile::Mem, 1) => match (get("mem.footprint_mb"), l.ram_mb) {
+                (Some(v), Some(r)) => (format!("{:.0}% of {} RAM", v / r as f64 * 100.0, gb(r as f64)), t.text_muted),
+                _ => none,
+            },
+            (Tile::Mem, 2) => match (get("gpu.alloc_mb"), l.memory_budget_mb) {
+                (Some(a), Some(b)) => (format!("GPU alloc {} · budget {}", gb(a), gb(b as f64)), t.text_dim),
+                (Some(a), None) => (format!("GPU alloc {}", gb(a)), t.text_dim),
+                (None, Some(b)) => (format!("budget {}", gb(b as f64)), t.text_dim),
+                _ => none,
+            },
+            (Tile::Quality, 0) => {
+                let q = l.quality.clone().unwrap_or_else(|| "—".into());
+                if l.level + l.memory_level == 0 {
+                    (q, t.text)
+                } else {
+                    (format!("{q} −{}", l.level + l.memory_level), t.bad)
+                }
+            }
+            (Tile::Quality, 1) => (
+                format!(
+                    "{} · {}/{} · scale {:.0}%",
+                    if l.governor_on { "governor on" } else { "governor off" },
+                    l.level,
+                    l.levels,
+                    l.scale * 100.0
+                ),
+                t.text_muted,
+            ),
+            (Tile::Quality, 2) => match l.last {
+                Some((reason, step)) => {
+                    use crate::render_budget::GovernorReason as R;
+                    let what = step.map(|s| s.label()).unwrap_or_else(|| "all".into());
+                    let s = match reason {
+                        R::Gpu => format!("last: −{what} (GPU)"),
+                        R::Memory => format!("last: −{what} (memory)"),
+                        R::Headroom => format!("last: +{what}"),
+                        R::Reset => "last: reset to full".into(),
+                    };
+                    (s, if matches!(reason, R::Gpu | R::Memory) { t.bad } else { t.good })
+                }
+                None => ("no changes".into(), t.text_dim),
+            },
+            _ => none,
+        }
+    }
+
+    /// The bottleneck tile, with the governor's rule: over budget and the GPU busy most of the
+    /// time → GPU-bound; else the busiest CPU thread if it fills most of the frame.
+    fn limit(&self, line: u8, frame_ms: Option<f64>) -> (String, Color) {
+        let t = &self.palette.t;
+        let get = |k: &str| self.m.latest(k);
+        let budget = self.live.budget_ms as f64;
+        let (gpu, main, render) = (get("gpu.frame_ms"), get("cpu.main_ms"), get("cpu.render_ms"));
+        match line {
+            0 => {
+                let Some(frame) = frame_ms else { return ("—".into(), t.text_dim) };
+                let busy = get("gpu.process_pct").map(|p| p / 100.0);
+                let over = frame > budget * 1.05;
+                let worst = [("GPU-bound", gpu), ("CPU-bound (main)", main), ("CPU-bound (render)", render)]
+                    .into_iter()
+                    .filter_map(|(n, v)| v.map(|v| (n, v)))
+                    .max_by(|a, b| a.1.total_cmp(&b.1));
+                if !over {
+                    let head = worst.map_or(100.0, |w| (1.0 - w.1 / budget) * 100.0).max(0.0);
+                    return (format!("OK · {head:.0}% spare"), t.good);
+                }
+                let label = match (busy, worst) {
+                    (Some(b), _) if b > 0.8 => "GPU-bound".to_string(),
+                    (_, Some((n, v))) if v >= frame * 0.6 => n.to_string(),
+                    _ => "Waiting (vsync / cap)".into(),
+                };
+                (label, t.bad)
+            }
+            1 => (format!("frame {} vs budget {budget:.1} ms", frame_ms.map_or("—".into(), |f| format!("{f:.1}"))), t.text_muted),
+            2 => (String::new(), t.text_dim),
+            _ => {
+                let f = |v: Option<f64>| v.map_or("—".into(), |v| format!("{v:.1}"));
+                (format!("main {} · render {} · GPU {} ms", f(main), f(render), f(gpu)), t.text)
+            }
         }
     }
 
@@ -1056,6 +1330,9 @@ mod tests {
             ..default()
         }];
         let p = make_plan(&m, &past, &MetricsCompare::default(), &MetricsFeatured::default(), (1440, 900), 2.0);
+        assert!(p.featured.is_empty());
+        let extra = MetricsFeatured(vec!["frame.ms", "gpu.pct", "cpu.process_pct"]);
+        let p = make_plan(&m, &past, &MetricsCompare::default(), &extra, (1440, 900), 2.0);
         assert_eq!(p.featured, ["frame.ms", "cpu.process_pct"]);
         let groups: Vec<&str> = p.groups.iter().flatten().map(|(g, _)| g.as_str()).collect();
         for g in ["frame", "cpu", "render", "span", "ai"] {

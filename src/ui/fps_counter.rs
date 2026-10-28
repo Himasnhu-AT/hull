@@ -1,4 +1,6 @@
-//! Small FPS counter in the top-right corner, shown while `CoreSettings.show_fps` is on.
+//! Small FPS counter in the top-right corner, shown while `CoreSettings.show_fps` is on:
+//! `62 FPS · CPU 9 ms · GPU 14 ms · RAM 3.5 GB` (CPU = main thread, GPU = this process's GPU
+//! time per frame; both only where measured, i.e. `devtools` builds).
 //! Owner: ui stream.
 
 use bevy::prelude::*;
@@ -56,6 +58,7 @@ fn update_counter(
     settings: Option<Res<CoreSettings>>,
     theme: Res<Theme>,
     time: Res<Time<Real>>,
+    cost: Option<Res<crate::render_budget::FrameCost>>,
     mut q: Query<(&mut Text, &mut Node, &mut TextColor), With<FpsCounter>>,
     mut acc: Local<(f32, u32, f32)>,
 ) {
@@ -74,7 +77,19 @@ fn update_counter(
             let fps = acc.1 as f32 / acc.0;
             let smooth = if acc.2 == 0.0 { fps } else { acc.2 * 0.5 + fps * 0.5 };
             *acc = (0.0, 0, smooth);
-            t.0 = format!("{smooth:.0} FPS");
+            let mut line = format!("{smooth:.0} FPS");
+            if let Some(c) = cost.as_ref() {
+                if let Some(ms) = c.cpu_ms {
+                    line += &format!(" · CPU {ms:.0} ms");
+                }
+                if let Some(ms) = c.gpu_ms {
+                    line += &format!(" · GPU {ms:.0} ms");
+                }
+            }
+            if let Some(mb) = crate::render_budget::governor::footprint_mb() {
+                line += &format!(" · RAM {:.1} GB", mb / 1024.0);
+            }
+            t.0 = line;
             color.0 = fps_color(&theme, smooth);
         }
     }

@@ -272,10 +272,23 @@ mod devtools {
     }
 
     /// The perf monitor's GPU busy share → the governor's GPU-bound test.
-    fn feed_gpu_load(shared: Option<Res<crate::devtools::perf::PerfShared>>, mut load: ResMut<super::super::GpuLoad>) {
-        let busy = shared.and_then(|s| s.latest()).map(|s| s.gpu.process.now).filter(|p| *p > 0.0).map(|p| p / 100.0);
+    /// Also the main-thread and GPU ms per frame for the FPS counter.
+    fn feed_gpu_load(
+        shared: Option<Res<crate::devtools::perf::PerfShared>>,
+        mut load: ResMut<super::super::GpuLoad>,
+        mut cost: ResMut<super::super::FrameCost>,
+    ) {
+        let snap = shared.and_then(|s| s.latest());
+        let busy = snap.as_ref().map(|s| s.gpu.process.now).filter(|p| *p > 0.0).map(|p| p / 100.0);
         if load.0 != busy {
             load.0 = busy;
+        }
+        let frame = snap.as_ref().map(|s| s.frame_avg_ms.now).filter(|f| *f > 0.0);
+        let cpu = snap.as_ref().and_then(|s| s.cpu.threads.iter().find(|t| t.name == "main")).zip(frame).map(|(t, f)| (t.cpu_pct / 100.0 * f).min(f));
+        let gpu = snap.as_ref().map(|s| s.gpu.frame_ms.now).filter(|v| *v > 0.0);
+        let next = super::super::FrameCost { cpu_ms: cpu, gpu_ms: gpu };
+        if cost.cpu_ms != next.cpu_ms || cost.gpu_ms != next.gpu_ms {
+            *cost = next;
         }
     }
 

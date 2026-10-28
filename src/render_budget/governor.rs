@@ -173,6 +173,14 @@ impl Default for QualityGovernor {
 #[derive(Resource, Clone, Copy, Debug, Default)]
 pub struct GpuLoad(pub Option<f32>);
 
+/// Main-thread CPU time and GPU time per frame (ms), when something measures them (the
+/// `devtools` perf monitor). The FPS counter shows them.
+#[derive(Resource, Clone, Copy, Debug, Default)]
+pub struct FrameCost {
+    pub cpu_ms: Option<f32>,
+    pub gpu_ms: Option<f32>,
+}
+
 /// Why the governor changed something.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum GovernorReason {
@@ -229,6 +237,8 @@ pub struct GovernorState {
     /// Steps up undone because they didn't hold; while this is in the future no step up is tried.
     pub hold_until: f64,
     pub last_reason: Option<GovernorReason>,
+    /// The step applied (down) or undone (up) by the last change.
+    pub last_step: Option<GovernorStep>,
     pub changes: u32,
     pub footprint_mb: Option<f32>,
     pub memory_budget_mb: Option<f32>,
@@ -257,6 +267,7 @@ impl Plugin for GovernorPlugin {
         }
         app.init_resource::<GovernorState>()
             .init_resource::<GpuLoad>()
+            .init_resource::<FrameCost>()
             .add_message::<QualityChanged>()
             .add_systems(Update, govern.run_if(resource_exists::<QualityPreset>).run_if(crate::flow::has_visuals));
     }
@@ -470,6 +481,7 @@ fn commit(
         rs.scale = scale;
     }
     st.last_reason = Some(reason);
+    st.last_step = step;
     st.changes += 1;
     out.write(QualityChanged {
         reason,

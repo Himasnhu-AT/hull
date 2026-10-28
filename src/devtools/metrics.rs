@@ -396,6 +396,7 @@ pub fn default_threshold(key: &str) -> Option<Threshold> {
         "mem.footprint_mb" | "mem.rss_mb" => t(2048.0, 4096.0),
         "frame.hitches" => t(1.0, 3.0),
         "perf.overhead_us" => t(200.0, 500.0),
+        "cpu.main_ms" | "cpu.render_ms" => t(12.0, 16.7),
         k if k.starts_with("frame.") && k.ends_with("ms") => t(16.7, 33.3),
         k if k.starts_with("cpu.") && k.ends_with("_pct") => t(100.0, 200.0),
         k if k.starts_with("span.") => t(2.0, 5.0),
@@ -521,11 +522,20 @@ pub fn record_snapshot(m: &mut Metrics, s: &PerfSnapshot) {
     if s.cpu.cores > 0 {
         m.record("cpu.machine_pct", s.cpu.machine_pct as f64);
     }
+    if s.cpu.process != Stat::default() {
+        m.record("cpu.cores", (s.cpu.process.now / 100.0) as f64);
+    }
+    // Thread CPU time per frame: busy share × frame time (waiting, e.g. for vsync, isn't counted).
+    let frame = (s.frame_avg_ms.now > 0.0).then_some(s.frame_avg_ms.now as f64);
     for t in &s.cpu.threads {
-        match t.name.as_str() {
-            "main" => m.record("cpu.main_pct", t.cpu_pct as f64),
-            "render" => m.record("cpu.render_pct", t.cpu_pct as f64),
-            _ => {}
+        let (pct, ms) = match t.name.as_str() {
+            "main" => ("cpu.main_pct", "cpu.main_ms"),
+            "render" => ("cpu.render_pct", "cpu.render_ms"),
+            _ => continue,
+        };
+        m.record(pct, t.cpu_pct as f64);
+        if let Some(f) = frame {
+            m.record(ms, (t.cpu_pct as f64 / 100.0 * f).min(f));
         }
     }
     for p in &s.cpu.pools {
