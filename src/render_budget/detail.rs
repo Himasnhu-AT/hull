@@ -283,6 +283,7 @@ fn classify_meshes(
     mut far_mats: ResMut<FarMaterials>,
     mut materials: Option<ResMut<Assets<StandardMaterial>>>,
     images: Option<Res<Assets<Image>>>,
+    averages: Option<Res<crate::gfx::PendingMips>>,
     cpu: Res<super::BudgetCpu>,
 ) {
     let _cpu = cpu.time();
@@ -320,7 +321,7 @@ fn classify_meshes(
         let far_mesh = far_look.and_then(|f| f.mesh.clone()).unwrap_or_else(|| mesh.0.clone());
         let far_mat = match (far_look.and_then(|f| f.material.clone()), mat, materials.as_mut()) {
             (Some(m), ..) => Some(m),
-            (None, Some(near), Some(mats)) => Some(far_mats.far_for(&near.0, mats, images.as_deref())),
+            (None, Some(near), Some(mats)) => Some(far_mats.far_for(&near.0, mats, images.as_deref(), averages.as_deref())),
             _ => None,
         };
         let Some(far_mat) = far_mat else { continue };
@@ -343,7 +344,13 @@ fn classify_meshes(
 impl FarMaterials {
     /// The automatic far material for `near`: same colour (times its texture's average), no
     /// textures, fully rough.
-    fn far_for(&mut self, near: &Handle<StandardMaterial>, mats: &mut Assets<StandardMaterial>, images: Option<&Assets<Image>>) -> Handle<StandardMaterial> {
+    fn far_for(
+        &mut self,
+        near: &Handle<StandardMaterial>,
+        mats: &mut Assets<StandardMaterial>,
+        images: Option<&Assets<Image>>,
+        averages: Option<&crate::gfx::PendingMips>,
+    ) -> Handle<StandardMaterial> {
         if let Some(h) = self.by_near.get(&near.id()) {
             return h.clone();
         }
@@ -370,7 +377,8 @@ impl FarMaterials {
         };
         let mut wait = None;
         if let Some(tex) = tex {
-            match images.and_then(|i| i.get(&tex)).and_then(average_color) {
+            let known = averages.and_then(|a| a.1.get(&tex.id()).copied());
+            match known.or_else(|| images.and_then(|i| i.get(&tex)).and_then(average_color)) {
                 Some(avg) => far.base_color = multiply(tint, avg),
                 None => wait = Some(tex),
             }
@@ -385,14 +393,29 @@ impl FarMaterials {
 }
 
 /// Far materials created before their near texture loaded: tint them once it has.
-fn refine_far_materials(mut far: ResMut<FarMaterials>, images: Option<Res<Assets<Image>>>, mats: Option<ResMut<Assets<StandardMaterial>>>) {
+fn refine_far_materials(
+    mut far: ResMut<FarMaterials>,
+    images: Option<Res<Assets<Image>>>,
+    mats: Option<ResMut<Assets<StandardMaterial>>>,
+    averages: Option<Res<crate::gfx::PendingMips>>,
+    server: Option<Res<AssetServer>>,
+) {
     if far.pending.is_empty() {
         return;
     }
     let (Some(images), Some(mut mats)) = (images, mats) else { return };
     far.pending.retain(|(tex, tint, h)| {
-        let Some(img) = images.get(tex) else { return true };
-        if let (Some(avg), Some(mut m)) = (average_color(img), mats.get_mut(h)) {
+        let known = averages.as_ref().and_then(|a| a.1.get(&tex.id()).copied());
+        let avg = match (known, images.get(tex)) {
+            (Some(c), _) => Some(c),
+            (None, Some(img)) => average_color(img),
+            // Loaded but not on the CPU (GPU-only texture) and no average given: keep the tint.
+            (None, None) => match server.as_ref().map(|s| s.is_loaded(tex.id())) {
+                Some(true) | None => None,
+                Some(false) => return true,
+            },
+        };
+        if let (Some(avg), Some(mut m)) = (avg, mats.get_mut(h)) {
             m.base_color = multiply(*tint, avg);
         }
         false

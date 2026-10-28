@@ -26,7 +26,7 @@ use bevy::pbr::{
     ScreenSpaceReflections,
 };
 use bevy::post_process::motion_blur::MotionBlur;
-use bevy::platform::collections::HashSet;
+use bevy::platform::collections::{HashMap, HashSet};
 use bevy::post_process::bloom::Bloom;
 use bevy::prelude::*;
 use bevy::render::camera::{MipBias, TemporalJitter};
@@ -140,7 +140,12 @@ impl Default for QualityPreset {
 
 /// Images that still need a CPU-built mip chain (JPG/PNG ship without mips).
 #[derive(Resource, Default)]
-pub struct PendingMips(pub HashSet<AssetId<Image>>);
+pub struct PendingMips(
+    pub HashSet<AssetId<Image>>,
+    /// Average colour (linear) of colour maps whose pixels never reach the CPU (GPU-only
+    /// KTX2): read from the cook's `color.avg`, used for automatic far-detail materials.
+    pub HashMap<AssetId<Image>, Color>,
+);
 
 /// Quality preset currently applied to a camera.
 #[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
@@ -605,10 +610,54 @@ pub fn sky_and_sun_with(commands: &mut Commands, s: SunSetup) {
 
 // ---------------------------------------------------------------- textures
 
-/// A PBR texture set under `assets/textures/<name>/` (`color`, `normal`, `rough`, optional
-/// `ao`, all `.jpg`), repeat-wrapped with 16× anisotropy and CPU-built mips. `None` if the
-/// colour map is missing (fall back to a flat material).
+/// A PBR texture set under `assets/textures/<name>/`, repeat-wrapped with 16× anisotropy.
+/// `None` if there is no colour map (fall back to a flat material).
+///
+/// - **Cooked** (feature `ktx2`, `color.ktx2` present): `color.ktx2` (sRGB, e.g. BC7),
+///   `normal.ktx2` (RG, e.g. BC5: Bevy reconstructs Z) and `orm.ktx2` (R = AO, G = roughness)
+///   with their own mip chains, GPU-only (no CPU copy). `color.avg` (three linear floats) gives
+///   far-detail materials their colour.
+/// - **Source**: `color`, `normal`, `rough`, optional `ao` `.jpg`, with CPU-built mips.
 pub fn load_pbr(server: &AssetServer, dir: &AssetsDir, pending: &mut PendingMips, name: &str, tint: Color) -> Option<StandardMaterial> {
+    let sampler = || {
+        ImageSampler::Descriptor(ImageSamplerDescriptor {
+            address_mode_u: ImageAddressMode::Repeat,
+            address_mode_v: ImageAddressMode::Repeat,
+            // 16x anisotropic + trilinear mips: no shimmer on floors at grazing angles.
+            anisotropy_clamp: 16,
+            ..ImageSamplerDescriptor::linear()
+        })
+    };
+    if cfg!(feature = "ktx2") && dir.has(&format!("textures/{name}/color.ktx2")) {
+        let load = |m: &str| -> Option<Handle<Image>> {
+            let p = format!("textures/{name}/{m}.ktx2");
+            dir.has(&p).then(|| {
+                server
+                    .load_builder()
+                    .with_settings(move |s: &mut ImageLoaderSettings| {
+                        s.sampler = sampler();
+                        s.asset_usage = bevy::asset::RenderAssetUsages::RENDER_WORLD;
+                    })
+                    .load(p)
+            })
+        };
+        let color = load("color");
+        if let (Some(c), Some(avg)) = (&color, read_avg(dir, name)) {
+            pending.1.insert(c.id(), avg);
+        }
+        let orm = load("orm");
+        return Some(StandardMaterial {
+            base_color: tint,
+            base_color_texture: color,
+            normal_map_texture: load("normal"),
+            // R = AO, G = roughness; `metallic: 0` zeroes B.
+            occlusion_texture: orm.clone(),
+            metallic_roughness_texture: orm,
+            perceptual_roughness: 1.0,
+            metallic: 0.0,
+            ..default()
+        });
+    }
     let path = |m: &str| format!("textures/{name}/{m}.jpg");
     if !dir.has(&path("color")) {
         return None;
@@ -622,13 +671,7 @@ pub fn load_pbr(server: &AssetServer, dir: &AssetsDir, pending: &mut PendingMips
             .load_builder()
             .with_settings(move |s: &mut ImageLoaderSettings| {
                 s.is_srgb = srgb;
-                s.sampler = ImageSampler::Descriptor(ImageSamplerDescriptor {
-                    address_mode_u: ImageAddressMode::Repeat,
-                    address_mode_v: ImageAddressMode::Repeat,
-                    // 16x anisotropic + trilinear mips: no shimmer on floors at grazing angles.
-                    anisotropy_clamp: 16,
-                    ..ImageSamplerDescriptor::linear()
-                });
+                s.sampler = sampler();
             })
             .load(p);
         pending.0.insert(h.id());
@@ -647,6 +690,13 @@ pub fn load_pbr(server: &AssetServer, dir: &AssetsDir, pending: &mut PendingMips
     })
 }
 
+/// `textures/<name>/color.avg`: three linear floats (the cooked colour map's average).
+fn read_avg(dir: &AssetsDir, name: &str) -> Option<Color> {
+    let s = std::fs::read_to_string(dir.0.join(format!("textures/{name}/color.avg"))).ok()?;
+    let v: Vec<f32> = s.split_whitespace().filter_map(|x| x.parse().ok()).collect();
+    (v.len() >= 3).then(|| Color::LinearRgba(LinearRgba::rgb(v[0], v[1], v[2])))
+}
+
 fn generate_mips(mut events: MessageReader<AssetEvent<Image>>, mut pending: ResMut<PendingMips>, mut images: ResMut<Assets<Image>>) {
     for ev in events.read() {
         let AssetEvent::LoadedWithDependencies { id } = ev else { continue };
@@ -659,7 +709,8 @@ fn generate_mips(mut events: MessageReader<AssetEvent<Image>>, mut pending: ResM
     }
 }
 
-/// Box-filtered mip chain for single-layer RGBA8 images without mips (others untouched).
+/// Box-filtered mip chain for single-layer RGBA8 images without mips (others untouched);
+/// sRGB colour is filtered in linear light.
 pub fn build_mips(img: &mut Image) {
     let fmt = img.texture_descriptor.format;
     if !matches!(fmt, TextureFormat::Rgba8Unorm | TextureFormat::Rgba8UnormSrgb)
@@ -669,6 +720,18 @@ pub fn build_mips(img: &mut Image) {
         return;
     }
     let Some(base) = img.data.take() else { return };
+    // sRGB colour is averaged in linear light (averaging the encoded values darkens distant
+    // mips); alpha and non-sRGB data are averaged as stored.
+    let srgb = fmt == TextureFormat::Rgba8UnormSrgb;
+    let to_lin: [f32; 256] = std::array::from_fn(|i| {
+        let c = i as f32 / 255.0;
+        if c <= 0.04045 { c / 12.92 } else { ((c + 0.055) / 1.055).powf(2.4) }
+    });
+    let to_srgb = |l: f32| -> u8 {
+        let l = l.clamp(0.0, 1.0);
+        let c = if l <= 0.0031308 { l * 12.92 } else { 1.055 * l.powf(1.0 / 2.4) - 0.055 };
+        (c * 255.0 + 0.5) as u8
+    };
     let (mut w, mut h) = (img.texture_descriptor.size.width as usize, img.texture_descriptor.size.height as usize);
     let mut out = base.clone();
     let mut prev = base;
@@ -679,13 +742,16 @@ pub fn build_mips(img: &mut Image) {
         for y in 0..nh {
             for x in 0..nw {
                 for c in 0..4 {
-                    let mut s = 0u32;
-                    for (dx, dy) in [(0, 0), (1, 0), (0, 1), (1, 1)] {
+                    let texels = [(0, 0), (1, 0), (0, 1), (1, 1)].map(|(dx, dy)| {
                         let sx = (x * 2 + dx).min(w - 1);
                         let sy = (y * 2 + dy).min(h - 1);
-                        s += prev[(sy * w + sx) * 4 + c] as u32;
-                    }
-                    next[(y * nw + x) * 4 + c] = (s / 4) as u8;
+                        prev[(sy * w + sx) * 4 + c]
+                    });
+                    next[(y * nw + x) * 4 + c] = if srgb && c < 3 {
+                        to_srgb(texels.iter().map(|&v| to_lin[v as usize]).sum::<f32>() / 4.0)
+                    } else {
+                        ((texels.iter().map(|&v| v as u32).sum::<u32>() + 2) / 4) as u8
+                    };
                 }
             }
         }
@@ -774,6 +840,22 @@ mod tests {
         assert_eq!(img.texture_descriptor.mip_level_count, 3); // 4x2, 2x1, 1x1
         assert_eq!(img.data.as_ref().unwrap().len(), (8 + 2 + 1) * 4);
         assert!(img.data.unwrap().iter().all(|&b| b == 200));
+    }
+
+    #[test]
+    fn srgb_mips_average_in_linear_light() {
+        // Black and white texels: the linear mean (0.5) encodes to sRGB 188, not 128.
+        let px: Vec<u8> = [0u8, 255].iter().flat_map(|&v| [v, v, v, 255]).collect();
+        let mut img = Image::new(
+            Extent3d { width: 2, height: 1, depth_or_array_layers: 1 },
+            TextureDimension::D2,
+            px,
+            TextureFormat::Rgba8UnormSrgb,
+            RenderAssetUsages::RENDER_WORLD,
+        );
+        build_mips(&mut img);
+        let d = img.data.unwrap();
+        assert_eq!(&d[8..12], &[188, 188, 188, 255]);
     }
 
     #[test]

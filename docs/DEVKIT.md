@@ -226,7 +226,17 @@ fn on_save(mut ev: MessageReader<SaveEvent>) { .. }       // Saved / Loaded / De
   is a dry-run plan. `--apply` needs `toktx` from KTX-Software 4.x (not installed here) and writes
   `assets-cooked/` plus a sorted `cook-manifest.json` with sha256 values; unchanged sources are
   skipped. Loading `.ktx2` needs the optional feature `ktx2` (`bevy/ktx2` + `bevy/zstd_rust`).
-  Without cooking, the engine builds mips on the CPU at load (`gfx::PendingMips`).
+  Without cooking, the engine builds mips on the CPU at load (`gfx::PendingMips`), filtering
+  sRGB colour in linear light.
+  **Caveat:** Bevy 0.19 can't load this script's output. UASTC needs `bevy/basis-universal`, and
+  ETC1S/BasisLZ isn't supported (`bevy_image ktx2.rs`). Native block formats in KTX2 (BC7/BC5 on
+  desktop, ASTC on Apple) load fine; Shroud cooks its own that way.
+- **`gfx::load_pbr` and cooked sets.** With feature `ktx2`, if `textures/<name>/color.ktx2`
+  exists it loads `color.ktx2` (sRGB), `normal.ktx2` (RG, e.g. BC5: Bevy rebuilds Z) and
+  `orm.ktx2` (R = AO, G = roughness, used for both occlusion and metallic-roughness),
+  GPU-only (`RenderAssetUsages::RENDER_WORLD`: no CPU copy, no CPU mips). `color.avg` holds the
+  colour map's average as three linear floats, for automatic far-detail materials (without it
+  they keep the material tint). Otherwise the `.jpg` set loads as before.
 - **Package:** `scripts/package.sh ... [--dry-run] [--archive] [--check-assets]`. On top of the
   ship checks it already had (no `ashlar-*` crates in the graph or the binary), the build is now
   reproducible and lean whatever the game's profile says:
