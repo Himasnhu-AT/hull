@@ -110,6 +110,12 @@ load).
   counted), per-emitter `capacity`, `max_effects` (`Vfx::play` refuses beyond), `pool_per_effect`
   (16), `collision_rays` per frame (2048, round robin), `max_dt` (0.1 s, a hitch never explodes
   the simulation), `max_lights`, `parallel`.
+- **Near the camera** (`VfxBudget::near_fade`, `max_screen`): sprites fade out as their edge
+  comes within `near_fade` of the camera (gone at 0.1 m, untouched beyond 1 m; colour fades too
+  in proportion to additive blending), and a sprite is at most `max_screen` (0.9) × its distance
+  wide. A muzzle or impact puff at 0.5–2 m otherwise covers the screen: tens of millions of
+  blended pixels (2–5 ms at Retina) and a white-out. Trails are untouched. Mesh particles
+  (debris) cast no shadows.
 - **LOD / culling**: spawn counts scale from 1 at `lod.near` (25 m) to `lod.min_scale` (0.2) at
   `lod.far` (120 m); beyond `cull_distance` (250 m) nothing spawns or draws. All distances ×
   `VfxBudget::distance_scale`, which follows `QualityPreset::detail_scale` (Low 0.6 … Ultra 1.5)

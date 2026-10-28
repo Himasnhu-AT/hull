@@ -88,6 +88,13 @@ pub struct VfxBudget {
     pub follow_quality: bool,
     /// Effect point lights on at once (nearest to the camera win).
     pub max_lights: u32,
+    /// Sprites fade out as their edge comes within this range of the camera (m): fully gone at
+    /// `x`, untouched beyond `y`. Smoke and puffs filling the screen cost millions of blended
+    /// pixels and hide the view. `Vec2::ZERO` = off.
+    pub near_fade: Vec2,
+    /// Largest sprite size per metre of distance from the camera (`0` = no cap): a puff at
+    /// 0.5 m is drawn at most `0.5 × max_screen` m wide.
+    pub max_screen: f32,
 }
 
 impl Default for VfxBudget {
@@ -103,6 +110,8 @@ impl Default for VfxBudget {
             distance_scale: 1.0,
             follow_quality: true,
             max_lights: 8,
+            near_fade: Vec2::new(0.1, 1.0),
+            max_screen: 0.9,
         }
     }
 }

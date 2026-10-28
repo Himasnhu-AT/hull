@@ -164,6 +164,14 @@ What runs by default:
 - **wgpu indirect validation** is off in debug builds too (Bevy drops it only in release):
   it adds a compute pass before every indirect render pass (Township Ultra 11.6 → 11.2 ms GPU).
   `WGPU_VALIDATION_INDIRECT_CALL=1` turns it back on.
+- **Pipeline warm-up** (`render_budget/warmup.rs`). Bevy builds a render pipeline the first
+  time a (mesh layout, material, view) combination is drawn, synchronously on macOS: the first
+  muzzle flash or impact in a round stalls a frame and meshes waiting for pipelines skip frames.
+  After loading a level (behind its loading screen) send `WarmPipelines`: for
+  `PipelineWarmup::frames` (3) frames every loaded `StandardMaterial` is drawn on a tiny quad
+  0.5 m in front of the `MainCamera` (casting shadows, so shadow pipelines compile too), plus
+  each `PipelineWarmup::extra` mesh/material pair (skinned or morphed meshes, other vertex
+  layouts). Devtools: `render.warmup`.
 - **Main view guard.** Each frame the main camera's aspect ratio is checked against its viewport
   and its `Frustum` against projection × transform; a mismatch is repaired, counted in
   `render.stats` → `view_fixes` and warned about once. Bevy only recomputes these on change and

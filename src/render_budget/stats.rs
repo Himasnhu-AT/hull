@@ -268,6 +268,12 @@ mod devtools {
                 ]),
                 render_governor,
             )
+            .add_control_command(
+                "render.warmup",
+                "Compile every loaded material's pipelines now (draws them tiny for a few frames); returns the last run's counts",
+                params(&[]),
+                render_warmup,
+            )
             .add_systems(PreUpdate, feed_gpu_load)
             .add_systems(Last, log_quality_changes);
     }
@@ -307,6 +313,12 @@ mod devtools {
         if cost.cpu_ms != next.cpu_ms || cost.gpu_ms != next.gpu_ms {
             *cost = next;
         }
+    }
+
+    fn render_warmup(world: &mut World, _: Value) -> Result<Value, String> {
+        world.write_message(super::super::WarmPipelines);
+        let w = *world.resource::<super::super::WarmupStats>();
+        Ok(json!({"queued": true, "previous": {"runs": w.runs, "materials": w.materials, "extra": w.extra}}))
     }
 
     fn governor_json(world: &World) -> Value {

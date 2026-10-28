@@ -55,11 +55,13 @@ pub mod pacing;
 pub mod scale;
 pub mod stats;
 pub mod stream;
+pub mod warmup;
 
 pub use detail::{AutoActor, AutoScenery, BudgetClass, DetailTier, FarLook, KeepDetail};
 pub use governor::{FrameCost, GovernorReason, GovernorState, GovernorStep, GpuLoad, GpuSample, QualityChanged, QualityGovernor};
 pub use pacing::FramePacing;
 pub use scale::RenderScale;
+pub use warmup::{PipelineWarmup, WarmPipelines, WarmupStats};
 pub use stream::{SceneryStream, StreamItem};
 
 /// Moves or matters up close: rendered at full detail whenever visible.
@@ -299,7 +301,7 @@ impl Plugin for RenderBudgetPlugin {
                 ),
             )
             .add_systems(PostUpdate, update_effective_ranges.before(RenderBudgetSystems::Stream))
-            .add_plugins((detail::DetailPlugin, stream::StreamPlugin, stats::StatsPlugin, pacing::PacingPlugin, scale::ScalePlugin, governor::GovernorPlugin));
+            .add_plugins((detail::DetailPlugin, stream::StreamPlugin, stats::StatsPlugin, pacing::PacingPlugin, scale::ScalePlugin, governor::GovernorPlugin, warmup::WarmupPlugin));
     }
 
     fn finish(&self, app: &mut App) {

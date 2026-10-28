@@ -144,6 +144,27 @@ fn lit_mesh() -> Mesh {
         .with_inserted_indices(Indices::U32(Vec::new()))
 }
 
+/// Near-camera handling for sprites (from [`super::VfxBudget::near_fade`] / `max_screen`).
+#[derive(Clone, Copy, Debug, Default)]
+pub struct NearCam {
+    pub fade: Vec2,
+    pub max_screen: f32,
+}
+
+impl NearCam {
+    /// Size capped by distance, and the fade (0..1) for a sprite of that size at `dist`.
+    fn apply(&self, size: f32, dist: f32) -> (f32, f32) {
+        let size = if self.max_screen > 0.0 { size.min(dist * self.max_screen) } else { size };
+        let (a, b) = (self.fade.x, self.fade.y);
+        if b <= a {
+            return (size, 1.0);
+        }
+        let edge = dist - size * 0.5;
+        let t = ((edge - a) / (b - a)).clamp(0.0, 1.0);
+        (size, t * t * (3.0 - 2.0 * t))
+    }
+}
+
 /// Writes one emitter's sprite instances into `out` (cleared first). Returns the count.
 #[allow(clippy::too_many_arguments)]
 pub fn fill_sprites(
@@ -153,10 +174,20 @@ pub fn fill_sprites(
     ce: &CompiledEmitter,
     enc: &SrgbEncoder,
     cam: Vec3A,
+    near: NearCam,
     sort: &mut Vec<(u32, u32)>,
     points: &mut Vec<(Vec3A, f32)>,
 ) -> usize {
     out.clear();
+    // Fading: alpha always; colour too in proportion to additive blending (no alpha there).
+    let additive = def.render.blend.additive_amount();
+    let faded = |c: [f32; 4], f: f32| -> [f32; 4] {
+        if f >= 1.0 {
+            return c;
+        }
+        let k = 1.0 + (f - 1.0) * additive;
+        [c[0] * k, c[1] * k, c[2] * k, c[3] * f]
+    };
     let p = &e.p;
     let n = p.len();
     let r = &def.render;
@@ -191,12 +222,15 @@ pub fn fill_sprites(
             for k in 0..n {
                 let i = idx(k, sort);
                 let t = p.t(i);
-                let size = p.size[i] * lut(&ce.size_lut, t);
+                let (size, f) = near.apply(p.size[i] * lut(&ce.size_lut, t), (p.pos[i] - cam).length());
+                if f <= 0.0 {
+                    continue;
+                }
                 out.push(SpriteInstance {
                     a: v4(p.pos[i], size * def.aspect),
                     b: [0.0, 0.0, 0.0, size],
                     c: [p.rot[i], frame(i, t), 1.0, MODE_BILLBOARD],
-                    color: enc.rgba(color(i, t)),
+                    color: enc.rgba(faded(color(i, t), f)),
                 });
             }
         }
@@ -205,12 +239,15 @@ pub fn fill_sprites(
             for k in 0..n {
                 let i = idx(k, sort);
                 let t = p.t(i);
-                let size = p.size[i] * lut(&ce.size_lut, t);
+                let (size, f) = near.apply(p.size[i] * lut(&ce.size_lut, t), (p.pos[i] - cam).length());
+                if f <= 0.0 {
+                    continue;
+                }
                 out.push(SpriteInstance {
                     a: v4(p.pos[i], size * def.aspect),
                     b: v4(nr, size),
                     c: [p.rot[i], frame(i, t), 1.0, MODE_FLAT],
-                    color: enc.rgba(color(i, t)),
+                    color: enc.rgba(faded(color(i, t), f)),
                 });
             }
         }
@@ -218,7 +255,12 @@ pub fn fill_sprites(
             for k in 0..n {
                 let i = idx(k, sort);
                 let t = p.t(i);
+                // Tracers and sparks: fade near the camera, but keep their width.
                 let size = p.size[i] * lut(&ce.size_lut, t);
+                let (_, f) = near.apply(size, (p.pos[i] - cam).length());
+                if f <= 0.0 {
+                    continue;
+                }
                 let v = p.vel[i];
                 let speed = v.length();
                 let axis = if speed > 1e-5 { v / speed } else { Vec3A::Y };
@@ -228,7 +270,7 @@ pub fn fill_sprites(
                     a: v4(p.pos[i] - axis * (len * 0.5), w),
                     b: v4(axis * len, w),
                     c: [1.0, frame(i, t), 1.0, MODE_STRETCHED],
-                    color: enc.rgba(color(i, t)),
+                    color: enc.rgba(faded(color(i, t), f)),
                 });
             }
         }
@@ -392,6 +434,8 @@ fn draw(
                             aabb,
                             VfxRender { owner, emitter: k as u16 },
                             crate::render_budget::Actor,
+                            // Small, short-lived debris: not worth a pass in every shadow view.
+                            bevy::light::NotShadowCaster,
                         ))
                         .id();
                     h
@@ -421,6 +465,7 @@ fn draw(
 
     if sprites_pending {
         let enc = &cache.encoder;
+        let near = NearCam { fade: budget.near_fade, max_screen: budget.max_screen };
         let build = |inst: &mut VfxInstance| {
             for k in 0..inst.draws.len() {
                 if !inst.draws[k].visible {
@@ -428,7 +473,7 @@ fn draw(
                 }
                 let (e, def, ce) = (&inst.state.emitters[k], &inst.fx.def.emitters[k], &inst.fx.emitters[k]);
                 let s = &mut inst.scratch;
-                fill_sprites(&mut inst.draws[k].instances, e, def, ce, enc, cam, &mut s.sort, &mut s.points);
+                fill_sprites(&mut inst.draws[k].instances, e, def, ce, enc, cam, near, &mut s.sort, &mut s.points);
             }
         };
         if budget.parallel {
@@ -536,7 +581,7 @@ mod tests {
             for (k, e) in st.emitters.iter().enumerate() {
                 let def = &fx.def.emitters[k];
                 let (mut out, mut sort, mut pts) = (Vec::new(), Vec::new(), Vec::new());
-                let q = fill_sprites(&mut out, e, def, &fx.emitters[k], &enc, Vec3A::new(0.0, 2.0, 8.0), &mut sort, &mut pts);
+                let q = fill_sprites(&mut out, e, def, &fx.emitters[k], &enc, Vec3A::new(0.0, 2.0, 8.0), NearCam::default(), &mut sort, &mut pts);
                 assert_eq!(q, out.len());
                 assert!(out.iter().all(|s| s.a.iter().chain(&s.b).chain(&s.c).all(|x| x.is_finite())), "{name}/{}", def.name);
                 match def.render.mode {
@@ -556,6 +601,21 @@ mod tests {
     }
 
     #[test]
+    fn sprites_fade_and_shrink_at_the_camera() {
+        let near = NearCam { fade: Vec2::new(0.1, 1.0), max_screen: 0.9 };
+        // Far away: untouched.
+        assert_eq!(near.apply(2.0, 20.0), (2.0, 1.0));
+        // 0.5 m away, 2 m puff: capped to 0.45 m and fading.
+        let (size, f) = near.apply(2.0, 0.5);
+        assert!((size - 0.45).abs() < 1e-5);
+        assert!(f > 0.0 && f < 1.0, "{f}");
+        // At the camera: gone.
+        assert_eq!(near.apply(1.0, 0.05).1, 0.0);
+        // Off: nothing changes.
+        assert_eq!(NearCam::default().apply(2.0, 0.3), (2.0, 1.0));
+    }
+
+    #[test]
     fn alpha_emitters_sort_back_to_front() {
         let enc = SrgbEncoder::default();
         let fx = CompiledEffect::new(presets::smoke()).unwrap();
@@ -566,7 +626,7 @@ mod tests {
         }
         let cam = Vec3A::new(0.0, 2.0, 6.0);
         let (mut out, mut sort, mut pts) = (Vec::new(), Vec::new(), Vec::new());
-        fill_sprites(&mut out, &st.emitters[0], &fx.def.emitters[0], &fx.emitters[0], &enc, cam, &mut sort, &mut pts);
+        fill_sprites(&mut out, &st.emitters[0], &fx.def.emitters[0], &fx.emitters[0], &enc, cam, NearCam::default(), &mut sort, &mut pts);
         let d: Vec<f32> = out.iter().map(|s| (Vec3A::new(s.a[0], s.a[1], s.a[2]) - cam).length()).collect();
         assert!(d.len() > 10);
         assert!(d.windows(2).all(|w| w[0] >= w[1]), "farthest first");
