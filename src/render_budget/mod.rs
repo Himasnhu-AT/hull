@@ -57,7 +57,7 @@ pub mod stats;
 pub mod stream;
 
 pub use detail::{AutoActor, AutoScenery, BudgetClass, DetailTier, FarLook, KeepDetail};
-pub use governor::{FrameCost, GovernorReason, GovernorState, GovernorStep, GpuLoad, QualityChanged, QualityGovernor};
+pub use governor::{FrameCost, GovernorReason, GovernorState, GovernorStep, GpuLoad, GpuSample, QualityChanged, QualityGovernor};
 pub use pacing::FramePacing;
 pub use scale::RenderScale;
 pub use stream::{SceneryStream, StreamItem};

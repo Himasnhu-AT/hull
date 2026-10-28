@@ -154,13 +154,27 @@ pub fn app_with(info: GameInfo, mut options: EngineOptions) -> App {
                     }),
                     ..default()
                 })
-                .set(asset_plugin),
+                .set(asset_plugin)
+                .set(render_plugin()),
         );
     }
     #[cfg(feature = "physics")]
     app.add_plugins(avian3d::prelude::PhysicsPlugins::default());
     app.add_plugins(EnginePlugin { info, options });
     app
+}
+
+/// Bevy's render plugin with wgpu's indirect-draw validation off in debug builds too (Bevy
+/// already drops it in release builds, except on DX12 where wgpu needs it): it adds a compute
+/// pass before every indirect render pass. Township Ultra: 11.6 → 11.2 ms GPU. The
+/// `WGPU_VALIDATION_INDIRECT_CALL` environment variable still overrides.
+fn render_plugin() -> bevy::render::RenderPlugin {
+    use bevy::render::settings::{Backends, InstanceFlags, RenderCreation, WgpuSettings};
+    let mut settings = WgpuSettings::default();
+    if !settings.backends.is_some_and(|b| b.contains(Backends::DX12)) && std::env::var_os("WGPU_VALIDATION_INDIRECT_CALL").is_none() {
+        settings.instance_flags.remove(InstanceFlags::VALIDATION_INDIRECT_CALL);
+    }
+    bevy::render::RenderPlugin { render_creation: RenderCreation::Automatic(Box::new(settings)), ..default() }
 }
 
 /// Everything the engine adds on top of Bevy's base plugins: flow states, settings, pause,

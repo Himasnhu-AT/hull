@@ -214,7 +214,7 @@ fn gfx_quality_adds_and_prunes_features() {
     assert!(w.get::<ContactShadows>(cam).is_some());
     assert!(w.get::<ScreenSpaceReflections>(cam).is_some());
     assert!(w.get::<ScreenSpaceAmbientOcclusion>(cam).is_some());
-    assert_eq!(*w.get::<ShadowFilteringMethod>(cam).unwrap(), ShadowFilteringMethod::Temporal);
+    assert_eq!(*w.get::<ShadowFilteringMethod>(cam).unwrap(), ShadowFilteringMethod::Gaussian);
     assert!(w.get::<DepthPrepass>(cam).is_some());
 
     set_quality(&mut app, engine::settings::GraphicsQuality::Low);

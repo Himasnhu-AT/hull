@@ -94,22 +94,31 @@ pub struct QualityPreset {
     /// Look tier: frames between realtime reflection-probe face updates (0 = bake once, never
     /// refresh). See `look::ReflectionProbe`.
     pub probe_refresh: [u32; 4],
-    /// Look tier: PCSS soft sun shadows (only with the `look_pcss` cargo feature).
+    /// Look tier: PCSS soft sun shadows (only with the `look_pcss` cargo feature). Off by
+    /// default: like temporal filtering it leans on TAA and sparkles at low or uneven fps.
     pub soft_shadows: [bool; 4],
+    /// Look tier: at most this many sun shadow cascades (the look's `cascades` is capped).
+    pub max_cascades: [u32; 4],
+    /// Point-light shadow cube face size (`PointLightShadowMap`; 6 faces per shadowed light).
+    pub point_shadow_map_size: [usize; 4],
 }
 
 impl Default for QualityPreset {
     fn default() -> Self {
-        use ShadowFilteringMethod::{Gaussian, Hardware2x2, Temporal};
+        use ShadowFilteringMethod::{Gaussian, Hardware2x2};
         QualityPreset {
             ssao: [false, false, true, true],
             bloom: [false, true, true, true],
             taa: [false, true, true, true],
-            shadow_map_size: [1024, 2048, 2048, 4096],
+            // Spot-light shadows are layers of this same texture in Bevy 0.19: at 4096 each spot
+            // costs 64 MB, and the texture is rebuilt whenever a shadowed light enters or
+            // leaves view. 2048 keeps Ultra's 4 cascades + 10 spots near 230 MB.
+            shadow_map_size: [1024, 2048, 2048, 2048],
             bloom_intensity: 0.12,
             occlusion_culling: [true, true, true, true],
             detail_scale: [0.6, 0.8, 1.0, 1.5],
-            shadow_filter: [Hardware2x2, Gaussian, Gaussian, Temporal],
+            // Temporal filtering needs steady TAA history: it crawls at low or spiky fps.
+            shadow_filter: [Hardware2x2, Gaussian, Gaussian, Gaussian],
             contact_shadows: [false, false, true, true],
             ssr: [false, false, false, true],
             volumetric_fog: [false, false, true, true],
@@ -122,7 +131,9 @@ impl Default for QualityPreset {
             post_fx: [false, true, true, true],
             bokeh: [false, false, false, true],
             probe_refresh: [0, 0, 4, 1],
-            soft_shadows: [false, false, false, true],
+            soft_shadows: [false, false, false, false],
+            max_cascades: [1, 2, 3, 4],
+            point_shadow_map_size: [256, 512, 512, 512],
         }
     }
 }
@@ -216,15 +227,33 @@ fn patch_grading_shader(mut events: MessageReader<AssetEvent<Shader>>, mut shade
 /// Adds/removes AA, SSAO, bloom, contact shadows and SSR on `Camera3d` main cameras and sets
 /// their shadow filtering when they appear, when `CoreSettings.quality` changes, or when
 /// [`QualityPreset`] changes; sets shadow-map size and `contact_shadows_enabled` on [`Sun`]s.
+/// The quality features a camera has now (see [`apply_camera_quality`]).
+type CameraFeatures = (
+    Has<TemporalAntiAliasing>,
+    Has<Fxaa>,
+    Option<&'static ScreenSpaceAmbientOcclusion>,
+    Option<&'static Bloom>,
+    Option<&'static ShadowFilteringMethod>,
+    Has<ContactShadows>,
+    Has<ScreenSpaceReflections>,
+);
+
+#[allow(clippy::too_many_arguments)]
 pub fn apply_camera_quality(
     mut commands: Commands,
     settings: Res<CoreSettings>,
     preset: Res<QualityPreset>,
     cams: Query<
-        (Entity, Option<&AppliedQuality>, (Has<DepthPrepass>, Has<BudgetDepthPrepass>, Has<NormalPrepass>, Has<MotionVectorPrepass>, Has<DeferredPrepass>)),
+        (
+            Entity,
+            Option<&AppliedQuality>,
+            (Has<DepthPrepass>, Has<BudgetDepthPrepass>, Has<NormalPrepass>, Has<MotionVectorPrepass>, Has<DeferredPrepass>),
+            CameraFeatures,
+        ),
         (With<MainCamera>, With<Camera3d>),
     >,
     shadow_map: Option<ResMut<DirectionalLightShadowMap>>,
+    point_map: Option<ResMut<bevy::light::PointLightShadowMap>>,
     mut suns: Query<(Ref<Sun>, &mut DirectionalLight)>,
     renderer: Option<ResMut<DefaultOpaqueRendererMethod>>,
     mut materials: Option<ResMut<Assets<StandardMaterial>>>,
@@ -238,7 +267,16 @@ pub fn apply_camera_quality(
     let force = preset.is_changed();
     let mut applied_any = false;
     let mut any_ssr = None;
-    for (e, applied, (depth, budget_depth, normal, motion, deferred)) in &cams {
+    for (e, applied, (depth, budget_depth, normal, motion, deferred), f) in &cams {
+        let have = (
+            f.0,
+            f.1,
+            f.2.map(|s| s.quality_level),
+            f.3.map(|b| b.intensity),
+            f.4.copied(),
+            f.5,
+            f.6,
+        );
         if !force && applied.is_some_and(|a| a.0 == q) {
             any_ssr = Some(any_ssr.unwrap_or(false) | preset.ssr[i]);
             continue;
@@ -249,11 +287,27 @@ pub fn apply_camera_quality(
             // Prepasses the game put there itself are never pruned (see `prune_prepasses`).
             ec.insert(GamePrepasses { depth: depth && !budget_depth, normal, motion, deferred });
         }
-        ec.insert((AppliedQuality(q), Msaa::Off));
+        // Insert only what's missing or different: re-inserting TAA resets its history (one
+        // aliased frame), and re-inserting the rest re-extracts them for nothing.
+        let (has_taa, has_fxaa, ssao, bloom, filter_now, has_contact, has_ssr) = have;
+        ec.insert(AppliedQuality(q));
+        if applied.is_none() {
+            ec.insert(Msaa::Off);
+        }
         if preset.taa[i] {
-            ec.remove::<Fxaa>().insert(TemporalAntiAliasing::default());
+            if has_fxaa {
+                ec.remove::<Fxaa>();
+            }
+            if !has_taa {
+                ec.insert(TemporalAntiAliasing::default());
+            }
         } else {
-            ec.remove::<(TemporalAntiAliasing, TemporalJitter, MipBias)>().insert(Fxaa::default());
+            if has_taa {
+                ec.remove::<(TemporalAntiAliasing, TemporalJitter, MipBias)>();
+            }
+            if !has_fxaa {
+                ec.insert(Fxaa::default());
+            }
         }
         if preset.ssao[i] {
             let quality_level = if q == GraphicsQuality::Ultra {
@@ -261,29 +315,39 @@ pub fn apply_camera_quality(
             } else {
                 ScreenSpaceAmbientOcclusionQualityLevel::High
             };
-            ec.insert(ScreenSpaceAmbientOcclusion { quality_level, ..default() });
-        } else {
+            if ssao != Some(quality_level) {
+                ec.insert(ScreenSpaceAmbientOcclusion { quality_level, ..default() });
+            }
+        } else if ssao.is_some() {
             ec.remove::<ScreenSpaceAmbientOcclusion>();
         }
         if preset.bloom[i] {
-            ec.insert(Bloom { intensity: preset.bloom_intensity, ..Bloom::NATURAL });
-        } else {
+            if bloom != Some(preset.bloom_intensity) {
+                ec.insert(Bloom { intensity: preset.bloom_intensity, ..Bloom::NATURAL });
+            }
+        } else if bloom.is_some() {
             ec.remove::<Bloom>();
         }
         let filter = match preset.shadow_filter[i] {
             ShadowFilteringMethod::Temporal if !preset.taa[i] => ShadowFilteringMethod::Gaussian,
             f => f,
         };
-        ec.insert(filter);
-        if preset.contact_shadows[i] {
-            ec.insert(ContactShadows::default());
-        } else {
-            ec.remove::<ContactShadows>();
+        if filter_now != Some(filter) {
+            ec.insert(filter);
         }
-        if preset.ssr[i] {
-            ec.insert(ScreenSpaceReflections::default());
-        } else {
-            ec.remove::<ScreenSpaceReflections>();
+        if preset.contact_shadows[i] != has_contact {
+            if has_contact {
+                ec.remove::<ContactShadows>();
+            } else {
+                ec.insert(ContactShadows::default());
+            }
+        }
+        if preset.ssr[i] != has_ssr {
+            if has_ssr {
+                ec.remove::<ScreenSpaceReflections>();
+            } else {
+                ec.insert(ScreenSpaceReflections::default());
+            }
         }
         any_ssr = Some(any_ssr.unwrap_or(false) | preset.ssr[i]);
     }
@@ -320,6 +384,12 @@ pub fn apply_camera_quality(
         && shadow_map.size != preset.shadow_map_size[i]
     {
         shadow_map.size = preset.shadow_map_size[i];
+    }
+    if (applied_any || settings.is_changed())
+        && let Some(mut point) = point_map
+        && point.size != preset.point_shadow_map_size[i]
+    {
+        point.size = preset.point_shadow_map_size[i];
     }
 }
 

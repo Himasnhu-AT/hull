@@ -67,6 +67,7 @@ pub struct Tier {
     pub bokeh: bool,
     pub probe_refresh: u32,
     pub soft_shadows: bool,
+    pub max_cascades: u32,
 }
 
 impl Tier {
@@ -87,6 +88,7 @@ impl Tier {
             bokeh: p.bokeh[i],
             probe_refresh: p.probe_refresh[i],
             soft_shadows: p.soft_shadows[i],
+            max_cascades: p.max_cascades[i],
         }
     }
 }
@@ -240,7 +242,7 @@ fn apply_sun(world: &mut World, look: &Look, tier: &Tier) {
         &mut em,
         Some(
             CascadeShadowConfigBuilder {
-                num_cascades: s.cascades.clamp(1, 4) as usize,
+                num_cascades: s.cascades.min(tier.max_cascades).clamp(1, 4) as usize,
                 first_cascade_far_bound: s.first_cascade.max(0.5),
                 maximum_distance: s.shadow_distance.max(s.first_cascade + 1.0),
                 ..default()

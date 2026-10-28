@@ -85,8 +85,10 @@ to gate what a `Look` asks for. Defaults (Low / Medium / High / Ultra):
 | `ssao` | – | – | ✓ | ✓ (Ultra quality) | gfx |
 | `bloom` | – | ✓ | ✓ | ✓ | gfx (tuning from the look) |
 | `taa` | FXAA | TAA | TAA | TAA | gfx |
-| `shadow_map_size` | 1024 | 2048 | 2048 | 4096 | gfx |
-| `shadow_filter` | Hardware2x2 | Gaussian | Gaussian | Temporal | gfx (Temporal → Gaussian without TAA) |
+| `shadow_map_size` | 1024 | 2048 | 2048 | 2048 | gfx: sun cascades **and every shadowed spot light** (Bevy 0.19 keeps spot shadows as layers of the sun's texture: 64 MB per spot at 4096) |
+| `max_cascades` | 1 | 2 | 3 | 4 | look: caps the look's `sun.cascades` |
+| `point_shadow_map_size` | 256 | 512 | 512 | 512 | gfx: `PointLightShadowMap` (6 faces per shadowed point light) |
+| `shadow_filter` | Hardware2x2 | Gaussian | Gaussian | Gaussian | gfx (Temporal needs steady TAA history and crawls at low fps; set it yourself if wanted) |
 | `contact_shadows` | – | – | ✓ | ✓ | gfx: camera `ContactShadows` + `Sun` lights |
 | `ssr` | – | – | – | ✓ | gfx: SSR, opaque materials switched to deferred |
 | `env_light` | ✓ | ✓ | ✓ | ✓ | look: image-based light from the sky |
@@ -98,7 +100,14 @@ to gate what a `Look` asks for. Defaults (Low / Medium / High / Ultra):
 | `bokeh` | – | – | – | ✓ | look: DOF mode |
 | `volumetric_fog` / `volumetric_steps` | – / 16 | – / 24 | ✓ / 32 | ✓ / 64 | look |
 | `probe_refresh` | 0 (bake) | 0 (bake) | 4 | 1 | look: frames per probe face update |
-| `soft_shadows` | – | – | – | ✓ | look: PCSS, only with cargo feature `look_pcss` (≈ +4 ms at 1080p) |
+| `soft_shadows` | – | – | – | – | look: PCSS, only with cargo feature `look_pcss` (≈ +4 ms at 1080p); opt in per game |
+
+**Shadow texture churn (Bevy 0.19, known limit).** The sun's shadow texture has one layer per
+cascade plus one per *visible* shadowed spot light, and Bevy's texture cache keys on the exact
+size: each time a shadowed spot enters or leaves view the whole texture is rebuilt (at 4096 with
+10 spots, ~900 MB; at 2048, ~230 MB). Keep the number of shadowed spots in view steady (e.g.
+the nearest K lamps with hysteresis), or cap it. A small Bevy patch rounding the layer count up to
+a fixed capacity would remove the churn.
 
 Nothing expensive runs at Low: no SSAO, bloom, TAA, contact shadows, SSR, volumetrics, post or
 camera effects, and probes bake once and freeze. Change the resource (`..default()`) to retune.

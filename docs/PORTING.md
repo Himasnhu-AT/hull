@@ -131,19 +131,39 @@ What runs by default:
   While scaled, `world_to_viewport` on the main camera is in scaled-image pixels. Township Ultra
   offscreen: GPU 13.8 ms at 1.0, 10.6 ms at 0.5 (fixed costs: 4096 sun cascades, probes).
 - **Quality governor** (`QualityGovernor`, `render_budget/governor.rs`). Holds `target_fps`
-  (60): steps down a ladder when the smoothed load stays over budget × 0.95 for 0.5 s (two steps
-  over 1.5×), up when under × 0.65 for 3 s, 1.5 s cooldown. Ladder: scale 85% → 70% → SSR → probe
-  refresh 8 → SSAO → contact shadows → Gaussian shadow filter → half shadow map → scale 60% → 50%
-  → volumetric → bloom → detail 75% → FXAA. Preset steps go on a copy of the game's
-  `QualityPreset` (all tiers): the saved quality never changes. Load = frame time × the
-  process's GPU busy share when the devtools perf monitor knows it (`GpuLoad`; also skips
-  CPU-bound frames), else frame time (down only on missed frames, × 1.15; up by trying a step,
-  with a doubling back-off when it doesn't hold). Memory: footprint over `memory_budget_mb`
-  (default 60% of RAM) applies `memory_steps` for the session. Active in unpaused `InGame` with
-  a focused window; off by default in `--control`/`--offscreen`/`--mcp` runs (tests and
-  benchmarks keep their quality). Each change sends `QualityChanged` (`.text(fps)` for a toast)
-  and updates `GovernorState`. Devtools: `render.governor {enabled, target_fps, max_scale,
-  scale}`, metrics `render.scale`, `render.governor_level`, `render.governor_load_ms`.
+  (60, budget B = 1000/fps ms).
+  - *Signal.* In devtools builds: `GpuLoad::sample`, this process's GPU time per frame over a
+    1 s window (Δ IOKit `accumulatedGPUTime` / frames; not busy % × frame time, which counts
+    stalls and vsync), flagged `clean` when the window had no hitch. It acts once per new clean
+    sample taken after its 2.5 s cooldown: down after 2 over 0.95 B (two steps on one over
+    1.4 B), up after 4 under 0.70 B and only if the step's measured saving also fits under
+    0.85 B. GPU-bound = busy share with hysteresis (in at 85%, out at 70%); unknown never blocks
+    a step down. Ship builds (no sample): frame-time EMA, down on missed frames (1.15 B), up by
+    trying a step.
+  - *Bans.* A step that comes back and has to go again within 15 s is banned for 60 s, then
+    120 s, then 600 s.
+  - *Ladder.* Default: only levers that leave render pipelines alone: scale 85% → 75% → half sun
+    shadow map → `Game(1)` → scale 65% → `Game(2)` → scale 50%. `GovernorStep::Game(n)` is the
+    game's own lever: it reads `GovernorState::game_level` (Shroud: fewer shadowed lamps). View
+    features (SSR, SSAO, contact shadows, volumetric, shadow filter, bloom, TAA) exist as steps
+    but stay off the default ladder: on macOS Bevy 0.19 compiles pipelines synchronously
+    (`pipeline_cache.rs`, `block_on`), so each toggle stalls the render thread, and meshes skip
+    frames until their new shaders exist. (This was Shroud's repeating 0.8–2.4 s hitches and
+    part of its flicker.) Used, they stay off at least `costly_hold` (30 s).
+  - *Memory.* Footprint over `memory_budget_mb` (default 60% of RAM) applies `memory_steps`
+    (half shadow map, probes frozen, scale 70%, volumetric) for the session.
+  - Steps go on a copy of the game's `QualityPreset` (all tiers) and `RenderScale`: the saved
+    quality never changes. `apply_camera_quality` only inserts camera components that are
+    missing or different, so TAA history survives preset changes.
+  - Active in unpaused `InGame` while any of the app's windows is focused (the metrics window
+    counts); off by default in `--control`/`--offscreen`/`--mcp` runs (tests and benchmarks keep
+    their quality). Each change sends `QualityChanged` (`.text(fps)` for a toast), updates
+    `GovernorState` and (devtools) writes a `quality` event to the session log. Devtools:
+    `render.governor {enabled, target_fps, max_scale, scale}`, metrics `render.scale`,
+    `render.governor_level`, `render.governor_load_ms`.
+- **wgpu indirect validation** is off in debug builds too (Bevy drops it only in release):
+  it adds a compute pass before every indirect render pass (Township Ultra 11.6 → 11.2 ms GPU).
+  `WGPU_VALIDATION_INDIRECT_CALL=1` turns it back on.
 - **Main view guard.** Each frame the main camera's aspect ratio is checked against its viewport
   and its `Frustum` against projection × transform; a mismatch is repaired, counted in
   `render.stats` → `view_fixes` and warned about once. Bevy only recomputes these on change and

@@ -181,6 +181,15 @@ pub struct RamRow {
     pub rss_mb: Option<f32>,
 }
 
+/// One window's GPU time per frame. `clean`: no hitch and no stall in the window, so it
+/// measures steady rendering. `seq` increases with every window.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct GpuSample {
+    pub ms_per_frame: f32,
+    pub clean: bool,
+    pub seq: u64,
+}
+
 #[derive(Serialize, Clone, Debug, Default)]
 pub struct GpuRow {
     /// Whole-device utilisation, % (all apps): mean of the driver's 8 Hz reads, smoothed.
@@ -190,8 +199,11 @@ pub struct GpuRow {
     pub tiler: Stat,
     /// This process's GPU busy time / wall time, % (IOKit AppUsage).
     pub process: Stat,
-    /// This process's GPU busy time per frame, ms.
+    /// This process's GPU time per frame, ms: Δ`accumulatedGPUTime` / frames in the window.
     pub frame_ms: Stat,
+    /// The last window's GPU ms per frame as a discrete sample (for controllers).
+    #[serde(skip)]
+    pub sample: Option<GpuSample>,
     /// This process's Metal allocations, MiB.
     pub process_alloc_mb: Option<f32>,
     /// Device-wide GPU memory in use, MiB (driver "In use system memory").
@@ -761,6 +773,7 @@ fn sampler(
     let mut util = UtilAcc::default();
     let mut next_poll = Instant::now();
     let mut last_agg = Instant::now();
+    let mut sample_seq: u64 = 0;
     loop {
         // Poll the driver's utilisation at GPU_POLL until the main thread's 1 s aggregate
         // arrives (or 1.5 s pass without one: the frame is stalled).
@@ -837,9 +850,14 @@ fn sampler(
         let g = probe.as_mut().map(|p| p.sample()).unwrap_or_default();
         let mut gpu_pct: HashMap<i32, (f32, String)> = HashMap::new();
         let mut next_gpu = HashMap::with_capacity(g.clients.len());
+        let mut my_gpu_ns = None;
         for c in &g.clients {
             if let Some(p) = prev_gpu.get(&c.pid) {
-                gpu_pct.insert(c.pid, (pct_of_wall(c.gpu_ns.saturating_sub(*p)), c.name.clone()));
+                let d = c.gpu_ns.saturating_sub(*p);
+                gpu_pct.insert(c.pid, (pct_of_wall(d), c.name.clone()));
+                if c.pid == me {
+                    my_gpu_ns = Some(d);
+                }
             }
             next_gpu.insert(c.pid, c.gpu_ns);
         }
@@ -893,7 +911,10 @@ fn sampler(
         let fresh = !stalled && agg.secs > 0.0;
         let fps = fresh.then(|| agg.frames as f32 / agg.secs);
         let frame_avg = fps.filter(|f| *f > 0.0).map(|f| 1000.0 / f);
-        let gpu_frame = process_gpu.zip(frame_avg).map(|(p, ms)| p / 100.0 * ms);
+        // GPU time per frame: this process's GPU time in the window over its frames.
+        let gpu_frame = my_gpu_ns.filter(|_| fresh && agg.frames > 0).map(|ns| ns as f32 / 1e6 / agg.frames as f32);
+        sample_seq += 1;
+        let gpu_sample = gpu_frame.map(|ms| GpuSample { ms_per_frame: ms, clean: agg.hitches == 0, seq: sample_seq });
         let t = &mut tracks;
         fn stat(t: &mut Track, v: Option<f32>) -> Stat {
             match v {
@@ -919,6 +940,7 @@ fn sampler(
                 tiler: stat(&mut t.gpu_tiler, u.map(|u| u.tiler as f32)),
                 process: stat(&mut t.gpu_process, process_gpu),
                 frame_ms: stat(&mut t.gpu_frame, gpu_frame),
+                sample: gpu_sample,
                 process_alloc_mb: g.process_alloc.map(mb),
                 device_in_use_mb: stat(&mut t.gpu_mem, u.map(|u| mb(u.in_use))),
                 device_alloc_mb: u.map(|u| mb(u.alloc)),

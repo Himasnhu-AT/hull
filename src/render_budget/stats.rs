@@ -268,7 +268,23 @@ mod devtools {
                 ]),
                 render_governor,
             )
-            .add_systems(PreUpdate, feed_gpu_load);
+            .add_systems(PreUpdate, feed_gpu_load)
+            .add_systems(Last, log_quality_changes);
+    }
+
+    /// Governor changes into the session log (next to `perf.hitch`), as `quality` events.
+    fn log_quality_changes(mut msgs: MessageReader<super::super::QualityChanged>, log: Option<Res<crate::devtools::session_log::SessionLog>>) {
+        for m in msgs.read() {
+            if let Some(log) = log.as_ref() {
+                log.event(
+                    "quality",
+                    json!({
+                        "reason": format!("{:?}", m.reason), "level": m.level, "memory_level": m.memory_level,
+                        "step": m.step.map(|s| s.label()), "load_ms": m.load_ms, "budget_ms": m.budget_ms, "scale": m.scale,
+                    }),
+                );
+            }
+        }
     }
 
     /// The perf monitor's GPU busy share → the governor's GPU-bound test.
@@ -280,8 +296,9 @@ mod devtools {
     ) {
         let snap = shared.and_then(|s| s.latest());
         let busy = snap.as_ref().map(|s| s.gpu.process.now).filter(|p| *p > 0.0).map(|p| p / 100.0);
-        if load.0 != busy {
-            load.0 = busy;
+        let sample = snap.as_ref().and_then(|s| s.gpu.sample).map(|g| super::super::governor::GpuSample { ms_per_frame: g.ms_per_frame, clean: g.clean, seq: g.seq });
+        if load.busy != busy || load.sample != sample {
+            *load = super::super::GpuLoad { busy, sample };
         }
         let frame = snap.as_ref().map(|s| s.frame_avg_ms.now).filter(|f| *f > 0.0);
         let cpu = snap.as_ref().and_then(|s| s.cpu.threads.iter().find(|t| t.name == "main")).zip(frame).map(|(t, f)| (t.cpu_pct / 100.0 * f).min(f));
@@ -303,7 +320,9 @@ mod devtools {
             "level": st.level, "levels": g.steps.len(), "memory_level": st.memory_level,
             "applied": steps.iter().take(st.level).collect::<Vec<_>>(),
             "load_ms": st.load_ms, "frame_ms": st.frame_ms, "gpu_bound": st.gpu_bound,
-            "gpu_busy": world.resource::<super::super::GpuLoad>().0,
+            "gpu_busy": world.resource::<super::super::GpuLoad>().busy,
+            "gpu_sample_ms": world.resource::<super::super::GpuLoad>().sample.map(|s| s.ms_per_frame),
+            "game_level": st.game_level,
             "hold_until": st.hold_until, "changes": st.changes, "last_reason": st.last_reason.map(|r| format!("{r:?}")),
             "footprint_mb": st.footprint_mb, "memory_budget_mb": st.memory_budget_mb,
             "scale": {"wanted": rs.scale, "applied": rs.applied, "size": [rs.size.x, rs.size.y]},
