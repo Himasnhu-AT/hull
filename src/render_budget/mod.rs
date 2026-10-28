@@ -50,12 +50,16 @@
 use bevy::prelude::*;
 
 pub mod detail;
+pub mod governor;
 pub mod pacing;
+pub mod scale;
 pub mod stats;
 pub mod stream;
 
 pub use detail::{AutoActor, AutoScenery, BudgetClass, DetailTier, FarLook, KeepDetail};
+pub use governor::{GovernorReason, GovernorState, GovernorStep, GpuLoad, QualityChanged, QualityGovernor};
 pub use pacing::FramePacing;
+pub use scale::RenderScale;
 pub use stream::{SceneryStream, StreamItem};
 
 /// Moves or matters up close: rendered at full detail whenever visible.
@@ -109,6 +113,20 @@ pub struct RenderStats {
     pub redraw_reason: Option<&'static str>,
     /// CPU time the render budget's own systems took last frame (µs).
     pub cpu_us: f32,
+    /// Cameras in the world, active or not (Bevy's `VisibilityRange`s see only the first 32).
+    pub cameras: u32,
+    /// The main camera: position, view direction, projection aspect ratio, logical viewport size
+    /// (zero until known). For "everything vanished" bugs.
+    pub eye: Vec3,
+    pub eye_forward: Vec3,
+    pub aspect: f32,
+    pub viewport: Vec2,
+    /// This frame the main camera's `Frustum` didn't match its projection and transform (Bevy
+    /// only recomputes it when one of them is marked changed) and was rebuilt.
+    pub frustum_stale: bool,
+    /// Times the main camera's frustum or aspect ratio had to be repaired (total since start;
+    /// 0 when healthy).
+    pub view_fixes: u32,
 }
 
 /// Accumulates the render budget systems' CPU time for the frame ([`RenderStats::cpu_us`]).
@@ -253,6 +271,9 @@ pub enum RenderBudgetSystems {
     Stats,
 }
 
+/// Cameras Bevy's `check_visibility_ranges` tracks (a `u32` bitmask per mesh).
+pub const MAX_RANGE_VIEWS: u32 = 32;
+
 pub struct RenderBudgetPlugin;
 
 impl Plugin for RenderBudgetPlugin {
@@ -278,12 +299,13 @@ impl Plugin for RenderBudgetPlugin {
                 ),
             )
             .add_systems(PostUpdate, update_effective_ranges.before(RenderBudgetSystems::Stream))
-            .add_plugins((detail::DetailPlugin, stream::StreamPlugin, stats::StatsPlugin, pacing::PacingPlugin));
+            .add_plugins((detail::DetailPlugin, stream::StreamPlugin, stats::StatsPlugin, pacing::PacingPlugin, scale::ScalePlugin, governor::GovernorPlugin));
     }
 
     fn finish(&self, app: &mut App) {
         stats::finish(app);
         pacing::finish(app);
+        scale::finish(app);
     }
 }
 
@@ -294,8 +316,21 @@ fn update_effective_ranges(
     mut eff: ResMut<EffectiveRanges>,
     cpu: Res<BudgetCpu>,
     mut stats: ResMut<RenderStats>,
+    cameras: Query<(), Or<(With<Camera>, With<bevy::camera::ShadowLodOrigin>)>>,
+    ranged: Query<(), With<bevy::camera::visibility::VisibilityRange>>,
+    mut warned: Local<bool>,
 ) {
     stats.cpu_us = cpu.take() as f32 / 1000.0;
+    // Bevy 0.19 gives visibility ranges to the first 32 cameras (in query order, active or not):
+    // past that, the main camera can lose its slot and every ranged mesh vanishes from it.
+    stats.cameras = cameras.iter().count() as u32;
+    if stats.cameras > MAX_RANGE_VIEWS && !*warned && !ranged.is_empty() {
+        *warned = true;
+        warn!(
+            "{} cameras: Bevy tracks VisibilityRange for the first {MAX_RANGE_VIEWS} only, so range-culled meshes may disappear from some of them (despawn unused cameras)",
+            stats.cameras
+        );
+    }
     let scale = match (&preset, &settings) {
         (Some(p), Some(s)) => p.detail_scale[s.quality.index()],
         _ => 1.0,

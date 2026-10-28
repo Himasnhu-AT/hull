@@ -112,6 +112,35 @@ What runs by default:
   average colour, no shadows) and vanish beyond `view` (170 m). Distances are `SceneryRanges`
   (metres at High) × `QualityPreset::detail_scale` (Low 0.6, Medium 0.8, High 1.0, Ultra 1.5).
   Set `view` to where your fog is opaque so the edge is never seen. `KeepDetail` opts a piece out.
+  Bevy 0.19 applies these ranges for the first 32 cameras only (active or not): keep the camera
+  count under that (`render.stats` → `cameras`; the engine warns once past 32).
+- **Render scale** (`RenderScale`, `render_budget/scale.rs`). `scale < 1` renders the main
+  camera (with its post effects) into an image of `scale ×` the window's physical size; a Camera2d
+  (order main+1, render layer 30, `IsDefaultUiCamera`) upscales it bilinearly with CAS 0.35, so
+  UI stays native. Sizes round to 8 px and scales to 0.05; at 1 it all goes away (no cost).
+  Bevy's `MainPassResolutionOverride` is no substitute: post passes ignore it (DLSS only).
+  While scaled, `world_to_viewport` on the main camera is in scaled-image pixels. Township Ultra
+  offscreen: GPU 13.8 ms at 1.0, 10.6 ms at 0.5 (fixed costs: 4096 sun cascades, probes).
+- **Quality governor** (`QualityGovernor`, `render_budget/governor.rs`). Holds `target_fps`
+  (60): steps down a ladder when the smoothed load stays over budget × 0.95 for 0.5 s (two steps
+  over 1.5×), up when under × 0.65 for 3 s, 1.5 s cooldown. Ladder: scale 85% → 70% → SSR → probe
+  refresh 8 → SSAO → contact shadows → Gaussian shadow filter → half shadow map → scale 60% → 50%
+  → volumetric → bloom → detail 75% → FXAA. Preset steps go on a copy of the game's
+  `QualityPreset` (all tiers): the saved quality never changes. Load = frame time × the
+  process's GPU busy share when the devtools perf monitor knows it (`GpuLoad`; also skips
+  CPU-bound frames), else frame time (down only on missed frames, × 1.15; up by trying a step,
+  with a doubling back-off when it doesn't hold). Memory: footprint over `memory_budget_mb`
+  (default 60% of RAM) applies `memory_steps` for the session. Active in unpaused `InGame` with
+  a focused window; off by default in `--control`/`--offscreen`/`--mcp` runs (tests and
+  benchmarks keep their quality). Each change sends `QualityChanged` (`.text(fps)` for a toast)
+  and updates `GovernorState`. Devtools: `render.governor {enabled, target_fps, max_scale,
+  scale}`, metrics `render.scale`, `render.governor_level`, `render.governor_load_ms`.
+- **Main view guard.** Each frame the main camera's aspect ratio is checked against its viewport
+  and its `Frustum` against projection × transform; a mismatch is repaired, counted in
+  `render.stats` → `view_fixes` and warned about once. Bevy only recomputes these on change and
+  window events, and a Shroud window opened behind a fullscreen app in another macOS Space once
+  culled nearly all scenery for a round. `render.stats` also reports `eye`, `eye_forward`,
+  `aspect` and `viewport`.
 - **Frame pacing.** Menus, pause and boot update reactively (30 Hz when focused, 8 Hz unfocused;
   30 Hz in control-port/offscreen runs) so the GPU idles; unpaused gameplay is continuous.
 - **CPU frustum culling** (Bevy, always on) is counted; `RenderStats` is filled every frame and

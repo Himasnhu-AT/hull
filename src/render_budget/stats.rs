@@ -9,6 +9,7 @@
 use std::any::TypeId;
 
 use bevy::camera::ShadowLodOrigin;
+use bevy::camera::primitives::Frustum;
 use bevy::camera::visibility::{VisibilityRange, VisibleEntities, VisibleEntityRanges};
 use bevy::core_pipeline::prepass::{DeferredPrepass, DepthPrepass};
 use bevy::prelude::*;
@@ -28,10 +29,61 @@ pub(super) struct StatsPlugin;
 
 impl Plugin for StatsPlugin {
     fn build(&self, app: &mut App) {
+        use bevy::camera::visibility::VisibilitySystems;
         app.add_systems(PostUpdate, count_stats.in_set(RenderBudgetSystems::Stats))
+            .add_systems(
+                PostUpdate,
+                guard_main_view
+                    .after(VisibilitySystems::UpdateFrusta)
+                    .after(bevy::camera::CameraUpdateSystems)
+                    .before(VisibilitySystems::CheckVisibility),
+            )
             .add_systems(Update, apply_occlusion.run_if(has_visuals));
         #[cfg(feature = "devtools")]
         devtools::register(app);
+    }
+}
+
+/// Keeps the main camera's culling volume true to what it draws. Bevy recomputes a `Frustum`
+/// only when the camera's transform or projection is marked changed, and the aspect ratio
+/// only on window events. A window opened occluded (behind a fullscreen app in another macOS
+/// Space) once left Shroud's camera culling nearly all scenery for a whole round. Here, every
+/// frame: an aspect ratio that disagrees with the viewport is reset, and a frustum that
+/// disagrees with projection × transform is rebuilt. Each repair counts in
+/// [`RenderStats::view_fixes`] (with a one-time warning), so the cause stays visible.
+fn guard_main_view(
+    mut cams: Query<(&GlobalTransform, &mut Projection, &mut Frustum, &mut Camera), With<MainCamera>>,
+    mut stats: ResMut<RenderStats>,
+    mut warned: Local<bool>,
+) {
+    stats.frustum_stale = false;
+    for (gt, mut proj, mut frustum, mut camera) in &mut cams {
+        if !camera.is_active {
+            continue;
+        }
+        let mut what = None;
+        if let (Projection::Perspective(p), Some(size), None) = (proj.as_ref(), camera.logical_viewport_size(), camera.sub_camera_view)
+            && size.x > 0.0
+            && size.y > 0.0
+            && (p.aspect_ratio - size.x / size.y).abs() > 1e-3 * p.aspect_ratio.max(1e-3)
+        {
+            proj.update(size.x, size.y);
+            camera.computed.clip_from_view = proj.get_clip_from_view();
+            what = Some("aspect ratio");
+        }
+        let want = proj.compute_frustum(gt);
+        if frustum.half_spaces.iter().zip(&want.half_spaces).any(|(a, b)| !a.normal_d().abs_diff_eq(b.normal_d(), 1e-3)) {
+            *frustum = want;
+            stats.frustum_stale = true;
+            what.get_or_insert("frustum");
+        }
+        if let Some(what) = what {
+            stats.view_fixes += 1;
+            if !*warned {
+                *warned = true;
+                warn!("render_budget: main camera {what} was out of date (viewport {:?}); repaired", camera.logical_viewport_size());
+            }
+        }
     }
 }
 
@@ -106,6 +158,7 @@ fn count_stats(
     budget: Res<RenderBudget>,
     mut stats: ResMut<RenderStats>,
     cams: Query<(Entity, &VisibleEntities, &GlobalTransform), With<MainCamera>>,
+    views: Query<(&GlobalTransform, Option<&Projection>, Option<&Camera>), With<MainCamera>>,
     all: Query<(), With<Mesh3d>>,
     meshes: Query<(Entity, &InheritedVisibility, Option<&DetailTier>, Option<&VisibilityRange>, &GlobalTransform), With<Mesh3d>>,
     classes: Query<(Option<&BudgetClass>, Option<&DetailTier>)>,
@@ -119,6 +172,15 @@ fn count_stats(
         s.meshes_visible = 0;
         return;
     };
+    if let Some((gt, proj, camera)) = views.iter().next() {
+        s.eye = gt.translation();
+        s.eye_forward = gt.forward().as_vec3();
+        s.aspect = match proj {
+            Some(Projection::Perspective(p)) => p.aspect_ratio,
+            _ => 0.0,
+        };
+        s.viewport = camera.and_then(Camera::logical_viewport_size).unwrap_or_default();
+    }
     let visible = visible.get(TypeId::of::<Mesh3d>());
     s.meshes_visible = visible.len() as u32;
     if !budget.detailed_stats {
@@ -194,11 +256,77 @@ mod devtools {
                     ("detailed_stats", "boolean", "per-mesh stats"),
                 ]),
                 render_budget,
-            );
+            )
+            .add_control_command(
+                "render.governor",
+                "Quality governor state; set enabled, target_fps, max_scale, or scale (with enabled=false)",
+                params(&[
+                    ("enabled", "boolean", "governor on/off"),
+                    ("target_fps", "number", "frame rate to hold"),
+                    ("max_scale", "number", "highest render scale it uses (0.4..1)"),
+                    ("scale", "number", "render scale to force (only while the governor is off)"),
+                ]),
+                render_governor,
+            )
+            .add_systems(PreUpdate, feed_gpu_load);
+    }
+
+    /// The perf monitor's GPU busy share → the governor's GPU-bound test.
+    fn feed_gpu_load(shared: Option<Res<crate::devtools::perf::PerfShared>>, mut load: ResMut<super::super::GpuLoad>) {
+        let busy = shared.and_then(|s| s.latest()).map(|s| s.gpu.process.now).filter(|p| *p > 0.0).map(|p| p / 100.0);
+        if load.0 != busy {
+            load.0 = busy;
+        }
+    }
+
+    fn governor_json(world: &World) -> Value {
+        use super::super::{GovernorState, QualityGovernor, RenderScale};
+        let g = world.resource::<QualityGovernor>();
+        let st = world.resource::<GovernorState>();
+        let rs = world.resource::<RenderScale>();
+        let steps: Vec<String> = g.steps.iter().map(|s| s.label()).collect();
+        json!({
+            "enabled": g.enabled, "target_fps": g.target_fps, "max_scale": g.max_scale,
+            "level": st.level, "levels": g.steps.len(), "memory_level": st.memory_level,
+            "applied": steps.iter().take(st.level).collect::<Vec<_>>(),
+            "load_ms": st.load_ms, "frame_ms": st.frame_ms, "gpu_bound": st.gpu_bound,
+            "gpu_busy": world.resource::<super::super::GpuLoad>().0,
+            "hold_until": st.hold_until, "changes": st.changes, "last_reason": st.last_reason.map(|r| format!("{r:?}")),
+            "footprint_mb": st.footprint_mb, "memory_budget_mb": st.memory_budget_mb,
+            "scale": {"wanted": rs.scale, "applied": rs.applied, "size": [rs.size.x, rs.size.y]},
+        })
+    }
+
+    fn render_governor(world: &mut World, p: Value) -> Result<Value, String> {
+        use super::super::{QualityGovernor, RenderScale};
+        {
+            let mut g = world.resource_mut::<QualityGovernor>();
+            if let Some(v) = p.get("enabled").and_then(Value::as_bool) {
+                g.enabled = v;
+            }
+            if let Some(v) = p.get("target_fps").and_then(Value::as_f64) {
+                g.target_fps = (v as f32).clamp(10.0, 500.0);
+            }
+            if let Some(v) = p.get("max_scale").and_then(Value::as_f64) {
+                g.max_scale = (v as f32).clamp(super::super::scale::MIN_SCALE, 1.0);
+            }
+        }
+        if let Some(v) = p.get("scale").and_then(Value::as_f64) {
+            if world.resource::<QualityGovernor>().enabled {
+                return Err("`scale` needs the governor off (enabled=false), else it owns the scale".into());
+            }
+            world.resource_mut::<RenderScale>().scale = (v as f32).clamp(super::super::scale::MIN_SCALE, 1.0);
+        }
+        Ok(governor_json(world))
     }
 
     /// Every [`RenderStats`] field as `render.<field>` (booleans as 0/1).
-    fn record_metrics(stats: Res<RenderStats>, metrics: Option<ResMut<Metrics>>) {
+    fn record_metrics(
+        stats: Res<RenderStats>,
+        scale: Res<super::super::RenderScale>,
+        gov: Res<super::super::GovernorState>,
+        metrics: Option<ResMut<Metrics>>,
+    ) {
         let Some(mut m) = metrics else { return };
         let s = &*stats;
         m.record("render.frames_rendered", s.frames_rendered as f64);
@@ -226,6 +354,12 @@ mod devtools {
         m.record("render.stream_hidden", s.stream_hidden as f64);
         m.record("render.stream_live", s.stream_live as f64);
         m.record("render.cpu_us", s.cpu_us as f64);
+        m.record("render.aspect", s.aspect as f64);
+        m.record("render.frustum_stale", s.frustum_stale as u8 as f64);
+        m.record("render.view_fixes", s.view_fixes as f64);
+        m.record("render.scale", scale.applied as f64);
+        m.record("render.governor_level", gov.level as f64);
+        m.record("render.governor_load_ms", gov.load_ms as f64);
     }
 
     pub fn stats_json(world: &World) -> Value {
@@ -242,7 +376,10 @@ mod devtools {
             "streamed_in": s.streamed_in, "streamed_out": s.streamed_out,
             "occlusion_culling": s.occlusion_culling, "occlusion_supported": s.occlusion_supported,
             "shadows_trimmed": s.shadows_trimmed, "stream_hidden": s.stream_hidden, "stream_live": s.stream_live,
-            "redraw_reason": s.redraw_reason, "cpu_us": s.cpu_us,
+            "redraw_reason": s.redraw_reason, "cpu_us": s.cpu_us, "cameras": s.cameras,
+            "eye": [s.eye.x, s.eye.y, s.eye.z], "eye_forward": [s.eye_forward.x, s.eye_forward.y, s.eye_forward.z],
+            "aspect": s.aspect, "viewport": [s.viewport.x, s.viewport.y], "frustum_stale": s.frustum_stale, "view_fixes": s.view_fixes,
+            "governor": governor_json(world),
             "entities": world.entities().count_spawned(),
             "budget": {
                 "occlusion": b.occlusion_culling, "detail": b.scenery_detail, "shadow_trim": b.shadow_trim,
@@ -275,5 +412,42 @@ mod devtools {
             set("detailed_stats", &mut b.detailed_stats);
         }
         Ok(stats_json(world)["budget"].clone())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use bevy::camera::RenderTargetInfo;
+
+    use super::*;
+
+    fn app() -> App {
+        let mut app = App::new();
+        app.init_resource::<RenderStats>().add_systems(Update, guard_main_view);
+        app
+    }
+
+    #[test]
+    fn stale_frustum_and_aspect_are_repaired() {
+        let mut app = app();
+        let mut camera = Camera::default();
+        camera.computed.target_info = Some(RenderTargetInfo { physical_size: UVec2::new(1600, 900), scale_factor: 1.0 });
+        let gt = GlobalTransform::from(Transform::from_xyz(0.0, 1.7, 27.0).looking_to(Vec3::NEG_Z, Vec3::Y));
+        // Aspect from a sliver-shaped window, frustum from another pose.
+        let proj = Projection::Perspective(PerspectiveProjection { aspect_ratio: 0.05, ..default() });
+        let old = proj.compute_frustum(&GlobalTransform::from(Transform::from_xyz(0.0, 50.0, -300.0)));
+        let cam = app.world_mut().spawn((MainCamera, camera, proj, old, gt)).id();
+        app.update();
+        let w = app.world();
+        let Projection::Perspective(p) = w.get::<Projection>(cam).unwrap() else { panic!() };
+        assert!((p.aspect_ratio - 16.0 / 9.0).abs() < 1e-4, "aspect {}", p.aspect_ratio);
+        let want = w.get::<Projection>(cam).unwrap().compute_frustum(&gt);
+        let got = w.get::<Frustum>(cam).unwrap();
+        assert!(got.half_spaces.iter().zip(&want.half_spaces).all(|(a, b)| a.normal_d().abs_diff_eq(b.normal_d(), 1e-5)));
+        assert_eq!(w.resource::<RenderStats>().view_fixes, 1);
+        // Healthy from here on: no more repairs.
+        app.update();
+        assert_eq!(app.world().resource::<RenderStats>().view_fixes, 1);
+        assert!(!app.world().resource::<RenderStats>().frustum_stale);
     }
 }

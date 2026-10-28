@@ -50,7 +50,7 @@ pub struct MainCamera;
 /// shadow filtering, contact shadows, SSR). The `look` module (feature `look`) reads the
 /// "look tier" fields (volumetric fog, env lighting, auto exposure, lens / post effects, sky
 /// quality, probe refresh) to gate what a [`crate::look::Look`] asks for.
-#[derive(Resource, Clone, Debug)]
+#[derive(Resource, Clone, Debug, PartialEq)]
 pub struct QualityPreset {
     pub ssao: [bool; 4],
     pub bloom: [bool; 4],
