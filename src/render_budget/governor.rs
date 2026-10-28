@@ -68,6 +68,9 @@ pub enum GovernorStep {
     /// A game-defined level (1, 2, …): the game reads [`GovernorState::game_level`], the
     /// highest one applied, and cuts what it knows is expensive (e.g. shadowed lamps).
     Game(u8),
+    /// Procedural `Normal`/`Fine` spawns at most this fraction (feature `pcg`; read from
+    /// [`GovernorState::pcg_density`]). Respawns from cache: no pipeline work.
+    PcgDensity(f32),
 }
 
 impl GovernorStep {
@@ -87,6 +90,7 @@ impl GovernorStep {
             GovernorStep::Detail(f) => format!("detail distance {:.0}%", f * 100.0),
             GovernorStep::Taa => "temporal anti-aliasing".into(),
             GovernorStep::Game(n) => format!("game detail level {n}"),
+            GovernorStep::PcgDensity(f) => format!("procedural detail {:.0}%", f * 100.0),
         }
     }
 
@@ -100,7 +104,7 @@ impl GovernorStep {
     pub fn apply(&self, p: &mut QualityPreset) {
         for i in 0..4 {
             match *self {
-                GovernorStep::Scale(_) | GovernorStep::Game(_) => {}
+                GovernorStep::Scale(_) | GovernorStep::Game(_) | GovernorStep::PcgDensity(_) => {}
                 GovernorStep::Ssr => p.ssr[i] = false,
                 GovernorStep::ProbeRefresh(n) => {
                     let r = &mut p.probe_refresh[i];
@@ -260,6 +264,9 @@ pub struct GovernorState {
     pub hold_until: f64,
     /// Highest [`GovernorStep::Game`] level applied (0 = none).
     pub game_level: u8,
+    /// Lowest [`GovernorStep::PcgDensity`] applied (1 = none; 0 before the first change, also
+    /// meaning none).
+    pub pcg_density: f32,
     pub last_reason: Option<GovernorReason>,
     /// The step applied (down) or undone (up) by the last change.
     pub last_step: Option<GovernorStep>,
@@ -628,6 +635,13 @@ fn commit(
         .filter_map(|s| if let GovernorStep::Game(n) = s { Some(*n) } else { None })
         .max()
         .unwrap_or(0);
+    st.pcg_density = g
+        .steps
+        .iter()
+        .take(st.level)
+        .chain(g.memory_steps.iter().take(st.memory_level))
+        .filter_map(|s| if let GovernorStep::PcgDensity(f) = s { Some(*f) } else { None })
+        .fold(1.0, f32::min);
     st.last_reason = Some(reason);
     st.last_step = step;
     st.changes += 1;

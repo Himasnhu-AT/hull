@@ -232,7 +232,7 @@ fn on_save(mut ev: MessageReader<SaveEvent>) { .. }       // Saved / Loaded / De
   ETC1S/BasisLZ isn't supported (`bevy_image ktx2.rs`). Native block formats in KTX2 (BC7/BC5 on
   desktop, ASTC on Apple) load fine: use `tools/cook` below.
 - **`tools/cook`** (standalone crate, links ISPC texture kernels; not part of the engine build):
-  `memgate -- cargo run --release --manifest-path tools/cook/Cargo.toml -- <assets>/textures
+  `memgate -- cargo run --manifest-path tools/cook/Cargo.toml -- <assets>/textures
   [--only SET] [--force]`. Per set: `color.ktx2` (BC7 sRGB, linear-light mips), `normal.ktx2`
   (BC5, renormalised mips), `orm.ktx2` (BC5: R = AO, white without `ao`, G = roughness),
   `color.avg` (linear average colour); zstd per level. Sets whose outputs are newer than every

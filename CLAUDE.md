@@ -38,4 +38,5 @@ The rules that matter most, so you don't skip them:
 | docs/ACTIONS.md | Input actions, rebinding, gamepad, accessibility |
 | docs/L10N.md | Localization |
 | docs/WORLD.md | Terrain, scatter, cell streaming, HLOD, floating origin |
+| docs/PCG.md | Procedural content: node graphs, cells, catalog, scalability |
 | docs/NET.md | Multiplayer (feature `net`) |

@@ -228,6 +228,8 @@ impl Plugin for EnginePlugin {
         app.add_plugins(crate::anim::AnimPlugin);
         #[cfg(feature = "vfx")]
         app.add_plugins(crate::vfx::VfxPlugin);
+        #[cfg(feature = "pcg")]
+        app.add_plugins(crate::pcg::PcgPlugin);
         #[cfg(feature = "ai")]
         app.add_plugins(crate::ai::AiPlugin);
         #[cfg(feature = "sound")]

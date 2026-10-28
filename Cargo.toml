@@ -27,6 +27,7 @@ ashlar-trace = { git = "https://github.com/Himasnhu-AT/ashlar", rev = "561745aaf
 image = { version = "0.25", default-features = false, features = ["png"], optional = true }
 # world: RON world descriptions and 16-bit PNG heightmaps (both already in Bevy's tree; no new features).
 ron = { version = "0.12", default-features = false, optional = true }
+pcg-core = { path = "crates/pcg-core", optional = true }
 png = { version = "0.18", default-features = false, optional = true }
 # net: compact serde wire format for replicated components / messages (pulls only cobs + serde).
 postcard = { version = "1", default-features = false, features = ["alloc"], optional = true }
@@ -42,6 +43,7 @@ default = [
     "look",
     "anim",
     "world",
+    "pcg",
     "vfx",
     "ai",
     "sound",
@@ -77,6 +79,8 @@ look_clustered_decals = ["look", "bevy/pbr_clustered_decals"]
 anim = []
 # Particles / visual effects (src/vfx, docs/VFX.md).
 vfx = ["dep:bytemuck"]
+# Procedural content generation: pcg-core graphs evaluated per cell, spawned as scenery (docs/PCG.md).
+pcg = ["dep:pcg-core"]
 # Navigation (tiled navmesh baking, paths, crowds), behaviour trees, utility AI, perception.
 ai = ["physics"]
 # Audio middleware: buses, snapshots, ducking, cues, voice limits, 3D, occlusion, music, captions (src/sound/).
@@ -124,6 +128,10 @@ required-features = ["devkit"]
 [[example]]
 name = "devkit_cli"
 required-features = ["devkit"]
+
+[[example]]
+name = "pcg_town"
+required-features = ["pcg"]
 
 [[example]]
 name = "look_showcase"

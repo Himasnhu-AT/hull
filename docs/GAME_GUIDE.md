@@ -34,6 +34,7 @@ budget, devtools when enabled). Your game is a `Plugin` added on top.
 | Input actions, rebinding, gamepad, accessibility | `actions` | ACTIONS.md |
 | Text in several languages | `l10n` | L10N.md |
 | Big outdoor worlds: terrain, scatter, cell streaming, HLOD, floating origin | `world` | WORLD.md |
+| Dressing maps from data (foliage, clutter, lamps, props) with deterministic node graphs | `pcg` + `crates/pcg-core` | PCG.md |
 | Multiplayer | `net` (feature, off by default) | NET.md |
 | Inspector, scenario tests, replays, golden images, saves, hot reload, asset checks | `devkit` | DEVKIT.md |
 | Benchmarks and regression checks | `scripts/perf_suite.py`, `scripts/bench.py` | PERF.md |
@@ -197,7 +198,7 @@ All in LOOK.md; the short version:
   normals renormalised, plus `color.avg` (three linear floats: the average colour, used for
   far-detail materials). With the engine feature `ktx2`, `load_pbr` prefers them and loads them
   GPU-only. The engine's cook does exactly this:
-  `memgate -- cargo run --release --manifest-path <engine>/tools/cook/Cargo.toml -- assets/textures [--only SET] [--force]`
+  `memgate -- cargo run --manifest-path <engine>/tools/cook/Cargo.toml -- assets/textures [--only SET] [--force]`
   (standalone crate, not part of the engine build; skips sets whose outputs are newer). Bevy
   0.19 can't load UASTC/ETC1S from `scripts/cook.py` (DEVKIT.md "Content pipeline").
 - Keep textures ≤ 2048 px; 1024 is plenty for tiling materials.

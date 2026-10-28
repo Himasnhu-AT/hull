@@ -1,0 +1,13 @@
+[package]
+name = "pcg-core"
+description = "Procedural content generation core: point sets, a node graph, deterministic partition-independent evaluation. No Bevy: usable from game-logic crates."
+edition = "2024"
+version = "0.1.0"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[dependencies]
+# Same glam as Bevy 0.19 (bevy_math), so points convert for free.
+glam = { version = "0.32", features = ["serde"] }
+serde = { version = "1", features = ["derive"] }
+ron = { version = "0.12", default-features = false }

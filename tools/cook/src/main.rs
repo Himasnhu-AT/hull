@@ -12,7 +12,7 @@
 //! Every level is zstd-supercompressed. About 4x less VRAM and texture bandwidth than RGBA8,
 //! and loading skips JPEG decode + CPU mip generation.
 //!
-//!   memgate -- cargo run --release --manifest-path <engine>/tools/cook/Cargo.toml -- assets/textures [--only SET] [--force]
+//!   memgate -- cargo run --manifest-path <engine>/tools/cook/Cargo.toml -- assets/textures [--only SET] [--force]
 //!
 //! Unchanged sets (outputs newer than every source) are skipped unless `--force`.
 

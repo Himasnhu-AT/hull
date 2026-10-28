@@ -67,6 +67,8 @@ pub mod net;
 pub mod trace;
 #[cfg(feature = "vfx")]
 pub mod vfx;
+#[cfg(feature = "pcg")]
+pub mod pcg;
 #[cfg(feature = "sound")]
 pub mod sound;
 

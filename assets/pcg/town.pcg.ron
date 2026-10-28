@@ -1,0 +1,31 @@
+// Cookbook: a small town's dressing (examples/pcg_town.rs). Inputs: "lots" (rects to dress),
+// "blocks" (houses to keep clear of), "streets" (polylines).
+(
+    seed: 11,
+    nodes: [
+        (id: "lots", op: Input(name: "lots")),
+        (id: "blocks", op: Input(name: "blocks")),
+        (id: "streets", op: Input(name: "streets")),
+
+        // Trees: blue-noise 4 m apart, thinned by noise into groves, clear of houses.
+        (id: "tree_pts", op: PoissonSample(radius: 4.0), inputs: ["lots"]),
+        (id: "groves", op: DensityNoise(scale: 18.0, octaves: 3, lo: 0.35, hi: 0.7), inputs: ["tree_pts"]),
+        (id: "dense", op: DensityFilter(lo: 0.2), inputs: ["groves"]),
+        (id: "clear", op: Difference(against: "blocks", pad: 2.0), inputs: ["dense"]),
+        (id: "trees_tf", op: Transform(yaw: (0.0, 360.0), scale: (0.7, 1.3)), inputs: ["clear"]),
+        (id: "trees", op: Spawn((items: [("tree", 3.0), ("bush", 1.0)], tier: Normal)), inputs: ["trees_tf"]),
+
+        // Rocks: fine detail, thinned first at low quality.
+        (id: "rock_pts", op: GridSample(spacing: 3.0, jitter: 0.9), inputs: ["lots"]),
+        (id: "rock_keep", op: Keep(fraction: 0.15), inputs: ["rock_pts"]),
+        (id: "rock_clear", op: Difference(against: "blocks", pad: 0.5), inputs: ["rock_keep"]),
+        (id: "rocks_tf", op: Transform(yaw: (0.0, 360.0), scale: (0.5, 1.5)), inputs: ["rock_clear"]),
+        (id: "rocks", op: Spawn((items: [("rock", 1.0)], tier: Fine, shadows: false)), inputs: ["rocks_tf"]),
+
+        // Street lamps: every 12 m on the left kerb, 3 m in; posts collide, lights on top.
+        (id: "lamp_pts", op: EdgeSample(spacing: 12.0, offset: 3.0, side: Left), inputs: ["streets"]),
+        (id: "lamp_clear", op: Difference(against: "blocks", pad: 1.0), inputs: ["lamp_pts"]),
+        (id: "lamp_posts", op: Spawn((items: [("lamp_post", 1.0)], tier: Essential, collider: true)), inputs: ["lamp_clear"]),
+        (id: "lamp_lights", op: Spawn((kind: Light, items: [("lamp_light", 1.0)], tier: Essential)), inputs: ["lamp_clear"]),
+    ],
+)
