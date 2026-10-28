@@ -555,6 +555,23 @@ pub fn record_snapshot(m: &mut Metrics, s: &PerfSnapshot) {
     if let Some(v) = s.gpu.passes_ms {
         m.record("gpu.passes_ms", v as f64);
     }
+    if let Some(ws) = s.gpu.working_set_mb.filter(|v| *v > 0.0) {
+        m.record("gpu.working_set_mb", ws as f64);
+        if let Some(a) = s.gpu.process_alloc_mb {
+            m.record("gpu.alloc_pct", (a / ws * 100.0) as f64);
+        }
+    }
+    if let (Some(u), Some(t)) = (s.ram.system_used_mb, s.ram.system_total_mb) {
+        m.record("mem.system_used_mb", u as f64);
+        m.record("mem.system_total_mb", t as f64);
+        m.record("mem.system_pct", (u / t.max(1.0) * 100.0) as f64);
+    }
+    if let Some(v) = s.ram.swap_mb {
+        m.record("mem.swap_mb", v as f64);
+    }
+    if let Some(v) = s.ram.pressure {
+        m.record("mem.pressure", v as f64);
+    }
     stat(m, "mem.footprint_mb", &s.ram.footprint_mb);
     if let Some(v) = s.ram.rss_mb {
         m.record("mem.rss_mb", v as f64);

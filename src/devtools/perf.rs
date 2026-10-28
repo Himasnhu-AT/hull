@@ -179,6 +179,12 @@ pub struct RamRow {
     pub footprint_mb: Stat,
     /// Resident set, MiB (`ps -o rss`); counts shared pages, not compressed ones.
     pub rss_mb: Option<f32>,
+    /// The whole machine: memory in use / installed, MiB (Activity Monitor's "Memory Used").
+    pub system_used_mb: Option<f32>,
+    pub system_total_mb: Option<f32>,
+    /// Swap in use, MiB; OS memory pressure (0 normal, 1 warning, 2 critical).
+    pub swap_mb: Option<f32>,
+    pub pressure: Option<u8>,
 }
 
 /// One window's GPU time per frame. `clean`: no hitch and no stall in the window, so it
@@ -206,6 +212,8 @@ pub struct GpuRow {
     pub sample: Option<GpuSample>,
     /// This process's Metal allocations, MiB.
     pub process_alloc_mb: Option<f32>,
+    /// Metal's recommended maximum working set for this GPU, MiB.
+    pub working_set_mb: Option<f32>,
     /// Device-wide GPU memory in use, MiB (driver "In use system memory").
     pub device_in_use_mb: Stat,
     /// Device-wide GPU memory allocated, MiB (driver "Alloc system memory").
@@ -933,7 +941,18 @@ fn sampler(
                 threads: rows,
                 pools,
             },
-            ram: RamRow { footprint_mb: stat(&mut t.footprint, mem.map(|m| mb(m.1))), rss_mb: mem.map(|m| mb(m.0)) },
+            ram: {
+                let sys = crate::render_budget::governor::system_memory_mb();
+                let (swap, pressure) = crate::render_budget::governor::swap_and_pressure();
+                RamRow {
+                    footprint_mb: stat(&mut t.footprint, mem.map(|m| mb(m.1))),
+                    rss_mb: mem.map(|m| mb(m.0)),
+                    system_used_mb: sys.map(|s| s.0),
+                    system_total_mb: sys.map(|s| s.1),
+                    swap_mb: swap,
+                    pressure,
+                }
+            },
             gpu: GpuRow {
                 device: stat(&mut t.gpu_device, u.map(|u| u.device as f32)),
                 renderer: stat(&mut t.gpu_renderer, u.map(|u| u.renderer as f32)),
@@ -942,6 +961,7 @@ fn sampler(
                 frame_ms: stat(&mut t.gpu_frame, gpu_frame),
                 sample: gpu_sample,
                 process_alloc_mb: g.process_alloc.map(mb),
+                working_set_mb: g.working_set.map(mb),
                 device_in_use_mb: stat(&mut t.gpu_mem, u.map(|u| mb(u.in_use))),
                 device_alloc_mb: u.map(|u| mb(u.alloc)),
                 polls,

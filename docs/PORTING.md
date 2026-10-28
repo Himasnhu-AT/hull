@@ -56,6 +56,15 @@ Dev builds (feature `devtools`) chart every metric in a second window and keep a
   % of RAM, GPU allocation, governor memory budget); **Quality** (preset, governor level and
   render scale, last step taken and why). The in-game FPS counter (`show_fps`) reads
   `62 FPS · CPU 9 ms · GPU 14 ms · RAM 3.5 GB` (CPU/GPU in devtools builds, from `FrameCost`).
+- **Readable rows**: every row has a plain label with units ("CPU, this game (100% = 1 core)
+  125% (1.3 cores)", "GPU memory, this game 255 MB", "System memory in use 16.8 GB"), headline
+  rows first in each section, sections ordered Frame → CPU → GPU → Memory → Render → Spans. New
+  keys: `gpu.working_set_mb` (Metal `recommendedMaxWorkingSetSize`), `gpu.alloc_pct`,
+  `mem.system_used_mb` / `mem.system_total_mb` / `mem.system_pct` (Activity Monitor's "Memory
+  Used"), `mem.swap_mb`, `mem.pressure` (0 normal, 1 warning, 2 critical). The GPU tile reads
+  "busy % · ms" and memory vs the working set; the Memory tile shows system RAM, this game,
+  pressure and swap. Developer counters (GPU resource counts, ECS, monitor overhead) are hidden
+  unless `metrics.window {dev: true}`.
 - **Cost**: it redraws at 4 Hz. Between redraws its camera is inactive, so Bevy doesn't touch the window at all, and it presents without vsync. A redraw takes ~0.4–1 ms of main-thread time in a dev build (`perf.metrics_view_ms`, also shown in the header). Measured on an M-series Mac, vsync off: frame p50 5.8 → 6.0–6.3 ms and p95 6.2 → 8.3 ms with it open. Close it (F4) for clean perf numbers.
 - **Engine keys** (from the perf monitor, no extra sampling): `frame.ms` (every frame), `frame.fps/p50_ms/p95_ms/p99_ms/max_ms/hitches`, `cpu.process_pct/machine_pct/main_pct/render_pct/<pool>_pct`, `gpu.pct/renderer_pct/tiler_pct/process_pct/frame_ms/mem_mb/alloc_mb/passes_ms`, `mem.footprint_mb/rss_mb`, `ecs.entities`, `span.<perf_span label>_ms`, `perf.overhead_us`. The render stream adds `render.*` (every `RenderStats` field).
 - **Game keys**: one line, one sample per key per frame (last write wins), behind the game's `dev` feature:

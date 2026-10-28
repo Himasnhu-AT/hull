@@ -53,6 +53,8 @@ pub struct GpuSys {
     pub process_gpu_ns: Option<u64>,
     /// This process's Metal allocations, bytes.
     pub process_alloc: Option<u64>,
+    /// Metal's `recommendedMaxWorkingSetSize`: how much GPU memory the app should stay under.
+    pub working_set: Option<u64>,
     /// Every process holding a GPU user client, with its cumulative GPU time.
     pub clients: Vec<GpuClient>,
 }
@@ -354,6 +356,7 @@ mod imp {
         k_gputime: CFTypeRef,
         mtl: *mut c_void,
         sel_alloc: *const c_void,
+        working_set: Option<u64>,
         pid: i32,
     }
 
@@ -398,8 +401,16 @@ mod imp {
             // SAFETY: MTLCreateSystemDefaultDevice returns a retained device (or null); we keep it
             // for the process lifetime. Devices are per-GPU singletons, so this is the device
             // wgpu renders with. sel_registerName takes a valid C string.
-            let (mtl, sel_alloc) =
-                unsafe { (MTLCreateSystemDefaultDevice(), sel_registerName(c"currentAllocatedSize".as_ptr())) };
+            let (mtl, sel_alloc, sel_ws) = unsafe {
+                (MTLCreateSystemDefaultDevice(), sel_registerName(c"currentAllocatedSize".as_ptr()), sel_registerName(c"recommendedMaxWorkingSetSize".as_ptr()))
+            };
+            // SAFETY: `-[MTLDevice recommendedMaxWorkingSetSize]` takes no arguments and returns
+            // uint64_t; objc_msgSend is called through the matching function type. Constant for
+            // the device, so read once.
+            let working_set = (!mtl.is_null()).then(|| unsafe {
+                let f: unsafe extern "C" fn(*mut c_void, *const c_void) -> u64 = std::mem::transmute(objc_msgSend as unsafe extern "C" fn());
+                f(mtl, sel_ws)
+            });
             Self {
                 k_perf: cfstr(c"PerformanceStatistics"),
                 k_util: cfstr(c"Device Utilization %"),
@@ -412,6 +423,7 @@ mod imp {
                 k_gputime: cfstr(c"accumulatedGPUTime"),
                 mtl,
                 sel_alloc,
+                working_set,
                 pid: std::process::id() as i32,
             }
         }
@@ -469,7 +481,7 @@ mod imp {
 
         /// Per-process GPU time (all processes) and this process's Metal allocations.
         pub fn sample(&mut self) -> GpuSys {
-            let mut g = GpuSys::default();
+            let mut g = GpuSys { working_set: self.working_set, ..Default::default() };
             if !self.mtl.is_null() {
                 // SAFETY: `-[MTLDevice currentAllocatedSize]` takes no arguments and returns
                 // NSUInteger; objc_msgSend is called through the matching function type.

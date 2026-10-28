@@ -51,7 +51,7 @@ pub const SIZE: (u32, u32) = (1440, 900);
 const LAYER: usize = 29;
 /// Width of one runs-table column / the key column, logical px.
 const RUN_COL: f32 = 112.0;
-const RUN_KEY: f32 = 200.0;
+const RUN_KEY: f32 = 290.0;
 const MAX_RUN_ROWS: usize = 12;
 /// Sparkline size, logical px.
 const SPARK: (f32, f32) = (150.0, 18.0);
@@ -122,6 +122,8 @@ enum Target {
 #[derive(Resource)]
 pub struct MetricsView {
     pub open: bool,
+    /// Also show developer counters (GPU resources, ECS, monitor overhead).
+    pub dev: bool,
     target: Target,
     window: Option<Entity>,
     camera: Option<Entity>,
@@ -141,6 +143,7 @@ impl MetricsView {
     pub fn json(&self) -> Value {
         json!({
             "open": self.open,
+            "dev": self.dev,
             "shown": self.camera.is_some(),
             "target": match self.target { Target::Window => "window", Target::Image => "image" },
             "redraw_ms": (self.cost_ms * 1000.0).round() / 1000.0,
@@ -223,7 +226,6 @@ impl Tile {
 struct Live {
     budget_ms: f32,
     target_fps: f32,
-    ram_mb: Option<f32>,
     quality: Option<String>,
     governor_on: bool,
     level: usize,
@@ -231,7 +233,6 @@ struct Live {
     memory_level: usize,
     scale: f32,
     last: Option<(crate::render_budget::GovernorReason, Option<crate::render_budget::GovernorStep>)>,
-    memory_budget_mb: Option<f32>,
 }
 
 struct ChartInfo {
@@ -262,7 +263,11 @@ pub(super) fn build(app: &mut App) {
         .add_control_command(
             "metrics.window",
             "Open or close the metrics window (no param: toggle)",
-            params(&[("on", "boolean", "open (true) or close (false)"), ("scroll", "number", "scroll the key list to this y (px)")]),
+            params(&[
+                ("on", "boolean", "open (true) or close (false)"),
+                ("scroll", "number", "scroll the key list to this y (px)"),
+                ("dev", "boolean", "also show developer counters (GPU resources, ECS, monitor)"),
+            ]),
             window_cmd,
         )
         .add_deferred_control_command(
@@ -288,6 +293,7 @@ pub(super) fn finish(app: &mut App) {
     }
     app.insert_resource(MetricsView {
         open: wanted_at_start(),
+        dev: false,
         target: if super::offscreen::enabled() { Target::Image } else { Target::Window },
         window: None,
         camera: None,
@@ -477,7 +483,7 @@ fn refresh(
         (Target::Image, _) => (SIZE, 1.0),
     };
     let past: &[SessionSummary] = history.as_ref().map_or(&[], |h| &h.past);
-    let plan = make_plan(&m, past, &compare, &featured, size, scale);
+    let plan = make_plan_dev(&m, past, &compare, &featured, size, scale, view.dev);
     if view.plan.as_ref() != Some(&plan) {
         if let Some(root) = view.root.take() {
             commands.entity(root).try_despawn();
@@ -559,7 +565,6 @@ impl LiveParams<'_> {
         Live {
             budget_ms: 1000.0 / target_fps,
             target_fps,
-            ram_mb: ram_mb(),
             quality: self.settings.as_ref().map(|s| format!("{:?}", s.quality)),
             governor_on: self.governor.as_ref().is_some_and(|g| g.enabled),
             level: st.map_or(0, |s| s.level),
@@ -567,15 +572,8 @@ impl LiveParams<'_> {
             memory_level: st.map_or(0, |s| s.memory_level),
             scale: self.scale.as_ref().map_or(1.0, |s| s.applied),
             last: st.and_then(|s| s.last_reason.map(|r| (r, s.last_step))),
-            memory_budget_mb: st.and_then(|s| s.memory_budget_mb).or_else(|| ram_mb().map(|r| r * 0.6)),
         }
     }
-}
-
-/// Physical RAM (MB), read once.
-fn ram_mb() -> Option<f32> {
-    static RAM: std::sync::OnceLock<Option<f32>> = std::sync::OnceLock::new();
-    *RAM.get_or_init(crate::render_budget::governor::ram_mb)
 }
 
 /// Logical CPU cores, read once.
@@ -585,14 +583,119 @@ fn cores() -> usize {
 }
 
 /// Group order in the body; others follow alphabetically.
-const GROUP_ORDER: [&str; 9] = ["frame", "cpu", "gpu", "mem", "ecs", "render", "span", "perf", "misc"];
+const GROUP_ORDER: [&str; 10] = ["frame", "cpu", "gpu", "mem", "render", "span", "resources", "ecs", "perf", "misc"];
+
+/// Row order inside groups: what matters first.
+const ROW_ORDER: [&str; 30] = [
+    "frame.fps",
+    "frame.ms",
+    "frame.p50_ms",
+    "frame.p95_ms",
+    "frame.p99_ms",
+    "frame.max_ms",
+    "frame.hitches",
+    "cpu.machine_pct",
+    "cpu.cores",
+    "cpu.process_pct",
+    "cpu.main_ms",
+    "cpu.render_ms",
+    "cpu.main_pct",
+    "cpu.render_pct",
+    "cpu.compute_pool_pct",
+    "cpu.async_pool_pct",
+    "gpu.process_pct",
+    "gpu.frame_ms",
+    "gpu.alloc_mb",
+    "gpu.alloc_pct",
+    "gpu.working_set_mb",
+    "gpu.pct",
+    "gpu.renderer_pct",
+    "gpu.tiler_pct",
+    "gpu.mem_mb",
+    "mem.system_pct",
+    "mem.system_used_mb",
+    "mem.footprint_mb",
+    "mem.pressure",
+    "mem.swap_mb",
+];
+
+/// Groups shown only with `metrics.window {dev: true}` (developer counters).
+const DEV_GROUPS: [&str; 3] = ["resources", "ecs", "perf"];
 
 fn group_of(key: &str) -> &str {
-    key.split_once('.').map_or("misc", |(g, _)| g)
+    match key {
+        "gpu.textures" | "gpu.texture_views" | "gpu.buffers" | "gpu.bind_groups" | "gpu.samplers" | "gpu.render_pipelines" | "gpu.compute_pipelines" => "resources",
+        _ => key.split_once('.').map_or("misc", |(g, _)| g),
+    }
 }
 
+/// Plain name for a metric row (units come with the value).
+pub fn label(key: &str) -> String {
+    let known = match key {
+        "frame.fps" => "Frame rate",
+        "frame.ms" => "Frame time",
+        "frame.p50_ms" => "Frame time, median",
+        "frame.p95_ms" => "Frame time, slowest 5%",
+        "frame.p99_ms" => "Frame time, slowest 1%",
+        "frame.max_ms" => "Slowest frame",
+        "frame.hitches" => "Hitches (> 50 ms)",
+        "cpu.machine_pct" => "CPU, share of the whole machine",
+        "cpu.process_pct" => "CPU, this game (100% = 1 core)",
+        "cpu.cores" => "Cores busy",
+        "cpu.main_pct" => "Main thread (% of a core)",
+        "cpu.render_pct" => "Render thread (% of a core)",
+        "cpu.main_ms" => "Main thread per frame",
+        "cpu.render_ms" => "Render thread per frame",
+        "cpu.compute_pool_pct" => "Compute pool (100% = 1 core)",
+        "cpu.async_pool_pct" => "Async pool (100% = 1 core)",
+        "cpu.io_pool_pct" => "IO pool (100% = 1 core)",
+        "gpu.process_pct" => "GPU busy, this game",
+        "gpu.frame_ms" => "GPU time per frame",
+        "gpu.pct" => "GPU busy, all apps",
+        "gpu.renderer_pct" => "GPU pixel work, all apps",
+        "gpu.tiler_pct" => "GPU geometry work, all apps",
+        "gpu.alloc_mb" => "GPU memory, this game",
+        "gpu.working_set_mb" => "GPU memory limit (Metal working set)",
+        "gpu.alloc_pct" => "GPU memory, share of limit",
+        "gpu.mem_mb" => "GPU memory, all apps",
+        "gpu.passes_ms" => "GPU passes per frame",
+        "gpu.textures" => "Textures",
+        "gpu.texture_views" => "Texture views",
+        "gpu.buffers" => "Buffers",
+        "gpu.bind_groups" => "Bind groups",
+        "gpu.samplers" => "Samplers",
+        "gpu.render_pipelines" => "Render pipelines",
+        "gpu.compute_pipelines" => "Compute pipelines",
+        "mem.footprint_mb" => "Memory, this game",
+        "mem.rss_mb" => "Resident memory, this game",
+        "mem.system_used_mb" => "System memory in use",
+        "mem.system_total_mb" => "System memory installed",
+        "mem.system_pct" => "System memory in use, share",
+        "mem.swap_mb" => "Swap in use",
+        "mem.pressure" => "Memory pressure",
+        "ecs.entities" => "Entities",
+        _ => "",
+    };
+    if !known.is_empty() {
+        return known.into();
+    }
+    // Fallback: the part after the group, without its unit suffix, words spaced.
+    let name = key.split_once('.').map_or(key, |(_, n)| n);
+    let name = ["_ms", "_pct", "_mb", "_us"].iter().fold(name, |n, suf| n.strip_suffix(suf).unwrap_or(n));
+    let mut out = name.replace('_', " ");
+    if let Some(c) = out.get(0..1) {
+        out = c.to_uppercase() + &out[1..];
+    }
+    out
+}
+
+#[cfg(test)]
 fn make_plan(m: &Metrics, past: &[SessionSummary], compare: &MetricsCompare, featured: &MetricsFeatured, size: (u32, u32), scale: f32) -> Plan {
-    let keys: Vec<&'static str> = m.keys().collect();
+    make_plan_dev(m, past, compare, featured, size, scale, false)
+}
+
+fn make_plan_dev(m: &Metrics, past: &[SessionSummary], compare: &MetricsCompare, featured: &MetricsFeatured, size: (u32, u32), scale: f32, dev: bool) -> Plan {
+    let keys: Vec<&'static str> = m.keys().filter(|k| dev || !DEV_GROUPS.contains(&group_of(k))).collect();
     let featured: Vec<&'static str> = featured.0.iter().copied().filter(|k| keys.contains(k)).take(4).collect();
     let mut groups: Vec<(String, Vec<&'static str>)> = Vec::new();
     for k in &keys {
@@ -604,6 +707,11 @@ fn make_plan(m: &Metrics, past: &[SessionSummary], compare: &MetricsCompare, fea
     }
     let rank = |g: &str| GROUP_ORDER.iter().position(|o| *o == g).unwrap_or(GROUP_ORDER.len());
     groups.sort_by(|a, b| rank(&a.0).cmp(&rank(&b.0)).then(a.0.cmp(&b.0)));
+    // Within a group: the headline numbers first (ROW_ORDER), the rest alphabetically.
+    let row = |k: &str| ROW_ORDER.iter().position(|o| *o == k).unwrap_or(ROW_ORDER.len());
+    for (_, keys) in groups.iter_mut() {
+        keys.sort_by(|a, b| row(a).cmp(&row(b)).then(a.cmp(b)));
+    }
     // Two columns, each group into the shorter one (rows + 2 for the heading).
     let mut cols: [Vec<(String, Vec<&'static str>)>; 2] = [Vec::new(), Vec::new()];
     let mut heights = [0usize; 2];
@@ -891,7 +999,7 @@ fn build_ui(
                                         }
                                     });
                                 for &k in keys {
-                                    let name = k.split_once('.').map_or(k, |(_, n)| n);
+                                    let name = self::label(k);
                                     p.spawn(Node { align_items: AlignItems::Center, column_gap: px(8), height: px(20), ..default() })
                                         .with_children(|p| {
                                             p.spawn((
@@ -943,7 +1051,8 @@ fn build_ui(
             }
             for (r, (k, stat)) in plan.rows.iter().enumerate() {
                 p.spawn(Node { height: px(18), align_items: AlignItems::Center, ..default() }).with_children(|p| {
-                    p.spawn((text(format!("{k} {stat}"), font(body, 12.0), t.text), Node { width: px(RUN_KEY), flex_shrink: 0.0, ..default() }));
+                    let name = if k.ends_with('.') { k.clone() } else { format!("{}, {stat}", self::label(k)) };
+                    p.spawn((text(name, font(body, 12.0), t.text), Node { width: px(RUN_KEY), flex_shrink: 0.0, ..default() }));
                     for c in 0..plan.run_cols {
                         p.spawn(Node {
                             width: px(RUN_COL),
@@ -1001,7 +1110,7 @@ impl FillCtx<'_> {
             SlotKind::RowStat(k, stat) => match self.recent.get(k).and_then(|s| s.get(stat)) {
                 Some(v) => {
                     let lvl = m.threshold(k).map_or(0, |th| th.level(v));
-                    (num(v), if lvl == 0 { t.text_muted } else { self.palette.level(lvl) })
+                    (stat_num(k, v), if lvl == 0 { t.text_muted } else { self.palette.level(lvl) })
                 }
                 None => (String::new(), t.text_dim),
             },
@@ -1024,6 +1133,7 @@ impl FillCtx<'_> {
         let dash = ("—".to_string(), t.text_dim);
         let frame_ms = get("frame.fps").filter(|f| *f > 0.0).map(|f| 1000.0 / f).or_else(|| avg("frame.ms"));
         let gb = |mb: f64| format!("{:.1} GB", mb / 1024.0);
+        let size = |mb: f64| if mb >= 1024.0 { format!("{:.1} GB", mb / 1024.0) } else { format!("{mb:.0} MB") };
         match (tile, line) {
             (Tile::Frame, 0) => match get("frame.fps") {
                 Some(f) => (format!("{f:.0} fps"), crate::ui::fps_counter::fps_color(t, f as f32)),
@@ -1039,7 +1149,7 @@ impl FillCtx<'_> {
                 None => dash,
             },
             (Tile::Cpu, 1) => match get("cpu.cores") {
-                Some(c) => (format!("{c:.1} of {} cores", cores()), t.text_muted),
+                Some(c) => (format!("of the machine · {c:.1} of {} cores busy", cores()), t.text_muted),
                 None => none,
             },
             (Tile::Cpu, 2) => match (get("cpu.main_ms"), get("cpu.render_ms")) {
@@ -1047,34 +1157,47 @@ impl FillCtx<'_> {
                 (Some(a), None) => (format!("main {a:.1} ms"), t.text_muted),
                 _ => none,
             },
-            (Tile::Gpu, 0) => match get("gpu.frame_ms") {
-                Some(v) => (format!("{v:.1} ms"), self.palette.value(Some(Threshold { amber: l.budget_ms as f64 * 0.8, red: l.budget_ms as f64 }), v)),
-                None => dash,
+            (Tile::Gpu, 0) => match (get("gpu.process_pct"), get("gpu.frame_ms")) {
+                (Some(p), Some(v)) => (format!("{p:.0}% · {v:.1} ms"), self.palette.value(Some(Threshold { amber: l.budget_ms as f64 * 0.8, red: l.budget_ms as f64 }), v)),
+                (Some(p), None) => (format!("{p:.0}%"), t.text),
+                (None, Some(v)) => (format!("{v:.1} ms"), t.text),
+                _ => dash,
             },
-            (Tile::Gpu, 1) => match get("gpu.process_pct") {
-                Some(p) => (format!("busy {p:.0}% of the time"), t.text_muted),
-                None => none,
+            (Tile::Gpu, 1) => match get("gpu.frame_ms") {
+                Some(v) => (format!("busy · {v:.1} of {:.1} ms per frame", l.budget_ms), t.text_muted),
+                None => ("busy share of this game".into(), t.text_muted),
             },
-            (Tile::Gpu, 2) => match (get("gpu.pct"), get("gpu.alloc_mb")) {
-                (Some(d), Some(a)) => (format!("device {d:.0}% · alloc {}", gb(a)), t.text_dim),
-                (Some(d), None) => (format!("device {d:.0}% (all apps)"), t.text_dim),
+            (Tile::Gpu, 2) => match (get("gpu.alloc_mb"), get("gpu.working_set_mb")) {
+                (Some(a), Some(ws)) => (format!("memory {} of {} ({:.0}%)", size(a), size(ws), a / ws.max(1.0) * 100.0), t.text_dim),
+                (Some(a), None) => (format!("memory {}", size(a)), t.text_dim),
                 _ => none,
             },
             (Tile::Limit, _) => self.limit(line, frame_ms),
-            (Tile::Mem, 0) => match get("mem.footprint_mb") {
-                Some(v) => (gb(v), self.palette.value(m.threshold("mem.footprint_mb"), v)),
-                None => dash,
+            (Tile::Mem, 0) => match get("mem.system_pct") {
+                Some(p) => (format!("{p:.0}%"), self.palette.value(Some(Threshold { amber: 75.0, red: 90.0 }), p)),
+                None => match get("mem.footprint_mb") {
+                    Some(v) => (size(v), t.text),
+                    None => dash,
+                },
             },
-            (Tile::Mem, 1) => match (get("mem.footprint_mb"), l.ram_mb) {
-                (Some(v), Some(r)) => (format!("{:.0}% of {} RAM", v / r as f64 * 100.0, gb(r as f64)), t.text_muted),
+            (Tile::Mem, 1) => match (get("mem.system_used_mb"), get("mem.system_total_mb"), get("mem.footprint_mb")) {
+                (Some(u), Some(tot), Some(me)) => (format!("system {} / {} · this game {}", gb(u), gb(tot), size(me)), t.text_muted),
+                (_, _, Some(me)) => (format!("this game {}", size(me)), t.text_muted),
                 _ => none,
             },
-            (Tile::Mem, 2) => match (get("gpu.alloc_mb"), l.memory_budget_mb) {
-                (Some(a), Some(b)) => (format!("GPU alloc {} · budget {}", gb(a), gb(b as f64)), t.text_dim),
-                (Some(a), None) => (format!("GPU alloc {}", gb(a)), t.text_dim),
-                (None, Some(b)) => (format!("budget {}", gb(b as f64)), t.text_dim),
-                _ => none,
-            },
+            (Tile::Mem, 2) => {
+                let pressure = match get("mem.pressure").map(|v| v as u8) {
+                    Some(2) => Some(("critical", t.bad)),
+                    Some(1) => Some(("warning", t.bad)),
+                    Some(_) => Some(("normal", t.text_dim)),
+                    None => None,
+                };
+                let swap = get("mem.swap_mb").filter(|v| *v >= 1.0).map(|v| format!(" · swap {}", size(v))).unwrap_or_default();
+                match pressure {
+                    Some((p, c)) => (format!("pressure {p}{swap}"), c),
+                    None => (swap.trim_start_matches(" · ").to_string(), t.text_dim),
+                }
+            }
             (Tile::Quality, 0) => {
                 let q = l.quality.clone().unwrap_or_else(|| "—".into());
                 if l.level + l.memory_level == 0 {
@@ -1239,6 +1362,22 @@ pub fn num(v: f64) -> String {
 /// Value with the unit its key implies (`frame.ms` → `8.31 ms`).
 pub fn with_unit(key: &str, v: f64) -> String {
     let n = num(v);
+    match key {
+        "cpu.process_pct" => return format!("{n}% ({:.1} cores)", v / 100.0),
+        "cpu.cores" => return format!("{v:.1} cores"),
+        "frame.fps" => return format!("{n} fps"),
+        "mem.pressure" => {
+            return match v as u8 {
+                2 => "critical".into(),
+                1 => "warning".into(),
+                _ => "normal".into(),
+            };
+        }
+        _ => {}
+    }
+    if key.ends_with("_mb") && v >= 1024.0 {
+        return format!("{:.2} GB", v / 1024.0);
+    }
     if key.ends_with("ms") {
         format!("{n} ms")
     } else if key.ends_with("_pct") || key == "gpu.pct" {
@@ -1252,11 +1391,20 @@ pub fn with_unit(key: &str, v: f64) -> String {
     }
 }
 
+/// A stats-column number in the same unit as the row's value (MB rows over 1 GB in GB).
+fn stat_num(key: &str, v: f64) -> String {
+    if key.ends_with("_mb") && v >= 1024.0 { format!("{:.2} G", v / 1024.0) } else { num(v) }
+}
+
 // ---- commands ----
 
 fn window_cmd(world: &mut World, p: Value) -> Result<Value, String> {
     let mut view = world.get_resource_mut::<MetricsView>().ok_or("no metrics view in this run (headless or no UI)")?;
-    let on = p.get("on").and_then(Value::as_bool).unwrap_or(if p.get("scroll").is_some() { view.open } else { !view.open });
+    let keep = p.get("scroll").is_some() || p.get("dev").is_some();
+    let on = p.get("on").and_then(Value::as_bool).unwrap_or(if keep { view.open } else { !view.open });
+    if let Some(d) = p.get("dev").and_then(Value::as_bool) {
+        view.dev = d;
+    }
     view.open = on;
     view.force = true;
     let out = view.json();

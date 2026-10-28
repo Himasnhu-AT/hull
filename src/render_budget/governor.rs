@@ -684,6 +684,72 @@ pub fn footprint_mb() -> Option<f32> {
     }
 }
 
+/// System memory `(used, total)` in MB. macOS: Activity Monitor's "Memory Used" (app memory +
+/// wired + compressed); Linux: total − available.
+pub fn system_memory_mb() -> Option<(f32, f32)> {
+    #[cfg(target_os = "macos")]
+    {
+        unsafe extern "C" {
+            // libc marks its binding deprecated (pointing at the mach2 crate); the symbol is stable.
+            fn mach_host_self() -> libc::mach_port_t;
+        }
+        let total = ram_mb()?;
+        let mut info = std::mem::MaybeUninit::<libc::vm_statistics64>::zeroed();
+        let mut count = libc::HOST_VM_INFO64_COUNT;
+        // SAFETY: `info` is a writable vm_statistics64 and `count` its size in natural_t units,
+        // as HOST_VM_INFO64 expects.
+        let rc = unsafe { libc::host_statistics64(mach_host_self(), libc::HOST_VM_INFO64, info.as_mut_ptr() as *mut libc::integer_t, &mut count) };
+        if rc != 0 {
+            return None;
+        }
+        // SAFETY: filled in by a successful host_statistics64.
+        let v = unsafe { info.assume_init() };
+        // SAFETY: sysconf is always safe to call.
+        let page = unsafe { libc::sysconf(libc::_SC_PAGESIZE) }.max(4096) as f32;
+        let pages = (v.internal_page_count.saturating_sub(v.purgeable_count) as u64 + v.wire_count as u64 + v.compressor_page_count as u64) as f32;
+        Some((pages * page / 1048576.0, total))
+    }
+    #[cfg(target_os = "linux")]
+    {
+        let s = std::fs::read_to_string("/proc/meminfo").ok()?;
+        let kb = |k: &str| -> Option<f32> { s.lines().find(|l| l.starts_with(k))?.split_whitespace().nth(1)?.parse().ok() };
+        let (total, avail) = (kb("MemTotal:")?, kb("MemAvailable:")?);
+        Some(((total - avail) / 1024.0, total / 1024.0))
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+    {
+        None
+    }
+}
+
+/// Swap in use (MB) and the OS memory-pressure level (0 normal, 1 warning, 2 critical), where
+/// the platform reports them (macOS: `vm.swapusage`, `kern.memorystatus_vm_pressure_level`).
+pub fn swap_and_pressure() -> (Option<f32>, Option<u8>) {
+    #[cfg(target_os = "macos")]
+    {
+        let mut sw = std::mem::MaybeUninit::<libc::xsw_usage>::zeroed();
+        let mut len = std::mem::size_of::<libc::xsw_usage>();
+        // SAFETY: "vm.swapusage" is an xsw_usage; `sw`/`len` describe a writable one.
+        let swap = (unsafe { libc::sysctlbyname(c"vm.swapusage".as_ptr(), sw.as_mut_ptr().cast(), &mut len, std::ptr::null_mut(), 0) } == 0)
+            // SAFETY: filled by a successful sysctl.
+            .then(|| unsafe { sw.assume_init() }.xsu_used as f32 / 1048576.0);
+        let mut level: i32 = 0;
+        let mut len = std::mem::size_of::<i32>();
+        // SAFETY: the pressure level is an int; `level`/`len` describe a writable one.
+        let rc = unsafe { libc::sysctlbyname(c"kern.memorystatus_vm_pressure_level".as_ptr(), (&mut level as *mut i32).cast(), &mut len, std::ptr::null_mut(), 0) };
+        let pressure = (rc == 0).then_some(match level {
+            4 => 2,
+            2 => 1,
+            _ => 0,
+        });
+        (swap, pressure)
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        (None, None)
+    }
+}
+
 /// Physical RAM (MB).
 pub fn ram_mb() -> Option<f32> {
     #[cfg(target_os = "macos")]
@@ -831,6 +897,13 @@ mod tests {
         let cheap: Vec<_> = (0..15).map(|_| (5.0, 0.9, true)).collect();
         assert!(samples(&g, &mut st, 5.0, &cheap).is_empty());
         assert_eq!(samples(&g, &mut st, 31.0, &cheap[..5]), vec![Decision::Up]);
+    }
+
+    #[test]
+    fn system_memory_reads() {
+        if let Some((used, total)) = system_memory_mb() {
+            assert!(used > 0.0 && used < total, "{used} / {total}");
+        }
     }
 
     #[test]
