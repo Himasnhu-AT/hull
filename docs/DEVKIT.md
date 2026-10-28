@@ -230,7 +230,14 @@ fn on_save(mut ev: MessageReader<SaveEvent>) { .. }       // Saved / Loaded / De
   sRGB colour in linear light.
   **Caveat:** Bevy 0.19 can't load this script's output. UASTC needs `bevy/basis-universal`, and
   ETC1S/BasisLZ isn't supported (`bevy_image ktx2.rs`). Native block formats in KTX2 (BC7/BC5 on
-  desktop, ASTC on Apple) load fine; Shroud cooks its own that way.
+  desktop, ASTC on Apple) load fine: use `tools/cook` below.
+- **`tools/cook`** (standalone crate, links ISPC texture kernels; not part of the engine build):
+  `memgate -- cargo run --release --manifest-path tools/cook/Cargo.toml -- <assets>/textures
+  [--only SET] [--force]`. Per set: `color.ktx2` (BC7 sRGB, linear-light mips), `normal.ktx2`
+  (BC5, renormalised mips), `orm.ktx2` (BC5: R = AO, white without `ao`, G = roughness),
+  `color.avg` (linear average colour); zstd per level. Sets whose outputs are newer than every
+  source are skipped. Asphalt (1024², 4 maps): 3.7 MB in 1.3 s. Moved from Shroud (identical
+  output).
 - **`gfx::load_pbr` and cooked sets.** With feature `ktx2`, if `textures/<name>/color.ktx2`
   exists it loads `color.ktx2` (sRGB), `normal.ktx2` (RG, e.g. BC5: Bevy rebuilds Z) and
   `orm.ktx2` (R = AO, G = roughness, used for both occlusion and metallic-roughness),

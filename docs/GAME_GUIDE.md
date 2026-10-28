@@ -196,8 +196,10 @@ All in LOOK.md; the short version:
   `orm.ktx2` (BC5: R = AO, G = roughness) with full mip chains filtered in linear light and
   normals renormalised, plus `color.avg` (three linear floats: the average colour, used for
   far-detail materials). With the engine feature `ktx2`, `load_pbr` prefers them and loads them
-  GPU-only. Shroud's cook (`shroud/tools/cook`) does exactly this; Bevy 0.19 can't load
-  UASTC/ETC1S from `scripts/cook.py` (DEVKIT.md "Content pipeline").
+  GPU-only. The engine's cook does exactly this:
+  `memgate -- cargo run --release --manifest-path <engine>/tools/cook/Cargo.toml -- assets/textures [--only SET] [--force]`
+  (standalone crate, not part of the engine build; skips sets whose outputs are newer). Bevy
+  0.19 can't load UASTC/ETC1S from `scripts/cook.py` (DEVKIT.md "Content pipeline").
 - Keep textures ≤ 2048 px; 1024 is plenty for tiling materials.
 
 ### 5.2 Models (glTF)

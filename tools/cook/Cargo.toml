@@ -1,0 +1,15 @@
+[package]
+name = "cook"
+description = "Offline texture cook: PBR JPG/PNG sets -> GPU-compressed KTX2 (BC7/BC5) with linear-light mips, plus color.avg. Shared by games on the engine."
+edition = "2024"
+version = "0.1.0"
+license = "MIT OR Apache-2.0"
+publish = false
+
+# Standalone: not part of the engine library's build (it links ISPC texture kernels).
+[workspace]
+
+[dependencies]
+image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
+intel_tex_2 = "0.4"
+zstd = "0.13"
