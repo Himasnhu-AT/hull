@@ -210,6 +210,10 @@ All in LOOK.md; the short version:
   `memgate -- cargo run --manifest-path <engine>/tools/cook/Cargo.toml -- assets/textures [--only SET] [--force]`
   (standalone crate, not part of the engine build; skips sets whose outputs are newer). Bevy
   0.19 can't load UASTC/ETC1S from `scripts/cook.py` (DEVKIT.md "Content pipeline").
+- Foliage cards and other cutouts: give the set alpha (in `color.png`, or a separate grey
+  `alpha.jpg`, white = opaque). The cook then encodes BC7 with alpha and rescales each mip's
+  alpha so the share of texels past the 0.5 cutoff stays the same (plain mips thin foliage until
+  it disappears at range). Use `AlphaMode::Mask(0.5)` on the material, not `Blend`.
 - Keep textures ≤ 2048 px; 1024 is plenty for tiling materials.
 
 ### 5.2 Models (glTF)
