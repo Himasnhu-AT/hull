@@ -233,3 +233,41 @@ fn gfx_quality_adds_and_prunes_features() {
     let b = app.world().get::<bevy::post_process::bloom::Bloom>(cam).expect("High has bloom");
     assert_eq!(b.intensity, Look::night().bloom.intensity);
 }
+
+/// Bevy gives `VisibilityRange`s to the first 32 cameras only: probes share six capture
+/// cameras (9 probes used to add 54 and hide range-culled scenery from the main camera), every
+/// probe still gets captured, and a despawned probe takes its filter worker with it.
+#[test]
+fn probes_share_six_cameras() {
+    use engine::look::ReflectionProbe;
+    use engine::look::probe::{ProbeRig, ProbeTargets, ProbeWorker};
+    let (mut app, _cam) = build("probes");
+    if !app.world().contains_resource::<Assets<Image>>() {
+        app.init_resource::<Assets<Image>>();
+    }
+    let probes: Vec<Entity> = (0..9)
+        .map(|i| {
+            let mut p = ReflectionProbe::default();
+            p.resolution = 16;
+            p.refresh = Some(0);
+            app.world_mut().spawn((p, Transform::from_xyz(i as f32 * 10.0, 2.0, 0.0))).id()
+        })
+        .collect();
+    run(&mut app, 40);
+    let w = app.world_mut();
+    let cameras = w.query_filtered::<(), With<Camera>>().iter(w).count();
+    assert_eq!(cameras, 1 + 6, "main camera + one shared rig");
+    let rig = *w.resource::<ProbeRig>();
+    for e in &probes {
+        let p = w.get::<ReflectionProbe>(*e).unwrap();
+        assert!(p.captures() >= 6, "probe {e} captured {} faces", p.captures());
+    }
+    assert_eq!(w.query::<&ProbeWorker>().iter(w).count(), 9);
+    let worker = w.get::<ProbeTargets>(probes[0]).unwrap().worker;
+    w.despawn(probes[0]);
+    run(&mut app, 1);
+    let w = app.world_mut();
+    assert!(w.get_entity(worker).is_err(), "worker despawned with its probe");
+    assert_eq!(w.query::<&ProbeWorker>().iter(w).count(), 8);
+    assert!(rig.cameras.iter().all(|c| w.get_entity(*c).is_ok()), "the rig stays");
+}

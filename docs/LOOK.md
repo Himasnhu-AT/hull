@@ -116,7 +116,11 @@ vectors stay, see "Bevy workarounds").
   look animates, so blends never stall a frame.
 - **`ReflectionProbe`** (`src/look/probe.rs`): six 90° cameras (`LookCapture`: sky, fog,
   exposure, no post) render the scene from the probe centre into a cubemap (copied into the cube
-  in the render world after submit). Specular: Bevy's GPU filter on a hidden worker entity.
+  in the render world after submit). All probes share one set of six cameras (`ProbeRig`): each
+  frame they go to the probes waiting for faces, one probe per face, round robin, so a bake of
+  n probes takes up to n frames. (Bevy 0.19 tracks `VisibilityRange` for the first 32 cameras
+  only; six cameras per probe hid every range-culled mesh from the main camera in a map with 9
+  probes.) Despawning a probe despawns its filter worker. Specular: Bevy's GPU filter on a hidden worker entity.
   Diffuse: Bevy's realtime irradiance filter point-samples the cube and is blotchy indoors
   (small bright windows/lamps), so the cube is read back asynchronously and projected onto 9
   spherical harmonics on the CPU instead (16² irradiance cube). Bake mode captures during shader
@@ -266,5 +270,10 @@ clear_day, Ultra, 1080p uncapped: hard 10.5 ms p50 → soft 14.6 ms (size 5–20
 - Gradient skies are CPU-built cubemaps: stars are texel-sized (≈ 0.35° at 256²).
 - Reflection probes: no blending between overlapping probes beyond Bevy's, captures see the
   gradient sky approximation, SH diffuse is order 2 (soft), realtime probes cost GPU every frame.
+  Realtime probes take turns on the six shared cameras: k realtime probes at `refresh` 1 update
+  each face about every k frames.
+- Bevy gives `VisibilityRange` (render-budget detail, HLOD) to the first 32 cameras, active or
+  not, in query order. More cameras than that and ranged meshes can vanish from the main camera;
+  the engine warns once and `render.stats` reports `cameras`.
 - Auto exposure uses Bevy's histogram metering (the whole screen; no metering mask from the look).
 - GPU numbers come from a shared, busy machine; re-measure on your target before tuning tiers.

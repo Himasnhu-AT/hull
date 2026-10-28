@@ -2,7 +2,8 @@
 //! volumes built from code.
 //!
 //! [`ReflectionProbe`]: spawn it with a `Transform` whose scale is the probe's box (a room). It
-//! renders the scene into a cubemap from its centre with six 90° cameras and lights everything
+//! renders the scene into a cubemap from its centre with six 90° cameras (one shared set for all
+//! probes, see [`ProbeRig`]) and lights everything
 //! inside the box: parallax-corrected reflections and indoor ambient instead of the sky's.
 //!
 //! - **Specular**: Bevy filters the cubemap on the GPU (`GeneratedEnvironmentMapLight` on a
@@ -94,6 +95,10 @@ struct ProbeRun {
     diffuse_updates: u32,
     /// Faces captured since the specular map was last filtered (realtime probes).
     spec_faces: u8,
+    /// Faces waiting for a free capture camera.
+    pending: u8,
+    /// Faces captured this frame.
+    granted: u8,
 }
 
 impl ReflectionProbe {
@@ -128,7 +133,6 @@ impl ReflectionProbe {
 pub struct ProbeTargets {
     pub cube: Handle<Image>,
     pub faces: [Handle<Image>; 6],
-    pub cameras: [Entity; 6],
     /// SH irradiance cubemap (the probe's diffuse map).
     pub diffuse: Handle<Image>,
     /// Hidden entity whose `GeneratedEnvironmentMapLight` filters `cube` into the specular map.
@@ -136,7 +140,18 @@ pub struct ProbeTargets {
     shared: Arc<ProbeShared>,
 }
 
-/// Set on probe cameras for the frame they capture; read by the render-world copy.
+/// The six capture cameras (one per cube face) shared by every probe: each frame `drive_probes`
+/// points them at the probes that want faces captured, one probe per face. Bevy tracks
+/// `VisibilityRange`s for the first 32 cameras only (`check_visibility_ranges`), so six cameras
+/// per probe would hide range-culled scenery from the main camera in a scene with 6+ probes.
+#[derive(Resource, Clone, Copy, Debug)]
+pub struct ProbeRig {
+    pub cameras: [Entity; 6],
+    /// Which waiting probe goes first next frame (round robin).
+    next: usize,
+}
+
+/// On each rig camera: the probe it captures for (while active) and its cube face.
 #[derive(Component, Clone, Copy, Debug)]
 pub struct ProbeCamera {
     pub probe: Entity,
@@ -160,6 +175,8 @@ struct ProbeShared {
 #[derive(Component, Clone, Copy, Debug, Default)]
 struct ProbeCopyMask(u8);
 
+const ALL_FACES: u8 = 0b11_1111;
+
 /// Camera orientation per cube face: (forward, up), matching Bevy's cube layout.
 const FACES: [(Vec3, Vec3); 6] = [
     (Vec3::X, Vec3::Y),
@@ -171,7 +188,8 @@ const FACES: [(Vec3, Vec3); 6] = [
 ];
 
 pub(super) fn plugin(app: &mut App) {
-    app.add_systems(Update, (setup_probes, drive_probes).chain().in_set(crate::gfx::QualitySet::Look).run_if(any_with_component::<ReflectionProbe>));
+    app.add_observer(drop_probe)
+        .add_systems(Update, (setup_probes, drive_probes).chain().in_set(crate::gfx::QualitySet::Look).run_if(any_with_component::<ReflectionProbe>));
     let Some(render_app) = app.get_sub_app_mut(RenderApp) else { return };
     render_app
         .init_resource::<ExtractedProbes>()
@@ -184,11 +202,10 @@ pub(super) fn plugin(app: &mut App) {
 fn setup_probes(
     mut commands: Commands,
     mut images: Option<ResMut<Assets<Image>>>,
-    look: Option<Res<Look>>,
-    probes: Query<(Entity, &ReflectionProbe, &GlobalTransform), Without<ProbeTargets>>,
+    probes: Query<(Entity, &ReflectionProbe), Without<ProbeTargets>>,
 ) {
     let Some(images) = images.as_mut() else { return };
-    for (e, probe, gtf) in &probes {
+    for (e, probe) in &probes {
         let n = probe.resolution.clamp(16, 2048).next_power_of_two();
         // Zero-filled (not uninitialised): it is filtered before the first capture lands.
         let mut cube = new_cubemap(n);
@@ -200,42 +217,45 @@ fn setup_probes(
             img.texture_descriptor.usage |= TextureUsages::COPY_SRC;
             images.add(img)
         });
-        let pos = gtf.translation();
-        let ev100 = look.as_ref().map(|l| l.exposure.ev100).unwrap_or(Exposure::EV100_BLENDER);
-        let cameras: [Entity; 6] = std::array::from_fn(|i| {
-            let (fwd, up) = FACES[i];
-            commands
-                .spawn((
-                    Name::new(format!("ProbeCamera{i}")),
-                    Camera3d::default(),
-                    Camera { order: -100 - i as isize, is_active: false, ..default() },
-                    RenderTarget::from(faces[i].clone()),
-                    Projection::Perspective(PerspectiveProjection {
-                        fov: std::f32::consts::FRAC_PI_2,
-                        aspect_ratio: 1.0,
-                        near: probe.near,
-                        far: probe.far,
-                        ..default()
-                    }),
-                    Tonemapping::None,
-                    bevy::camera::Hdr,
-                    // Forward decals need it in every view that draws them.
-                    bevy::core_pipeline::prepass::DepthPrepass,
-                    Msaa::Off,
-                    Exposure { ev100 },
-                    LookCapture,
-                    ProbeCamera { probe: e, face: i },
-                    Transform::from_translation(pos).looking_to(fwd, up),
-                ))
-                .id()
-        });
         let worker = commands
             .spawn((Name::new("ProbeFilter"), ProbeWorker { probe: e }, GeneratedEnvironmentMapLight { environment_map: cube.clone(), intensity: 1.0, ..default() }))
             .id();
         let mut run = probe.clone();
         run.state = ProbeRun { bake_frames: 1, warmup: 10, warmups_left: 12, ..default() };
-        commands.entity(e).insert((run, LightProbe::default(), ProbeTargets { cube, faces, cameras, diffuse, worker, shared: Arc::default() }, ProbeCopyMask(0)));
+        commands.entity(e).insert((run, LightProbe::default(), ProbeTargets { cube, faces, diffuse, worker, shared: Arc::default() }, ProbeCopyMask(0)));
     }
+}
+
+/// A despawned probe takes its filter worker with it.
+fn drop_probe(ev: On<Remove, ProbeTargets>, probes: Query<&ProbeTargets>, mut commands: Commands) {
+    if let Ok(t) = probes.get(ev.event().entity) {
+        commands.entity(t.worker).try_despawn();
+    }
+}
+
+/// Spawns the six shared capture cameras (inactive; `drive_probes` points them at a probe).
+fn spawn_rig(commands: &mut Commands, target: &Handle<Image>, ev100: f32) -> [Entity; 6] {
+    std::array::from_fn(|i| {
+        let (fwd, up) = FACES[i];
+        commands
+            .spawn((
+                Name::new(format!("ProbeCamera{i}")),
+                Camera3d::default(),
+                Camera { order: -100 - i as isize, is_active: false, ..default() },
+                RenderTarget::from(target.clone()),
+                Projection::Perspective(PerspectiveProjection { fov: std::f32::consts::FRAC_PI_2, aspect_ratio: 1.0, ..default() }),
+                Tonemapping::None,
+                bevy::camera::Hdr,
+                // Forward decals need it in every view that draws them.
+                bevy::core_pipeline::prepass::DepthPrepass,
+                Msaa::Off,
+                Exposure { ev100 },
+                LookCapture,
+                ProbeCamera { probe: Entity::PLACEHOLDER, face: i },
+                Transform::default().looking_to(fwd, up),
+            ))
+            .id()
+    })
 }
 
 /// Exposure → env intensity: captures are stored pre-exposed (`Tonemapping::None`).
@@ -243,29 +263,49 @@ fn pre_exposure_inverse(ev100: f32) -> f32 {
     1.2 * 2f32.powf(ev100)
 }
 
+type ProbeItem<'a> = (Entity, &'a mut ReflectionProbe, &'a ProbeTargets, &'a mut ProbeCopyMask, &'a GlobalTransform, Option<&'a mut EnvironmentMapLight>);
+type RigCamera<'a> = (&'a mut Camera, &'a mut Transform, &'a mut RenderTarget, &'a mut Projection, &'a mut ProbeCamera, &'a Exposure);
+
+#[allow(clippy::too_many_arguments)]
 fn drive_probes(
     mut commands: Commands,
     time: Res<Time<Real>>,
     preset: Res<QualityPreset>,
     settings: Res<CoreSettings>,
     look: Option<Res<Look>>,
+    mut rig: Option<ResMut<ProbeRig>>,
     mut images: Option<ResMut<Assets<Image>>>,
-    mut probes: Query<(Entity, &mut ReflectionProbe, &ProbeTargets, &mut ProbeCopyMask, &GlobalTransform, Option<&mut EnvironmentMapLight>), Without<ProbeWorker>>,
+    mut probes: Query<ProbeItem, Without<ProbeWorker>>,
     workers: Query<(Has<GeneratedEnvironmentMapLight>, Option<&EnvironmentMapLight>), With<ProbeWorker>>,
-    mut cams: Query<(&mut Camera, &mut Transform, &Exposure), With<ProbeCamera>>,
+    mut cams: Query<RigCamera>,
+    mut order: Local<Vec<Entity>>,
 ) {
+    // The shared capture cameras (re-made if a game despawned them).
+    let rig_ok = rig.as_ref().is_some_and(|r| r.cameras.iter().all(|c| cams.contains(*c)));
+    if !rig_ok {
+        let Some((_, _, t, ..)) = probes.iter().next() else { return };
+        let ev100 = look.as_ref().map(|l| l.exposure.ev100).unwrap_or(Exposure::EV100_BLENDER);
+        let cameras = spawn_rig(&mut commands, &t.faces[0], ev100);
+        commands.insert_resource(ProbeRig { cameras, next: 0 });
+        return;
+    }
+    let Some(rig) = rig.as_mut() else { return };
+
     let tier = Tier::of(&preset, settings.quality);
     let now = time.elapsed_secs_f64();
     let look_changed = look.as_ref().is_some_and(|l| l.is_changed());
-    for (e, mut probe, targets, mut mask, gtf, env) in &mut probes {
+
+    // 1. What each probe wants captured.
+    order.clear();
+    for (e, mut probe, targets, ..) in &mut probes {
         let refresh = probe.refresh.unwrap_or(tier.probe_refresh);
         let throttle = probe.rebake_on_look_change;
         let p = &mut probe.state;
+        p.granted = 0;
         let copies = targets.shared.copies.load(Ordering::Relaxed);
-        let filtered = targets.shared.filtered.load(Ordering::Relaxed);
         if copies != p.copies_seen {
             p.copies_seen = copies;
-            p.filtered_at_copy = filtered;
+            p.filtered_at_copy = targets.shared.filtered.load(Ordering::Relaxed);
         }
         if look_changed
             && let Some(throttle) = throttle
@@ -286,20 +326,61 @@ fn drive_probes(
                 p.bake_frames = p.bake_frames.max(1);
             }
         }
-        let mut want = 0u8;
-        if p.bake_frames > 0 {
-            p.bake_frames -= 1;
-            want = 0b11_1111;
-        } else if refresh > 0 {
-            p.frame += 1;
-            if p.frame >= refresh {
-                p.frame = 0;
-                want = 1 << p.face;
-                p.face = (p.face + 1) % 6;
+        if p.pending == 0 {
+            if p.bake_frames > 0 {
+                p.bake_frames -= 1;
+                p.pending = ALL_FACES;
+            } else if refresh > 0 {
+                p.frame += 1;
+                if p.frame >= refresh {
+                    p.frame = 0;
+                    p.pending = 1 << p.face;
+                    p.face = (p.face + 1) % 6;
+                }
             }
         }
-        if want != 0 {
-            p.captures += want.count_ones();
+        if p.pending != 0 {
+            order.push(e);
+        }
+    }
+
+    // 2. Hand out the six cameras: one probe per face per frame, rotating who goes first, so
+    // a scene's camera count stays at six however many probes it has.
+    let mut faces: [Option<(Entity, Handle<Image>, Vec3, f32, f32)>; 6] = Default::default();
+    if !order.is_empty() {
+        let start = rig.next % order.len();
+        rig.next = rig.next.wrapping_add(1);
+        let mut free = ALL_FACES;
+        for k in 0..order.len() {
+            let e = order[(start + k) % order.len()];
+            let Ok((_, mut probe, targets, _, gtf, _)) = probes.get_mut(e) else { continue };
+            let grant = probe.state.pending & free;
+            if grant == 0 {
+                continue;
+            }
+            free &= !grant;
+            probe.state.pending &= !grant;
+            probe.state.granted = grant;
+            for (i, slot) in faces.iter_mut().enumerate() {
+                if grant & (1 << i) != 0 {
+                    *slot = Some((e, targets.faces[i].clone(), gtf.translation(), probe.near, probe.far));
+                }
+            }
+            if free == 0 {
+                break;
+            }
+        }
+    }
+
+    // 3. Copies, diffuse readback, specular filtering and intensity per probe.
+    let ev = cams.get(rig.cameras[0]).map(|c| c.5.ev100).unwrap_or(Exposure::EV100_BLENDER);
+    for (e, mut probe, targets, mut mask, _, env) in &mut probes {
+        let refresh = probe.refresh.unwrap_or(tier.probe_refresh);
+        let intensity = probe.intensity * pre_exposure_inverse(ev);
+        let p = &mut probe.state;
+        let granted = p.granted;
+        if granted != 0 {
+            p.captures += granted.count_ones();
         }
 
         // Diffuse: read the cubemap back once every face is fresh; SH-project the result.
@@ -316,8 +397,8 @@ fn drive_probes(
         }
         // Faces copied this frame land in the cube after this frame's render; a readback
         // requested now is copied after that (same frame), so it sees them.
-        p.fresh_faces |= want;
-        if p.fresh_faces == 0b11_1111 && !p.readback_in_flight && p.warmups_left < 11 {
+        p.fresh_faces |= granted;
+        if p.fresh_faces == ALL_FACES && !p.readback_in_flight && p.warmups_left < 11 {
             p.fresh_faces = 0;
             p.readback_in_flight = true;
             let shared = targets.shared.clone();
@@ -335,36 +416,35 @@ fn drive_probes(
         // filtered its latest capture twice. A realtime probe filters once per full cycle of
         // fresh faces instead of every frame: each filter re-creates Bevy's bind groups, uniform
         // buffers and placeholder textures, and a filter of an unchanged cube is wasted GPU time.
+        let filtered = targets.shared.filtered.load(Ordering::Relaxed);
         let latest_filtered = p.copies_seen > 0 && filtered >= p.filtered_at_copy + 2;
         let (working, worker_env) = workers.get(targets.worker).unwrap_or((false, None));
         let start = |commands: &mut Commands| {
             commands.entity(targets.worker).insert(GeneratedEnvironmentMapLight { environment_map: targets.cube.clone(), intensity: 1.0, ..default() });
         };
         if refresh == 0 {
-            let settled = want == 0 && p.warmups_left == 0 && latest_filtered && !p.readback_in_flight;
+            let settled = granted == 0 && p.pending == 0 && p.warmups_left == 0 && latest_filtered && !p.readback_in_flight;
             if settled && working {
                 p.frozen = true;
                 commands.entity(targets.worker).remove::<GeneratedEnvironmentMapLight>();
-            } else if want != 0 && !working {
+            } else if granted != 0 && !working {
                 p.frozen = false;
                 start(&mut commands);
             }
         } else {
             p.frozen = false;
-            p.spec_faces |= want;
-            if p.spec_faces == 0b11_1111 {
+            p.spec_faces |= granted;
+            if p.spec_faces == ALL_FACES {
                 // A full set of fresh faces: (keep) filtering until it has seen the last copy.
                 p.spec_faces = 0;
                 if !working {
                     start(&mut commands);
                 }
-            } else if working && want == 0 && latest_filtered && p.warmups_left == 0 {
+            } else if working && granted == 0 && latest_filtered && p.warmups_left == 0 {
                 commands.entity(targets.worker).remove::<GeneratedEnvironmentMapLight>();
             }
         }
 
-        let ev = cams.get(targets.cameras[0]).map(|c| c.2.ev100).unwrap_or(Exposure::EV100_BLENDER);
-        let intensity = probe.intensity * pre_exposure_inverse(ev);
         match (env, worker_env) {
             (Some(mut env), _) => {
                 if env.intensity != intensity {
@@ -377,20 +457,36 @@ fn drive_probes(
             _ => {}
         }
 
-        if mask.0 != want {
-            mask.0 = want;
+        if mask.0 != granted {
+            mask.0 = granted;
         }
-        let pos = gtf.translation();
-        for (i, cam) in targets.cameras.iter().enumerate() {
-            if let Ok((mut c, mut tf, _)) = cams.get_mut(*cam) {
-                let on = want & (1 << i) != 0;
-                if c.is_active != on {
-                    c.is_active = on;
-                }
-                if on && tf.translation != pos {
-                    tf.translation = pos;
-                }
+    }
+
+    // 4. Point the cameras at this frame's probes.
+    for (i, cam) in rig.cameras.iter().enumerate() {
+        let Ok((mut c, mut tf, mut target, mut proj, mut tag, _)) = cams.get_mut(*cam) else { continue };
+        let Some((probe, face, pos, near, far)) = faces[i].take() else {
+            if c.is_active {
+                c.is_active = false;
             }
+            continue;
+        };
+        c.is_active = true;
+        if tf.translation != pos {
+            tf.translation = pos;
+        }
+        if target.as_image() != Some(&face) {
+            *target = RenderTarget::from(face);
+        }
+        if let Projection::Perspective(pp) = proj.as_ref()
+            && (pp.near != near || pp.far != far)
+            && let Projection::Perspective(pp) = proj.as_mut()
+        {
+            pp.near = near;
+            pp.far = far;
+        }
+        if tag.probe != probe {
+            tag.probe = probe;
         }
     }
 }
