@@ -30,6 +30,7 @@ from the shell.
 
 | Path | What |
 |---|---|
+| `CLAUDE.md`, `docs/GAME_GUIDE.md` | **Read first when building a game**: the playbook (what to use when, perf rules, pitfalls) |
 | `src/app.rs` | `engine::app(GameInfo)` / `app_with(info, EngineOptions)`, `EnginePlugin` wiring |
 | `src/devtools/` | control port (TCP + MCP), offscreen capture, perf monitor + overlay, metrics window |
 | `src/devkit/` | inspector (`ecs.*`), scenario test kit, replay, golden images, perf budgets, bench JSON, `profile_scope!`, JSON hot reload, saves, asset checks: **docs/DEVKIT.md** |

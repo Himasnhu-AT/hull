@@ -269,6 +269,12 @@ mod devtools {
                 render_governor,
             )
             .add_control_command(
+                "render.clusters",
+                "Main camera light clusters: set FixedZ {total, z_slices} (omitted = unchanged); returns the grid",
+                params(&[("total", "number", "clusters in total (Bevy default and maximum 4096)"), ("z_slices", "number", "depth slices (default 24)")]),
+                render_clusters,
+            )
+            .add_control_command(
                 "render.warmup",
                 "Compile every loaded material's pipelines now (draws them tiny for a few frames); returns the last run's counts",
                 params(&[]),
@@ -313,6 +319,30 @@ mod devtools {
         if cost.cpu_ms != next.cpu_ms || cost.gpu_ms != next.gpu_ms {
             *cost = next;
         }
+    }
+
+    fn render_clusters(world: &mut World, p: Value) -> Result<Value, String> {
+        use bevy::light::cluster::{ClusterConfig, ClusterZConfig, Clusters};
+        let cam = world.query_filtered::<Entity, With<crate::gfx::MainCamera>>().iter(world).next().ok_or("no MainCamera")?;
+        let total = p.get("total").and_then(Value::as_u64);
+        let z = p.get("z_slices").and_then(Value::as_u64);
+        if total.is_some() || z.is_some() {
+            let (t0, z0) = match world.get::<ClusterConfig>(cam) {
+                Some(ClusterConfig::FixedZ { total, z_slices, .. }) => (*total, *z_slices),
+                _ => (4096, 24),
+            };
+            let cfg = ClusterConfig::FixedZ {
+                // Bevy 0.19 allows at most 4096 clusters (uniform buffer limit; it asserts beyond).
+                total: total.map_or(t0, |v| v.clamp(1, 4096) as u32),
+                z_slices: z.map_or(z0, |v| v.clamp(1, 64) as u32),
+                z_config: ClusterZConfig::default(),
+                dynamic_resizing: true,
+            };
+            world.entity_mut(cam).insert(cfg);
+        }
+        let cfg = world.get::<ClusterConfig>(cam).map(|c| format!("{c:?}"));
+        let grid = world.get::<Clusters>(cam).map(|c| json!({"dimensions": [c.dimensions.x, c.dimensions.y, c.dimensions.z], "tile_px": [c.tile_size.x, c.tile_size.y]}));
+        Ok(json!({"config": cfg, "grid": grid}))
     }
 
     fn render_warmup(world: &mut World, _: Value) -> Result<Value, String> {

@@ -188,7 +188,13 @@ What runs by default:
 Opt-in (measured below):
 - `RenderBudget::occlusion_culling = true`: GPU occlusion culling (+ depth prepass) on the main
   camera, where the GPU supports it (`RenderStats::occlusion_supported`). Slower on every scene
-  measured here; try it only for heavy indoor overdraw and measure.
+  measured here; try it only for heavy indoor overdraw and measure. Re-measured on Shroud's
+  Township (Ultra, 3 views, real per-frame GPU samples, 2026-10-28): 11.1 / 9.7 / 16.6 ms off vs
+  11.1 / 9.7 / 16.2 ms on, within noise. Still off.
+- **Light clusters** (`render.clusters {total, z_slices}`, devtools): Bevy 0.19 caps a view at
+  4096 clusters (it asserts beyond), so only the split between screen tiles and depth slices can
+  change. On Township (37 lamps + 18 probes) 4096 × 24 (default), × 12, × 6, × 32 and 1024 × 24
+  all measured within noise: keep the default.
 - `RenderBudget::idle_skip = true`: frames where nothing visible changed (no mesh/camera/light/UI
   change, no removal, no asset change, no resize, no `RequestRedraw`, no pending screenshot) are
   simulated but not drawn; at least one frame in 30 is drawn. Needs pipelined rendering (the
