@@ -97,7 +97,10 @@ pub fn data_dir(info: &crate::GameInfo) -> PathBuf {
 }
 
 /// Resolve the assets folder for `info`: `<ID>_ASSETS`, macOS bundle `Contents/Resources/assets`,
-/// `./assets`, then `info.assets_fallback`, then `assets` (relative; may not exist).
+/// `info.assets_fallback` when that folder exists (a game's own source folder, usually
+/// `concat!(env!("CARGO_MANIFEST_DIR"), "/assets")`; absent on players' machines), `./assets`,
+/// then `assets` (relative; may not exist). The fallback comes before `./assets` so a game run
+/// from another project's folder (the engine's scripts) doesn't pick up that project's assets.
 pub fn assets_dir(info: &crate::GameInfo) -> PathBuf {
     if let Some(dir) = std::env::var_os(format!("{}_ASSETS", env_prefix(info))) {
         return PathBuf::from(dir);
@@ -110,6 +113,11 @@ pub fn assets_dir(info: &crate::GameInfo) -> PathBuf {
         if p.is_dir() {
             return p;
         }
+    }
+    if let Some(p) = info.assets_fallback.map(PathBuf::from)
+        && p.is_dir()
+    {
+        return p;
     }
     if let Ok(cwd) = std::env::current_dir() {
         let p = cwd.join("assets");
@@ -126,6 +134,20 @@ pub fn assets_dir(info: &crate::GameInfo) -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn game_folder_beats_the_working_directory() {
+        let dir = std::env::temp_dir().join(format!("assets-test-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let p: &'static str = Box::leak(dir.to_string_lossy().into_owned().into_boxed_str());
+        let info = crate::GameInfo::new("assets-test-game", "X").assets_fallback(p);
+        assert_eq!(assets_dir(&info), dir);
+        // A fallback that doesn't exist (a dev path on a player's machine) is skipped.
+        let gone = crate::GameInfo::new("assets-test-game", "X").assets_fallback("/nonexistent/assets");
+        // (cargo runs tests from the crate root, which has an assets/ folder).
+        assert_eq!(assets_dir(&gone), std::env::current_dir().unwrap().join("assets"));
+        let _ = std::fs::remove_dir(&dir);
+    }
 
     #[test]
     fn env_prefix_uppercases_and_sanitises() {
