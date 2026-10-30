@@ -15,6 +15,7 @@
 - Audio: `Sfx` → `SoundLibrary::load_variants(server, dir, name, "audio/<name>", n)`; play/play_at → `engine::audio::play(.., AudioCategory::Sfx, vol, at)`; ambient bed → `play_loop(.., AudioCategory::Ambience, ~0.58)`. Muting automatic.
 - Settings: difficulty, map, crosshair_color, crosshair_size, show_callouts → `ShroudSettings` (game section); FieldDefs on "Gameplay"/"HUD"; `set_settings_tabs` Gameplay first.
 - `ops::data_dir`/`assets::assets_dir` → `DataDir`/`AssetsDir` resources (SHROUD_DATA_DIR / SHROUD_ASSETS still work). `GameInfo::assets_fallback(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets"))`.
+- Asset lookup (`paths::assets_dir`): `<ID>_ASSETS` → macOS bundle `Contents/Resources/assets` → `assets/` next to the executable (the `scripts/package.sh` layout, any working folder) → `assets_fallback` if it exists → `./assets`. Set `assets_fallback` only under the game's `dev` feature so ship builds carry no source-tree path.
 - `GameState` → `AppState::InGame` + Shroud sub-states (Playing/Evolving/Debrief) with `#[source(AppState = AppState::InGame)]`. `GameSeed`, `Paused`, `not_paused`, `has_visuals` from engine.
 - Control-port look: `LookInput` follows injected mouse motion in InGame while unpaused.
 
