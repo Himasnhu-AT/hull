@@ -10,7 +10,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use glam::{IVec2, Quat, Vec2, Vec3};
 
 use crate::graph::{Graph, Op, PcgError, Side, SpawnDef, Tier};
-use crate::points::{Area, Inputs, Point, PointSet, Rect, mix64, seed_at, str_hash, tag_id, unit};
+use crate::points::{Area, Inputs, Point, PointSet, Rect, mix64, seed_at, str_hash, tag_id, unit, yaw_quat};
 
 /// What a spawn node produced in the area.
 #[derive(Clone, Debug, PartialEq)]
@@ -128,7 +128,7 @@ pub fn evaluate(g: &Graph, inputs: &Inputs, area: Option<Area>) -> Result<Output
                     let s = scale.0 + (scale.1 - scale.0) * unit(mix64(h ^ 1));
                     let j = Vec3::new(unit(mix64(h ^ 2)) - 0.5, 0.0, unit(mix64(h ^ 3)) - 0.5) * (2.0 * jitter);
                     p.pos[k] += p.rot[k] * *offset + j;
-                    p.rot[k] *= Quat::from_rotation_y(a);
+                    p.rot[k] *= yaw_quat(a);
                     p.scale[k] *= s;
                 }
                 p
@@ -378,7 +378,7 @@ fn rect_fill(rects: &[Rect], work: Area, gs: u64, ns: u64) -> PointSet {
         let pos = Vec3::new(r.center.x, r.y, r.center.y);
         p.push(Point {
             pos,
-            rot: Quat::from_rotation_y(r.yaw),
+            rot: yaw_quat(r.yaw),
             extent: Vec3::new(r.half.x, 0.5, r.half.y),
             seed: seed_at(gs, ns, pos),
             tag: tag_id(&r.tag),

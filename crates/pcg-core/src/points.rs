@@ -191,7 +191,7 @@ impl Rect {
 
     /// `p` (XZ) in its local frame.
     pub fn local(&self, p: Vec2) -> Vec2 {
-        let (s, c) = self.yaw.sin_cos();
+        let (s, c) = yaw_sin_cos(self.yaw);
         let d = p - self.center;
         Vec2::new(d.x * c - d.y * s, d.x * s + d.y * c)
     }
@@ -203,14 +203,14 @@ impl Rect {
 
     /// Axis-aligned bounds (XZ).
     pub fn aabb(&self) -> Area {
-        let (s, c) = self.yaw.sin_cos();
+        let (s, c) = yaw_sin_cos(self.yaw);
         let e = Vec2::new(self.half.x * c.abs() + self.half.y * s.abs(), self.half.x * s.abs() + self.half.y * c.abs());
         Area { min: self.center - e, max: self.center + e }
     }
 
     /// The four corners, counter-clockwise seen from above (+Y).
     pub fn corners(&self) -> [Vec2; 4] {
-        let (s, c) = self.yaw.sin_cos();
+        let (s, c) = yaw_sin_cos(self.yaw);
         let w = |l: Vec2| self.center + Vec2::new(l.x * c + l.y * s, -l.x * s + l.y * c);
         let h = self.half;
         [w(Vec2::new(-h.x, -h.y)), w(Vec2::new(-h.x, h.y)), w(Vec2::new(h.x, h.y)), w(Vec2::new(h.x, -h.y))]
@@ -445,4 +445,16 @@ impl Fnv {
     fn str(&mut self, s: &str) {
         self.u(str_hash(s));
     }
+}
+
+/// `(sin, cos)` of a yaw angle, the same bits on every platform (libm, not std).
+pub(crate) fn yaw_sin_cos(a: f32) -> (f32, f32) {
+    (libm::sinf(a), libm::cosf(a))
+}
+
+/// A rotation of `a` radians about +Y (as `Quat::from_rotation_y`), the same bits on every
+/// platform.
+pub(crate) fn yaw_quat(a: f32) -> Quat {
+    let (s, c) = yaw_sin_cos(a * 0.5);
+    Quat::from_xyzw(0.0, s, 0.0, c)
 }

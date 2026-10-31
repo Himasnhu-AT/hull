@@ -7,7 +7,18 @@
 //! - `frame()` every frame (real time), gauges every second, `perf.hitch` for slow frames.
 //! - The tracer (and its panic hook) starts in `TracePlugin::finish`, after every plugin's
 //!   `build`, so it wraps Bevy's panic hook: ours reports first, then chains to Bevy's.
-//! - Nothing is sent until the main menu has been shown (`notice_shown`).
+//! - Envelope: app name = `GameInfo.id`, version = `GameInfo.version`, build =
+//!   `GameInfo.build` (packaged builds only), process = GUI.
+//! - Nothing is sent until the player has seen the privacy notice (`notice_shown`). By default
+//!   the engine counts the main menu as that; a game that shows its own notice inserts
+//!   [`GameShowsTraceNotice`] and calls `notice_shown` itself when the player closes it.
+//! - `<ID>_TRACE_INSPECT=1`: also write everything accepted for sending to
+//!   `<data>/trace/tracer/outbox.jsonl` (to check what leaves the machine).
+//! - On `AppExit` the session is ended and sent with at most [`SHUTDOWN_WAIT`] of waiting.
+//! - [`trace_handled`] reports an error the game caught and survived.
+//! - [`TraceQuiet`]: present while the game does expected long work (loading): no hang
+//!   watchdog turns and no `perf.hitch`.
+//! - `DO_NOT_TRACK` / `TRACER_DISABLED` (non-empty, not `0`/`false`) turn the SDK off.
 //! - `--crash-test` panics on purpose 2 s after start.
 //!
 //! Games report events with [`trace_event`]; names declared with
@@ -52,6 +63,28 @@ impl Event for Named {
 
 /// A frame longer than this (after the first in-game frame) is reported as `perf.hitch`.
 const HITCH: Duration = Duration::from_millis(250);
+
+/// Longest the app waits at exit for the last send.
+pub const SHUTDOWN_WAIT: Duration = Duration::from_millis(1500);
+
+/// While this resource exists (a loading screen, a level build), long frames are expected: the
+/// engine opens no hang-watchdog turns and reports no `perf.hitch`. Insert it before the long
+/// work and remove it after.
+#[derive(Resource, Clone, Copy, Debug, Default)]
+pub struct TraceQuiet;
+
+/// Inserted by a game that shows its own privacy notice: the engine then doesn't count the
+/// main menu as the notice, and the game calls `GameTracer.0.notice_shown()` itself.
+#[derive(Resource, Clone, Copy, Debug, Default)]
+pub struct GameShowsTraceNotice;
+
+/// Reports an error the game caught and survived (`context`: a fixed label such as
+/// `"ghost.save"`, never user text).
+pub fn trace_handled(src: &(impl TraceSource + ?Sized), error: &dyn std::fmt::Display, context: &'static str) {
+    if let Some(t) = src.game_tracer() {
+        t.0.report_handled(error, Some(context));
+    }
+}
 
 /// The app's tracer. Cheap to clone; every call is a no-op when tracing is off.
 #[derive(Resource, Clone)]
@@ -148,7 +181,8 @@ impl Plugin for TracePlugin {
             .init_resource::<TraceState>()
             .add_systems(First, begin_turn)
             .add_systems(Last, end_frame)
-            .add_systems(OnEnter(AppState::MainMenu), notice_shown.run_if(visuals));
+            .add_systems(OnEnter(AppState::MainMenu), notice_shown.run_if(visuals).run_if(not(resource_exists::<GameShowsTraceNotice>)))
+            .add_systems(Last, shutdown_on_exit);
         if dev_flag("crash-test") {
             app.insert_resource(CrashTest)
                 .add_systems(Update, crash_test.run_if(resource_exists::<CrashTest>));
@@ -157,15 +191,15 @@ impl Plugin for TracePlugin {
 
     fn finish(&self, app: &mut App) {
         let world = app.world();
-        let (id, version) = world
+        let (id, version, build) = world
             .get_resource::<GameInfo>()
-            .map_or(("game", env!("CARGO_PKG_VERSION")), |g| (g.id, g.version));
+            .map_or(("game", env!("CARGO_PKG_VERSION"), None), |g| (g.id, g.version, g.build));
         let dir = world
             .get_resource::<DataDir>()
             .map(|d| d.0.join("trace"))
             .unwrap_or_else(|| std::env::temp_dir().join(format!("{id}-trace")));
         let names = world.get_resource::<TraceCatalog>().cloned().unwrap_or_default().0;
-        let tracer = make_tracer(id, version, dir, &names);
+        let tracer = make_tracer(id, version, build, dir, &names);
         let gauges = tracer.is_enabled().then(|| Gauges { entities: tracer.gauge("entities"), fps: tracer.gauge("fps") });
         app.insert_resource(GameTracer(tracer, Arc::new(names.into_iter().collect())));
         app.world_mut().resource_mut::<TraceState>().gauges = gauges;
@@ -182,15 +216,21 @@ fn env_prefix(id: &str) -> String {
         .collect()
 }
 
-fn make_tracer(id: &'static str, version: &'static str, dir: std::path::PathBuf, names: &[&'static str]) -> Tracer {
+fn make_tracer(id: &'static str, version: &'static str, build: Option<&'static str>, dir: std::path::PathBuf, names: &[&'static str]) -> Tracer {
     let prefix = env_prefix(id);
     let var = |k: &str| std::env::var(format!("{prefix}_{k}")).ok().filter(|v| !v.trim().is_empty());
     match (var("TRACE_ENDPOINT"), var("TRACE_KEY")) {
         (Some(endpoint), Some(key)) => {
             let names = names.to_vec();
-            Tracer::builder(&key, id, version)
-                .data_dir(dir)
+            let inspect = var("TRACE_INSPECT").is_some_and(|v| v != "0" && !v.eq_ignore_ascii_case("false"));
+            let mut b = Tracer::builder(&key, id, version);
+            if let Some(build) = build {
+                b = b.build(build);
+            }
+            b.data_dir(dir)
                 .endpoint(endpoint)
+                .process(ashlar_trace::ProcessKind::Gui)
+                .inspect(inspect)
                 .listen(TraceCategory::Game)
                 .listen(TraceCategory::Perf)
                 .configure(move |c| {
@@ -209,8 +249,8 @@ fn make_tracer(id: &'static str, version: &'static str, dir: std::path::PathBuf,
     }
 }
 
-fn begin_turn(tracer: Res<GameTracer>, mut st: ResMut<TraceState>) {
-    if st.armed && !st.in_turn {
+fn begin_turn(tracer: Res<GameTracer>, quiet: Option<Res<TraceQuiet>>, mut st: ResMut<TraceState>) {
+    if st.armed && !st.in_turn && quiet.is_none() {
         tracer.0.begin_turn();
         st.in_turn = true;
     }
@@ -226,6 +266,7 @@ fn end_frame(world: &mut World) {
         .get_resource::<State<AppState>>()
         .is_some_and(|s| *s.get() == AppState::InGame);
     let entities = world.entities().count_spawned();
+    let quiet = world.contains_resource::<TraceQuiet>();
     let mut st = world.resource_mut::<TraceState>();
 
     let dt = real.delta();
@@ -237,7 +278,7 @@ fn end_frame(world: &mut World) {
     if st.in_turn {
         tracer.end_turn();
         st.in_turn = false;
-        if dt > HITCH {
+        if dt > HITCH && !quiet {
             tracer.track_with(EngineEvent::Hitch, &[("ms", Prop::Int(dt.as_millis() as i64))]);
         }
     }
@@ -257,6 +298,13 @@ fn end_frame(world: &mut World) {
 
 fn notice_shown(tracer: Res<GameTracer>) {
     tracer.0.notice_shown();
+}
+
+/// Ends the session and sends what's waiting, without holding the exit up for long.
+fn shutdown_on_exit(mut exits: MessageReader<AppExit>, tracer: Res<GameTracer>) {
+    if exits.read().next().is_some() && tracer.0.is_enabled() {
+        tracer.0.shutdown_within(SHUTDOWN_WAIT);
+    }
 }
 
 fn crash_test(time: Res<Time<Real>>) {

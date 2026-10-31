@@ -1,8 +1,9 @@
 //! Mouse look + cursor capture + a display list of key bindings. Owner: core stream.
 //!
-//! - Cursor is captured (locked + hidden) in `AppState::InGame` while not paused, not
-//!   [`crate::cli::test_driven`] and [`CaptureCursor`] is true; released in menus / pause. If it gets lost while it should be
-//!   captured (focus loss, Cmd-Tab), a left click re-captures it.
+//! - Cursor is captured (locked + hidden) in `AppState::InGame` while not paused, no UI screen
+//!   is open (results, pause, settings: anything on the [`crate::ui::screens::Screens`] stack),
+//!   not [`crate::cli::test_driven`] and [`CaptureCursor`] is true; released otherwise. If it gets
+//!   lost while it should be captured (focus loss, Cmd-Tab), a left click re-captures it.
 //! - [`LookInput`] each frame: mouse delta × `CoreSettings.sensitivity` (× invert Y), zero when
 //!   not captured. With feature `actions` it comes from the rebindable "look" action (mouse +
 //!   gamepad right stick), see `crate::actions`. Games read it for camera look (radians per frame, already scaled).
@@ -83,6 +84,13 @@ impl Plugin for InputPlugin {
     }
 }
 
+/// Should the cursor be captured? Only while playing: in game, not paused, no screen open (an
+/// in-game screen such as results needs the pointer even though the game isn't paused), the
+/// game allows it, and not a test-driven run.
+pub fn wants_capture(state: Option<AppState>, paused: bool, allowed: bool, screen_open: bool, test_driven: bool) -> bool {
+    state == Some(AppState::InGame) && !paused && allowed && !screen_open && !test_driven
+}
+
 fn set_cursor(c: &mut CursorOptions, locked: bool) {
     c.visible = !locked;
     c.grab_mode = if locked { CursorGrabMode::Locked } else { CursorGrabMode::None };
@@ -92,12 +100,13 @@ fn cursor_policy(
     state: Option<Res<State<AppState>>>,
     paused: Res<Paused>,
     allowed: Res<CaptureCursor>,
+    screens: Option<Res<crate::ui::screens::Screens>>,
     mouse: Option<Res<ButtonInput<MouseButton>>>,
     mut cursors: Query<(&Window, &mut CursorOptions), With<PrimaryWindow>>,
     mut captured: ResMut<CursorCaptured>,
     mut was_wanted: Local<bool>,
 ) {
-    let want = state.is_some_and(|s| *s.get() == AppState::InGame) && !paused.0 && allowed.0 && !crate::cli::test_driven();
+    let want = wants_capture(state.as_deref().map(|s| *s.get()), paused.0, allowed.0, screens.is_some_and(|s| !s.stack.is_empty()), crate::cli::test_driven());
     let became_wanted = want && !*was_wanted;
     *was_wanted = want;
     let clicked = mouse.is_some_and(|m| m.just_pressed(MouseButton::Left));
@@ -169,6 +178,49 @@ pub fn look_from_motion(delta: Vec2, settings: &CoreSettings) -> LookInput {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn capture_only_while_playing() {
+        let ig = Some(AppState::InGame);
+        assert!(wants_capture(ig, false, true, false, false));
+        assert!(!wants_capture(ig, false, true, true, false), "results / any screen: free pointer");
+        assert!(!wants_capture(ig, true, true, true, false), "paused");
+        assert!(!wants_capture(ig, false, false, false, false), "the game said no (CaptureCursor)");
+        assert!(!wants_capture(Some(AppState::MainMenu), false, true, false, false));
+        assert!(!wants_capture(ig, false, true, false, true), "test-driven runs never capture");
+    }
+
+    /// The real system on a window: captured while driving, released when a screen (results)
+    /// opens without pausing, captured again when it closes.
+    #[test]
+    fn results_screen_releases_the_cursor() {
+        use bevy::state::app::StatesPlugin;
+        use bevy::window::{CursorGrabMode, CursorOptions, PrimaryWindow};
+        let mut app = App::new();
+        app.add_plugins((MinimalPlugins, StatesPlugin))
+            .init_state::<AppState>()
+            .init_resource::<Paused>()
+            .init_resource::<CaptureCursor>()
+            .init_resource::<CursorCaptured>()
+            .init_resource::<crate::ui::screens::Screens>()
+            .add_systems(Update, cursor_policy);
+        let w = app.world_mut().spawn((Window::default(), CursorOptions::default(), PrimaryWindow)).id();
+        let grab = |app: &App| app.world().get::<CursorOptions>(w).unwrap().grab_mode;
+        app.world_mut().resource_mut::<NextState<AppState>>().set(AppState::InGame);
+        app.update();
+        app.update();
+        assert_ne!(grab(&app), CursorGrabMode::None, "driving: captured");
+        app.world_mut().resource_mut::<crate::ui::screens::Screens>().stack.push("results");
+        app.update();
+        assert_eq!(grab(&app), CursorGrabMode::None, "results: released");
+        assert!(app.world().get::<CursorOptions>(w).unwrap().visible, "and shown");
+        app.world_mut().resource_mut::<crate::ui::screens::Screens>().stack.clear();
+        app.update();
+        assert_ne!(grab(&app), CursorGrabMode::None, "back to driving: captured again");
+        app.world_mut().resource_mut::<CaptureCursor>().0 = false;
+        app.update();
+        assert_eq!(grab(&app), CursorGrabMode::None, "CaptureCursor(false): released");
+    }
 
     #[test]
     fn look_scaling_and_invert() {

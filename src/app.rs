@@ -38,11 +38,14 @@ pub struct GameInfo {
     /// Fallback assets folder when not run from the workspace root or a bundle
     /// (games pass `concat!(env!("CARGO_MANIFEST_DIR"), "/assets")` or similar).
     pub assets_fallback: Option<&'static str>,
+    /// Build id (e.g. a git sha) for packaged builds; sent with crash and usage reports
+    /// (feature `trace`). `None` in dev builds, which the telemetry server treats as test data.
+    pub build: Option<&'static str>,
 }
 
 impl GameInfo {
     pub fn new(id: &'static str, title: &'static str) -> Self {
-        GameInfo { id, title, tagline: "", version: env!("CARGO_PKG_VERSION"), assets_fallback: None }
+        GameInfo { id, title, tagline: "", version: env!("CARGO_PKG_VERSION"), assets_fallback: None, build: None }
     }
     pub fn tagline(mut self, t: &'static str) -> Self {
         self.tagline = t;
@@ -54,6 +57,12 @@ impl GameInfo {
     }
     pub fn assets_fallback(mut self, p: &'static str) -> Self {
         self.assets_fallback = Some(p);
+        self
+    }
+    /// Build id of a packaged build (`.build(option_env!("MYGAME_BUILD_SHA"))` style; `None`
+    /// leaves it unset).
+    pub fn build(mut self, b: Option<&'static str>) -> Self {
+        self.build = b.filter(|b| !b.trim().is_empty());
         self
     }
 }

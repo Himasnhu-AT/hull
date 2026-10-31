@@ -11,3 +11,7 @@ publish = false
 glam = { version = "0.32", features = ["serde"] }
 serde = { version = "1", features = ["derive"] }
 ron = { version = "0.12", default-features = false }
+# sin / cos with the same bits on every platform (std's libm differs between Apple arm64,
+# x86_64 and Windows): rotations decide which points survive clearing, so placement must not
+# depend on the machine (games replay physics against these points).
+libm = "0.2"
