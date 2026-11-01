@@ -55,7 +55,7 @@ Each `EmitterDef` (all fields have defaults, build with `..default()`):
 | velocity | `Radial{speed}` (out of the shape; cone half-angle for `Cone`), `Cone{dir, angle, speed}`, `Fixed{v, jitter}`, `inherit_velocity` |
 | forces | `gravity`, `drag`, `turbulence` (divergence-free curl field: `strength, frequency, speed`), `attractors` (`offset, strength, radius, kill_radius`; negative repels), `orbit` (`axis, speed, radial`), `local_space` |
 | look over life | `size` + `size_over_life: Curve`, `aspect`, `color_over_life: Gradient` (linear RGBA, `Gradient::srgb` for picker colours), `start_tint` (random per particle), `rotation`, `spin` |
-| collision | `Plane{height, restitution, friction, die}`, `Physics{restitution, friction, die}` (avian raycasts, feature `physics`) |
+| collision | `Plane{height, restitution, friction, die}` (world height), `Ground{offset, restitution, friction, die}` (plane `offset` m above the instance's origin height at its first frame: ground for one-shots played on terrain; pooled instances re-read it on restart), `Physics{restitution, friction, die}` (avian raycasts, feature `physics`) |
 | sub-emitters | `SubEmitter{on: Spawn/Death/Collision, emitter: "<later emitter's name>", count, inherit_velocity, chance}` |
 | rendering | `RenderDef{mode, texture, blend, intensity, lit, soft, flipbook, sort}` |
 
@@ -96,7 +96,10 @@ curl turbulence), `fire` (crossfading flame flipbook, embers, smoke, flickering 
 death, tumbling lit debris bouncing on y = 0, lingering lit smoke, fading light), `dust_puff`,
 `magic` (orbiting ribbon wisps, motes falling into an attractor, per-metre sparkle trail when
 it moves), `rain` / `snow` (`follow_camera`: 36×36 m / 32×32 m around the camera; rain dies on
-y = 0 with splash sub-emitters, snow drifts in a curl field and settles), `stress` (benchmark
+y = 0 with splash sub-emitters, snow drifts in a curl field and settles), `leaves` (one-shot:
+lit green-to-brown flakes fluttering down through a curl field), `splinters` (one-shot: pale
+tumbling wood shards), `snap_dust` (one-shot low dust ring for a trunk or post breaking; the
+three settle with `Collision::Ground`, so play them on the ground point), `stress` (benchmark
 load).
 
 ## Runtime (`src/vfx/mod.rs`)

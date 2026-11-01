@@ -28,6 +28,9 @@ const SLOTS: &[(&str, f32, f32)] = &[
     ("explosion", 9.0, -8.0),
     ("dust_puff", -6.0, 1.0),
     ("magic", 0.0, 1.0),
+    ("leaves", 6.0, 1.0),
+    ("splinters", -3.0, 4.0),
+    ("snap_dust", 3.0, 4.0),
 ];
 
 #[derive(Resource, Clone, Copy)]
@@ -154,7 +157,8 @@ fn focus_pose(name: &str) -> CamPose {
         "explosion" => Vec3::new(0.0, 3.5, 9.0),
         "muzzle_flash" => Vec3::new(1.6, 1.9, 0.6),
         "rain" | "snow" => Vec3::new(0.0, 1.7, 6.0),
-        "dust_puff" => Vec3::new(0.0, 1.2, 2.2),
+        "dust_puff" | "snap_dust" | "splinters" => Vec3::new(0.0, 1.2, 2.2),
+        "leaves" => Vec3::new(0.0, 1.6, 3.0),
         "smoke" => Vec3::new(0.0, 2.5, 6.0),
         _ => Vec3::new(0.0, 2.0, 3.5),
     };

@@ -232,6 +232,40 @@ fn settle(mut commands: Commands, budget: Res<RenderBudget>, mut q: Query<(Entit
     }
 }
 
+/// Turns a piece that is about to move into an [`Actor`]: the root is tagged `Actor`, `Scenery`
+/// and hide-mode streaming membership come off, and every mesh below is classified again (far
+/// twins despawned, engine ranges and trimmed shadows undone). Used by `props` when a prop
+/// topples; a moving prop must not keep a static classification.
+#[cfg_attr(not(feature = "props"), allow(dead_code))]
+pub(crate) fn into_actor(world: &mut World, root: Entity) {
+    let Ok(mut r) = world.get_entity_mut(root) else { return };
+    r.remove::<super::stream::StreamCell>().insert(Actor);
+    let mut stack = vec![root];
+    let mut twins = Vec::new();
+    while let Some(e) = stack.pop() {
+        let Ok(mut ec) = world.get_entity_mut(e) else { continue };
+        if ec.get::<DetailTier>() == Some(&DetailTier::Far) {
+            twins.push(e);
+            continue;
+        }
+        if let Some(c) = ec.get::<Children>() {
+            stack.extend_from_slice(c);
+        }
+        let tiered = ec.contains::<DetailTier>();
+        let trimmed = ec.contains::<ShadowTrimmable>();
+        ec.remove::<(Scenery, BudgetClass, Settling, AutoScenery, AutoActor)>();
+        if tiered {
+            ec.remove::<(DetailTier, VisibilityRange)>();
+        }
+        if trimmed {
+            ec.remove::<(ShadowTrimmable, NotShadowCaster)>();
+        }
+    }
+    for t in twins {
+        world.despawn(t);
+    }
+}
+
 fn moved(a: &GlobalTransform, b: &GlobalTransform) -> bool {
     let (a, b) = (a.affine(), b.affine());
     a.translation.distance_squared(b.translation) > 1e-6 || !a.matrix3.abs_diff_eq(b.matrix3, 1e-4)

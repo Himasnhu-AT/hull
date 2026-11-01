@@ -70,6 +70,8 @@ pub mod trace;
 pub mod vfx;
 #[cfg(feature = "pcg")]
 pub mod pcg;
+#[cfg(feature = "props")]
+pub mod props;
 #[cfg(feature = "sound")]
 pub mod sound;
 
@@ -108,6 +110,8 @@ pub mod prelude {
     pub use crate::look::{Look, LookPlugin, LookTimeline, LookTransition, ReflectionProbe};
     #[cfg(feature = "vfx")]
     pub use crate::vfx::{EffectDef, EmitterDef, OnFinish, ParticleEffect, Vfx, VfxBudget, VfxLibrary, VfxPlugin, VfxStats};
+    #[cfg(feature = "props")]
+    pub use crate::props::{Breakable, Brushed, DebrisSpec, Fallen, Knock, Landed, PropGround, PropsPlugin, PropsSet, Sway, SwayPusher, Toppled, spawn_debris};
     #[cfg(feature = "sound")]
     pub use crate::sound::{
         Attenuation, BusId, Caption, DuckRule, MixSnapshot, Mixer, Music, MusicBeat, MusicStem, MusicTrack, MusicTransition, Pick, PlayParams,

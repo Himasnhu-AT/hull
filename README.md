@@ -67,6 +67,7 @@ cargo run -- --headless                      # no window, for tests
 | Look | Sun, sky, fog, exposure, grading, lens, probes, decals as data | `look` | [LOOK](docs/LOOK.md) |
 | Animation | State machines, blend spaces, layers, root motion, notifies, IK | `anim` | [ANIM](docs/ANIM.md) |
 | VFX | Particles, presets, budgets, near-camera fade | `vfx` | [VFX](docs/VFX.md) |
+| Props | Posts and saplings that topple when knocked, debris, plants that bend and spring back | `props` | [PROPS](docs/PROPS.md) |
 | AI | Navmesh baking, paths, crowds, behaviour trees, utility AI, perception | `ai` | [AI](docs/AI.md) |
 | Sound | Buses, snapshots, ducking, cues, 3D sound, occlusion, music, captions | `sound` | [SOUND](docs/SOUND.md) |
 | Worlds | Terrain, scatter, cell streaming, HLOD, floating origin | `world` | [WORLD](docs/WORLD.md) |

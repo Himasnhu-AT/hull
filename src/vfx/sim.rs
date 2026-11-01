@@ -331,6 +331,8 @@ pub struct InstanceState {
     pub seed: u64,
     /// Effect origin last frame (`local_space`).
     last_pos: Option<Vec3>,
+    /// Origin height at the first step (`Collision::Ground`).
+    ground: Option<f32>,
 }
 
 impl InstanceState {
@@ -343,7 +345,7 @@ impl InstanceState {
             .enumerate()
             .map(|(i, (d, c))| EmitterState::new(d, c, Rng::fork(seed, i as u64)))
             .collect();
-        InstanceState { emitters, time: 0.0, seed, last_pos: None }
+        InstanceState { emitters, time: 0.0, seed, last_pos: None, ground: None }
     }
 
     /// Back to time 0 with a new seed, keeping every buffer's capacity (pooling).
@@ -351,6 +353,7 @@ impl InstanceState {
         self.seed = seed;
         self.time = 0.0;
         self.last_pos = None;
+        self.ground = None;
         for (i, e) in self.emitters.iter_mut().enumerate() {
             e.reset(Rng::fork(seed, i as u64));
         }
@@ -376,12 +379,13 @@ impl InstanceState {
     pub fn step(&mut self, fx: &CompiledEffect, ctx: &FrameCtx, budget: &Budget) {
         let shift = if let Some(lp) = self.last_pos { Vec3A::from(ctx.pos - lp) } else { Vec3A::ZERO };
         self.last_pos = Some(ctx.pos);
+        let ground = *self.ground.get_or_insert(ctx.pos.y);
         let t0 = self.time;
         let t1 = t0 + ctx.dt;
         for i in 0..self.emitters.len() {
             let (head, tail) = self.emitters.split_at_mut(i + 1);
             let e = &mut head[i];
-            e.step(&fx.def, i, &fx.emitters[i], ctx, t0, t1, shift, budget, tail);
+            e.step(&fx.def, i, &fx.emitters[i], ctx, t0, t1, shift, ground, budget, tail);
         }
         self.time = t1;
     }
@@ -451,6 +455,7 @@ impl EmitterState {
         t0: f32,
         t1: f32,
         shift: Vec3A,
+        ground: f32,
         budget: &Budget,
         children: &mut [EmitterState],
     ) {
@@ -542,8 +547,13 @@ impl EmitterState {
                 }
             }
 
-            // 3. Ground-plane collision.
-            if let Collision::Plane { height, restitution, friction, die } = def.collision {
+            // 3. Ground-plane collision (world height, or relative to the instance's start).
+            let plane = match def.collision {
+                Collision::Plane { height, restitution, friction, die } => Some((height, restitution, friction, die)),
+                Collision::Ground { offset, restitution, friction, die } => Some((ground + offset, restitution, friction, die)),
+                _ => None,
+            };
+            if let Some((height, restitution, friction, die)) = plane {
                 let mut i = 0;
                 while i < self.p.len() {
                     let p = &mut self.p.pos[i];
@@ -882,6 +892,32 @@ mod tests {
         assert_eq!(st.emitters[2].spawned, 40);
         assert!(st.emitters[2].p.pos.iter().all(|p| (p.y + 1.0).abs() < 1e-4));
         assert!(!st.finished(&fx));
+    }
+
+    #[test]
+    fn ground_collision_is_relative_to_the_start_height() {
+        let fx = one(EmitterDef {
+            bursts: vec![Burst::at(0.0, 4)],
+            lifetime: (5.0, 5.0),
+            velocity: Velocity::Fixed { v: Vec3::new(1.0, -2.0, 0.0), jitter: Vec3::ZERO },
+            gravity: Vec3::new(0.0, -9.81, 0.0),
+            collision: Collision::Ground { offset: 0.1, restitution: 0.0, friction: 0.5, die: false },
+            ..default_e()
+        });
+        let b = Budget::unlimited();
+        let mut st = InstanceState::new(&fx, 1);
+        // Played on a hill at y = 37; the effect then moves (ground stays where it started).
+        for i in 0..120 {
+            st.step(&fx, &FrameCtx { dt: 1.0 / 60.0, ..FrameCtx::at(Vec3::new(0.0, 37.0 + i as f32 * 0.1, 0.0)) }, &b);
+        }
+        assert_eq!(st.alive(), 4);
+        assert!(st.emitters[0].p.pos.iter().all(|p| (p.y - 37.1).abs() < 1e-4), "{:?}", st.emitters[0].p.pos);
+        // Restarting picks up the new height.
+        st.restart(2);
+        for _ in 0..120 {
+            st.step(&fx, &FrameCtx { dt: 1.0 / 60.0, ..FrameCtx::at(Vec3::new(0.0, -4.0, 0.0)) }, &b);
+        }
+        assert!(st.emitters[0].p.pos.iter().all(|p| (p.y + 3.9).abs() < 1e-4));
     }
 
     #[test]

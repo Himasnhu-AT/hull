@@ -20,6 +20,9 @@ pub const PRESETS: &[(&str, fn() -> EffectDef)] = &[
     ("magic", magic),
     ("rain", rain),
     ("snow", snow),
+    ("leaves", leaves),
+    ("splinters", splinters),
+    ("snap_dust", snap_dust),
     ("stress", || stress(10_000)),
 ];
 
@@ -475,6 +478,82 @@ pub fn snow() -> EffectDef {
         color_over_life: Gradient::srgb(&[(0.0, [0.95, 0.97, 1.0], 0.0), (0.05, [0.95, 0.97, 1.0], 0.9)]),
         render: RenderDef { blend: Blend::Mix(0.2), intensity: 1.2, ..Default::default() },
         collision: Collision::Plane { height: 0.02, restitution: 0.0, friction: 1.0, die: false },
+        ..Default::default()
+    })
+}
+
+/// One-shot burst of leaves (a car through a shrub, a sapling snapping): small lit flakes that
+/// flutter down through a curl field, green to brown, settling on the ground where it was played.
+pub fn leaves() -> EffectDef {
+    EffectDef::new("leaves").once(0.05).with(EmitterDef {
+        name: "leaves".into(),
+        capacity: 64,
+        bursts: vec![Burst::at(0.0, 36)],
+        lifetime: (1.8, 3.2),
+        shape: Shape::Sphere { radius: 0.45, surface: false },
+        offset: Vec3::new(0.0, 0.5, 0.0),
+        velocity: Velocity::Cone { dir: Vec3::Y, angle: 1.2, speed: (1.5, 4.0) },
+        inherit_velocity: 0.3,
+        gravity: Vec3::new(0.0, -2.2, 0.0),
+        drag: 2.5,
+        turbulence: Some(Turbulence { strength: 3.0, frequency: 1.3, speed: 1.2 }),
+        size: (0.05, 0.09),
+        aspect: 0.55,
+        color_over_life: Gradient::srgb(&[(0.0, [1.0, 1.0, 1.0], 1.0), (0.85, [1.0, 1.0, 1.0], 1.0), (1.0, [0.8, 0.72, 0.55], 0.0)]),
+        start_tint: Gradient::srgb(&[(0.0, [0.27, 0.45, 0.13], 1.0), (0.55, [0.42, 0.5, 0.18], 1.0), (1.0, [0.55, 0.4, 0.2], 1.0)]),
+        rotation: (0.0, core::f32::consts::TAU),
+        spin: (-7.0, 7.0),
+        render: RenderDef { texture: VfxTexture::Dot, blend: Blend::Alpha, lit: 1.0, ..Default::default() },
+        collision: Collision::Ground { offset: 0.02, restitution: 0.0, friction: 1.0, die: false },
+        ..Default::default()
+    })
+}
+
+/// One-shot wood chips (a post or sapling snapping): pale tumbling shards that bounce on the
+/// ground where it was played.
+pub fn splinters() -> EffectDef {
+    EffectDef::new("splinters").once(0.05).with(EmitterDef {
+        name: "chips".into(),
+        capacity: 32,
+        bursts: vec![Burst::at(0.0, 18)],
+        lifetime: (0.8, 1.6),
+        shape: Shape::Sphere { radius: 0.12, surface: false },
+        offset: Vec3::new(0.0, 0.3, 0.0),
+        velocity: Velocity::Cone { dir: Vec3::Y, angle: 1.2, speed: (2.0, 6.0) },
+        inherit_velocity: 0.4,
+        gravity: G,
+        drag: 0.3,
+        size: (0.03, 0.08),
+        size_over_life: Curve::keys(&[(0.0, 1.0), (0.8, 1.0), (1.0, 0.0)]),
+        color_over_life: Gradient::srgb(&[(0.0, [0.8, 0.68, 0.5], 1.0)]),
+        start_tint: Gradient::srgb(&[(0.0, [1.0, 1.0, 1.0], 1.0), (1.0, [0.75, 0.68, 0.6], 1.0)]),
+        rotation: (0.0, core::f32::consts::TAU),
+        spin: (-15.0, 15.0),
+        render: RenderDef { mode: RenderMode::Mesh { shape: MeshShape::Shard }, lit: 1.0, ..Default::default() },
+        collision: Collision::Ground { offset: 0.0, restitution: 0.3, friction: 0.4, die: false },
+        ..Default::default()
+    })
+}
+
+/// One-shot low ring of brown dust for a trunk or post breaking at its base.
+pub fn snap_dust() -> EffectDef {
+    EffectDef::new("snap_dust").once(0.05).with(EmitterDef {
+        name: "dust".into(),
+        capacity: 24,
+        bursts: vec![Burst::at(0.0, 14)],
+        lifetime: (0.7, 1.3),
+        shape: Shape::Ring { radius: 0.2 },
+        offset: Vec3::new(0.0, 0.1, 0.0),
+        velocity: Velocity::Radial { speed: (1.0, 2.5) },
+        gravity: Vec3::new(0.0, 0.15, 0.0),
+        drag: 3.0,
+        size: (0.3, 0.5),
+        size_over_life: Curve::linear(0.6, 2.0),
+        color_over_life: Gradient::srgb(&[(0.0, [0.5, 0.42, 0.32], 0.5), (1.0, [0.6, 0.53, 0.43], 0.0)]),
+        rotation: (0.0, core::f32::consts::TAU),
+        spin: (-0.8, 0.8),
+        render: RenderDef { texture: VfxTexture::Smoke, blend: Blend::Alpha, lit: 1.0, soft: 0.3, flipbook: smoke_book(), sort: true, ..Default::default() },
+        collision: Collision::Ground { offset: 0.0, restitution: 0.0, friction: 0.5, die: false },
         ..Default::default()
     })
 }

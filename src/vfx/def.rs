@@ -395,6 +395,9 @@ pub enum Collision {
     None,
     /// Horizontal plane at world `height`.
     Plane { height: f32, restitution: f32, friction: f32, die: bool },
+    /// Horizontal plane `offset` metres above where the effect instance started (its origin's
+    /// height at its first frame): ground for one-shots played on terrain.
+    Ground { offset: f32, restitution: f32, friction: f32, die: bool },
     /// Raycasts against avian colliders (feature `physics`; `VfxBudget::collision_rays` per frame).
     Physics { restitution: f32, friction: f32, die: bool },
 }

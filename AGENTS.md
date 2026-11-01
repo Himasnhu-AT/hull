@@ -41,6 +41,7 @@ from the shell.
 | `src/pcg/`, `crates/pcg-core/` | procedural content: Bevy-free graph core + per-cell spawning (`pcg.*`): **docs/PCG.md** |
 | `tools/cook/` | texture cook (KTX2 BC7/BC5 + `color.avg`), standalone crate |
 | `src/vfx/` | particle effects, presets, budgets (`vfx.*`): **docs/VFX.md** |
+| `src/props/` | breakable props (topple, debris), swaying plants: **docs/PROPS.md** |
 | `src/ai/` | navmesh baking, paths, crowds, behaviour trees, utility AI, perception (`ai.*`): **docs/AI.md** |
 | `src/sound/`, `src/audio.rs` | mixer buses, snapshots, ducking, cues, 3D, occlusion, music, captions (`sound.*`): **docs/SOUND.md** |
 | `src/world/` | terrain, scatter, cell streaming, HLOD, floating origin, worlds as data (`world.*`): **docs/WORLD.md** |
