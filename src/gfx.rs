@@ -679,6 +679,12 @@ pub fn sky_and_sun_with(commands: &mut Commands, s: SunSetup) {
 ///   far-detail materials their colour.
 /// - **Source**: `color`, `normal`, `rough`, optional `ao` `.jpg`, with CPU-built mips.
 pub fn load_pbr(server: &AssetServer, dir: &AssetsDir, pending: &mut PendingMips, name: &str, tint: Color) -> Option<StandardMaterial> {
+    load_pbr_at(server, dir, pending, &format!("textures/{name}"), tint)
+}
+
+/// [`load_pbr`] for a set in any folder under the assets root, e.g. the asset library's
+/// `library/textures/polyhaven-asphalt_01` (docs/ASSETS.md).
+pub fn load_pbr_at(server: &AssetServer, dir: &AssetsDir, pending: &mut PendingMips, base: &str, tint: Color) -> Option<StandardMaterial> {
     let sampler = || {
         ImageSampler::Descriptor(ImageSamplerDescriptor {
             address_mode_u: ImageAddressMode::Repeat,
@@ -688,9 +694,9 @@ pub fn load_pbr(server: &AssetServer, dir: &AssetsDir, pending: &mut PendingMips
             ..ImageSamplerDescriptor::linear()
         })
     };
-    if cfg!(feature = "ktx2") && dir.has(&format!("textures/{name}/color.ktx2")) {
+    if cfg!(feature = "ktx2") && dir.has(&format!("{base}/color.ktx2")) {
         let load = |m: &str| -> Option<Handle<Image>> {
-            let p = format!("textures/{name}/{m}.ktx2");
+            let p = format!("{base}/{m}.ktx2");
             dir.has(&p).then(|| {
                 server
                     .load_builder()
@@ -702,7 +708,7 @@ pub fn load_pbr(server: &AssetServer, dir: &AssetsDir, pending: &mut PendingMips
             })
         };
         let color = load("color");
-        if let (Some(c), Some(avg)) = (&color, read_avg(dir, name)) {
+        if let (Some(c), Some(avg)) = (&color, read_avg(dir, base)) {
             pending.1.insert(c.id(), avg);
         }
         let orm = load("orm");
@@ -718,7 +724,7 @@ pub fn load_pbr(server: &AssetServer, dir: &AssetsDir, pending: &mut PendingMips
             ..default()
         });
     }
-    let path = |m: &str| format!("textures/{name}/{m}.jpg");
+    let path = |m: &str| format!("{base}/{m}.jpg");
     if !dir.has(&path("color")) {
         return None;
     }
@@ -751,8 +757,8 @@ pub fn load_pbr(server: &AssetServer, dir: &AssetsDir, pending: &mut PendingMips
 }
 
 /// `textures/<name>/color.avg`: three linear floats (the cooked colour map's average).
-fn read_avg(dir: &AssetsDir, name: &str) -> Option<Color> {
-    let s = std::fs::read_to_string(dir.0.join(format!("textures/{name}/color.avg"))).ok()?;
+fn read_avg(dir: &AssetsDir, base: &str) -> Option<Color> {
+    let s = std::fs::read_to_string(dir.0.join(format!("{base}/color.avg"))).ok()?;
     let v: Vec<f32> = s.split_whitespace().filter_map(|x| x.parse().ok()).collect();
     (v.len() >= 3).then(|| Color::LinearRgba(LinearRgba::rgb(v[0], v[1], v[2])))
 }
