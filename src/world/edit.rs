@@ -670,8 +670,8 @@ fn finish_heights(world: &mut World, rect: SampleRect, t0: std::time::Instant) -
     rect_world
 }
 
-#[cfg(feature = "devtools")]
-pub(crate) fn edit_stats(world: &World) -> TerrainEditStats {
+/// Edit counters and the timing of the last height edit.
+pub fn edit_stats(world: &World) -> TerrainEditStats {
     world.get_resource::<TerrainEditState>().map(|s| s.stats).unwrap_or_default()
 }
 
