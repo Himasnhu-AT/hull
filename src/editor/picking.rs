@@ -131,6 +131,7 @@ pub fn click_select(
     level: Query<(), With<LevelEntity>>,
     names: Query<(), With<Name>>,
     editor_only: Query<(), With<EditorOnly>>,
+    lights: Query<(Entity, &GlobalTransform), (With<LevelEntity>, Or<(With<PointLight>, With<SpotLight>, With<DirectionalLight>)>)>,
     mut press: Local<Option<Vec2>>,
 ) {
     let Some(window) = window else { return };
@@ -152,7 +153,22 @@ pub fn click_select(
     let Some(ray) = cursor_ray(camera, gt, &window, vp) else { return };
     let filter = |e: Entity| !editor_only.contains(e);
     let settings = MeshRayCastSettings::default().with_filter(&filter).with_visibility(RayCastVisibility::Visible);
-    let hit = ray_cast.cast_ray(ray, &settings).first().map(|(e, _)| *e);
+    let mesh_hit = ray_cast.cast_ray(ray, &settings).first().map(|(e, h)| (*e, h.distance));
+    // Lights have no mesh: pick their marker sphere when it is nearer than what the ray hits.
+    let light_hit = lights
+        .iter()
+        .filter_map(|(e, lt)| {
+            let c = lt.translation();
+            let depth = (c - ray.origin).length().max(1.0);
+            ray_sphere(ray, c, (0.02 * depth).max(0.25)).map(|t| (e, t))
+        })
+        .min_by(|a, b| a.1.total_cmp(&b.1));
+    let hit = match (mesh_hit, light_hit) {
+        (Some((m, md)), Some((l, ld))) => Some(if ld < md { l } else { m }),
+        (Some((m, _)), None) => Some(m),
+        (None, Some((l, _))) => Some(l),
+        (None, None) => None,
+    };
     let toggle = keys.any_pressed([KeyCode::ShiftLeft, KeyCode::ShiftRight, KeyCode::ControlLeft, KeyCode::ControlRight, KeyCode::SuperLeft, KeyCode::SuperRight]);
     match hit {
         Some(h) => {
@@ -170,4 +186,17 @@ pub fn click_select(
         None if !toggle => st.selection.clear(),
         None => {}
     }
+}
+
+/// Distance along the ray to a sphere, if it is hit in front of the origin.
+fn ray_sphere(ray: Ray3d, centre: Vec3, radius: f32) -> Option<f32> {
+    let oc = ray.origin - centre;
+    let b = oc.dot(*ray.direction);
+    let c = oc.length_squared() - radius * radius;
+    let disc = b * b - c;
+    if disc < 0.0 {
+        return None;
+    }
+    let t = -b - disc.sqrt();
+    (t > 0.0).then_some(t)
 }

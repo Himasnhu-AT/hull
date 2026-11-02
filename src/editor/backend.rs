@@ -119,7 +119,7 @@ const MAX_TREE_NODES: usize = 6000;
 /// Generated entities the engine and Bevy make for themselves: not level content, never shown.
 const INTERNAL_NAMES: &[&str] = &["far detail", "FPS counter", "Perf overlay", "LineGizmoRenderer", "LineJointGizmoRenderer", "LineStripGizmoRenderer"];
 
-fn build_node(world: &World, e: Entity, filter: &TreeFilter, budget: &mut usize, under_level: bool) -> Option<TreeNode> {
+fn build_node(world: &World, e: Entity, budget: &mut usize, under_level: bool) -> Option<TreeNode> {
     if *budget == 0 || world.get::<EditorOnly>(e).is_some() {
         return None;
     }
@@ -135,7 +135,7 @@ fn build_node(world: &World, e: Entity, filter: &TreeFilter, budget: &mut usize,
     let mut kids = Vec::new();
     if let Some(children) = world.get::<Children>(e) {
         for c in children.iter() {
-            if let Some(n) = build_node(world, c, filter, budget, stable.is_some() || under_level) {
+            if let Some(n) = build_node(world, c, budget, stable.is_some() || under_level) {
                 kids.push(n);
             }
         }
@@ -227,18 +227,6 @@ pub fn component_docs(world: &World, e: Entity) -> Result<Vec<ComponentDoc>, Str
         rank(a).cmp(&rank(b)).then_with(|| a.short_name.cmp(&b.short_name))
     });
     Ok(docs)
-}
-
-/// One component of an entity in UI JSON (`None` if absent or not serialisable).
-pub fn read_component(world: &World, e: Entity, type_path: &str) -> Option<Value> {
-    let registry = registry(world);
-    let reg = registry.read();
-    let r = find_type(&reg, type_path).ok()?;
-    let rc = r.data::<ReflectComponent>()?;
-    let er = world.get_entity(e).ok()?;
-    let value = rc.reflect(er)?;
-    let raw = schema::serialize(&reg, value.as_partial_reflect()).ok()?;
-    Some(schema::to_ui(&reg, r.type_info(), raw))
 }
 
 /// Sets (inserts or replaces) a component from UI JSON; `None` removes it.
@@ -440,7 +428,7 @@ impl EditorBackend for WorldBackend<'_> {
         let mut budget = MAX_TREE_NODES;
         let mut nodes = Vec::new();
         for r in roots {
-            if let Some(n) = build_node(world, r, filter, &mut budget, false) {
+            if let Some(n) = build_node(world, r, &mut budget, false) {
                 nodes.push(n);
             }
         }
@@ -585,5 +573,208 @@ impl EditorBackend for WorldBackend<'_> {
                 st.snap_step = step;
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bevy::world_serialization::{WorldAssetRoot, WorldSerializationPlugin};
+    use serde_json::json;
+
+    const TRANSFORM: &str = "bevy_transform::components::transform::Transform";
+
+    fn app() -> App {
+        let mut app = App::new();
+        app.add_plugins((MinimalPlugins, AssetPlugin::default(), WorldSerializationPlugin))
+            .init_asset::<Mesh>()
+            .init_asset::<StandardMaterial>()
+            .register_type::<Name>()
+            .register_type::<Transform>()
+            .register_type::<Visibility>()
+            .register_type::<ChildOf>()
+            .register_type::<PointLight>()
+            .register_type::<WorldAssetRoot>()
+            .add_plugins(crate::level::LevelPlugin)
+            .init_resource::<EditorState>();
+        app.finish();
+        app.cleanup();
+        app
+    }
+
+    fn level_entity(world: &mut World, name: &str, at: Vec3) -> Entity {
+        let id = level::new_stable_id(world);
+        world.spawn((LevelEntity { id }, Name::new(name.to_string()), Transform::from_translation(at))).id()
+    }
+
+    fn set_x(world: &mut World, e: Entity, x: f64) -> Op {
+        let stable = stable_of(world, e).unwrap();
+        let before = component_docs(world, e).unwrap().into_iter().find(|d| d.short_name == "Transform").unwrap().value;
+        let mut after = before.clone();
+        after["translation"][0] = json!(x);
+        Op::SetComponent { entity: StableOrId::Stable(stable), type_path: TRANSFORM.into(), before: Some(before), after: Some(after) }
+    }
+
+    #[test]
+    fn set_component_and_inverse() {
+        let mut app = app();
+        let w = app.world_mut();
+        let e = level_entity(w, "A", Vec3::new(1.0, 2.0, 3.0));
+        let op = set_x(w, e, 9.0);
+        let mut be = WorldBackend::new(w);
+        be.apply(&op).unwrap();
+        assert_eq!(be.world.get::<Transform>(e).unwrap().translation, Vec3::new(9.0, 2.0, 3.0));
+        be.apply(&op.inverse()).unwrap();
+        assert_eq!(be.world.get::<Transform>(e).unwrap().translation, Vec3::new(1.0, 2.0, 3.0));
+    }
+
+    #[test]
+    fn generated_entities_are_read_only() {
+        let mut app = app();
+        let w = app.world_mut();
+        let g = w.spawn((Name::new("Code-built"), Transform::default())).id();
+        let op = Op::Rename { entity: StableOrId::Id(g.to_bits()), before: "Code-built".into(), after: "x".into() };
+        let err = WorldBackend::new(w).apply(&op).unwrap_err();
+        assert!(err.contains("generated"), "{err}");
+        assert_eq!(w.get::<Name>(g).unwrap().as_str(), "Code-built");
+        let tree = WorldBackend::new(w).tree(&TreeFilter::default());
+        assert!(tree.iter().any(|n| n.name == "Code-built" && n.generated));
+        let tree = WorldBackend::new(w).tree(&TreeFilter { include_generated: false, ..default() });
+        assert!(tree.iter().all(|n| n.name != "Code-built"));
+    }
+
+    #[test]
+    fn despawn_and_spawn_keep_stable_ids_and_children() {
+        let mut app = app();
+        let w = app.world_mut();
+        let parent = level_entity(w, "Parent", Vec3::X);
+        let child = level_entity(w, "Child", Vec3::Y);
+        w.entity_mut(child).insert(ChildOf(parent));
+        let (pid, cid) = (stable_of(w, parent).unwrap(), stable_of(w, child).unwrap());
+        let mut be = WorldBackend::new(w);
+        let snap = be.snapshot(parent.to_bits()).unwrap();
+        assert_eq!(snap.children.len(), 1);
+        assert_eq!(snap.children[0].parent, Some(pid));
+        be.apply(&Op::Despawn { snapshot: snap.clone() }).unwrap();
+        assert!(by_stable(be.world, pid).is_none() && by_stable(be.world, cid).is_none());
+        be.apply(&Op::Spawn { snapshot: snap }).unwrap();
+        let (p2, c2) = (by_stable(be.world, pid).unwrap(), by_stable(be.world, cid).unwrap());
+        assert_eq!(be.world.get::<ChildOf>(c2).unwrap().parent(), p2);
+        assert_eq!(be.world.get::<Transform>(c2).unwrap().translation, Vec3::Y);
+        // The same snapshot twice is refused (ids are unique).
+        let snap = be.snapshot(p2.to_bits()).unwrap();
+        assert!(be.apply(&Op::Spawn { snapshot: snap }).is_err());
+    }
+
+    #[test]
+    fn reparent_rename_and_cycles() {
+        let mut app = app();
+        let w = app.world_mut();
+        let a = level_entity(w, "A", Vec3::ZERO);
+        let b = level_entity(w, "B", Vec3::ZERO);
+        let (sa, sb) = (stable_of(w, a).unwrap(), stable_of(w, b).unwrap());
+        let mut be = WorldBackend::new(w);
+        be.apply(&Op::Reparent { entity: sb.into(), before: None, after: Some(sa.into()) }).unwrap();
+        assert_eq!(be.world.get::<ChildOf>(b).unwrap().parent(), a);
+        assert!(be.apply(&Op::Reparent { entity: sa.into(), before: None, after: Some(sb.into()) }).is_err(), "no cycles");
+        be.apply(&Op::Reparent { entity: sb.into(), before: Some(sa.into()), after: None }).unwrap();
+        assert!(be.world.get::<ChildOf>(b).is_none());
+        be.apply(&Op::Rename { entity: sa.into(), before: "A".into(), after: "Alpha".into() }).unwrap();
+        assert_eq!(be.world.get::<Name>(a).unwrap().as_str(), "Alpha");
+    }
+
+    #[test]
+    fn a_failing_batch_changes_nothing() {
+        let mut app = app();
+        let w = app.world_mut();
+        let e = level_entity(w, "A", Vec3::ZERO);
+        let good = set_x(w, e, 5.0);
+        let bad = Op::Rename { entity: StableOrId::Stable(StableId(9999)), before: String::new(), after: "x".into() };
+        let mut be = WorldBackend::new(w);
+        assert!(be.apply(&Op::Batch(vec![good, bad])).is_err());
+        assert_eq!(be.world.get::<Transform>(e).unwrap().translation.x, 0.0);
+    }
+
+    #[test]
+    fn bad_input_is_an_error_not_a_panic() {
+        let mut app = app();
+        let w = app.world_mut();
+        let e = level_entity(w, "A", Vec3::ZERO);
+        let s = stable_of(w, e).unwrap();
+        let mut be = WorldBackend::new(w);
+        let set = |tp: &str, v: Value| Op::SetComponent { entity: s.into(), type_path: tp.into(), before: None, after: Some(v) };
+        assert!(be.apply(&set("no::such::Type", json!(1))).is_err());
+        assert!(be.apply(&set(TRANSFORM, json!("nonsense"))).is_err());
+        assert!(be.apply(&set(TRANSFORM, json!({"translation": [1, 2]}))).is_err());
+        assert!(be.components(u64::MAX).is_err());
+        assert!(be.snapshot(12345).is_err());
+        assert!(be.place_asset("../../etc/passwd", Placement::default()).is_err());
+        assert!(be.place_asset("textures/x.png", Placement::default()).is_err());
+        assert!(be.open_level("/no/such/level.ron").is_err());
+        assert!(be.assets("../..").is_empty());
+        // Still intact.
+        assert_eq!(be.world.get::<Transform>(e).unwrap().translation, Vec3::ZERO);
+    }
+
+    #[test]
+    fn asset_handles_show_and_load_by_path() {
+        let mut app = app();
+        let w = app.world_mut();
+        let e = level_entity(w, "Car", Vec3::ZERO);
+        let s = stable_of(w, e).unwrap();
+        let tp = "bevy_world_serialization::components::WorldAssetRoot";
+        let mut be = WorldBackend::new(w);
+        be.apply(&Op::SetComponent { entity: s.into(), type_path: tp.into(), before: None, after: Some(json!("library/cars/x/car.glb#Scene0")) }).unwrap();
+        let doc = be.components(e.to_bits()).unwrap().into_iter().find(|d| d.short_name == "WorldAssetRoot").unwrap();
+        assert_eq!(doc.value, json!("library/cars/x/car.glb#Scene0"));
+        assert!(matches!(doc.schema, TypeSchema::AssetPath { .. }));
+        let snap = be.snapshot(e.to_bits()).unwrap();
+        assert!(snap.components.iter().any(|(t, v)| t == tp && v == &json!("library/cars/x/car.glb#Scene0")));
+        // Removing a component is `after: None`.
+        be.apply(&Op::SetComponent { entity: s.into(), type_path: tp.into(), before: None, after: None }).unwrap();
+        assert!(be.world.get::<WorldAssetRoot>(e).is_none());
+    }
+
+    #[test]
+    fn selection_drops_dead_entities() {
+        let mut app = app();
+        let w = app.world_mut();
+        let a = level_entity(w, "A", Vec3::ZERO);
+        let b = level_entity(w, "B", Vec3::ZERO);
+        let mut be = WorldBackend::new(w);
+        be.set_selection(&[a.to_bits(), b.to_bits(), 77]);
+        assert_eq!(be.selection().len(), 2);
+        be.world.entity_mut(a).despawn();
+        assert_eq!(be.selection(), vec![b.to_bits()]);
+    }
+
+    #[test]
+    fn asset_listing_marks_folders_kinds_and_licences() {
+        let d = std::env::temp_dir().join(format!("editor-assets-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(d.join("library/cars/kit")).unwrap();
+        std::fs::write(d.join("library/cars/kit/sedan.glb"), b"x").unwrap();
+        std::fs::write(d.join("library/LICENSES.json"), r#"{"cars/kit": {"license": "CC0-1.0"}}"#).unwrap();
+        std::fs::write(d.join("levels.level.ron"), b"x").unwrap();
+        let root = list_assets(&d, "");
+        assert_eq!(root[0].kind, AssetKind::Folder);
+        assert!(root.iter().any(|a| a.path == "levels.level.ron" && a.kind == AssetKind::Level));
+        let cars = list_assets(&d, "library/cars/kit");
+        assert_eq!(cars[0].path, "library/cars/kit/sedan.glb");
+        assert_eq!(cars[0].kind, AssetKind::Model);
+        assert_eq!(cars[0].license.as_deref(), Some("CC0-1.0"));
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn diagnostics_cursor_advances() {
+        let mut st = EditorState::default();
+        for i in 0..3 {
+            st.push_diag(Diagnostic { level: Level::Info, source: "t".into(), message: i.to_string(), file: None, line: None, col: None });
+        }
+        let (c, items) = st.diagnostics_since(0);
+        assert_eq!((c, items.len()), (3, 3));
+        let (c2, items) = st.diagnostics_since(c);
+        assert_eq!((c2, items.len()), (3, 0));
     }
 }

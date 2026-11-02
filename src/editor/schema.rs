@@ -207,10 +207,6 @@ fn srgb_encode(c: f64) -> f64 {
     if c <= 0.003_130_8 { c * 12.92 } else { 1.055 * c.powf(1.0 / 2.4) - 0.055 }
 }
 
-fn srgb_decode(c: f64) -> f64 {
-    if c <= 0.040_45 { c / 12.92 } else { ((c + 0.055) / 1.055).powf(2.4) }
-}
-
 fn obj4(a: [f64; 4]) -> Value {
     json!({"red": a[0], "green": a[1], "blue": a[2], "alpha": a[3]})
 }

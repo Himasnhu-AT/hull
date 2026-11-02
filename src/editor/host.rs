@@ -61,6 +61,13 @@ pub fn ui_pass(world: &mut World) -> Result {
     };
     let Some(mut ui) = world.remove_resource::<EditorUiRes>() else { return Ok(()) };
     let out = ui.0.show(&ctx, &mut WorldBackend::new(world));
+    if let Some(r) = out.viewport
+        && world.resource::<EditorState>().play.is_running()
+    {
+        let p = ctx.layer_painter(egui::LayerId::background());
+        p.rect_filled(r, 0.0, egui::Color32::from_rgb(14, 15, 18));
+        p.text(r.center(), egui::Align2::CENTER_CENTER, "The game is running in its own window. Press Stop to come back.", egui::FontId::proportional(15.0), egui::Color32::from_gray(150));
+    }
     // The 3D view fills the transparent hole.
     if let (Some(r), Some(tex)) = (out.viewport, world.resource::<ViewportImage>().texture)
         && !world.resource::<EditorState>().play.is_running()
@@ -105,12 +112,6 @@ pub struct ViewportImage {
     /// A size that differs from `size`, and for how many frames it has been wanted.
     pending: UVec2,
     stable: u32,
-}
-
-impl ViewportImage {
-    pub fn size(&self) -> UVec2 {
-        self.size
-    }
 }
 
 /// Keeps the image the size of the viewport hole (reallocated once the size has held for a few

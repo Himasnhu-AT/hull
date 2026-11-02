@@ -130,6 +130,11 @@ fn dist_to_segment(p: Vec2, a: Vec2, b: Vec2) -> f32 {
 }
 
 fn in_quad(p: Vec2, q: &[Vec2; 4]) -> bool {
+    // A plane seen edge-on collapses to a line: not a target.
+    let area: f32 = (0..4).map(|i| q[i].perp_dot(q[(i + 1) % 4])).sum::<f32>().abs() * 0.5;
+    if area < 16.0 {
+        return false;
+    }
     let mut sign = 0.0f32;
     for i in 0..4 {
         let (a, b) = (q[i], q[(i + 1) % 4]);
@@ -313,7 +318,7 @@ pub fn interact(
                 entity: StableOrId::Stable(d.stable),
                 type_path: Transform::type_path().to_string(),
                 before: Some(transform_json(&d.start)),
-                after: Some(transform_json(&t)),
+                after: Some(transform_json(t)),
             };
             ui.0.record_applied(label, op, Some(format!("gizmo|{}", d.stable.0)));
             ui.0.seal_undo();
@@ -506,6 +511,125 @@ pub fn draw(
             }
             let c = if active == Some(Handle::ScaleAll) { HOVER } else { Color::WHITE };
             g.cube(Transform::from_translation(f.origin).with_rotation(target_gt.rotation()).with_scale(Vec3::splat(f.size * 0.11)), c);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use bevy::camera::CameraProjection;
+
+    use super::*;
+
+    fn drag(handle: Handle, axes: [Vec3; 3], t0: f32, hit0: Vec3) -> Drag {
+        Drag {
+            handle,
+            entity: Entity::PLACEHOLDER,
+            stable: StableId(1),
+            start: Transform::IDENTITY,
+            parent: None,
+            world: Transform::IDENTITY,
+            origin: Vec3::ZERO,
+            axes,
+            t0,
+            hit0,
+            mouse0: Vec2::new(100.0, 100.0),
+            centre_px: Vec2::new(100.0, 200.0),
+        }
+    }
+
+    const WORLD: [Vec3; 3] = [Vec3::X, Vec3::Y, Vec3::Z];
+
+    /// A ray from z = 10 toward `target`.
+    fn ray_to(target: Vec3) -> Ray3d {
+        let o = Vec3::new(0.0, 0.0, 10.0);
+        Ray3d::new(o, Dir3::new(target - o).unwrap())
+    }
+
+    #[test]
+    fn axis_drag_follows_the_mouse_along_the_axis() {
+        let d = drag(Handle::Axis(0), WORLD, 0.0, Vec3::ZERO);
+        let t = drag_transform(&d, ray_to(Vec3::new(2.0, 0.0, 0.0)), Vec2::ZERO, false, 0.5);
+        assert!((t.translation - Vec3::new(2.0, 0.0, 0.0)).length() < 1e-3, "{t:?}");
+        // The mouse off the axis (up) does not move the entity up.
+        let t = drag_transform(&d, ray_to(Vec3::new(2.0, 3.0, 0.0)), Vec2::ZERO, false, 0.5);
+        assert!(t.translation.y.abs() < 1e-3);
+    }
+
+    #[test]
+    fn move_snaps_to_the_step() {
+        let d = drag(Handle::Axis(0), WORLD, 0.0, Vec3::ZERO);
+        let t = drag_transform(&d, ray_to(Vec3::new(1.2, 0.0, 0.0)), Vec2::ZERO, true, 0.5);
+        assert!((t.translation.x - 1.0).abs() < 1e-3, "{t:?}");
+    }
+
+    #[test]
+    fn plane_drag_moves_in_the_plane_only() {
+        // Plane(2) = the XY plane (normal Z).
+        let d = drag(Handle::Plane(2), WORLD, 0.0, Vec3::ZERO);
+        let t = drag_transform(&d, ray_to(Vec3::new(1.5, -2.0, 0.0)), Vec2::ZERO, false, 0.5);
+        assert!((t.translation - Vec3::new(1.5, -2.0, 0.0)).length() < 1e-3, "{t:?}");
+    }
+
+    #[test]
+    fn ring_drag_rotates_by_the_swept_angle() {
+        // Ring(2) turns about Z. Start at the +X side of the ring, move the mouse to +Y: 90 degrees.
+        let n = Vec3::Z;
+        let a0 = ring_angle(Vec3::ZERO, n, Vec3::X);
+        let d = drag(Handle::Ring(2), WORLD, a0, Vec3::X);
+        let t = drag_transform(&d, ray_to(Vec3::new(0.0, 1.0, 0.0)), Vec2::ZERO, false, 15.0);
+        let (axis, angle) = t.rotation.to_axis_angle();
+        assert!((angle.to_degrees().abs() - 90.0).abs() < 0.5, "{angle}");
+        assert!(axis.dot(Vec3::Z).abs() > 0.99);
+        // With snapping on a 15 degree step, 80 degrees lands on 75.
+        let t = drag_transform(&d, ray_to(Vec3::new(0.1763, 1.0, 0.0)), Vec2::ZERO, true, 15.0);
+        let a = t.rotation.to_axis_angle().1.to_degrees();
+        assert!((a - 75.0).abs() < 0.5 || (a - 285.0).abs() < 0.5 || (a + 75.0).abs() < 0.5, "{a}");
+    }
+
+    #[test]
+    fn scale_handles_scale_by_the_ratio() {
+        let mut d = drag(Handle::Scale(0), WORLD, 1.0, Vec3::ZERO);
+        d.start.scale = Vec3::splat(2.0);
+        let t = drag_transform(&d, ray_to(Vec3::new(3.0, 0.0, 0.0)), Vec2::ZERO, false, 0.1);
+        assert!((t.scale - Vec3::new(6.0, 2.0, 2.0)).length() < 1e-3, "{t:?}");
+        // Never zero or negative.
+        let t = drag_transform(&d, ray_to(Vec3::new(-5.0, 0.0, 0.0)), Vec2::ZERO, false, 0.1);
+        assert!(t.scale.x > 0.0);
+        // Uniform scale by the distance ratio from the gizmo centre.
+        let mut d = drag(Handle::ScaleAll, WORLD, 0.0, Vec3::ZERO);
+        d.start.scale = Vec3::ONE;
+        let t = drag_transform(&d, ray_to(Vec3::ZERO), Vec2::new(100.0, 0.0), false, 0.1);
+        assert!((t.scale - Vec3::splat(2.0)).length() < 1e-3, "{t:?}");
+    }
+
+    #[test]
+    fn a_parent_transform_is_taken_out_of_the_result() {
+        let mut d = drag(Handle::Axis(0), WORLD, 0.0, Vec3::ZERO);
+        d.parent = Some(GlobalTransform::from(Transform::from_translation(Vec3::new(10.0, 0.0, 0.0))));
+        d.world = Transform::from_translation(Vec3::new(10.0, 0.0, 0.0));
+        d.origin = d.world.translation;
+        let ray = Ray3d::new(Vec3::new(12.0, 0.0, 10.0), Dir3::NEG_Z);
+        let t = drag_transform(&d, ray, Vec2::ZERO, false, 0.5);
+        // Moved 2 m along X in the world, so 2 m in the parent's frame.
+        assert!((t.translation.x - 2.0).abs() < 1e-3, "{t:?}");
+    }
+
+    #[test]
+    fn hit_test_picks_the_nearest_handle() {
+        // A camera 10 m from the origin looking down -Z with a 90 degree viewport 200 px high.
+        let mut cam = Camera::default();
+        cam.computed.target_info = Some(bevy::camera::RenderTargetInfo { physical_size: UVec2::new(200, 200), scale_factor: 1.0 });
+        let gt = GlobalTransform::from(Transform::from_xyz(0.0, 0.0, 10.0));
+        let f = Frame { origin: Vec3::ZERO, axes: WORLD, size: 2.0 };
+        cam.computed.clip_from_view = PerspectiveProjection { fov: std::f32::consts::FRAC_PI_2, aspect_ratio: 1.0, ..default() }.get_clip_from_view();
+        let o = cam.world_to_viewport(&gt, Vec3::ZERO).ok();
+        {
+            let o = o.expect("projects");
+            let tip = cam.world_to_viewport(&gt, Vec3::new(2.0, 0.0, 0.0)).unwrap();
+            let mid = (o + tip) * 0.5;
+            assert_eq!(hit_test(Tool::Move, &f, &cam, &gt, mid), Some(Handle::Axis(0)));
+            assert_eq!(hit_test(Tool::Move, &f, &cam, &gt, Vec2::new(5.0, 5.0)), None);
         }
     }
 }
