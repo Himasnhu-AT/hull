@@ -6,6 +6,9 @@ rust-version = "1.97.1"
 license = "MIT OR Apache-2.0"
 description = "Reusable game shell on Bevy: app bootstrap, settings, menus, pause, UI kit, rendering presets, audio, input, devtools."
 
+[workspace]
+members = [".", "crates/pcg-core", "crates/editor-proto", "crates/editor-ui"]
+
 [dependencies]
 bevy = { version = "=0.20.1", features = ["jpeg"] }
 avian3d = { version = "=0.8.0", optional = true }
