@@ -4,6 +4,8 @@
 //!
 //! `cargo run --example world_editor_demo --features editor -- --editor`
 //!
+//! `--size 4096 --pcg-all` makes it a 4 km map dressed everywhere (the editor frame-time measurement).
+//!
 //! Tools (toolbar): Spline, Sculpt, Paint, Foliage, Place. Script them with `editor.tool` and
 //! `editor.tool_action` (docs/EDITOR.md, "World tools").
 
@@ -17,7 +19,10 @@ use engine::prelude::*;
 use engine::spline::{Spline, SplinePoint, SplineRoad};
 use engine::world::*;
 
-const SIZE: f32 = 1000.0;
+/// Terrain side in metres: `--size <m>` (default 1000; 4096 for the big-world measurement).
+fn size() -> f32 {
+    engine::cli::arg_value("size").and_then(|s| s.parse().ok()).unwrap_or(1000.0)
+}
 
 /// A gameplay marker the Place tool can drop (shows in Details like any component).
 #[derive(Component, Reflect, Default, Clone, Debug)]
@@ -43,10 +48,11 @@ fn main() {
 }
 
 fn setup(world: &mut World) {
-    let n = (SIZE / 2.0) as u32 + 1;
+    let size = size();
+    let n = (size / 2.0) as u32 + 1;
     let noise = NoiseTerrain { fbm: Fbm { seed: 11, frequency: 0.0016, octaves: 5, warp: 60.0, ..default() }, amplitude: 70.0, base: 0.0, exponent: 1.6, border_falloff: 0.0 };
-    let hf = Heightfield::from_noise(n, n, 2.0, Vec2::splat(-SIZE * 0.5), &noise);
-    let mut desc = WorldDesc { seed: 5, terrain: engine::world::desc::TerrainDesc { size: [SIZE, SIZE], spacing: 2.0, chunk_quads: 64, ..default() }, ..default() };
+    let hf = Heightfield::from_noise(n, n, 2.0, Vec2::splat(-size * 0.5), &noise);
+    let mut desc = WorldDesc { seed: 5, terrain: engine::world::desc::TerrainDesc { size: [size, size], spacing: 2.0, chunk_quads: 64, ..default() }, ..default() };
     // Four paintable layers: grass, dirt, gravel, red paint (the last two only by hand).
     let mut layers = engine::world::material::default_layers();
     layers[1] = SplatLayer { name: "dirt".into(), color: [0.45, 0.33, 0.2], slope: [30.0, 90.0], blend: 8.0, weight: 3.0, ..default() };
@@ -54,7 +60,10 @@ fn setup(world: &mut World) {
     layers[3] = SplatLayer { name: "paint".into(), color: [0.85, 0.2, 0.15], height: [1e5, 1e6], weight: 0.0, ..default() };
     desc.terrain.layers = layers;
     // The PCG surface: the same heights, sampled once.
-    let (w, a0) = (301usize, -300.0f32);
+    // The PCG area: the middle 560 m by default, the whole map with `--pcg-all`.
+    let all = engine::cli::has_flag("pcg-all");
+    let half = if all { size * 0.5 - 20.0 } else { 280.0 };
+    let (w, a0) = (((2.0 * half + 40.0) / 2.0) as usize + 1, -half - 20.0);
     let heights: Vec<f32> = (0..w * w).map(|i| hf.height_at(a0 + (i % w) as f32 * 2.0, a0 + (i / w) as f32 * 2.0)).collect();
     if let Err(e) = engine::world::desc::spawn_world_with(world, desc, Some(hf)) {
         error!("world_editor_demo: {e}");
@@ -92,7 +101,7 @@ fn setup(world: &mut World) {
     }
     let graph = Graph::build(7)
         .input("lots")
-        .poisson(12.0)
+        .poisson(if all { 22.0 } else { 12.0 })
         .project(0.0, false)
         .spawn(&[("tree", 1.0)], Tier::Normal)
         .id("trees")
@@ -103,9 +112,9 @@ fn setup(world: &mut World) {
         .id("rocks")
         .finish()
         .expect("graph");
-    let inputs = Inputs::default().rects("lots", vec![Rect::new(Vec2::ZERO, Vec2::splat(280.0))]).surface(Surface::Heightfield { origin: Vec2::splat(a0), cell: 2.0, width: w, heights });
+    let inputs = Inputs::default().rects("lots", vec![Rect::new(Vec2::ZERO, Vec2::splat(half))]).surface(Surface::Heightfield { origin: Vec2::splat(a0), cell: 2.0, width: w, heights });
     let id = new_stable_id(world);
-    world.spawn((LevelEntity { id }, Name::new("Dressing"), PcgVolume { graph: PcgGraphRef::Inline(Arc::new(graph)), inputs: Arc::new(inputs), area: Area::new(Vec2::splat(-280.0), Vec2::splat(280.0)), cell: 64.0 }, PcgFollowTerrain));
+    world.spawn((LevelEntity { id }, Name::new("Dressing"), PcgVolume { graph: PcgGraphRef::Inline(Arc::new(graph)), inputs: Arc::new(inputs), area: Area::new(Vec2::splat(-half), Vec2::splat(half)), cell: 64.0 }, PcgFollowTerrain));
 
     if !world.resource::<Headless>().0 {
         let h = ground(world, 0.0, 0.0);

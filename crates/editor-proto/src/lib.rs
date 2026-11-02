@@ -398,6 +398,8 @@ pub enum ViewportCmd {
     SetLocalSpace(bool),
     /// The faint ground grid.
     SetShowGrid(bool),
+    /// Draw every scenery mesh at any distance (no detail fade). Costs frame time on big worlds.
+    SetShowAllScenery(bool),
 }
 
 /// What the viewport overlay shows, read every frame.
@@ -406,13 +408,14 @@ pub struct ViewInfo {
     pub camera_speed: f32,
     pub local_space: bool,
     pub show_grid: bool,
+    pub show_all_scenery: bool,
     /// Camera rotation as `[x, y, z, w]` (for the axis gizmo).
     pub camera_rotation: [f32; 4],
 }
 
 impl Default for ViewInfo {
     fn default() -> Self {
-        ViewInfo { camera_speed: 8.0, local_space: false, show_grid: true, camera_rotation: [0.0, 0.0, 0.0, 1.0] }
+        ViewInfo { camera_speed: 8.0, local_space: false, show_grid: true, show_all_scenery: false, camera_rotation: [0.0, 0.0, 0.0, 1.0] }
     }
 }
 
