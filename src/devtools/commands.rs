@@ -386,6 +386,7 @@ fn perf_stats(world: &mut World, _: Value) -> Result<Value, String> {
         "frame_ms": {"p50": p50, "p95": p95, "p99": p99},
         "entities": world.entities().count_spawned(),
         "perf": super::perf::stats_json(world),
+        "textures": world.get_resource::<crate::gfx::TextureCapStats>().map(|t| json!({"capped": t.capped, "mb_saved": t.bytes_saved as f64 / 1048576.0})),
     }))
 }
 

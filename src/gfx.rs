@@ -9,6 +9,28 @@
 //!   components (games own the look); with one, `look` does. [`prune_prepasses`] drops
 //!   prepasses only a removed feature needed.
 //! - Textures: [`load_pbr`] (+ CPU mip generation through [`PendingMips`]), [`world_uv_cuboid`].
+//! - Texture size cap: [`QualityPreset::max_texture_size`] (default Low 1024, Medium 2048, High
+//!   4096, Ultra no cap; 0 = no cap). A bigger image loses its top mip levels before it is
+//!   uploaded ([`cap_texture_size`]): BC7 2048² with mips is 5.6 MB, capped to 1024² 1.4 MB
+//!   (RGBA8: 22.4 → 5.6 MB). Applies to
+//!   - every 2D image that arrives with a mip chain and CPU data (cooked KTX2 from [`load_pbr`]
+//!     or anywhere else; arrays and cubemaps too, mip- or layer-major),
+//!   - [`load_pbr`]'s JPEG sets, after their CPU mips are built,
+//!   - with `cap_material_images` (default on), mip-less RGBA8 images used by a
+//!     `StandardMaterial` slot (base colour, normal, metallic-roughness, occlusion, emissive):
+//!     glTF / PNG / JPEG textures get CPU mips ([`cap_mipless`]), then the cap. Only material
+//!     slots, so UI images, fonts, sprites and render targets keep their size (they have no
+//!     mips, and stretching UI to a lower resolution would blur it).
+//!
+//!   Not capped: images without CPU data (render targets, GPU-generated maps), mip-less images
+//!   outside material slots or in other formats, 3D textures, data whose length does not match
+//!   its descriptor, and images that are already extracted and GPU-only. The cap runs in
+//!   `PostUpdate` on the frame's `AssetEvent::Added` (after Bevy publishes asset events, before
+//!   extraction takes GPU-only images' data), changing images with `get_mut_untracked` so only
+//!   the capped data is ever uploaded. A quality change applies to textures loaded after it;
+//!   restart (or reload the textures) to apply it to loaded ones: nothing is reloaded during
+//!   play. Stats: [`TextureCapStats`], `perf.stats` → `textures` (`capped`, `mb_saved`). Idle
+//!   cost: reading the frame's image and material asset events.
 //! - Helpers: [`FaceCamera`] billboards, [`sky_and_sun`] for a ready-made outdoor look.
 //!
 //! Nothing here runs headless.
@@ -30,7 +52,8 @@ use bevy::platform::collections::{HashMap, HashSet};
 use bevy::post_process::bloom::Bloom;
 use bevy::prelude::*;
 use bevy::render::camera::{MipBias, TemporalJitter};
-use bevy::render::render_resource::TextureFormat;
+use bevy::ecs::message::MessageCursor;
+use bevy::render::render_resource::{TextureDataOrder, TextureDimension, TextureFormat};
 
 use crate::flow::has_visuals;
 use crate::paths::AssetsDir;
@@ -101,6 +124,14 @@ pub struct QualityPreset {
     pub max_cascades: [u32; 4],
     /// Point-light shadow cube face size (`PointLightShadowMap`; 6 faces per shadowed light).
     pub point_shadow_map_size: [usize; 4],
+    /// Largest texture side (px) kept at load; 0 = no cap. Bigger images lose their top mip
+    /// levels before upload (see [`cap_texture_size`] and the module docs: which images, when).
+    /// Applies to textures loaded after a quality change; restart or reload them to apply.
+    pub max_texture_size: [u32; 4],
+    /// Also cap textures without a mip chain (glTF / PNG / JPEG) that a `StandardMaterial`
+    /// uses: build RGBA8 mips on the CPU, then drop the top levels. Off → only images that
+    /// arrive with a mip chain (cooked KTX2) or get one from [`load_pbr`] are capped.
+    pub cap_material_images: bool,
 }
 
 impl Default for QualityPreset {
@@ -134,6 +165,9 @@ impl Default for QualityPreset {
             soft_shadows: [false, false, false, false],
             max_cascades: [1, 2, 3, 4],
             point_shadow_map_size: [256, 512, 512, 512],
+            // BC7 2048² with mips is 5.6 MB, 1024² 1.4 MB: Low fits an 8 GB Mac's budget.
+            max_texture_size: [1024, 2048, 4096, 0],
+            cap_material_images: true,
         }
     }
 }
@@ -185,6 +219,8 @@ impl Plugin for GfxPlugin {
         app.add_observer(main_camera_msaa_off);
         app.init_resource::<PendingMips>()
             .init_resource::<QualityPreset>()
+            .init_resource::<TextureCapStats>()
+            .add_systems(PostUpdate, cap_textures.after(bevy::asset::AssetEventSystems).run_if(has_visuals))
             .init_resource::<SsrDeferred>()
             .add_systems(
                 Update,
@@ -713,14 +749,187 @@ fn read_avg(dir: &AssetsDir, name: &str) -> Option<Color> {
     (v.len() >= 3).then(|| Color::LinearRgba(LinearRgba::rgb(v[0], v[1], v[2])))
 }
 
-fn generate_mips(mut events: MessageReader<AssetEvent<Image>>, mut pending: ResMut<PendingMips>, mut images: ResMut<Assets<Image>>) {
+fn generate_mips(
+    mut events: MessageReader<AssetEvent<Image>>,
+    mut pending: ResMut<PendingMips>,
+    mut images: ResMut<Assets<Image>>,
+    settings: Res<CoreSettings>,
+    preset: Res<QualityPreset>,
+    mut stats: ResMut<TextureCapStats>,
+) {
+    let max = preset.max_texture_size[settings.quality.index()];
     for ev in events.read() {
         let AssetEvent::LoadedWithDependencies { id } = ev else { continue };
         if !pending.0.remove(id) {
             continue;
         }
         if let Some(mut img) = images.get_mut(*id) {
+            let full = img.data.as_ref().map_or(0, Vec::len) * 4 / 3;
             build_mips(&mut img);
+            if cap_texture_size(&mut img, max).is_some() {
+                // Saved against the full-size mip chain.
+                stats.add(full.saturating_sub(img.data.as_ref().map_or(0, Vec::len)));
+            }
+        }
+    }
+}
+
+/// What [`QualityPreset::max_texture_size`] has done since start (`perf.stats` → `textures`).
+#[derive(Resource, Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct TextureCapStats {
+    /// Images that lost top mip levels.
+    pub capped: u32,
+    /// Bytes of texture data not uploaded (against the full-size image with mips).
+    pub bytes_saved: u64,
+}
+
+impl TextureCapStats {
+    fn add(&mut self, saved: usize) {
+        self.capped += 1;
+        self.bytes_saved += saved as u64;
+    }
+}
+
+/// Drops the top mip levels of `img` until its larger side is at most `max` (0 = no cap) and
+/// returns the bytes removed. Works on 2D images (single layer, arrays, cubemaps) with CPU data
+/// and a mip chain, in any format with a fixed block size, mip-major (KTX2) or layer-major (DDS).
+/// Untouched (`None`): no data (render targets), one mip level, small enough already, data length
+/// not matching the descriptor, a view descriptor that picks mips, or a compressed base level
+/// that would not be whole blocks.
+pub fn cap_texture_size(img: &mut Image, max: u32) -> Option<usize> {
+    let d = &img.texture_descriptor;
+    let (w, h, levels) = (d.size.width, d.size.height, d.mip_level_count);
+    if max == 0 || w.max(h) <= max || levels < 2 || d.dimension != TextureDimension::D2 {
+        return None;
+    }
+    if img.texture_view_descriptor.as_ref().is_some_and(|v| v.base_mip_level != 0 || v.mip_level_count.is_some()) {
+        return None;
+    }
+    let layers = d.size.depth_or_array_layers.max(1) as usize;
+    let (bw, bh) = d.format.block_dimensions();
+    let block = d.format.block_copy_size(None)? as usize;
+    let side = |s: u32, l: u32| (s >> l).max(1);
+    let level_bytes = |l: u32| side(w, l).div_ceil(bw) as usize * side(h, l).div_ceil(bh) as usize * block;
+    let data = img.data.as_ref()?;
+    let per_layer: usize = (0..levels).map(level_bytes).sum();
+    if per_layer * layers != data.len() {
+        return None;
+    }
+    let mut drop = 0;
+    while side(w, drop).max(side(h, drop)) > max && drop + 1 < levels {
+        drop += 1;
+    }
+    // A compressed texture's base level must be whole blocks.
+    while drop > 0 && (side(w, drop) % bw != 0 || side(h, drop) % bh != 0) {
+        drop -= 1;
+    }
+    if drop == 0 {
+        return None;
+    }
+    let skip: usize = (0..drop).map(level_bytes).sum();
+    let out: Vec<u8> = match img.data_order {
+        TextureDataOrder::MipMajor => data[skip * layers..].to_vec(),
+        TextureDataOrder::LayerMajor => data.chunks_exact(per_layer).flat_map(|l| &l[skip..]).copied().collect(),
+    };
+    let saved = data.len() - out.len();
+    img.data = Some(out);
+    let d = &mut img.texture_descriptor;
+    d.size.width = side(w, drop);
+    d.size.height = side(h, drop);
+    d.mip_level_count = levels - drop;
+    Some(saved)
+}
+
+/// [`cap_texture_size`] for an image without mips: builds the chain ([`build_mips`]: single-layer
+/// RGBA8 only), then drops the top levels. Returns the bytes saved against the full-size image
+/// with mips; `None` (untouched) when under the cap, without data or not RGBA8.
+pub fn cap_mipless(img: &mut Image, max: u32) -> Option<usize> {
+    let d = &img.texture_descriptor;
+    if max == 0 || d.mip_level_count != 1 || d.size.width.max(d.size.height) <= max || img.data.is_none() {
+        return None;
+    }
+    let full = img.data.as_ref().map_or(0, Vec::len) * 4 / 3;
+    build_mips(img);
+    if img.texture_descriptor.mip_level_count == 1 {
+        return None;
+    }
+    cap_texture_size(img, max)?;
+    Some(full.saturating_sub(img.data.as_ref().map_or(0, Vec::len)))
+}
+
+/// A material's mip-less texture: capped if loaded (`true`), `false` while it is not loaded yet.
+fn cap_material_image(id: AssetId<Image>, fresh: bool, max: u32, images: &mut Assets<Image>, stats: &mut TextureCapStats) -> bool {
+    let Some(img) = images.get(id) else { return false };
+    let d = &img.texture_descriptor;
+    if img.data.is_none() || d.mip_level_count != 1 || d.size.width.max(d.size.height) <= max {
+        return true;
+    }
+    // Fresh images are not extracted yet: change them in place. Older ones still have their data
+    // only if they are MAIN_WORLD too; a tracked change uploads the capped version.
+    let saved = if fresh { images.get_mut_untracked(id).and_then(|i| cap_mipless(i, max)) } else { images.get_mut(id).and_then(|mut i| cap_mipless(&mut i, max)) };
+    if let Some(s) = saved {
+        stats.add(s);
+    }
+    true
+}
+
+/// Applies [`QualityPreset::max_texture_size`] to images as they are added: in `PostUpdate`
+/// after Bevy publishes the frame's asset events and before extraction takes GPU-only images'
+/// data, through `get_mut_untracked` so the full-size image is never uploaded. Mip-less material
+/// textures are found through `StandardMaterial` events and capped once both are loaded. Idle
+/// cost: reading the frame's asset events.
+#[allow(clippy::too_many_arguments)]
+fn cap_textures(
+    settings: Res<CoreSettings>,
+    preset: Res<QualityPreset>,
+    mut image_events: MessageReader<AssetEvent<Image>>,
+    material_events: Option<Res<Messages<AssetEvent<StandardMaterial>>>>,
+    mut material_cursor: Local<MessageCursor<AssetEvent<StandardMaterial>>>,
+    materials: Option<Res<Assets<StandardMaterial>>>,
+    mut images: ResMut<Assets<Image>>,
+    pending: Res<PendingMips>,
+    mut stats: ResMut<TextureCapStats>,
+    mut added: Local<Vec<AssetId<Image>>>,
+    mut waiting: Local<HashSet<AssetId<Image>>>,
+) {
+    let max = preset.max_texture_size[settings.quality.index()];
+    added.clear();
+    added.extend(image_events.read().filter_map(|e| match e {
+        AssetEvent::Added { id } => Some(*id),
+        _ => None,
+    }));
+    let Some(material_events) = material_events.as_deref() else { return cap_added(&added, &mut waiting, max, &mut images, &mut stats) };
+    let mids = material_cursor.read(material_events).filter_map(|e| match e {
+        AssetEvent::Added { id } | AssetEvent::Modified { id } => Some(*id),
+        _ => None,
+    });
+    match materials.as_deref() {
+        Some(materials) if max != 0 && preset.cap_material_images => {
+            for mid in mids {
+                let Some(m) = materials.get(mid) else { continue };
+                let slots = [&m.base_color_texture, &m.normal_map_texture, &m.metallic_roughness_texture, &m.occlusion_texture, &m.emissive_texture];
+                for id in slots.into_iter().flatten().map(Handle::id) {
+                    if !pending.0.contains(&id) && !cap_material_image(id, added.contains(&id), max, &mut images, &mut stats) {
+                        waiting.insert(id);
+                    }
+                }
+            }
+        }
+        _ => mids.for_each(drop),
+    }
+    cap_added(&added, &mut waiting, max, &mut images, &mut stats);
+}
+
+fn cap_added(added: &[AssetId<Image>], waiting: &mut HashSet<AssetId<Image>>, max: u32, images: &mut Assets<Image>, stats: &mut TextureCapStats) {
+    if max == 0 {
+        return;
+    }
+    for &id in added {
+        if waiting.remove(&id) {
+            cap_material_image(id, true, max, images, stats);
+        }
+        if let Some(saved) = images.get_mut_untracked(id).and_then(|i| cap_texture_size(i, max)) {
+            stats.add(saved);
         }
     }
 }
@@ -873,6 +1082,134 @@ mod tests {
         build_mips(&mut img);
         let d = img.data.unwrap();
         assert_eq!(&d[8..12], &[188, 188, 188, 255]);
+    }
+
+    /// A `w`×`h` image of `format` with a full mip chain (each level filled with its index).
+    fn with_mips(w: u32, h: u32, layers: u32, format: TextureFormat, order: TextureDataOrder) -> Image {
+        let levels = 32 - w.max(h).leading_zeros();
+        let (bw, bh) = format.block_dimensions();
+        let block = format.block_copy_size(None).unwrap() as usize;
+        let level = |l: u32| ((w >> l).max(1).div_ceil(bw) * (h >> l).max(1).div_ceil(bh)) as usize * block;
+        let mut data = Vec::new();
+        match order {
+            TextureDataOrder::MipMajor => (0..levels).for_each(|l| (0..layers).for_each(|_| data.extend(std::iter::repeat_n(l as u8, level(l))))),
+            TextureDataOrder::LayerMajor => (0..layers).for_each(|_| (0..levels).for_each(|l| data.extend(std::iter::repeat_n(l as u8, level(l))))),
+        }
+        let mut img = Image::new_uninit(Extent3d { width: w, height: h, depth_or_array_layers: layers }, TextureDimension::D2, format, RenderAssetUsages::RENDER_WORLD);
+        img.data = Some(data);
+        img.data_order = order;
+        img.texture_descriptor.mip_level_count = levels;
+        img
+    }
+
+    #[test]
+    fn bc7_2048_capped_to_1024_drops_one_level() {
+        let mut img = with_mips(2048, 2048, 1, TextureFormat::Bc7RgbaUnormSrgb, TextureDataOrder::MipMajor);
+        assert_eq!(img.texture_descriptor.mip_level_count, 12);
+        let before = img.data.as_ref().unwrap().len();
+        let saved = cap_texture_size(&mut img, 1024).unwrap();
+        assert_eq!(saved, 2048 * 2048); // BC7: 1 byte per texel
+        let d = &img.texture_descriptor;
+        assert_eq!((d.size.width, d.size.height, d.mip_level_count), (1024, 1024, 11));
+        let data = img.data.unwrap();
+        assert_eq!(data.len(), before - saved);
+        // 1024² … 4×4 at 1 B/texel, then 2×2 and 1×1 still take one 16-byte block each.
+        let expect: usize = (0..9).map(|l| (1024usize >> l).pow(2)).sum::<usize>() + 2 * 16;
+        assert_eq!(data.len(), expect);
+        assert_eq!(data[0], 1, "new base is the old level 1");
+        assert!(before > 5_500_000 && data.len() < 1_400_000);
+    }
+
+    #[test]
+    fn cap_handles_arrays_in_both_orders() {
+        for order in [TextureDataOrder::MipMajor, TextureDataOrder::LayerMajor] {
+            let mut img = with_mips(256, 128, 3, TextureFormat::Bc5RgUnorm, order);
+            cap_texture_size(&mut img, 64).unwrap();
+            let d = &img.texture_descriptor;
+            assert_eq!((d.size.width, d.size.height, d.mip_level_count), (64, 32, 7));
+            // Same as a 64×32 chain whose level i holds the old level i + 2.
+            let mut want = with_mips(64, 32, 3, TextureFormat::Bc5RgUnorm, order);
+            want.data.as_mut().unwrap().iter_mut().for_each(|b| *b += 2);
+            assert_eq!(img, want, "{order:?}");
+        }
+    }
+
+    #[test]
+    fn rgba8_without_mips_is_built_then_capped() {
+        let mut img = Image::new(
+            Extent3d { width: 64, height: 32, depth_or_array_layers: 1 },
+            TextureDimension::D2,
+            vec![200; 64 * 32 * 4],
+            TextureFormat::Rgba8Unorm,
+            RenderAssetUsages::default(),
+        );
+        let saved = cap_mipless(&mut img, 16).unwrap();
+        let d = &img.texture_descriptor;
+        assert_eq!((d.size.width, d.size.height, d.mip_level_count), (16, 8, 5));
+        let len = img.data.as_ref().unwrap().len();
+        assert_eq!(len, (16 * 8 + 8 * 4 + 4 * 2 + 2 + 1) * 4);
+        assert_eq!(saved, 64 * 32 * 4 * 4 / 3 - len);
+        assert!(img.data.unwrap().iter().all(|&b| b == 200));
+    }
+
+    #[test]
+    fn small_mipless_and_target_images_are_untouched() {
+        let mut small = with_mips(1024, 1024, 1, TextureFormat::Bc7RgbaUnorm, TextureDataOrder::MipMajor);
+        let copy = small.clone();
+        assert_eq!(cap_texture_size(&mut small, 1024), None);
+        assert_eq!(cap_texture_size(&mut small, 0), None);
+        assert_eq!(small, copy);
+        // No mip chain: only `cap_mipless` touches it.
+        let mut flat = Image::new_fill(Extent3d { width: 4096, height: 4096, depth_or_array_layers: 1 }, TextureDimension::D2, &[0, 0, 0, 255], TextureFormat::Rgba8UnormSrgb, RenderAssetUsages::default());
+        assert_eq!(cap_texture_size(&mut flat, 1024), None);
+        assert_eq!(flat.texture_descriptor.size.width, 4096);
+        // Render target: no data.
+        let mut target = Image::new_target_texture(4096, 4096, TextureFormat::Rgba8Unorm, None);
+        target.texture_descriptor.mip_level_count = 13;
+        assert_eq!(cap_texture_size(&mut target, 1024), None);
+        assert_eq!(cap_mipless(&mut target, 1024), None);
+        assert_eq!(target.texture_descriptor.size.width, 4096);
+        // A compressed base that would not be whole blocks stays as it is.
+        let mut odd = with_mips(8, 2, 1, TextureFormat::Bc7RgbaUnorm, TextureDataOrder::MipMajor);
+        assert_eq!(cap_texture_size(&mut odd, 4), None);
+    }
+
+    /// The system: images added this frame are capped before extraction would see them; a
+    /// material's mip-less texture is capped whether the material or the image arrives first.
+    #[test]
+    fn cap_system_caps_added_and_material_images() {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .add_plugins(bevy::asset::AssetPlugin::default())
+            .init_asset::<Image>()
+            .init_asset::<StandardMaterial>()
+            .insert_resource(CoreSettings { quality: GraphicsQuality::Low, ..default() })
+            .init_resource::<QualityPreset>()
+            .init_resource::<PendingMips>()
+            .init_resource::<TextureCapStats>()
+            .add_systems(PostUpdate, cap_textures.after(bevy::asset::AssetEventSystems));
+        let rgba = |side| Image::new_fill(Extent3d { width: side, height: side, depth_or_array_layers: 1 }, TextureDimension::D2, &[9, 9, 9, 255], TextureFormat::Rgba8UnormSrgb, RenderAssetUsages::RENDER_WORLD);
+        let w = app.world_mut();
+        let (cooked, ui, early) = {
+            let mut images = w.resource_mut::<Assets<Image>>();
+            let cooked = images.add(with_mips(2048, 2048, 1, TextureFormat::Bc7RgbaUnormSrgb, TextureDataOrder::MipMajor));
+            (cooked, images.add(rgba(2048)), images.add(rgba(2048)))
+        };
+        let late = w.resource::<Assets<Image>>().reserve_handle();
+        let _mats = {
+            let mut mats = w.resource_mut::<Assets<StandardMaterial>>();
+            [mats.add(StandardMaterial { base_color_texture: Some(early.clone()), ..default() }), mats.add(StandardMaterial { normal_map_texture: Some(late.clone()), ..default() })]
+        };
+        app.update();
+        let side = |app: &App, h: &Handle<Image>| app.world().resource::<Assets<Image>>().get(h).unwrap().texture_descriptor.size.width;
+        assert_eq!(side(&app, &cooked), 1024);
+        assert_eq!(side(&app, &early), 1024);
+        assert_eq!(side(&app, &ui), 2048, "mip-less images outside materials are left alone");
+        // The material's image arrives later.
+        app.world_mut().resource_mut::<Assets<Image>>().insert(&late, rgba(4096)).unwrap();
+        app.update();
+        assert_eq!(side(&app, &late), 1024);
+        assert_eq!(app.world().resource::<TextureCapStats>().capped, 3);
     }
 
     #[test]
