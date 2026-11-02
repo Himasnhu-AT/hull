@@ -47,10 +47,11 @@ pub fn param_names(params: &serde_json::Value) -> Vec<String> {
     fn walk(v: &serde_json::Value, names: &mut Vec<String>) {
         match v {
             serde_json::Value::String(s) => {
-                if let Some(n) = s.strip_prefix('$') {
-                    if !n.is_empty() && !names.iter().any(|x| x == n) {
-                        names.push(n.to_string());
-                    }
+                if let Some(n) = s.strip_prefix('$')
+                    && !n.is_empty()
+                    && !names.iter().any(|x| x == n)
+                {
+                    names.push(n.to_string());
                 }
             }
             serde_json::Value::Array(a) => a.iter().for_each(|x| walk(x, names)),
@@ -99,6 +100,7 @@ pub fn pins(kind: &NodeKind) -> PinSpec {
             s.data_in = vec![din("list", Ty::Json)];
             s.data_out = vec![out("item", Ty::Any), out("index", Ty::Number)];
         }
+        Find { .. } => s.data_out = vec![out("entity", Ty::Entity)],
         Get { .. } => {
             s.data_in = vec![DataIn { name: "entity".into(), ty: Ty::Entity, default: Dflt::SelfEntity }];
             s.data_out = vec![out("value", Ty::Any)];
@@ -169,7 +171,7 @@ pub fn pins(kind: &NodeKind) -> PinSpec {
 /// Short name of a node kind for messages.
 pub fn kind_name(kind: &NodeKind) -> String {
     let d = format!("{kind:?}");
-    d.split(|c: char| c == '(' || c == ' ' || c == '{').next().unwrap_or("").to_string()
+    d.split(['(', ' ', '{']).next().unwrap_or("").to_string()
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -284,10 +286,10 @@ impl crate::Graph {
             if index.insert(n.id, i).is_some() {
                 errors.push(err(Some(n.id), None, "duplicate node id"));
             }
-            if let NodeKind::Sequence { n: count } = n.kind {
-                if count == 0 || count > 16 {
-                    errors.push(err(Some(n.id), None, "Sequence needs 1..=16 outputs"));
-                }
+            if let NodeKind::Sequence { n: count } = n.kind
+                && (count == 0 || count > 16)
+            {
+                errors.push(err(Some(n.id), None, "Sequence needs 1..=16 outputs"));
             }
         }
         let specs: Vec<PinSpec> = self.nodes.iter().map(|n| pins(&n.kind)).collect();
@@ -405,10 +407,10 @@ impl crate::Graph {
         if seen < n {
             let culprit = (0..n).find(|&i| indeg[i] > 0).map(|i| self.nodes[i].id);
             errors.push(err(culprit, None, "data links form a cycle"));
-        } else if let Some((i, d)) = depth.iter().enumerate().max_by_key(|(_, d)| **d) {
-            if *d > MAX_DATA_DEPTH {
-                errors.push(err(Some(self.nodes[i].id), None, format!("data chain is {d} nodes deep (limit {MAX_DATA_DEPTH})")));
-            }
+        } else if let Some((i, d)) = depth.iter().enumerate().max_by_key(|(_, d)| **d)
+            && *d > MAX_DATA_DEPTH
+        {
+            errors.push(err(Some(self.nodes[i].id), None, format!("data chain is {d} nodes deep (limit {MAX_DATA_DEPTH})")));
         }
 
         if !errors.is_empty() {

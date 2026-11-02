@@ -29,6 +29,8 @@ pub struct Payload {
 pub trait Host {
     fn get(&mut self, entity: u64, path: &str) -> Result<Value, String>;
     fn set(&mut self, entity: u64, path: &str, value: &Value) -> Result<(), String>;
+    /// The entity with this name, if any.
+    fn find(&mut self, name: &str) -> Option<u64>;
     fn command(&mut self, id: &str, params: &serde_json::Value) -> Result<serde_json::Value, String>;
     fn script(&mut self, file: &str, function: &str, args: &[Value]) -> Result<Value, String>;
     fn emit(&mut self, name: &str, value: &Value);
@@ -155,10 +157,10 @@ impl Runner {
     }
 
     fn follow(&mut self, g: &Compiled, node: u32, out: usize) {
-        if let Some(&t) = g.nodes[node as usize].flow_out.get(out) {
-            if t != NONE {
-                self.stack.push(Work::Exec(t));
-            }
+        if let Some(&t) = g.nodes[node as usize].flow_out.get(out)
+            && t != NONE
+        {
+            self.stack.push(Work::Exec(t));
         }
     }
 
@@ -309,6 +311,10 @@ impl Runner {
     fn compute<H: Host>(&mut self, cx: &mut Ctx<H>, ni: u32, node: &CNode) -> Result<(), RunError> {
         match &node.kind {
             NodeKind::Const(v) => self.put(node, 0, v.clone()),
+            NodeKind::Find { name } => {
+                let v = cx.host.find(name).map_or(Value::Null, Value::Entity);
+                self.put(node, 0, v);
+            }
             NodeKind::Get { path } => {
                 let e = self.entity_input(cx, ni, 0)?;
                 let v = cx.host.get(e, path).map_err(|m| RunError { node: node.id, message: m })?;

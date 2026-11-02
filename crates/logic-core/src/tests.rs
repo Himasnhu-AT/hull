@@ -21,6 +21,9 @@ impl Host for Mock {
         self.world.insert((e, p.to_string()), v.clone());
         Ok(())
     }
+    fn find(&mut self, name: &str) -> Option<u64> {
+        (name == "leaf").then_some(77)
+    }
     fn command(&mut self, id: &str, params: &serde_json::Value) -> Result<serde_json::Value, String> {
         self.commands.push((id.into(), params.clone()));
         Ok(serde_json::json!({"ok": true}))
@@ -262,4 +265,18 @@ fn ten_node_graph_timing() {
     let us = t.elapsed().as_secs_f64() * 1e6 / n as f64;
     println!("BENCH 10-node graph (incl. mock host map get/set): {us:.3} us/event, {} steps", r.steps);
     let _ = Arc::new(0);
+}
+
+#[test]
+fn find_node_feeds_entity_pins() {
+    let g = compile(
+        r#"Graph(nodes: [(id: 1, kind: Start), (id: 2, kind: Find(name: "leaf")), (id: 3, kind: Set(path: "T.y"), defaults: [("value", Num(2.0))]),
+            (id: 4, kind: Find(name: "nobody")), (id: 5, kind: Set(path: "T.y"), defaults: [("value", Num(2.0))])],
+        flow: [(from: (1, "then"), to: (3, "in")), (from: (3, "then"), to: (5, "in"))],
+        data: [(from: (2, "entity"), to: (3, "entity")), (from: (4, "entity"), to: (5, "entity"))])"#,
+    );
+    let mut host = Mock::default();
+    let e = Runner::new().run(&g, Entry::Event(0), &Payload { me: 1, ..Default::default() }, &mut host).unwrap_err();
+    assert_eq!(e.node, 5); // second Find found nobody: Set says so
+    assert_eq!(host.world[&(77, "T.y".to_string())], Value::Num(2.0));
 }

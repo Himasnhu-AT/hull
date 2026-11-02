@@ -52,6 +52,8 @@ pub enum NodeKind {
     Delay { secs: f32 },
     ForEach,
     // World access.
+    /// The entity with this `Name` (or null).
+    Find { name: String },
     Get { path: String },
     Set { path: String },
     // Data.
