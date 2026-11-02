@@ -1,0 +1,156 @@
+[
+ {
+  "sleep": 2
+ },
+ {
+  "shot": "before"
+ },
+ {
+  "cmd": "pcg.pick",
+  "params": {
+   "origin": [
+    -8.38,
+    20,
+    14.09
+   ],
+   "dir": [
+    0,
+    -1,
+    0
+   ]
+  },
+  "expect": {
+   "result.hit": true,
+   "result.item": "tree"
+  }
+ },
+ {
+  "cmd": "pcg.overrides.remove",
+  "params": {
+   "key": {
+    "node": "trees",
+    "seed": "425475227891329489"
+   }
+  }
+ },
+ {
+  "cmd": "pcg.overrides.remove",
+  "params": {
+   "key": {
+    "node": "trees",
+    "seed": "9735763847978807157"
+   }
+  }
+ },
+ {
+  "cmd": "pcg.overrides.remove",
+  "params": {
+   "key": {
+    "node": "trees",
+    "seed": "2083552471749999103"
+   }
+  }
+ },
+ {
+  "cmd": "pcg.overrides.area",
+  "params": {
+   "polygon": [
+    [
+     -62,
+     14
+    ],
+    [
+     -22,
+     14
+    ],
+    [
+     -22,
+     47
+    ],
+    [
+     -62,
+     47
+    ]
+   ],
+   "density": 0
+  }
+ },
+ {
+  "cmd": "pcg.overrides.add",
+  "params": {
+   "item": "tree",
+   "node": "trees",
+   "transform": {
+    "translation": [
+     -12,
+     0,
+     26
+    ],
+    "scale": [
+     1.6,
+     1.6,
+     1.6
+    ]
+   }
+  }
+ },
+ {
+  "cmd": "pcg.overrides.add",
+  "params": {
+   "item": "tree",
+   "node": "trees",
+   "transform": {
+    "translation": [
+     -7,
+     0,
+     29
+    ],
+    "scale": [
+     1.2,
+     1.2,
+     1.2
+    ]
+   }
+  }
+ },
+ {
+  "cmd": "pcg.overrides.add",
+  "params": {
+   "item": "bush",
+   "node": "trees",
+   "transform": {
+    "translation": [
+     -50,
+     0,
+     36
+    ],
+    "scale": [
+     3,
+     3,
+     3
+    ]
+   }
+  }
+ },
+ {
+  "sleep": 1
+ },
+ {
+  "shot": "after"
+ },
+ {
+  "cmd": "pcg.stats",
+  "expect": {
+   "result.errors": []
+  }
+ },
+ {
+  "cmd": "pcg.overrides.get",
+  "params": {},
+  "expect": {
+   "result.counts.removed": 3,
+   "result.counts.added": 3,
+   "result.counts.areas": 1
+  }
+ }
+]

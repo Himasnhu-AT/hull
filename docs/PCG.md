@@ -161,6 +161,70 @@ commands.spawn((PcgVolume { cell: 64.0, ..PcgVolume::new(graph, inputs, area) },
 | `pcg.regen` | | regenerate every cell |
 | `pcg.scale` | `density` | set `PcgSettings::density` (respawns from cache) |
 
+## Overrides (hand edits on top of the graph)
+
+`PcgOverrides` (a reflected component on the `PcgVolume` entity, saved in levels) holds what a
+person changed: `removed` (generated points deleted), `moved` (point -> new transform), `added`
+(hand-placed `item` + transform + the Spawn `node` it belongs to) and `areas` (XZ polygons with a
+`density`; 0 = clear, e.g. a no-tree zone; `nodes: Some([..])` limits it to those nodes). No
+component = no cost.
+
+**Keys.** A generated point is named by `PointKey { node, seed }`: the Spawn / Emit node id and
+the point's seed. `pcg_core::seed_at` hashes graph seed, node and the world position (1 mm), so
+the key is the same after re-evaluation, after a streaming drop and re-entry, at any cell size
+and in any order (tested). Moving a point keeps its key (it is the generated identity); a
+hand-placed item's key follows its position. A key whose point no longer exists (graph changed)
+is ignored. A move records the item, so it is self-contained and area-correct: any area apply drops a
+moved point whose destination is outside it and appends one whose destination is inside, even
+if it was generated elsewhere, so it appears exactly once (origin and destination cells both
+respawn). Moved and hand-placed points are never thinned by quality or the governor.
+
+**Apply.** `OverrideIndex` (`ov.index(cell_size)`) removes, moves, thins by area (deterministic
+by seed, nested: density 0.3 is a subset of 0.6) and appends hand-placed items inside the area it
+is given (half-open, so tiles never double). The volume applies it to the cached evaluation when a
+cell spawns, so editing overrides respawns only the cells they touch (a per-cell hash compares),
+without evaluating the graph again; `PcgStats::override_respawns` counts them. `PcgEmitted` carries
+the edited points; when an edit changes a cell that has emits, `PcgCellDropped` then a fresh
+`PcgEmitted` is sent (drop what you built from that cell, rebuild from the new points).
+
+**In a game's own evaluation** (colliders, nav): evaluate the graph per tile as before, then
+
+```rust
+let ix = overrides.index(32.0);                       // once per change, not per tile
+let area = Area::new(tile_min, tile_max);            // the tile's XZ rect
+for s in &mut out.spawns { ix.apply_spawned(area, s); }       // or
+ix.apply_points("trees", area, &mut points);                  // any PointSet of node "trees"
+```
+
+The result equals what the volume spawned in that area (same removed / moved / thinned points).
+Added items are appended to the set whose area contains them, with `HAND_ATTR` ("hand") = 1.
+`PcgOverrides::apply(node, area, pts)` is the one-shot form (builds an index each call).
+Edit helpers: `remove_point`, `move_point`, `add_item`.
+
+**Picking.** `pcg_pick(&World, origin, dir) -> Option<PcgPick { volume, key, item, transform,
+distance, cell, emitted }>` rays against the point sets of loaded cells (bounding sphere per point
+from the catalog mesh AABB x scale; Emit points use their extent), so it works on merged meshes;
+thinned and removed points are not hit, hand-placed ones are. `find_point(world, volume, &key)`
+looks a key up.
+
+| Command | Params | Returns |
+|---|---|---|
+| `pcg.pick` | `origin`, `dir` | nearest hit: volume, key `{node, seed}` (seed as a string), item, transform, distance, cell |
+| `pcg.overrides.get` | `volume` (entity id, default first) | counts and every entry |
+| `pcg.overrides.remove` | `volume`, `key`, `at`? | removes a generated or hand-placed point (`at` only for unloaded cells) |
+| `pcg.overrides.move` | `volume`, `key`, `transform` `{translation, rotation (xyzw), scale}`, `at`? | the key afterwards |
+| `pcg.overrides.add` | `volume`, `item`, `transform`, `node`? | its key (`node` defaults to the Spawn node listing the item) |
+| `pcg.overrides.area` | `volume`, `polygon` `[[x,z],..]`, `density`? (0), `nodes`? | counts |
+| `pcg.overrides.clear` | `volume` | removes all |
+
+`pcg.inspect` takes `node` and then lists that node's points with keys. Demo:
+`python3 -I scripts/play.py examples/pcg_town_edit.steps.json --example pcg_town --features pcg`
+(clears a polygon, removes three trees, hand-places two trees and a bush).
+
+Cost (dev build, Apple M5 Pro): building the index for 1000 edits 0.4 ms; applying it to a cell
+of 4000 points with 1000 removed / moved and an area 46 us; a cell no override touches is used as
+is (one hash lookup).
+
 ## Gameplay safety
 
 Anything players collide with, take cover behind or path around is gameplay: mark it
@@ -182,4 +246,5 @@ re-evaluation.
   rects to keep things off them).
 - No subgraphs, loops, splines (`SplineSample`), grammar (`SubdivideSegment`) or GPU path.
 - Merged meshes carry positions, normals, UVs and tangents only (no vertex colours or skinning).
+- Overrides: hand-placed Emit points carry no item name; keys are lost if the graph's node ids change.
 - No gizmo overlay yet; use `pcg.inspect` and screenshots.
