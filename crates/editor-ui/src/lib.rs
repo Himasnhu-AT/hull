@@ -909,6 +909,10 @@ impl EditorUi {
                 self.view.show_grid = !self.view.show_grid;
                 backend.viewport(ViewportCmd::SetShowGrid(self.view.show_grid));
             }
+            Cmd::ToggleAllScenery => {
+                self.view.show_all_scenery = !self.view.show_all_scenery;
+                backend.viewport(ViewportCmd::SetShowAllScenery(self.view.show_all_scenery));
+            }
             Cmd::Help => self.help_open = !self.help_open,
             Cmd::ResetLayout => self.reset_layout(),
             Cmd::SelectAll => {

@@ -136,6 +136,10 @@ impl EditorUi {
                     if ui.checkbox(&mut grid, "Ground grid").changed() {
                         reqs.push(Req::Cmd(Cmd::ToggleGrid));
                     }
+                    let mut all = self.view.show_all_scenery;
+                    if ui.checkbox(&mut all, "Show all scenery (no distance fade)").on_hover_text("Draws every prop at any distance. Slower on big worlds.").changed() {
+                        reqs.push(Req::Cmd(Cmd::ToggleAllScenery));
+                    }
                     ui.checkbox(&mut self.hint_open, "Control hint in the viewport");
                     item(ui, reqs, "Focus selection", Cmd::Focus, !self.selection.is_empty());
                     ui.separator();

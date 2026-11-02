@@ -322,6 +322,18 @@ scale. Handles keep a constant size on screen and are picked by screen-space dis
 Generated entities (built by code, no `LevelEntity`) show greyed in the Outliner and get no gizmo.
 While the camera is being dragged egui gets no keys.
 
+**Scenery distance fade**: the engine's detail ranges stay on in the editor (big worlds need them), but
+the selection and every `SplineRoad` are exempt: their meshes lose the `VisibilityRange` while
+selected / present and get it back after (`src/editor/fade.rs`; the flat far twin of a piece is
+hidden meanwhile). **View > Show all scenery (no distance fade)** switches `scenery_detail` and
+`shadow_trim` off for everything; it is off by default and remembered in
+`<data dir>/editor_prefs.json`. Measured with `world_editor_demo -- --editor --uncapped --size 4096
+--pcg-all` (4 km terrain at 2 m, ~44 000 entities, trees and rocks over the whole map, camera 1.3 km
+out looking at the middle), offscreen 1920x1080, Apple M5 Pro, `perf.stats` frame time after a
+20-25 s settle: fade on (default) p50 4.7 ms, p95 7.7 ms; show all p50 7.7 ms, p95 12.0 ms
+(+55 %); back to fade on p50 3.9 ms, p95 4.7 ms. On a map that size leave it off and use it to
+check how a place looks from afar.
+
 **Play / Stop**: see `src/editor/play.rs`. Play writes the level to
 `<data dir>/play/editor_play.level.ron` (the open file is untouched), runs
 `memgate -- cargo build --manifest-path <game> (--bin|--example <exe name>) [--features F]`

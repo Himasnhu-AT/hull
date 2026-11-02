@@ -42,6 +42,7 @@ mod gizmo;
 mod host;
 mod picking;
 mod play;
+mod fade;
 pub mod tools;
 pub mod schema;
 
@@ -83,6 +84,8 @@ pub struct EditorState {
     pub local_space: bool,
     /// The faint ground grid (View menu).
     pub show_grid: bool,
+    /// View > Show all scenery: no distance fade (stored in `editor_prefs.json`).
+    pub show_all_scenery: bool,
     diag: VecDeque<Diagnostic>,
     diag_dropped: u64,
     pub(crate) play: play::PlayRuntime,
@@ -107,6 +110,7 @@ impl Default for EditorState {
             snap_step: 0.5,
             local_space: false,
             show_grid: true,
+            show_all_scenery: false,
             diag: VecDeque::new(),
             diag_dropped: 0,
             play: play::PlayRuntime::default(),
@@ -227,11 +231,7 @@ impl Plugin for EditorPlugin {
                     .after(bevy_egui::EguiPostUpdateSet::EndPass)
                     .before(bevy::camera::CameraUpdateSystems),
             );
-        // The editor shows everything at any distance (roads and props fade out otherwise).
-        if let Some(mut b) = app.world_mut().get_resource_mut::<crate::render_budget::RenderBudget>() {
-            b.scenery_detail = false;
-            b.shadow_trim = false;
-        }
+        app.add_systems(Startup, load_prefs).add_systems(Update, fade::exempt);
         gizmo::build(app);
         control::register(app);
     }
@@ -253,5 +253,36 @@ fn full_resolution(mut scale: ResMut<crate::render_budget::RenderScale>, preset:
         && p.hidpi_render_scale != [1.0; 4]
     {
         p.hidpi_render_scale = [1.0; 4];
+    }
+}
+
+/// Editor preferences, kept in `<data dir>/editor_prefs.json`.
+#[derive(serde::Serialize, serde::Deserialize, Default)]
+struct Prefs {
+    #[serde(default)]
+    show_all_scenery: bool,
+}
+
+fn prefs_path(world: &World) -> Option<std::path::PathBuf> {
+    world.get_resource::<crate::paths::DataDir>().map(|d| d.0.join("editor_prefs.json"))
+}
+
+fn load_prefs(world: &mut World) {
+    let prefs: Prefs = prefs_path(world).and_then(|p| std::fs::read_to_string(p).ok()).and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default();
+    set_show_all_scenery(world, prefs.show_all_scenery);
+}
+
+/// Distance fade of scenery on / off; remembered between sessions.
+pub fn set_show_all_scenery(world: &mut World, on: bool) {
+    world.resource_mut::<EditorState>().show_all_scenery = on;
+    if let Some(mut b) = world.get_resource_mut::<crate::render_budget::RenderBudget>() {
+        b.scenery_detail = !on;
+        b.shadow_trim = !on;
+    }
+    if let Some(p) = prefs_path(world)
+        && let Ok(text) = serde_json::to_string(&Prefs { show_all_scenery: on })
+        && let Err(e) = std::fs::write(p, text)
+    {
+        warn!("editor prefs not saved: {e}");
     }
 }

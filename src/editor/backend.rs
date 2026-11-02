@@ -629,7 +629,7 @@ impl EditorBackend for WorldBackend<'_> {
         let st = self.world.resource::<EditorState>();
         let (local, grid) = (st.local_space, st.show_grid);
         let cam = self.world.resource::<super::camera::EditorCamera>();
-        ViewInfo { camera_speed: cam.speed, local_space: local, show_grid: grid, camera_rotation: cam.rotation().to_array() }
+        ViewInfo { camera_speed: cam.speed, local_space: local, show_grid: grid, show_all_scenery: self.world.resource::<EditorState>().show_all_scenery, camera_rotation: cam.rotation().to_array() }
     }
 
     fn tools(&mut self) -> Vec<ToolDoc> {
@@ -668,6 +668,7 @@ impl EditorBackend for WorldBackend<'_> {
             ViewportCmd::SetCameraSpeed(v) => self.world.resource_mut::<super::camera::EditorCamera>().speed = v.clamp(0.2, 400.0),
             ViewportCmd::SetLocalSpace(on) => self.world.resource_mut::<EditorState>().local_space = on,
             ViewportCmd::SetShowGrid(on) => self.world.resource_mut::<EditorState>().show_grid = on,
+            ViewportCmd::SetShowAllScenery(on) => super::set_show_all_scenery(self.world, on),
             ViewportCmd::SetSnap { enabled, step } => {
                 let mut st = self.world.resource_mut::<EditorState>();
                 st.snap = enabled;
