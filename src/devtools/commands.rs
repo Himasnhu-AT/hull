@@ -598,11 +598,11 @@ fn input_mouse(world: &mut World, p: Value) -> Result<Value, String> {
         let window = window(world);
         let ev = |state| MouseButtonInput { button, state, window };
         if action != "up" {
-            world.write_message(ev(ButtonState::Pressed));
+            crate::input::write_mouse_button(world, ev(ButtonState::Pressed));
         }
         match action {
             "up" => {
-                world.write_message(ev(ButtonState::Released));
+                crate::input::write_mouse_button(world, ev(ButtonState::Released));
             }
             "tap" => world.resource_mut::<InjectedUps>().buttons.push(ev(ButtonState::Released)),
             _ => {}
@@ -618,7 +618,7 @@ fn release_taps(world: &mut World) {
         world.write_message(k);
     }
     for b in ups.buttons {
-        world.write_message(b);
+        crate::input::write_mouse_button(world, b);
     }
 }
 

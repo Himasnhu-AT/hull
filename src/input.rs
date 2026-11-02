@@ -87,6 +87,16 @@ impl Plugin for InputPlugin {
 /// Should the cursor be captured? Only while playing: in game, not paused, no screen open (an
 /// in-game screen such as results needs the pointer even though the game isn't paused), the
 /// game allows it, and not a test-driven run.
+/// Injects a mouse button event (control port, replay). Bevy 0.20 picking reads only
+/// `WindowEvent`s, so a bare `MouseButtonInput` moves `ButtonInput<MouseButton>` but never clicks
+/// UI: write both. `None` when the app has no mouse input.
+pub fn write_mouse_button(world: &mut World, ev: bevy::input::mouse::MouseButtonInput) -> Option<()> {
+    if world.contains_resource::<Messages<bevy::window::WindowEvent>>() {
+        world.write_message(bevy::window::WindowEvent::MouseButtonInput(ev));
+    }
+    world.write_message(ev).map(|_| ())
+}
+
 pub fn wants_capture(state: Option<AppState>, paused: bool, allowed: bool, screen_open: bool, test_driven: bool) -> bool {
     state == Some(AppState::InGame) && !paused && allowed && !screen_open && !test_driven
 }
