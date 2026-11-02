@@ -182,16 +182,40 @@ impl EditorCamera {
     }
 }
 
-/// Finds (or makes) the camera the editor drives; takes its starting pose from it.
-pub fn adopt_camera(mut commands: Commands, mut cam: ResMut<EditorCamera>, cams: Query<(Entity, &Transform, Has<MainCamera>), (With<Camera3d>, Without<EditorOnly>)>, alive: Query<(), With<Camera3d>>, mut frames: Local<u32>) {
+/// Game cameras the editor took `MainCamera` from (and switched off), so leaving editor mode in
+/// process could give them back.
+#[derive(Resource, Default, Debug)]
+pub struct EditorDemotedCameras(pub Vec<Entity>);
+
+/// Finds (or makes) the camera the editor drives; takes its starting pose from it. A game camera
+/// that already exists is adopted (it keeps the game's exposure, projection and post effects);
+/// otherwise the editor spawns its own after a few frames, and swaps to a game camera that shows
+/// up later.
+#[allow(clippy::too_many_arguments)]
+pub fn adopt_camera(
+    mut commands: Commands,
+    mut cam: ResMut<EditorCamera>,
+    cams: Query<(Entity, &Transform, Has<MainCamera>), (With<Camera3d>, Without<EditorOnly>)>,
+    alive: Query<(), With<Camera3d>>,
+    fallback: Query<(), (With<Camera3d>, With<EditorOnly>)>,
+    mut frames: Local<u32>,
+) {
+    let game = cams.iter().find(|(_, _, main)| *main).or_else(|| cams.iter().next());
     if let Some(e) = cam.entity
         && alive.contains(e)
     {
+        // Our own fallback camera gives way to the game's, which has the game's look.
+        if fallback.contains(e)
+            && let Some((g, _, _)) = game
+        {
+            commands.entity(e).despawn();
+            commands.entity(g).insert(MainCamera);
+            cam.entity = Some(g);
+        }
         return;
     }
     *frames += 1;
-    let found = cams.iter().find(|(_, _, main)| *main).or_else(|| cams.iter().next());
-    match found {
+    match game {
         Some((e, t, _)) => {
             cam.entity = Some(e);
             let (yaw, pitch, _) = t.rotation.to_euler(EulerRot::YXZ);
@@ -209,6 +233,23 @@ pub fn adopt_camera(mut commands: Commands, mut cam: ResMut<EditorCamera>, cams:
             cam.entity = Some(e);
         }
         None => {}
+    }
+}
+
+/// Exactly one `MainCamera` while editing: the editor's. Any other `Camera3d` that has (or later
+/// gains) `MainCamera` loses it and is switched off, so every `Query<.., With<MainCamera>>`
+/// `.single()` in the engine and in games (streaming, LOD, listener) follows the editor view.
+pub fn demote_cameras(mut commands: Commands, cam: Res<EditorCamera>, mut demoted: ResMut<EditorDemotedCameras>, mut cams: Query<(Entity, &mut Camera), (With<MainCamera>, With<Camera3d>)>) {
+    let Some(mine) = cam.entity else { return };
+    for (e, mut c) in &mut cams {
+        if e == mine {
+            continue;
+        }
+        commands.entity(e).remove::<MainCamera>();
+        c.is_active = false;
+        if !demoted.0.contains(&e) {
+            demoted.0.push(e);
+        }
     }
 }
 
@@ -481,5 +522,51 @@ mod tests {
         let (a, b) = (run(1.0 / 30.0), run(1.0 / 144.0));
         assert!((a - b).abs() < 0.05, "{a} vs {b}");
         assert!(a > 7.9, "{a}");
+    }
+}
+
+#[cfg(test)]
+mod demote_tests {
+    use super::*;
+
+    fn app() -> App {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins).init_resource::<EditorCamera>().init_resource::<EditorDemotedCameras>().add_systems(First, demote_cameras);
+        app
+    }
+
+    fn mains(app: &mut App) -> Vec<Vec3> {
+        app.world_mut().query_filtered::<&Transform, With<MainCamera>>().iter(app.world()).map(|t| t.translation).collect()
+    }
+
+    #[test]
+    fn a_game_camera_spawned_after_the_editor_starts_is_demoted() {
+        let mut app = app();
+        let editor = app.world_mut().spawn((EditorOnly, MainCamera, Camera3d::default(), Camera::default(), Transform::from_xyz(1.0, 2.0, 3.0))).id();
+        app.world_mut().resource_mut::<EditorCamera>().entity = Some(editor);
+        app.update();
+        // The game's stage load spawns its camera later.
+        let game = app.world_mut().spawn((MainCamera, Camera3d::default(), Camera::default(), Transform::from_xyz(90.0, 0.0, 0.0))).id();
+        app.update();
+        assert_eq!(mains(&mut app), vec![Vec3::new(1.0, 2.0, 3.0)], "exactly one MainCamera, the editor's");
+        assert!(!app.world().get::<Camera>(game).unwrap().is_active);
+        assert_eq!(app.world().resource::<EditorDemotedCameras>().0, vec![game]);
+        // A third one too, and the single() every game uses works.
+        app.world_mut().spawn((MainCamera, Camera3d::default(), Camera::default(), Transform::default()));
+        app.update();
+        let n = app.world_mut().query_filtered::<(), With<MainCamera>>().iter(app.world()).count();
+        assert_eq!(n, 1);
+        let t = app.world_mut().query_filtered::<&Transform, With<MainCamera>>().single(app.world()).unwrap().translation;
+        assert_eq!(t, Vec3::new(1.0, 2.0, 3.0), "camera-centred streaming sees the editor view");
+    }
+
+    #[test]
+    fn the_adopted_game_camera_is_left_alone() {
+        let mut app = app();
+        let game = app.world_mut().spawn((MainCamera, Camera3d::default(), Camera::default(), Transform::default())).id();
+        app.world_mut().resource_mut::<EditorCamera>().entity = Some(game);
+        app.update();
+        assert!(app.world().get::<Camera>(game).unwrap().is_active);
+        assert!(app.world().resource::<EditorDemotedCameras>().0.is_empty());
     }
 }

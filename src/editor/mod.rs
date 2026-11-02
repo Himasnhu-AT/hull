@@ -196,6 +196,7 @@ impl Plugin for EditorPlugin {
             .init_resource::<EditorState>()
             .init_resource::<EditorConfig>()
             .init_resource::<camera::EditorCamera>()
+            .init_resource::<camera::EditorDemotedCameras>()
             .init_resource::<gizmo::GizmoState>()
             .init_resource::<tools::ToolState>()
             .register_type::<EditorOnly>()
@@ -231,7 +232,7 @@ impl Plugin for EditorPlugin {
                     .after(bevy_egui::EguiPostUpdateSet::EndPass)
                     .before(bevy::camera::CameraUpdateSystems),
             );
-        app.add_systems(Startup, load_prefs).add_systems(Update, fade::exempt);
+        app.add_systems(First, camera::demote_cameras).add_systems(Startup, load_prefs).add_systems(Update, fade::exempt);
         gizmo::build(app);
         control::register(app);
     }

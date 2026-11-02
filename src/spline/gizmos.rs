@@ -21,11 +21,19 @@ pub struct SplineGizmos {
     pub edge_step: f32,
     /// Skip everything farther than this from the camera, in metres.
     pub range: f32,
+    /// Draw points, edges and banks for the selected spline only (the editor's Spline tool).
+    pub selected_only: bool,
+    /// Splines other than the selected one (with `selected_only`): draw only a thin faint curve, and only this close.
+    pub others_range: f32,
+    /// Most curve segments drawn for splines other than the selected one, per frame.
+    pub others_max_segments: usize,
+    /// Control point rings are drawn at most this many screen pixels across (radius).
+    pub point_px: f32,
 }
 
 impl Default for SplineGizmos {
     fn default() -> Self {
-        SplineGizmos { enabled: false, points: true, edges: true, banks: true, edge_step: 3.0, range: 400.0 }
+        SplineGizmos { enabled: false, points: true, edges: true, banks: true, edge_step: 3.0, range: 400.0, selected_only: false, others_range: 900.0, others_max_segments: 6000, point_px: 7.0 }
     }
 }
 
@@ -44,10 +52,17 @@ pub(crate) fn draw(
     cfg: Res<SplineGizmos>,
     sel: Res<SplineSelection>,
     splines: Query<(Entity, &Spline, &SplineCache, &GlobalTransform)>,
-    cams: Query<&GlobalTransform, With<Camera3d>>,
+    cams: Query<(&GlobalTransform, &Camera, Option<&Projection>), With<Camera3d>>,
     mut g: Gizmos,
 ) {
-    let cam = cams.iter().next().map(|c| c.translation());
+    let active = cams.iter().find(|(_, c, _)| c.is_active).or_else(|| cams.iter().next());
+    let cam = active.map(|c| c.0.translation());
+    // World size of one screen pixel at distance 1 (perspective): 2 tan(fov/2) / viewport height.
+    let px_per_m = active.and_then(|(_, c, p)| match p {
+        Some(Projection::Perspective(p)) => Some(2.0 * (p.fov * 0.5).tan() / c.logical_viewport_size()?.y.max(1.0)),
+        _ => None,
+    });
+    let mut others_left = cfg.others_max_segments;
     let range2 = cfg.range * cfg.range;
     let near = |p: Vec3| cam.is_none_or(|c| c.distance_squared(p) <= range2);
     let curve = Color::srgb(0.2, 0.85, 1.0);
@@ -59,6 +74,24 @@ pub(crate) fn draw(
         let lift = Vec3::Y * 0.08;
         let world = |p: Vec3| gt.transform_point(p) + lift;
         let line = cache.polyline();
+        // The selected spline gets everything; the rest is a faint thin curve nearby (23 roads
+        // with rings and edges each would bury the one you are editing).
+        let selected_spline = sel.entity == Some(entity);
+        if cfg.selected_only && !selected_spline {
+            let faint = curve.with_alpha(0.28);
+            let r2 = cfg.others_range * cfg.others_range;
+            for w in line.windows(2) {
+                if others_left == 0 {
+                    break;
+                }
+                let (a, b) = (world(w[0]), world(w[1]));
+                if cam.is_none_or(|c| c.distance_squared(a) <= r2) {
+                    g.line(a, b, faint);
+                    others_left -= 1;
+                }
+            }
+            continue;
+        }
         for w in line.windows(2) {
             let (a, b) = (world(w[0]), world(w[1]));
             if near(a) {
@@ -89,7 +122,12 @@ pub(crate) fn draw(
                 continue;
             }
             let selected = sel.entity == Some(entity) && sel.point == Some(i);
-            let size = cam.map_or(0.5, |c| (c.distance(at) * 0.012).max(0.3));
+            // A ring about `point_px` pixels in radius, whatever the distance.
+            let size = match (cam, px_per_m) {
+                (Some(c), Some(k)) => (c.distance(at) * k * cfg.point_px).max(0.15),
+                (Some(c), None) => (c.distance(at) * 0.006).clamp(0.15, 3.0),
+                _ => 0.5,
+            };
             if cfg.points {
                 g.sphere(Isometry3d::from_translation(at), if selected { size * 1.8 } else { size }, if selected { selc } else { pointc });
             }
