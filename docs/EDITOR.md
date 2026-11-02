@@ -375,8 +375,8 @@ place `place {at, type_path?}`. Example: `examples/world_editor_demo.rs` driven 
 `scripts`-style steps (the run in the Stream C report: sculpt, paint, spline, foliage, place, each
 with a before / after screenshot and an undo).
 
-Known gaps of the world tools: the PCG surface of a volume (`Inputs::surface`) is a copy of the
-heights, so sculpting does not move generated trees until the game rebuilds it; a spline point
+Known gaps of the world tools: a PCG volume follows sculpting only with `PcgFollowTerrain`
+(docs/PCG.md; the demo's Dressing has it), otherwise its surface is a copy of the heights; a spline point
 drags on the ground (no 3D gizmo on a point); the foliage Paint area is a capsule (start to end of
 the drag), not a free polygon; Ramp has no live preview; sculpt / paint strokes by mouse are
 covered by the math tests and the scripted strokes, not by synthetic mouse events.

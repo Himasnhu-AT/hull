@@ -161,6 +161,30 @@ commands.spawn((PcgVolume { cell: 64.0, ..PcgVolume::new(graph, inputs, area) },
 | `pcg.regen` | | regenerate every cell |
 | `pcg.scale` | `density` | set `PcgSettings::density` (respawns from cache) |
 
+## Following the terrain (`PcgFollowTerrain`, feature `world`)
+
+A volume's `Inputs::surface` is a copy of the heights. Put `PcgFollowTerrain` (reflected, saved in
+levels) next to the `PcgVolume` and `Project` nodes sample the live `world::TerrainHeights`
+instead: each cell's evaluation gets a small grid-aligned crop (cell + graph halo + 2 samples, so
+bilinear heights and normals equal the full grid's), never a copy of the whole map. The copy in
+`Inputs` is then only the fallback.
+
+A `world::TerrainChanged` (Height layer) marks the cells overlapping `rect_world` grown by the
+graph halo and 2 samples. Marked cells get a new key (the cell key mixes a per-cell terrain
+revision), so only they re-evaluate; the rest keep their `Output` (same `Arc`). Marks are flushed
+at most every `PcgSettings::terrain_interval` (0.1 s): the first edit of a stroke flushes at once,
+the following ones are batched, and the last batch flushes within one interval of the stroke
+ending, so a 20 Hz brush does not re-evaluate a cell per dab. Cells not loaded (streaming) just
+evaluate against the current terrain when they load. A re-evaluated cell that had emitted points
+sends `PcgCellDropped` and then a fresh `PcgEmitted`.
+
+Override keys survive a height change: seeds hash the graph, the node and the sampler's position
+(from the input shapes), never the ground height (`seeds_ignore_the_ground_height` in pcg-core).
+Removed / moved / area edits therefore still apply after sculpting; moved and hand-placed items
+keep the Y they were given. `Project` is the only op that reads the ground. Heights are the
+bilinear ones of pcg-core's `Surface`, not the terrain mesh's triangles: a rock can sit a few cm
+off the rendered surface on a sharp crease.
+
 ## Overrides (hand edits on top of the graph)
 
 `PcgOverrides` (a reflected component on the `PcgVolume` entity, saved in levels) holds what a
