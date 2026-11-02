@@ -55,6 +55,7 @@ default = [
     "l10n",
     "props",
     "level",
+    "spline",
 ]
 # AI-friendly dev loop: ECS inspector commands, scenario test kit, perf assertions, scope
 # profiling, JSON hot reload, save slots, asset checks (docs/DEVKIT.md).
@@ -101,6 +102,8 @@ l10n = []
 props = []
 # Level files: LevelEntity + `levels/*.level.ron` through Bevy's reflected world format, hot reload, `--level` (src/level, docs/LEVELS.md).
 level = ["dep:ron"]
+# Splines: points with width/bank/tags, Catmull-Rom, nearest queries, road ribbon, gizmos (src/spline, docs/SPLINES.md).
+spline = []
 # Multiplayer: transports, channels, replication, prediction (not in default: many games are single-player).
 net = ["dep:postcard"]
 
@@ -114,6 +117,10 @@ debug = "line-tables-only"
 [profile.dev.package."*"]
 opt-level = 3
 debug = false
+
+[[example]]
+name = "spline_road"
+required-features = ["spline"]
 
 [[example]]
 name = "devtools_probe"
