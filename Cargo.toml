@@ -171,6 +171,10 @@ name = "open_world"
 required-features = ["world"]
 
 [[example]]
+name = "terrain_edit"
+required-features = ["world", "devtools"]
+
+[[example]]
 name = "net_demo"
 required-features = ["net"]
 

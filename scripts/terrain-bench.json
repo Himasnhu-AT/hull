@@ -1,0 +1,62 @@
+[
+ {
+  "sleep": 8
+ },
+ {
+  "cmd": "terrain.info",
+  "expect": {
+   "result.source_samples": [
+    2001,
+    2001
+   ]
+  }
+ },
+ {
+  "cmd": "terrain.bench",
+  "params": {
+   "dabs": 400,
+   "radius": 20,
+   "kind": "raise"
+  }
+ },
+ {
+  "cmd": "terrain.bench",
+  "params": {
+   "dabs": 400,
+   "radius": 20,
+   "kind": "smooth"
+  }
+ },
+ {
+  "cmd": "terrain.bench",
+  "params": {
+   "dabs": 400,
+   "radius": 20,
+   "kind": "flatten"
+  }
+ },
+ {
+  "cmd": "terrain.bench",
+  "params": {
+   "dabs": 400,
+   "radius": 20,
+   "kind": "noise"
+  }
+ },
+ {
+  "cmd": "terrain.bench",
+  "params": {
+   "dabs": 400,
+   "radius": 60,
+   "kind": "raise"
+  }
+ },
+ {
+  "cmd": "terrain.bench",
+  "params": {
+   "dabs": 400,
+   "radius": 20,
+   "kind": "paint"
+  }
+ }
+]
