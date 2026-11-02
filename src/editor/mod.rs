@@ -227,6 +227,11 @@ impl Plugin for EditorPlugin {
                     .after(bevy_egui::EguiPostUpdateSet::EndPass)
                     .before(bevy::camera::CameraUpdateSystems),
             );
+        // The editor shows everything at any distance (roads and props fade out otherwise).
+        if let Some(mut b) = app.world_mut().get_resource_mut::<crate::render_budget::RenderBudget>() {
+            b.scenery_detail = false;
+            b.shadow_trim = false;
+        }
         gizmo::build(app);
         control::register(app);
     }

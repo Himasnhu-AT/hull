@@ -451,6 +451,7 @@ pub fn draw(
     gts: Query<&GlobalTransform>,
     levels: Query<(), With<LevelEntity>>,
     bq: BoundsQuery,
+    splines: Query<(&crate::spline::SplineCache, &GlobalTransform)>,
     lights: Query<(&GlobalTransform, Option<&PointLight>, Option<&SpotLight>, Option<&DirectionalLight>), (With<LevelEntity>, Or<(With<PointLight>, With<SpotLight>, With<DirectionalLight>)>)>,
     tool_active: Option<Res<super::tools::ToolState>>,
 ) {
@@ -475,6 +476,12 @@ pub fn draw(
     let tool_on = tool_active.is_some_and(|t| t.active.is_some());
     for &e in &st.selection {
         let Ok(gt) = gts.get(e) else { continue };
+        // A road is outlined by its curve, not by a box over the map.
+        if let Ok((cache, sgt)) = splines.get(e) {
+            let line: Vec<Vec3> = cache.polyline().iter().map(|p| sgt.transform_point(*p) + Vec3::Y * 0.3).collect();
+            g.linestrip(line, SELECT);
+            continue;
+        }
         match bounds(&bq, e) {
             // A tool works on the entity's contents (a road's points): no box over the map.
             Some(_) if tool_on => {}

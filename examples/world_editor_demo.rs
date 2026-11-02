@@ -74,7 +74,7 @@ fn setup(world: &mut World) {
             let a = i as f32 / 10.0 * std::f32::consts::TAU;
             let r = 1.0 + 0.2 * (a * 3.0).sin();
             let (x, z) = (a.cos() * 150.0 * r, a.sin() * 110.0 * r);
-            SplinePoint::at(Vec3::new(x, ground(world, x, z) + 0.4, z)).with_width(9.0 + 2.0 * (a * 2.0).sin())
+            SplinePoint::at(Vec3::new(x, ground(world, x, z) + 1.0, z)).with_width(9.0 + 2.0 * (a * 2.0).sin())
         })
         .collect();
     let id = new_stable_id(world);
