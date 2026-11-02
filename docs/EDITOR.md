@@ -176,3 +176,56 @@ only and never committed or shipped.
 ```
 `content.check` fails on library assets with no entry or a forbidden licence
 (`ue-only`, `reference-only`, `epic-sample`). `scripts/assets.py fetch|import|list`.
+
+## World tools (open-world editing; Pacenote first)
+
+Viewport **tools** are implemented on the engine side (`src/editor/tools/`), each with a
+settings struct shown in a Tool panel through the same property grid as Details
+(`ToolDoc { id, settings: Value, schema: TypeSchema }`). Tools: Select, Move, Rotate, Scale,
+Spline, TerrainSculpt, TerrainPaint, Foliage (PCG overrides), Place (palette of placeable
+types).
+
+### Terrain (`world::terrain` data)
+- Heights live in a heightmap asset next to the level: `levels/<name>/terrain.r16` (u16
+  little-endian, row-major) + `terrain.ron` (`size_samples`, `spacing`, `origin`, `height_min`,
+  `height_max`) and splat weights `terrain_splat.rgba8` (up to 4 layers, matching
+  `TerrainDesc` layers). `WorldDesc` points at it (`HeightSource::Raw16`).
+- Runtime API: `TerrainEdit` (engine) applies a height/splat patch to a rectangle and rebuilds
+  only the chunks it touches (and their colliders when `physics`); emits
+  `TerrainChanged { rect }` so games refresh anything derived (road shaping, PCG cells).
+- Brushes: raise, lower, smooth, flatten (to picked height), ramp, noise; paint layer; radius,
+  strength, falloff. One stroke = one undo step.
+- Undo: `Op::TerrainPatch { layer: Height|Splat, rect, before: BlobId, after: BlobId }`; blobs
+  are kept by the engine in an undo blob store (not JSON).
+
+### Splines (`engine::spline`)
+- `Spline { points: Vec<SplinePoint>, closed: bool }` component (Reflect):
+  `SplinePoint { pos: Vec3, width: f32, bank: f32, tags: u32, data: Option<String> }`
+  (`tags`/`data` are game-defined: surface, road kind, lane info). Catmull-Rom by default.
+- Sampling helpers (`sample(step)`, `nearest(p)`, `length`), `SplineChanged` message.
+- Spline tool: click to add, insert between, delete, drag points/tangent; edits are
+  `SetComponent` ops on the `Spline` (undo for free).
+- Games build their own meshes/physics from splines (Pacenote's road ribbons, junctions).
+
+### PCG overrides (`engine::pcg`)
+- `PcgOverrides` component on a `PcgVolume` (Reflect, saved in the level): `removed` (point
+  keys: cell + point seed), `moved` (key → transform), `added` (item + transform),
+  `areas` (polygons with a density multiplier, 0 = clear), `seed_offset`.
+- Applied when cells spawn (render) and exposed as
+  `PcgOverrides::apply(&mut PointSet, cell)` so games that evaluate the same graph elsewhere
+  (Pacenote's forest colliders) apply exactly the same edits.
+- Foliage tool: click picks a generated instance (ray vs the cell's point set, works on merged
+  meshes), delete/move; paint/erase density areas; place items from the catalog.
+
+### Gameplay points
+- Game components that derive `Reflect` and register a `Placeable { name, icon, category }`
+  appear in the Place palette and in Details. Non-mesh entities get a viewport icon.
+- Pacenote: events (route, start/finish markers, splits), spawn point, corner-grade overrides,
+  surfaces/width per segment (spline point data), no-tree areas (PCG areas), traffic lanes,
+  time of day (`look`).
+
+### Bake (game side)
+Games with generated worlds bake once into a level: heightmap files, splines, placed
+entities, PCG volumes with empty overrides. After the bake the level is the source of truth.
+Pacenote: `pacenote --bake-world levels/open.level.ron`, then `OpenWorld` loads from the level;
+ghost replays are keyed by the level's content hash.
