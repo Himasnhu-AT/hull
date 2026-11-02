@@ -61,8 +61,18 @@ fn log_metrics(m: Res<Metrics>, log: Res<SessionLog>, mut last: Local<f64>) {
     if now - *last < 1.0 {
         return;
     }
-    let from = *last as f32;
+    let v = window_avgs(&m, *last as f32);
     *last = now;
+    if !v.is_empty() {
+        log.write("metrics", serde_json::json!({ "v": Value::Object(v) }));
+    }
+}
+
+/// Average of each key's committed samples with `t >= from`. Values recorded this frame are
+/// still pending (committed next frame with `t = now`), so they land in the next line: the
+/// boundary is inclusive to keep them. With `t > from` the 1 Hz perf keys, recorded on the
+/// same frame the line is written, fell between lines and never appeared after the first.
+fn window_avgs(m: &Metrics, from: f32) -> Map<String, Value> {
     let mut v = Map::new();
     for k in m.keys() {
         let Some(samples) = m.recent_samples(k) else {
@@ -70,7 +80,7 @@ fn log_metrics(m: Res<Metrics>, log: Res<SessionLog>, mut last: Local<f64>) {
         };
         let (mut sum, mut n) = (0.0f64, 0u32);
         for &(t, x) in samples.iter().rev() {
-            if t <= from {
+            if t < from {
                 break;
             }
             sum += x as f64;
@@ -83,9 +93,7 @@ fn log_metrics(m: Res<Metrics>, log: Res<SessionLog>, mut last: Local<f64>) {
             );
         }
     }
-    if !v.is_empty() {
-        log.write("metrics", serde_json::json!({ "v": Value::Object(v) }));
-    }
+    v
 }
 
 /// The viewer process this game started (dev runs on screen).
@@ -589,7 +597,9 @@ fn event_line(t: f64, ev: &str, o: &Map<String, Value>) -> String {
         let v = match v {
             Value::String(x) => x.clone(),
             Value::Null => continue,
-            Value::Number(n) if n.is_f64() => super::metrics::sig4(n.as_f64().unwrap_or(0.0)).to_string(),
+            Value::Number(n) if n.is_f64() => {
+                super::metrics::sig4(n.as_f64().unwrap_or(0.0)).to_string()
+            }
             other => other.to_string(),
         };
         s += &format!("  {k}={v}");
@@ -608,6 +618,38 @@ fn event_line(t: f64, ev: &str, o: &Map<String, Value>) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Frame order in a game: `begin_frame` commits last frame's values, systems record, then
+    /// the line is written in `Last` (after `record_engine`). A key recorded once a second on
+    /// the very frame the line is written must still be in every line.
+    #[test]
+    fn once_a_second_keys_reach_every_line() {
+        let mut m = Metrics::default();
+        let (mut last, mut lines) = (0.0f64, Vec::new());
+        let dt = 1.0 / 60.0;
+        for f in 0..(60 * 30) {
+            let now = f as f64 * dt;
+            m.next_frame(now);
+            m.record("render.fast", 1.0);
+            let due = m.now() - last >= 1.0;
+            if due {
+                m.record("frame.fps", 60.0); // the perf snapshot lands on this frame
+            }
+            if due {
+                lines.push(window_avgs(&m, last as f32));
+                last = m.now();
+            }
+        }
+        assert!(lines.len() >= 28, "{} lines", lines.len());
+        let with = |k: &str| lines.iter().filter(|l| l.contains_key(k)).count();
+        assert!(
+            with("frame.fps") >= lines.len() - 1,
+            "frame.fps in {} of {} lines",
+            with("frame.fps"),
+            lines.len()
+        );
+        assert_eq!(with("render.fast"), lines.len());
+    }
 
     #[test]
     fn event_lines_read_well() {
