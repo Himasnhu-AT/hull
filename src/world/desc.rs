@@ -31,7 +31,9 @@ use super::material::{SplatLayer, TerrainExt, TerrainMaterial, default_layers, g
 use super::noise::{Rng64, hash2};
 use super::prefab::{MaterialDesc, PrefabDef, ShapeDesc, WorldAssets};
 use super::scatter::{Exclusion, RuleRt, Scatter, ScatterMesh, ScatterRule, builtin_material, builtin_mesh};
+use super::edit::{TerrainHeights, TerrainSplat};
 use super::terrain::{Terrain, TerrainChunks, TerrainLook};
+use super::terrain_data::{TerrainData, TerrainDataError};
 use super::{StreamMode, WorldOrigin, WorldRoot, WorldSettings, WorldStats};
 use crate::paths::AssetsDir;
 
@@ -44,6 +46,10 @@ pub enum HeightSource {
     Png { path: String, min: f32, max: f32 },
     /// Little-endian u16 raw file under the assets folder.
     Raw16 { path: String, width: u32, height: u32, min: f32, max: f32 },
+    /// A folder under the assets folder with `terrain.ron` + `terrain.r16` (+ `terrain_splat.rgba8`)
+    /// as written by the terrain editor (`TerrainEdit::save`, `terrain_data`). Size, spacing and
+    /// origin come from `terrain.ron`, not from [`TerrainDesc`].
+    TerrainFiles { dir: String },
 }
 
 impl Default for HeightSource {
@@ -209,6 +215,15 @@ impl WorldDesc {
                 let o = centred(probe.nx(), probe.nz());
                 Heightfield::from_heights(probe.nx(), probe.nz(), sp, o, probe.heights().to_vec())
             }
+            HeightSource::TerrainFiles { dir } => {
+                let path = assets.map_or_else(|| std::path::PathBuf::from(dir), |a| a.join(dir));
+                TerrainData::load(&path)
+                    .and_then(|d| d.to_heightfield())
+                    .map_err(|e| WorldError::Heightmap(match e {
+                        TerrainDataError::Io(m) => HeightmapError::Io(m),
+                        TerrainDataError::Format(m) => HeightmapError::Format(m),
+                    }))?
+            }
             HeightSource::Raw16 { path, width, height, min, max } => {
                 let bytes = read(path)?;
                 Heightfield::from_raw16(&bytes, *width, *height, sp, centred(*width, *height), *min, *max).map_err(WorldError::Heightmap)?
@@ -237,6 +252,8 @@ pub fn despawn_world(world: &mut World) {
     }
     world.remove_resource::<Terrain>();
     world.remove_resource::<TerrainLook>();
+    world.remove_resource::<TerrainHeights>();
+    world.remove_resource::<TerrainSplat>();
     world.remove_resource::<WorldCells>();
     world.remove_resource::<Scatter>();
     world.insert_resource(HlodState::default());
@@ -349,12 +366,19 @@ pub fn spawn_world_with(world: &mut World, desc: WorldDesc, heightfield: Option<
     world.spawn((Name::new("World"), WorldRoot, Transform::from_translation(origin.root_translation()), Visibility::default()));
 
     // Terrain look.
+    let mut splat_resource: Option<TerrainSplat> = None;
     if render {
         let layers = if desc.terrain.layers.is_empty() { default_layers() } else { desc.terrain.layers.clone() };
         let hf = terrain.heightfield();
         let res = if desc.terrain.splat_resolution > 0 { desc.terrain.splat_resolution } else { hf.nx().max(hf.nz()).min(2048) };
-        let bytes = generate_splat(hf, &layers, res, desc.seed);
-        let splat = world.resource_mut::<Assets<Image>>().add(splat_image(bytes, res));
+        // A saved splat map (terrain editor) wins over the generated one.
+        let saved = match &desc.terrain.source {
+            HeightSource::TerrainFiles { dir } => TerrainData::load_splat(&assets_dir.as_deref().map_or_else(|| std::path::PathBuf::from(dir), |a| a.join(dir))),
+            _ => None,
+        };
+        let (res, bytes) = saved.unwrap_or_else(|| (res, generate_splat(hf, &layers, res, desc.seed)));
+        let splat = world.resource_mut::<Assets<Image>>().add(splat_image(bytes.clone(), res));
+        splat_resource = TerrainSplat::new(res, bytes, Some(splat.clone()));
         let mut tex: [Option<Handle<Image>>; 4] = Default::default();
         if let Some(server) = world.get_resource::<AssetServer>() {
             for (i, l) in layers.iter().take(4).enumerate() {
@@ -403,6 +427,16 @@ pub fn spawn_world_with(world: &mut World, desc: WorldDesc, heightfield: Option<
     world.insert_resource(Scatter::new(rules, terrain.heightfield_arc(), exclusions, seed));
     world.insert_resource(cells);
     world.insert_resource(TerrainChunks::default());
+    if splat_resource.is_none()
+        && let HeightSource::TerrainFiles { dir } = &desc.terrain.source
+        && let Some((res, bytes)) = TerrainData::load_splat(&assets_dir.as_deref().map_or_else(|| std::path::PathBuf::from(dir), |a| a.join(dir)))
+    {
+        splat_resource = TerrainSplat::new(res, bytes, None);
+    }
+    if let Some(sp) = splat_resource {
+        world.insert_resource(sp);
+    }
+    world.insert_resource(TerrainHeights::new(terrain.heightfield_arc()));
     world.insert_resource(terrain);
     let mut st = world.resource_mut::<WorldStats>();
     st.spawned = true;
