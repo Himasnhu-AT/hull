@@ -18,6 +18,10 @@
 //!   ([`PcgScalability`]) and by the governor's [`crate::render_budget::GovernorStep::PcgDensity`],
 //!   deterministically (lower quality ⊂ higher); changing it respawns from the cache.
 //!   `Essential` (gameplay) never thins.
+//! - **Streaming** (optional, [`PcgStreaming`] next to the volume): only cells within `radius`
+//!   of the main camera (and `world::StreamSource`s, feature `world`) are evaluated and kept;
+//!   cells past `radius + margin` are dropped (entities, cached output, emitted points: a
+//!   [`PcgCellDropped`] message) and evaluated again, deterministically, when re-entered.
 
 use std::sync::Arc;
 
@@ -75,6 +79,37 @@ pub struct PcgMesh {
 pub enum PcgLight {
     Point(PointLight, Vec3),
     Spot(SpotLight, Vec3),
+}
+
+/// Streams a [`PcgVolume`]: only cells near the main camera (and `world::StreamSource`
+/// entities) are evaluated and kept. Without it every cell of the area is evaluated and kept.
+#[derive(Component, Clone, Copy, Debug)]
+pub struct PcgStreaming {
+    /// A cell loads when its square is within this distance (m, XZ) of a source.
+    pub radius: f32,
+    /// A loaded cell unloads past `radius + margin` (no load/unload flicker at the edge).
+    pub margin: f32,
+}
+
+impl Default for PcgStreaming {
+    fn default() -> Self {
+        PcgStreaming { radius: 512.0, margin: 64.0 }
+    }
+}
+
+impl PcgStreaming {
+    pub fn radius(radius: f32) -> PcgStreaming {
+        PcgStreaming { radius, margin: (radius * 0.125).max(16.0) }
+    }
+}
+
+/// A cell that had spawned was dropped (left a [`PcgStreaming`] radius or the area, or the
+/// volume was removed from its cells): its entities are gone; drop anything built from its
+/// [`PcgEmitted`] points. If it comes back, its points are emitted again.
+#[derive(Message, Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PcgCellDropped {
+    pub volume: Entity,
+    pub cell: IVec2,
 }
 
 /// Item names → assets.
@@ -153,6 +188,8 @@ pub struct PcgStats {
     pub evaluations: u64,
     /// Cells respawned from cached output (quality or density changed) without evaluating.
     pub cache_hits: u64,
+    /// Cells dropped by streaming (or leaving the area), total since start.
+    pub cells_dropped: u64,
     /// Cell root entities alive now.
     pub entities: u32,
     /// Points spawned / thinned out, totals since start (respawns count again).
@@ -202,6 +239,7 @@ impl Plugin for PcgPlugin {
             .init_resource::<PcgSettings>()
             .init_resource::<PcgStats>()
             .add_message::<PcgEmitted>()
+            .add_message::<PcgCellDropped>()
             .add_systems(Update, (schedule_cells, collect_cells, spawn_cells).chain());
         #[cfg(feature = "devtools")]
         devtools::register(app);
@@ -241,19 +279,62 @@ fn cells_of(area: Area, size: f32) -> impl Iterator<Item = IVec2> {
     (z0..=z1).flat_map(move |z| (x0..=x1).map(move |x| IVec2::new(x, z)))
 }
 
+/// Distance (XZ) from `p` to the square `area` (0 inside).
+fn rect_distance(area: Area, p: Vec2) -> f32 {
+    (area.min - p).max(p - area.max).max(Vec2::ZERO).length()
+}
+
+/// The cells of `area` a streamed volume wants: within `radius` of a source, or within
+/// `radius + margin` while already loaded. Only the cells around the sources are visited.
+fn streamed_cells(area: Area, size: f32, s: &PcgStreaming, sources: &[Vec2], loaded: &HashMap<IVec2, Cell>, out: &mut Vec<IVec2>) {
+    let keep = s.radius.max(0.0) + s.margin.max(0.0);
+    for &p in sources {
+        let near = Area::new(p - Vec2::splat(keep), p + Vec2::splat(keep)).intersect(area);
+        if near.max.x <= near.min.x || near.max.y <= near.min.y {
+            continue;
+        }
+        for k in cells_of(near, size) {
+            let cell = Area::cell(k.x, k.y, size).intersect(area);
+            let reach = if loaded.contains_key(&k) { keep } else { s.radius };
+            if sources.iter().any(|&q| rect_distance(cell, q) <= reach) {
+                out.push(k);
+            }
+        }
+    }
+    if sources.len() > 1 {
+        out.sort_unstable_by_key(|k| (k.y, k.x));
+        out.dedup();
+    }
+}
+
 /// Starts evaluations for cells whose key (graph + nearby inputs) changed, nearest first.
+/// Streamed volumes ([`PcgStreaming`]) also load and drop cells around the sources here.
+#[allow(clippy::too_many_arguments, clippy::type_complexity)]
 fn schedule_cells(
     mut commands: Commands,
-    mut volumes: Query<(Entity, &PcgVolume, Option<&mut PcgCells>)>,
+    mut volumes: Query<(Entity, &PcgVolume, Option<&mut PcgCells>, Option<&PcgStreaming>)>,
     assets: Res<Assets<PcgGraphAsset>>,
     settings: Res<PcgSettings>,
     cam: Query<&GlobalTransform, With<MainCamera>>,
+    #[cfg(feature = "world")] stream_sources: Query<&GlobalTransform, (With<crate::world::StreamSource>, Without<MainCamera>)>,
+    mut dropped: MessageWriter<PcgCellDropped>,
+    mut stats: ResMut<PcgStats>,
     mut todo: Local<Vec<(f32, Entity, IVec2)>>,
+    mut sources: Local<Vec<Vec2>>,
+    mut wanted: Local<Vec<IVec2>>,
 ) {
-    let eye = cam.iter().next().map(|g| Vec2::new(g.translation().x, g.translation().z)).unwrap_or(Vec2::ZERO);
+    let xz = |g: &GlobalTransform| Vec2::new(g.translation().x, g.translation().z);
+    let eye = cam.iter().next().map(xz).unwrap_or(Vec2::ZERO);
+    sources.clear();
+    sources.extend(cam.iter().map(xz));
+    #[cfg(feature = "world")]
+    sources.extend(stream_sources.iter().map(xz));
+    if sources.is_empty() {
+        sources.push(eye);
+    }
     let mut running = 0;
     todo.clear();
-    for (e, v, cells) in &mut volumes {
+    for (e, v, cells, streaming) in &mut volumes {
         let Some(mut cells) = cells else {
             commands.entity(e).insert(PcgCells::default());
             continue;
@@ -277,16 +358,30 @@ fn schedule_cells(
             cells.keys = keys;
             cells.keyed = Some(stamp);
         }
-        let wanted: Vec<IVec2> = cells_of(v.area, size).collect();
-        // Cells no longer in the area: drop them.
-        cells.cells.retain(|k, c| {
-            let keep = wanted.contains(k);
-            if !keep && let Some(r) = c.root.take() {
-                commands.entity(r).try_despawn();
-            }
-            keep
-        });
-        for k in wanted {
+        wanted.clear();
+        match streaming {
+            Some(s) => streamed_cells(v.area, size, s, &sources, &cells.cells, &mut wanted),
+            None => wanted.extend(cells_of(v.area, size)),
+        }
+        // Cells no longer wanted (out of range or out of the area): drop them, their cached
+        // output and any evaluation in flight (dropping the task cancels it).
+        if cells.cells.len() + wanted.len() > 0 {
+            let want: bevy::platform::collections::HashSet<IVec2> = wanted.iter().copied().collect();
+            cells.cells.retain(|k, c| {
+                let keep = want.contains(k);
+                if !keep {
+                    if let Some(r) = c.root.take() {
+                        commands.entity(r).try_despawn();
+                    }
+                    if c.spawned_with.is_some() {
+                        dropped.write(PcgCellDropped { volume: e, cell: *k });
+                    }
+                    stats.cells_dropped += 1;
+                }
+                keep
+            });
+        }
+        for &k in wanted.iter() {
             let area = Area::cell(k.x, k.y, size).intersect(v.area);
             let key = cells.keys.get(&k).copied().unwrap_or(0);
             let c = cells.cells.entry(k).or_insert(Cell { key: 0, output: None, task: None, root: None, spawned_with: None });
@@ -306,7 +401,7 @@ fn schedule_cells(
         if running >= settings.in_flight {
             break;
         }
-        let Ok((_, v, Some(mut cells))) = volumes.get_mut(e) else { continue };
+        let Ok((_, v, Some(mut cells), _)) = volumes.get_mut(e) else { continue };
         let Some(g) = graph_of(v, &assets) else { continue };
         let size = v.cell.max(1.0);
         let area = Area::cell(k.x, k.y, size).intersect(v.area);
@@ -643,7 +738,7 @@ mod devtools {
         let s = world.resource::<PcgStats>().clone();
         Ok(json!({
             "volumes": s.volumes, "cells": s.cells, "cells_pending": s.cells_pending, "evaluations": s.evaluations,
-            "cache_hits": s.cache_hits, "cell_roots": s.entities, "points_spawned": s.points_spawned,
+            "cache_hits": s.cache_hits, "cells_dropped": s.cells_dropped, "cell_roots": s.entities, "points_spawned": s.points_spawned,
             "points_thinned": s.points_thinned, "last_eval_us": s.last_eval_us, "errors": s.errors,
             "density": world.resource::<PcgSettings>().density,
         }))
@@ -766,6 +861,51 @@ mod tests {
         }
         let more = app.world().resource::<PcgStats>().evaluations - evals;
         assert!(more > 0 && more < 8, "re-evaluated {more} of 8 cells");
+    }
+
+    #[test]
+    fn streaming_loads_near_the_camera_and_drops_far_cells() {
+        let mut app = app();
+        // 512 x 64 m strip, 32 m cells: 16 x 2 cells.
+        let inputs = Inputs::default().rects("lots", vec![Rect::new(Vec2::ZERO, Vec2::new(256.0, 32.0))]);
+        let v = app
+            .world_mut()
+            .spawn((PcgVolume { cell: 32.0, ..PcgVolume::new(graph(), inputs, Area::new(Vec2::new(-256.0, -32.0), Vec2::new(256.0, 32.0))) }, PcgStreaming { radius: 30.0, margin: 16.0 }))
+            .id();
+        let cam = app.world_mut().spawn((MainCamera, Transform::from_xyz(-200.0, 2.0, 0.0), GlobalTransform::from_xyz(-200.0, 2.0, 0.0))).id();
+        let near = |app: &mut App| {
+            let mut c: Vec<IVec2> = app.world_mut().query::<&PcgCellRoot>().iter(app.world()).map(|r| r.cell).collect();
+            c.sort_by_key(|k| (k.x, k.y));
+            c
+        };
+        let points = |app: &mut App, cell: IVec2| {
+            let q = app.world_mut().query::<&PcgCells>().single(app.world()).unwrap().cells.get(&cell).and_then(|c| c.output.clone());
+            q.map(|o| o.spawns.iter().map(|s| s.points.len()).sum::<usize>())
+        };
+        run_until_done(&mut app);
+        let west = near(&mut app);
+        // x = -200 ± 30 m reaches cells -8..=-6 (x -256..-160; cell -5 starts 40 m away), both rows.
+        assert_eq!(west.len(), 6, "{west:?}");
+        assert!(west.iter().all(|k| (-8..=-6).contains(&k.x)), "{west:?}");
+        let first = points(&mut app, IVec2::new(-7, 0)).unwrap();
+        assert_eq!(app.world().resource::<PcgStats>().cells, 6, "only near cells are kept");
+
+        // Drive east: the west cells drop (message + no cached output), east cells load.
+        app.world_mut().entity_mut(cam).insert(GlobalTransform::from_xyz(200.0, 2.0, 0.0));
+        run_until_done(&mut app);
+        let east = near(&mut app);
+        assert!(east.iter().all(|k| (5..=7).contains(&k.x)), "{east:?}");
+        assert_eq!(points(&mut app, IVec2::new(-7, 0)), None, "dropped cells free their output");
+        let msgs = app.world().resource::<Messages<PcgCellDropped>>();
+        let dropped: Vec<_> = msgs.iter_current_update_messages().chain(msgs.get_cursor().read(msgs)).filter(|d| d.volume == v).map(|d| d.cell).collect();
+        assert!(dropped.contains(&IVec2::new(-7, 0)), "{dropped:?}");
+        assert!(app.world().resource::<PcgStats>().cells_dropped >= 6);
+
+        // Back west: re-evaluated, same points (deterministic).
+        app.world_mut().entity_mut(cam).insert(GlobalTransform::from_xyz(-200.0, 2.0, 0.0));
+        run_until_done(&mut app);
+        assert_eq!(near(&mut app), west);
+        assert_eq!(points(&mut app, IVec2::new(-7, 0)), Some(first));
     }
 
     #[test]

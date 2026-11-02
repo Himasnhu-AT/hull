@@ -117,6 +117,28 @@ inputs, wrong input counts, cycles and bad parameters, naming the node.
 - `PcgSettings::cells_per_frame` (2) cells spawn per frame.
 - `Emit` ports arrive once per evaluated cell as `PcgEmitted { volume, cell, port, points }`.
 
+## Streaming (`PcgStreaming`)
+
+Without it, every cell of a volume is evaluated and kept for the whole run (output cache, root
+entities, emitted points). For large worlds put `PcgStreaming` on the volume entity:
+
+```rust
+commands.spawn((PcgVolume { cell: 64.0, ..PcgVolume::new(graph, inputs, area) }, PcgStreaming::radius(600.0)));
+```
+
+- A cell loads when its square is within `radius` (XZ) of the `MainCamera` or of any
+  `world::StreamSource` (feature `world`), and is dropped past `radius + margin`
+  (`PcgStreaming::radius(r)` sets margin to r/8, at least 16 m).
+- Dropping a cell despawns its root, frees its cached output and cancels an evaluation in
+  flight. Cells that had spawned send `PcgCellDropped { volume, cell }`: drop whatever you
+  built from that cell's `PcgEmitted` points. On re-entry the cell evaluates again (same
+  seeds, same points) and emits again.
+- Only cells around the sources are visited each frame; `pcg.stats` shows `cells` (loaded)
+  and `cells_dropped`.
+- Things that must exist far away (impostor fields, map markers) shouldn't come from a
+  streamed volume's emits: put them in a second, unstreamed volume with only the `Emit`
+  nodes they need, or generate them with `pcg-core` directly.
+
 ## Scalability
 
 - `Spawn` tiers: `Essential` (gameplay: never thinned), `Normal`, `Fine` (thinned first).
@@ -130,7 +152,7 @@ inputs, wrong input counts, cycles and bad parameters, naming the node.
 
 | Command | Params | Returns |
 |---|---|---|
-| `pcg.stats` | | volumes, cells, pending, evaluations, cache hits, live cell roots, points spawned/thinned, last evaluation µs, errors, density |
+| `pcg.stats` | | volumes, cells, pending, evaluations, cache hits, cells dropped, live cell roots, points spawned/thinned, last evaluation µs, errors, density |
 | `pcg.inspect` | `x`, `z`, `volume` | points per node in that cell, spawns, emits |
 | `pcg.regen` | | regenerate every cell |
 | `pcg.scale` | `density` | set `PcgSettings::density` (respawns from cache) |
@@ -150,7 +172,8 @@ re-evaluation.
 
 ## Known limits (v1)
 
-- No streaming by distance yet: every cell of a volume is generated (nearest first).
+- Streaming radius is distance only (no view-direction or speed look-ahead); positions are
+  world coordinates (with a floating origin, keep volumes and sources in the same frame).
 - `Difference` / `Intersect` test rects and point boxes, not polylines (buffer streets into
   rects to keep things off them).
 - No subgraphs, loops, splines (`SplineSample`), grammar (`SubdivideSegment`) or GPU path.
