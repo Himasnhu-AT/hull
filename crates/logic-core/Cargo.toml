@@ -1,0 +1,12 @@
+[package]
+name = "logic-core"
+description = "Game logic as node graphs: types, validation and an allocation-light interpreter. No Bevy: side effects go through the Host trait."
+edition = "2024"
+version = "0.1.0"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[dependencies]
+serde = { version = "1", features = ["derive", "rc"] }
+serde_json = "1"
+ron = { version = "0.12", default-features = false }

@@ -3342,11 +3342,13 @@ dependencies = [
  "directories",
  "image",
  "libc",
+ "logic-core",
  "pcg-core",
  "png",
  "postcard",
  "rand 0.9.5",
  "ron",
+ "ruspy",
  "serde",
  "serde_json",
  "sysinfo 0.38.4",
@@ -4711,6 +4713,15 @@ name = "log"
 version = "0.4.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f9f8bd3e56ce4dfc153cf470fffbfa98c7620958b312ca5c3a4b8d5181fd13c6"
+
+[[package]]
+name = "logic-core"
+version = "0.1.0"
+dependencies = [
+ "ron",
+ "serde",
+ "serde_json",
+]
 
 [[package]]
 name = "logos"
@@ -6338,6 +6349,15 @@ dependencies = [
  "heapless 0.8.0",
  "num-traits",
  "smallvec",
+]
+
+[[package]]
+name = "ruspy"
+version = "0.1.0"
+source = "git+https://github.com/Himasnhu-AT/ruspy?rev=982b759423b5984e0112c891a1c6f3868f8d3de1#982b759423b5984e0112c891a1c6f3868f8d3de1"
+dependencies = [
+ "log",
+ "serde",
 ]
 
 [[package]]

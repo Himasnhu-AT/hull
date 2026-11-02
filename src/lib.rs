@@ -77,6 +77,8 @@ pub mod vfx;
 pub mod pcg;
 #[cfg(feature = "spline")]
 pub mod spline;
+#[cfg(feature = "logic")]
+pub mod logic;
 #[cfg(feature = "props")]
 pub mod props;
 #[cfg(feature = "sound")]
