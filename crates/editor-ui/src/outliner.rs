@@ -273,8 +273,8 @@ pub(crate) fn show(ui: &mut Ui, st: &mut OutlinerState, v: &View<'_>, reqs: &mut
     if cancel_rename {
         *renaming = None;
     }
-    if let Some((src, target)) = drop {
-        if let Some(op) = reparent_op(v.nodes, src, target) {
+    if let Some((src, target)) = drop
+        && let Some(op) = reparent_op(v.nodes, src, target) {
             reqs.push(Req::Edit {
                 op,
                 label: "Reparent".into(),
@@ -282,13 +282,11 @@ pub(crate) fn show(ui: &mut Ui, st: &mut OutlinerState, v: &View<'_>, reqs: &mut
                 seal: true,
             });
         }
-    }
     // Keyboard on the focused list.
-    if out.response.has_focus() && !renaming.is_some() {
-        if ui.input(|i| i.key_pressed(Key::F2)) {
+    if out.response.has_focus() && !renaming.is_some()
+        && ui.input(|i| i.key_pressed(Key::F2)) {
             reqs.push(Req::Cmd(Cmd::Rename));
         }
-    }
     if let Some(i) = out.select
         && let Some(&(id, _)) = rows.get(i)
     {

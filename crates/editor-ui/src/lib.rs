@@ -796,26 +796,20 @@ impl EditorUi {
                     focus_pending: true,
                 });
             }
-            Cmd::Undo => match self.undo.undo() {
-                Some(op) => match backend.apply(&op) {
-                    Ok(()) => self.after_history(),
-                    Err(e) => {
-                        self.undo.restore_undo();
-                        self.toasts.error(format!("Undo failed: {e}"));
-                    }
-                },
-                None => {}
-            },
-            Cmd::Redo => match self.undo.redo() {
-                Some(op) => match backend.apply(&op) {
-                    Ok(()) => self.after_history(),
-                    Err(e) => {
-                        self.undo.restore_redo();
-                        self.toasts.error(format!("Redo failed: {e}"));
-                    }
-                },
-                None => {}
-            },
+            Cmd::Undo => if let Some(op) = self.undo.undo() { match backend.apply(&op) {
+                Ok(()) => self.after_history(),
+                Err(e) => {
+                    self.undo.restore_undo();
+                    self.toasts.error(format!("Undo failed: {e}"));
+                }
+            } },
+            Cmd::Redo => if let Some(op) = self.undo.redo() { match backend.apply(&op) {
+                Ok(()) => self.after_history(),
+                Err(e) => {
+                    self.undo.restore_redo();
+                    self.toasts.error(format!("Redo failed: {e}"));
+                }
+            } },
             Cmd::PlayStop => match backend.play_state() {
                 PlayState::Editing => {
                     if let Err(e) = backend.play() {
