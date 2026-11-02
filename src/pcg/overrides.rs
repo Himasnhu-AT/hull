@@ -47,6 +47,9 @@ pub struct RemovedPoint {
 pub struct MovedPoint {
     pub key: PointKey,
     pub at: Vec3,
+    /// Catalog item (Emit points: the port name), so the move is self-contained: the cell
+    /// holding the destination draws it even though it was generated elsewhere.
+    pub item: String,
     pub to: Transform,
 }
 
@@ -124,7 +127,7 @@ impl PcgOverrides {
 
     /// Moves a generated point (or a hand-placed one) to `to`. Returns its key afterwards (a
     /// hand-placed item's key follows its position).
-    pub fn move_point(&mut self, key: &PointKey, at: Vec3, to: Transform) -> PointKey {
+    pub fn move_point(&mut self, key: &PointKey, at: Vec3, item: &str, to: Transform) -> PointKey {
         if let Some(a) = self.added.iter_mut().find(|a| a.key() == *key) {
             a.transform = to;
             return a.key();
@@ -132,7 +135,7 @@ impl PcgOverrides {
         self.removed.retain(|r| r.key != *key);
         match self.moved.iter_mut().find(|m| m.key == *key) {
             Some(m) => m.to = to,
-            None => self.moved.push(MovedPoint { key: key.clone(), at, to }),
+            None => self.moved.push(MovedPoint { key: key.clone(), at, item: item.into(), to }),
         }
         key.clone()
     }
@@ -151,6 +154,8 @@ impl PcgOverrides {
 struct NodeEdits {
     removed: HashSet<u64>,
     moved: HashMap<u64, Transform>,
+    /// Moves in entry order: (seed, item, destination).
+    moved_list: Vec<(u64, String, Transform)>,
     added: Vec<AddedItem>,
 }
 
@@ -206,8 +211,13 @@ impl OverrideIndex {
             ix.bump(r.at, mix64(r.key.seed ^ 0x1111) ^ str_hash(&r.key.node));
         }
         for m in &ov.moved {
-            ix.node(&m.key.node).moved.insert(m.key.seed, m.to);
-            ix.bump(m.at, mix64(m.key.seed ^ 0x2222 ^ h_tf(&m.to)) ^ str_hash(&m.key.node));
+            let n = ix.node(&m.key.node);
+            n.moved.insert(m.key.seed, m.to);
+            n.moved_list.push((m.key.seed, m.item.clone(), m.to));
+            // Both the cell it leaves and the one it lands in.
+            let h = mix64(m.key.seed ^ 0x2222 ^ h_tf(&m.to) ^ str_hash(&m.item)) ^ str_hash(&m.key.node);
+            ix.bump(m.at, h);
+            ix.bump(m.to.translation, h.rotate_left(7));
         }
         for a in &ov.added {
             ix.node(&a.node).added.push(a.clone());
@@ -243,7 +253,7 @@ impl OverrideIndex {
     }
 
     fn node(&mut self, n: &str) -> &mut NodeEdits {
-        self.nodes.entry(n.to_string()).or_insert_with(|| NodeEdits { removed: HashSet::default(), moved: HashMap::default(), added: Vec::new() })
+        self.nodes.entry(n.to_string()).or_insert_with(|| NodeEdits { removed: HashSet::default(), moved: HashMap::default(), moved_list: Vec::new(), added: Vec::new() })
     }
 
     fn bump(&mut self, p: Vec3, h: u64) {
@@ -280,11 +290,13 @@ impl OverrideIndex {
         if edits.is_none() && !has_area {
             return;
         }
+        let mut moved_seen: HashSet<u64> = HashSet::default();
         let point_edits = edits.is_some_and(|e| !e.removed.is_empty() || !e.moved.is_empty());
         if point_edits || has_area {
             let relevant: Vec<&IndexedArea> = self.areas.iter().filter(|a| a.nodes.as_ref().is_none_or(|n| n.iter().any(|x| x == node)) && area.overlaps(a.bbox)).collect();
             let mut keep: Vec<usize> = Vec::with_capacity(pts.len());
             let mut dropped = false;
+            let mut seen: HashSet<u64> = HashSet::default();
             for k in 0..pts.len() {
                 let seed = pts.seed[k];
                 if let Some(e) = edits {
@@ -293,6 +305,12 @@ impl OverrideIndex {
                         continue;
                     }
                     if let Some(t) = e.moved.get(&seed) {
+                        seen.insert(seed);
+                        // Destination in another area: that area's evaluation owns it.
+                        if !area.contains(Vec2::new(t.translation.x, t.translation.z)) {
+                            dropped = true;
+                            continue;
+                        }
                         pts.pos[k] = t.translation;
                         pts.rot[k] = t.rotation;
                         pts.scale[k] = t.scale;
@@ -321,8 +339,43 @@ impl OverrideIndex {
                     **it = keep.iter().map(|&k| it[k]).collect();
                 }
             }
+            if let Some(e) = edits.filter(|e| !e.moved.is_empty()) {
+                // Moved points are hand edits: thinning never touches them.
+                let moved_here: Vec<usize> = (0..pts.len()).filter(|&k| e.moved.contains_key(&pts.seed[k])).collect();
+                if !moved_here.is_empty() {
+                    let len = pts.pos.len();
+                    let h = pts.attrs.entry(HAND_ATTR.to_string()).or_default();
+                    h.resize(len, 0.0);
+                    for k in moved_here {
+                        h[k] = 1.0;
+                    }
+                }
+            }
+            moved_seen = seen;
         }
         let Some(e) = edits else { return };
+        // Moves generated elsewhere that land here.
+        for (seed, item, t) in &e.moved_list {
+            if moved_seen.contains(seed) || e.removed.contains(seed) || !area.contains(Vec2::new(t.translation.x, t.translation.z)) {
+                continue;
+            }
+            let len = pts.pos.len();
+            pts.attrs.entry(HAND_ATTR.to_string()).or_default().resize(len, 0.0);
+            pts.push(Point { pos: t.translation, rot: t.rotation, scale: t.scale, extent: Vec3::splat(0.5), density: 1.0, seed: *seed, tag: 0 });
+            if let Some(h) = pts.attrs.get_mut(HAND_ATTR) {
+                *h.last_mut().expect("just pushed") = 1.0;
+            }
+            if let Some((it, names)) = items.as_mut() {
+                let idx = match names.iter().position(|(nm, _)| nm == item) {
+                    Some(i) => i,
+                    None => {
+                        names.push((item.clone(), 0.0));
+                        names.len() - 1
+                    }
+                };
+                it.push(idx.min(u16::MAX as usize) as u16);
+            }
+        }
         for a in e.added.iter().filter(|a| area.contains(Vec2::new(a.transform.translation.x, a.transform.translation.z))) {
             let seed = a.seed();
             if e.removed.contains(&seed) {
@@ -634,7 +687,7 @@ pub(super) mod control {
             "volume": e.to_bits(),
             "counts": summary(&ov),
             "removed": ov.removed.iter().map(|r| json!({"key": key_json(&r.key), "at": r.at.to_array()})).collect::<Vec<_>>(),
-            "moved": ov.moved.iter().map(|m| json!({"key": key_json(&m.key), "at": m.at.to_array(), "to": tf_json(&m.to)})).collect::<Vec<_>>(),
+            "moved": ov.moved.iter().map(|m| json!({"key": key_json(&m.key), "at": m.at.to_array(), "item": m.item, "to": tf_json(&m.to)})).collect::<Vec<_>>(),
             "added": ov.added.iter().map(|a| json!({"key": key_json(&a.key()), "item": a.item, "node": a.node, "transform": tf_json(&a.transform)})).collect::<Vec<_>>(),
             "areas": ov.areas.iter().map(|a| json!({"polygon": a.polygon.iter().map(|p| p.to_array()).collect::<Vec<_>>(), "density": a.density, "nodes": a.nodes})).collect::<Vec<_>>(),
         }))
@@ -656,11 +709,12 @@ pub(super) mod control {
         let e = volume(world, &p)?;
         let key = key_of(&p)?;
         let to = transform(p.get("transform"))?;
-        let at = find_point(world, e, &key).map(|f| f.transform.translation);
+        let found = find_point(world, e, &key);
         let hand = world.get::<PcgOverrides>(e).is_some_and(|o| o.added.iter().any(|a| a.key() == key));
-        let at = at.or(if hand { Some(Vec3::ZERO) } else { None }).or_else(|| p.get("at").and_then(|a| vec3(a, "at").ok())).ok_or("no loaded point with that key (pass `at` [x,y,z])")?;
+        let at = found.as_ref().map(|f| f.transform.translation).or(if hand { Some(Vec3::ZERO) } else { None }).or_else(|| p.get("at").and_then(|a| vec3(a, "at").ok())).ok_or("no loaded point with that key (pass `at` [x,y,z] and `item`)")?;
+        let item = found.map(|f| f.item).or_else(|| p.get("item").and_then(Value::as_str).map(String::from)).unwrap_or_default();
         Ok(edit(world, e, |o| {
-            let k = o.move_point(&key, at, to);
+            let k = o.move_point(&key, at, &item, to);
             json!({"key": key_json(&k), "counts": summary(o)})
         }))
     }
@@ -776,7 +830,7 @@ mod tests {
         let (k0, k1) = (base.points.seed[0], base.points.seed[1]);
         ov.remove_point(&PointKey { node: "rocks".into(), seed: k0 }, base.points.pos[0]);
         let moved_to = Transform::from_xyz(7.0, 0.0, 7.0).with_scale(Vec3::splat(2.0));
-        ov.move_point(&PointKey { node: "rocks".into(), seed: k1 }, base.points.pos[1], moved_to);
+        ov.move_point(&PointKey { node: "rocks".into(), seed: k1 }, base.points.pos[1], "rock", moved_to);
         ov.add_item("rock", "rocks", Transform::from_xyz(1.5, 0.0, 2.5));
         // An item outside the cell is not appended here.
         ov.add_item("rock", "rocks", Transform::from_xyz(100.0, 0.0, 2.5));
@@ -789,7 +843,7 @@ mod tests {
         assert_eq!(s.points.pos[i], moved_to.translation);
         assert_eq!(s.points.scale[i], moved_to.scale);
         assert_eq!(s.item.len(), s.points.len());
-        assert_eq!(s.points.attrs[HAND_ATTR].iter().filter(|h| **h > 0.5).count(), 1);
+        assert_eq!(s.points.attrs[HAND_ATTR].iter().filter(|h| **h > 0.5).count(), 2, "the added item and the moved point");
         // Other nodes untouched.
         let mut other = base.points.clone();
         ix.apply_points("other", area, &mut other);
@@ -845,7 +899,7 @@ mod tests {
         let mut ov = PcgOverrides::default();
         for k in 0..500u64 {
             ov.remove_point(&PointKey { node: "n".into(), seed: mix64(k * 7) }, Vec3::ZERO);
-            ov.move_point(&PointKey { node: "n".into(), seed: mix64(k * 7 + 3) }, Vec3::ZERO, Transform::from_xyz(1.0, 0.0, 1.0));
+            ov.move_point(&PointKey { node: "n".into(), seed: mix64(k * 7 + 3) }, Vec3::ZERO, "n", Transform::from_xyz(1.0, 0.0, 1.0));
         }
         ov.areas.push(OverrideArea { polygon: vec![Vec2::ZERO, Vec2::new(20.0, 0.0), Vec2::new(20.0, 20.0), Vec2::new(0.0, 20.0)], density: 0.5, nodes: None });
         let t0 = std::time::Instant::now();

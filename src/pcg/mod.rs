@@ -1012,6 +1012,14 @@ mod tests {
         assert!(app.world().resource::<PcgStats>().cells_dropped > 10);
     }
 
+    fn graph_of_rock_app() -> Graph {
+        Graph::build(5).input("lots").poisson(3.0).spawn(&[("rock", 1.0)], Tier::Essential).id("rocks").from("lots").poisson(6.0).emit("pts").finish().unwrap()
+    }
+
+    fn rock_inputs() -> Inputs {
+        Inputs::default().rects("lots", vec![Rect::new(Vec2::ZERO, Vec2::new(40.0, 40.0))])
+    }
+
     fn rock_app() -> (App, Entity) {
         let mut app = app();
         let (rock, mat) = {
@@ -1109,6 +1117,51 @@ mod tests {
     }
 
     #[test]
+    fn a_move_across_cells_shows_once_in_the_destination() {
+        let (mut app, v) = rock_app();
+        let (a, b) = (IVec2::new(0, 0), IVec2::new(1, 0));
+        let (pos, seed) = {
+            let c = &app.world().get::<PcgCells>(v).unwrap().cells[&a];
+            let s = c.output.as_ref().unwrap().spawns.iter().find(|s| s.node == "rocks").unwrap();
+            (s.points.pos[4], s.points.seed[4])
+        };
+        let (b_before, evals) = (cell_seeds(&app, v, b, "rocks").len(), app.world().resource::<PcgStats>().evaluations);
+        let key = PointKey { node: "rocks".into(), seed };
+        let to = Transform::from_xyz(40.0, 0.0, 10.0).with_scale(Vec3::splat(1.7));
+        let mut ov = PcgOverrides::default();
+        ov.move_point(&key, pos, "rock", to);
+        app.world_mut().entity_mut(v).insert(ov.clone());
+        settle(&mut app);
+        let st = app.world().resource::<PcgStats>().clone();
+        assert_eq!((st.evaluations, st.override_respawns), (evals, 2), "origin and destination respawn, nothing else");
+        let all: Vec<IVec2> = app.world().get::<PcgCells>(v).unwrap().cells.keys().copied().collect();
+        let holders: Vec<IVec2> = all.into_iter().filter(|k| cell_seeds(&app, v, *k, "rocks").contains(&seed)).collect();
+        assert_eq!(holders, vec![b], "drawn once, in the destination cell");
+        assert_eq!(cell_seeds(&app, v, b, "rocks").len(), b_before + 1);
+        // Standalone: over A's area it is gone, over B's it appears once, from either origin.
+        let ix = ov.index(32.0);
+        let spawn_in = |area: Area| {
+            let mut o = pcg_core::evaluate(&graph_of_rock_app(), &rock_inputs(), Some(area)).unwrap();
+            for s in &mut o.spawns {
+                ix.apply_spawned(area, s);
+            }
+            o.spawns.iter().filter(|s| s.node == "rocks").flat_map(|s| s.points.seed.iter().zip(s.points.pos.iter()).map(|(a, b)| (*a, *b)).collect::<Vec<_>>()).collect::<Vec<_>>()
+        };
+        let hits = |pts: &[(u64, Vec3)]| pts.iter().filter(|(s, _)| *s == seed).count();
+        assert_eq!(hits(&spawn_in(Area::cell(a.x, a.y, 32.0))), 0);
+        let in_b = spawn_in(Area::cell(b.x, b.y, 32.0));
+        assert_eq!(hits(&in_b), 1);
+        assert_eq!(in_b.iter().find(|(s, _)| *s == seed).unwrap().1, to.translation);
+        // A collider-style 128 m tile (not the volume's 32 m cells) gets it exactly once; the
+        // neighbouring tile does not have it.
+        assert_eq!(hits(&spawn_in(Area::new(Vec2::ZERO, Vec2::splat(128.0)))), 1);
+        assert_eq!(hits(&spawn_in(Area::new(Vec2::new(-128.0, 0.0), Vec2::new(0.0, 128.0)))), 0);
+        // Tiles that straddle: the origin tile and destination tile when they differ (64 m tiles).
+        let tiles = [Area::new(Vec2::splat(-64.0), Vec2::splat(0.0)), Area::new(Vec2::new(0.0, -64.0), Vec2::new(64.0, 0.0)), Area::new(Vec2::ZERO, Vec2::splat(64.0)), Area::new(Vec2::new(-64.0, 0.0), Vec2::new(0.0, 64.0))];
+        assert_eq!(tiles.iter().map(|t| hits(&spawn_in(*t))).sum::<usize>(), 1);
+    }
+
+    #[test]
     fn emits_are_resent_when_overrides_change() {
         let (mut app, v) = rock_app();
         let at = Vec3::new(5.0, 0.0, 5.0);
@@ -1188,7 +1241,7 @@ mod tests {
         app.cleanup();
         let mut ov = PcgOverrides::default();
         ov.remove_point(&PointKey { node: "rocks".into(), seed: u64::MAX - 3 }, Vec3::new(1.0, 2.0, 3.0));
-        ov.move_point(&PointKey { node: "rocks".into(), seed: 77 }, Vec3::X, Transform::from_xyz(4.0, 5.0, 6.0).with_scale(Vec3::splat(1.5)));
+        ov.move_point(&PointKey { node: "rocks".into(), seed: 77 }, Vec3::X, "rock", Transform::from_xyz(4.0, 5.0, 6.0).with_scale(Vec3::splat(1.5)));
         ov.add_item("rock", "rocks", Transform::from_xyz(9.0, 0.0, 9.0));
         ov.areas.push(OverrideArea { polygon: vec![Vec2::ZERO, Vec2::X * 10.0, Vec2::splat(10.0)], density: 0.25, nodes: Some(vec!["rocks".into()]) });
         app.world_mut().spawn((LevelEntity { id: StableId(1) }, ov.clone()));

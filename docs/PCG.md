@@ -174,8 +174,10 @@ the point's seed. `pcg_core::seed_at` hashes graph seed, node and the world posi
 the key is the same after re-evaluation, after a streaming drop and re-entry, at any cell size
 and in any order (tested). Moving a point keeps its key (it is the generated identity); a
 hand-placed item's key follows its position. A key whose point no longer exists (graph changed)
-is ignored. A moved point is drawn at its new place but stays owned by the cell it was generated
-in. Hand-placed items are never thinned by quality or the governor.
+is ignored. A move records the item, so it is self-contained and area-correct: any area apply drops a
+moved point whose destination is outside it and appends one whose destination is inside, even
+if it was generated elsewhere, so it appears exactly once (origin and destination cells both
+respawn). Moved and hand-placed points are never thinned by quality or the governor.
 
 **Apply.** `OverrideIndex` (`ov.index(cell_size)`) removes, moves, thins by area (deterministic
 by seed, nested: density 0.3 is a subset of 0.6) and appends hand-placed items inside the area it
@@ -244,5 +246,5 @@ re-evaluation.
   rects to keep things off them).
 - No subgraphs, loops, splines (`SplineSample`), grammar (`SubdivideSegment`) or GPU path.
 - Merged meshes carry positions, normals, UVs and tangents only (no vertex colours or skinning).
-- Overrides: a moved point cannot change cells (a collider tile that does not own its origin cell misses it); hand-placed Emit points carry no item name; keys are lost if the graph's node ids change.
+- Overrides: hand-placed Emit points carry no item name; keys are lost if the graph's node ids change.
 - No gizmo overlay yet; use `pcg.inspect` and screenshots.
