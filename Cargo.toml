@@ -116,6 +116,10 @@ opt-level = 3
 debug = false
 
 [[example]]
+name = "spline_road"
+required-features = ["spline"]
+
+[[example]]
 name = "devtools_probe"
 required-features = ["devtools"]
 
