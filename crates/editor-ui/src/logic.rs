@@ -1,6 +1,7 @@
 //! Logic panel: the node graph canvas. Today a 3-node demo graph (egui-snarl, feature `snarl`);
 //! the real graph model comes with the logic runtime (docs/EDITOR.md, "Logic graphs").
 
+#[cfg(not(feature = "snarl"))]
 use ashlar_ui::tokens;
 use egui::Ui;
 
