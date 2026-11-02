@@ -344,3 +344,58 @@ pub fn action(world: &mut World, act: &str, p: &Value) -> Result<Value, String> 
         _ => Err(format!("spline: unknown action `{act}` (select, add, move, delete, set)")),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use bevy::ecs::reflect::AppTypeRegistry;
+
+    use super::*;
+    use crate::editor::EditorState;
+
+    fn world() -> (World, Entity) {
+        let mut w = World::new();
+        w.init_resource::<AppTypeRegistry>();
+        {
+            let reg = w.resource::<AppTypeRegistry>().clone();
+            let mut r = reg.write();
+            r.register::<Spline>();
+            r.register::<SplinePoint>();
+            r.register::<crate::spline::SplineMode>();
+            r.register::<Vec3>();
+        }
+        w.insert_resource(EditorState::default());
+        w.insert_resource(SplineSelection::default());
+        let pts = [(0.0, 0.0), (100.0, 0.0), (100.0, 100.0), (0.0, 100.0)].map(|(x, z)| SplinePoint::at(Vec3::new(x, 0.0, z)));
+        let e = w.spawn((Spline::new(pts.to_vec()), Transform::default(), GlobalTransform::default())).id();
+        (w, e)
+    }
+
+    #[test]
+    fn adding_inserts_into_the_nearest_segment_or_appends_past_the_end() {
+        let (mut w, e) = world();
+        // Beside the middle of segment 1 (x = 100): inserted after point 1.
+        let i = add_point(&mut w, e, Vec3::new(104.0, 0.0, 50.0)).unwrap();
+        assert_eq!(i, 2);
+        assert_eq!(w.get::<Spline>(e).unwrap().points.len(), 5);
+        // Far beyond the last point (0, 100): appended.
+        let i = add_point(&mut w, e, Vec3::new(-60.0, 0.0, 130.0)).unwrap();
+        assert_eq!(i, 5);
+        // Before the first point: prepended.
+        let i = add_point(&mut w, e, Vec3::new(-10.0, 0.0, -60.0)).unwrap();
+        assert_eq!(i, 0);
+        assert_eq!(w.resource::<EditorState>().take_recorded_len(), 3, "each add is one undo step");
+    }
+
+    #[test]
+    fn delete_keeps_two_points_and_records_an_undoable_op() {
+        let (mut w, e) = world();
+        assert!(delete_point(&mut w, e, 1).is_ok());
+        assert!(delete_point(&mut w, e, 1).is_ok());
+        assert!(delete_point(&mut w, e, 0).is_err(), "two points stay");
+        let recorded = w.resource_mut::<EditorState>().take_recorded();
+        assert_eq!(recorded.len(), 2);
+        let editor_proto::Op::SetComponent { before, after, .. } = &recorded[0].op else { panic!("SetComponent") };
+        assert_ne!(before, after);
+        assert!(before.is_some() && after.is_some());
+    }
+}

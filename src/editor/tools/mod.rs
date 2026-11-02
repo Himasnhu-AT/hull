@@ -50,6 +50,8 @@ pub struct ToolState {
     pub(crate) foliage_pick: Option<foliage::Picked>,
     pub(crate) foliage_drag: Option<foliage::ItemDrag>,
     pub(crate) area_drag: Option<(Vec3, Vec3)>,
+    /// The default gizmo group's depth bias before the spline tool drew on top of the terrain.
+    pub(crate) saved_bias: Option<f32>,
 }
 
 /// Lines and markers the tools want drawn this frame (filled by `update`, drawn by `draw`).
@@ -260,6 +262,17 @@ pub fn activate(world: &mut World, id: Option<&str>) -> Result<(), String> {
         ts.foliage_drag = None;
         ts.area_drag = None;
         ts.active = id.map(str::to_owned);
+        // A fresh tool starts on something valid.
+        if ts.foliage.item.is_empty()
+            && let Some(first) = foliage::catalog_items(world).and_then(|v| v.into_iter().next())
+        {
+            ts.foliage.item = first;
+        }
+        if ts.place.type_path.is_empty()
+            && let Some(p) = world.get_resource::<crate::level::Placeables>().and_then(|l| l.0.first())
+        {
+            ts.place.type_path = p.type_path.to_string();
+        }
         ts.overlay.lines.clear();
         ts.overlay.spheres.clear();
     });
@@ -269,9 +282,27 @@ pub fn activate(world: &mut World, id: Option<&str>) -> Result<(), String> {
         let on = id == Some("spline");
         if let Some(mut g) = world.get_resource_mut::<crate::spline::SplineGizmos>() {
             g.enabled = on;
+            // The default draws only within 400 m of the camera; the editor looks from further.
+            g.range = 5000.0;
         }
         if !on && let Some(mut s) = world.get_resource_mut::<crate::spline::SplineSelection>() {
             *s = default();
+        }
+        // The curve is drawn just above the ground: on top of far, coarse terrain LODs too.
+        let saved = world.resource::<ToolState>().saved_bias;
+        if let Some(mut store) = world.get_resource_mut::<bevy::gizmos::config::GizmoConfigStore>() {
+            let (cfg, _) = store.config_mut::<bevy::gizmos::config::DefaultGizmoConfigGroup>();
+            let new_saved = if on && saved.is_none() {
+                let prev = cfg.depth_bias;
+                cfg.depth_bias = -1.0;
+                Some(prev)
+            } else if !on && let Some(b) = saved {
+                cfg.depth_bias = b;
+                None
+            } else {
+                saved
+            };
+            world.resource_mut::<ToolState>().saved_bias = new_saved;
         }
     }
     Ok(())

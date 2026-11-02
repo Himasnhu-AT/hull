@@ -135,6 +135,11 @@ impl EditorState {
         self.recorded.push(editor_proto::RecordedOp { label: label.into(), op, key });
     }
 
+    #[cfg(test)]
+    pub(crate) fn take_recorded_len(&self) -> usize {
+        self.recorded.len()
+    }
+
     pub fn take_recorded(&mut self) -> Vec<editor_proto::RecordedOp> {
         std::mem::take(&mut self.recorded)
     }

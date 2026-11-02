@@ -302,6 +302,29 @@ pub fn action(world: &mut World, act: &str, p: &Value) -> Result<Value, String> 
             world.resource_mut::<ToolState>().foliage_pick = Some(Picked::from(&pick));
             Ok(out)
         }
+        "scan" => {
+            // Every pickable item within `radius` of `at`, found with downward rays on a grid.
+            let a = p.get("at").and_then(|v| at3(world, v)).ok_or("`at` [x, z] is required")?;
+            let r = p.get("radius").and_then(Value::as_f64).unwrap_or(30.0).clamp(1.0, 80.0) as f32;
+            let step = p.get("step").and_then(Value::as_f64).unwrap_or(2.0).clamp(0.5, 10.0) as f32;
+            let mut seen: Vec<(String, u64)> = Vec::new();
+            let mut items = Vec::new();
+            let n = (r / step) as i32;
+            for i in -n..=n {
+                for j in -n..=n {
+                    let q = a + Vec3::new(i as f32 * step, 0.0, j as f32 * step);
+                    if let Some(h) = pcg_pick(world, Vec3::new(q.x, ground_y(world, q.x, q.z) + 200.0, q.z), Vec3::NEG_Y) {
+                        let id = (h.key.node.clone(), h.key.seed);
+                        if !seen.contains(&id) {
+                            seen.push(id);
+                            let t = h.transform.translation;
+                            items.push(json!({"item": h.item, "node": h.key.node, "at": [t.x, t.z], "y": t.y}));
+                        }
+                    }
+                }
+            }
+            Ok(json!({"count": items.len(), "items": items}))
+        }
         "delete" => {
             let sel = world.resource_mut::<ToolState>().foliage_pick.take().ok_or("nothing is picked")?;
             delete_picked(world, &sel);

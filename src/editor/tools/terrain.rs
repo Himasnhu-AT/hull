@@ -63,7 +63,7 @@ pub fn ray_terrain(h: &TerrainHeights, ray: Ray3d) -> Option<Vec3> {
     while t < 12_000.0 {
         match above(t) {
             Some(d) if d <= 0.0 => {
-                let Some(t0) = prev else { return None };
+                let t0 = prev?;
                 // Crossed between t0 and t.
                 let (mut lo, mut hi) = (t0, t);
                 for _ in 0..20 {

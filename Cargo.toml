@@ -202,3 +202,7 @@ required-features = ["level"]
 [[example]]
 name = "editor_demo"
 required-features = ["editor"]
+
+[[example]]
+name = "world_editor_demo"
+required-features = ["editor"]

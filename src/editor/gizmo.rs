@@ -469,9 +469,12 @@ pub fn draw(
             g.arrow(pos, pos + *gt.forward() * (depth * 0.08), c);
         }
     }
+    let tool_on = tool_active.is_some_and(|t| t.active.is_some());
     for &e in &st.selection {
         let Ok(gt) = gts.get(e) else { continue };
         match bounds(&bq, e) {
+            // A tool works on the entity's contents (a road's points): no box over the map.
+            Some(_) if tool_on => {}
             Some((min, max)) => {
                 g.cube(Transform::from_translation((min + max) * 0.5).with_scale(max - min), SELECT);
             }
@@ -481,7 +484,7 @@ pub fn draw(
             }
         }
     }
-    if tool_active.is_some_and(|t| t.active.is_some()) {
+    if tool_on {
         return;
     }
     let Some(target) = st.selection.first().copied().filter(|e| levels.contains(*e)) else { return };

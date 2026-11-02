@@ -117,7 +117,9 @@ fn node_kind(world: &World, e: Entity) -> NodeKind {
 const MAX_TREE_NODES: usize = 6000;
 
 /// Generated entities the engine and Bevy make for themselves: not level content, never shown.
-const INTERNAL_NAMES: &[&str] = &["far detail", "FPS counter", "Perf overlay", "LineGizmoRenderer", "LineJointGizmoRenderer", "LineStripGizmoRenderer"];
+const INTERNAL_NAMES: &[&str] = &["far detail", "FPS counter", "Perf overlay", "LineGizmoRenderer", "LineJointGizmoRenderer", "LineStripGizmoRenderer", "World", "terrain collider"];
+/// Streaming cells, terrain chunks and the like.
+const INTERNAL_PREFIXES: &[&str] = &["cell ", "chunk ", "pcg "];
 
 fn build_node(world: &World, e: Entity, budget: &mut usize, under_level: bool) -> Option<TreeNode> {
     if *budget == 0 || world.get::<EditorOnly>(e).is_some() {
@@ -126,7 +128,7 @@ fn build_node(world: &World, e: Entity, budget: &mut usize, under_level: bool) -
     let stable = stable_of(world, e);
     let named = world.get::<Name>(e).map(|n| n.as_str().to_string());
     // What a level entity builds for itself (glTF nodes, LOD children) is not listed.
-    if stable.is_none() && (under_level || named.as_deref().is_some_and(|n| INTERNAL_NAMES.contains(&n))) {
+    if stable.is_none() && (under_level || named.as_deref().is_some_and(|n| INTERNAL_NAMES.contains(&n) || INTERNAL_PREFIXES.iter().any(|p| n.starts_with(p)))) {
         return None;
     }
     // Unnamed generated entities (render and UI internals) are not shown; their children attach
