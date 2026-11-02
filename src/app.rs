@@ -296,6 +296,8 @@ impl Plugin for EnginePlugin {
         app.add_plugins(crate::sound::SoundPlugin);
         #[cfg(feature = "world")]
         app.add_plugins(crate::world::WorldPlugin);
+        #[cfg(feature = "spline")]
+        app.add_plugins(crate::spline::SplinePlugin);
         #[cfg(feature = "level")]
         app.add_plugins(crate::level::LevelPlugin);
         #[cfg(feature = "actions")]
