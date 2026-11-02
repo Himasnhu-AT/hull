@@ -30,7 +30,11 @@ pub(crate) struct Renaming {
 
 impl OutlinerState {
     pub fn start_rename(&mut self, id: EntityId, current: &str) {
-        self.renaming = Some(Renaming { id, text: current.to_owned(), focus_pending: true });
+        self.renaming = Some(Renaming {
+            id,
+            text: current.to_owned(),
+            focus_pending: true,
+        });
     }
     pub fn scroll_to(&mut self, id: EntityId) {
         self.scroll_to = Some(id);
@@ -89,7 +93,10 @@ fn kind_glyph(k: NodeKind, t: &Tokens) -> (&'static str, Color32) {
 pub(crate) fn show(ui: &mut Ui, st: &mut OutlinerState, v: &View<'_>, reqs: &mut Vec<Req>) {
     let t = tokens::current(ui.ctx());
     ui.horizontal(|ui| {
-        let r = SearchField::new("outliner.search", &mut st.filter).hint("Search entities").width(ui.available_width()).show(ui);
+        let r = SearchField::new("outliner.search", &mut st.filter)
+            .hint("Search entities")
+            .width(ui.available_width())
+            .show(ui);
         if r.changed {
             reqs.push(Req::TreeFilterChanged);
         }
@@ -114,7 +121,11 @@ pub(crate) fn show(ui: &mut Ui, st: &mut OutlinerState, v: &View<'_>, reqs: &mut
     let mut cancel_rename = false;
     let mut drop: Option<(EntityId, Option<EntityId>)> = None;
 
-    let list = VirtualList::new("outliner.list", rows.len(), RowHeights::Uniform(row_h)).selected(cursor).is_selected(&is_sel).row_label(&label_of).scroll_to(scroll_row);
+    let list = VirtualList::new("outliner.list", rows.len(), RowHeights::Uniform(row_h))
+        .selected(cursor)
+        .is_selected(&is_sel)
+        .row_label(&label_of)
+        .scroll_to(scroll_row);
     let out = list.show(ui, |ui, row| {
         let Some(&(id, depth)) = rows.get(row.index) else { return };
         let Some(info) = v.nodes.info.get(&id) else { return };
@@ -142,7 +153,11 @@ pub(crate) fn show(ui: &mut Ui, st: &mut OutlinerState, v: &View<'_>, reqs: &mut
         }
         resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, row.selected, &info.name));
         if resp.double_clicked() && !info.generated {
-            *renaming = Some(Renaming { id, text: info.name.clone(), focus_pending: true });
+            *renaming = Some(Renaming {
+                id,
+                text: info.name.clone(),
+                focus_pending: true,
+            });
         }
         if resp.drag_started() && !info.generated {
             resp.dnd_set_drag_payload(id);
@@ -187,11 +202,23 @@ pub(crate) fn show(ui: &mut Ui, st: &mut OutlinerState, v: &View<'_>, reqs: &mut
         }
 
         let base = if row.selected { t.selection_text } else { t.text.primary };
-        let dim = if info.generated { t.text.disabled } else if info.hidden { t.text.secondary } else { base };
+        let dim = if info.generated {
+            t.text.disabled
+        } else if info.hidden {
+            t.text.secondary
+        } else {
+            base
+        };
         let (glyph, gc) = kind_glyph(if info.generated { NodeKind::Generated } else { info.kind }, &t);
         let gx = arrow.right() + 2.0;
         let font = Tokens::font(t.type_scale.small);
-        ui.painter().text(pos2(gx + 5.0, row.rect.center().y), egui::Align2::CENTER_CENTER, glyph, font, if row.selected { t.selection_text } else { gc });
+        ui.painter().text(
+            pos2(gx + 5.0, row.rect.center().y),
+            egui::Align2::CENTER_CENTER,
+            glyph,
+            font,
+            if row.selected { t.selection_text } else { gc },
+        );
         let tx = gx + 16.0;
         if renaming.as_ref().is_some_and(|r| r.id == id) {
             if let Some(r) = renaming.as_mut() {
@@ -208,7 +235,8 @@ pub(crate) fn show(ui: &mut Ui, st: &mut OutlinerState, v: &View<'_>, reqs: &mut
                 }
             }
         } else {
-            ui.painter().text(pos2(tx, row.rect.center().y), egui::Align2::LEFT_CENTER, &info.name, Tokens::font(t.type_scale.body), dim);
+            ui.painter()
+                .text(pos2(tx, row.rect.center().y), egui::Align2::LEFT_CENTER, &info.name, Tokens::font(t.type_scale.body), dim);
         }
     });
 
@@ -230,7 +258,16 @@ pub(crate) fn show(ui: &mut Ui, st: &mut OutlinerState, v: &View<'_>, reqs: &mut
             && !text.is_empty()
             && text != info.name
         {
-            reqs.push(Req::Edit { op: Op::Rename { entity: info.reference, before: info.name.clone(), after: text }, label: "Rename".into(), key: None, seal: true });
+            reqs.push(Req::Edit {
+                op: Op::Rename {
+                    entity: info.reference,
+                    before: info.name.clone(),
+                    after: text,
+                },
+                label: "Rename".into(),
+                key: None,
+                seal: true,
+            });
         }
     }
     if cancel_rename {
@@ -238,7 +275,12 @@ pub(crate) fn show(ui: &mut Ui, st: &mut OutlinerState, v: &View<'_>, reqs: &mut
     }
     if let Some((src, target)) = drop {
         if let Some(op) = reparent_op(v.nodes, src, target) {
-            reqs.push(Req::Edit { op, label: "Reparent".into(), key: None, seal: true });
+            reqs.push(Req::Edit {
+                op,
+                label: "Reparent".into(),
+                key: None,
+                seal: true,
+            });
         }
     }
     // Keyboard on the focused list.
@@ -274,7 +316,11 @@ pub(crate) fn reparent_op(nodes: &Nodes, src: EntityId, target: Option<EntityId>
     }
     let before = s.parent.map(|p| nodes.reference(p));
     let after = target.map(|t| nodes.reference(t));
-    Some(Op::Reparent { entity: s.reference, before, after })
+    Some(Op::Reparent {
+        entity: s.reference,
+        before,
+        after,
+    })
 }
 
 #[cfg(test)]
@@ -298,7 +344,14 @@ mod tests {
         let nodes = Nodes::build(&tree());
         // A under B: allowed, references use stable ids when present.
         let op = reparent_op(&nodes, 1, Some(2)).expect("allowed");
-        assert_eq!(op, Op::Reparent { entity: editor_proto::StableOrId::Stable(StableId(10)), before: None, after: Some(editor_proto::StableOrId::Stable(StableId(20))) });
+        assert_eq!(
+            op,
+            Op::Reparent {
+                entity: editor_proto::StableOrId::Stable(StableId(10)),
+                before: None,
+                after: Some(editor_proto::StableOrId::Stable(StableId(20)))
+            }
+        );
         // B into its own child, onto a generated node, from a generated node, same parent: refused.
         assert!(reparent_op(&nodes, 2, Some(4)).is_none());
         assert!(reparent_op(&nodes, 1, Some(3)).is_none());

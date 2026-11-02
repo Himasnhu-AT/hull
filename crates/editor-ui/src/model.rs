@@ -38,7 +38,15 @@ impl Nodes {
             let generated = node.generated || parent_generated;
             self.info.insert(
                 node.id,
-                NodeInfo { name: node.name.clone(), reference: node.reference(), generated, hidden: node.hidden, kind: node.icon, parent, child_count: node.children.len() },
+                NodeInfo {
+                    name: node.name.clone(),
+                    reference: node.reference(),
+                    generated,
+                    hidden: node.hidden,
+                    kind: node.icon,
+                    parent,
+                    child_count: node.children.len(),
+                },
             );
             self.order.push(node.id);
             self.add(&node.children, Some(node.id), generated, depth + 1);
@@ -72,7 +80,12 @@ pub(crate) fn a11y_row(ui: &egui::Ui, rect: egui::Rect, id: egui::Id, label: &st
 /// read state and never touch the backend.
 pub(crate) enum Req {
     /// Apply `op`, record it for undo. `key` merges drags; `seal` ends the gesture.
-    Edit { op: Op, label: String, key: Option<String>, seal: bool },
+    Edit {
+        op: Op,
+        label: String,
+        key: Option<String>,
+        seal: bool,
+    },
     Select(Vec<EntityId>),
     Place(String),
     Cmd(Cmd),
@@ -110,20 +123,118 @@ pub(crate) struct CmdSpec {
 
 /// Every toolbar action is a command with an id, a label and (mostly) a shortcut.
 pub(crate) const COMMANDS: &[CmdSpec] = &[
-    CmdSpec { cmd: Cmd::Save, id: "editor.save", label: "Save level", shortcut: Some("Mod+S"), menu: "File", mutates: false },
-    CmdSpec { cmd: Cmd::SaveAs, id: "editor.save_as", label: "Save level as...", shortcut: Some("Mod+Shift+S"), menu: "File", mutates: false },
-    CmdSpec { cmd: Cmd::Open, id: "editor.open", label: "Open level...", shortcut: Some("Mod+O"), menu: "File", mutates: false },
-    CmdSpec { cmd: Cmd::Undo, id: "editor.undo", label: "Undo", shortcut: Some("Mod+Z"), menu: "Edit", mutates: true },
-    CmdSpec { cmd: Cmd::Redo, id: "editor.redo", label: "Redo", shortcut: Some("Mod+Shift+Z / Mod+Y"), menu: "Edit", mutates: true },
-    CmdSpec { cmd: Cmd::Delete, id: "editor.delete", label: "Delete selection", shortcut: Some("Delete / Backspace"), menu: "Edit", mutates: true },
-    CmdSpec { cmd: Cmd::Rename, id: "editor.rename", label: "Rename selection", shortcut: Some("F2"), menu: "Edit", mutates: true },
-    CmdSpec { cmd: Cmd::PlayStop, id: "editor.play", label: "Play / Stop", shortcut: Some("Mod+P"), menu: "Game", mutates: false },
-    CmdSpec { cmd: Cmd::ToolMove, id: "editor.tool_move", label: "Tool: Move", shortcut: Some("W"), menu: "Tools", mutates: false },
-    CmdSpec { cmd: Cmd::ToolRotate, id: "editor.tool_rotate", label: "Tool: Rotate", shortcut: Some("E"), menu: "Tools", mutates: false },
-    CmdSpec { cmd: Cmd::ToolScale, id: "editor.tool_scale", label: "Tool: Scale", shortcut: Some("R"), menu: "Tools", mutates: false },
-    CmdSpec { cmd: Cmd::ToggleSnap, id: "editor.snap", label: "Toggle snapping", shortcut: Some("G"), menu: "Tools", mutates: false },
-    CmdSpec { cmd: Cmd::Focus, id: "editor.focus", label: "Focus selection", shortcut: Some("F"), menu: "View", mutates: false },
-    CmdSpec { cmd: Cmd::Palette, id: "editor.palette", label: "Command palette", shortcut: Some("Mod+K / Mod+Shift+P"), menu: "View", mutates: false },
+    CmdSpec {
+        cmd: Cmd::Save,
+        id: "editor.save",
+        label: "Save level",
+        shortcut: Some("Mod+S"),
+        menu: "File",
+        mutates: false,
+    },
+    CmdSpec {
+        cmd: Cmd::SaveAs,
+        id: "editor.save_as",
+        label: "Save level as...",
+        shortcut: Some("Mod+Shift+S"),
+        menu: "File",
+        mutates: false,
+    },
+    CmdSpec {
+        cmd: Cmd::Open,
+        id: "editor.open",
+        label: "Open level...",
+        shortcut: Some("Mod+O"),
+        menu: "File",
+        mutates: false,
+    },
+    CmdSpec {
+        cmd: Cmd::Undo,
+        id: "editor.undo",
+        label: "Undo",
+        shortcut: Some("Mod+Z"),
+        menu: "Edit",
+        mutates: true,
+    },
+    CmdSpec {
+        cmd: Cmd::Redo,
+        id: "editor.redo",
+        label: "Redo",
+        shortcut: Some("Mod+Shift+Z / Mod+Y"),
+        menu: "Edit",
+        mutates: true,
+    },
+    CmdSpec {
+        cmd: Cmd::Delete,
+        id: "editor.delete",
+        label: "Delete selection",
+        shortcut: Some("Delete / Backspace"),
+        menu: "Edit",
+        mutates: true,
+    },
+    CmdSpec {
+        cmd: Cmd::Rename,
+        id: "editor.rename",
+        label: "Rename selection",
+        shortcut: Some("F2"),
+        menu: "Edit",
+        mutates: true,
+    },
+    CmdSpec {
+        cmd: Cmd::PlayStop,
+        id: "editor.play",
+        label: "Play / Stop",
+        shortcut: Some("Mod+P"),
+        menu: "Game",
+        mutates: false,
+    },
+    CmdSpec {
+        cmd: Cmd::ToolMove,
+        id: "editor.tool_move",
+        label: "Tool: Move",
+        shortcut: Some("W"),
+        menu: "Tools",
+        mutates: false,
+    },
+    CmdSpec {
+        cmd: Cmd::ToolRotate,
+        id: "editor.tool_rotate",
+        label: "Tool: Rotate",
+        shortcut: Some("E"),
+        menu: "Tools",
+        mutates: false,
+    },
+    CmdSpec {
+        cmd: Cmd::ToolScale,
+        id: "editor.tool_scale",
+        label: "Tool: Scale",
+        shortcut: Some("R"),
+        menu: "Tools",
+        mutates: false,
+    },
+    CmdSpec {
+        cmd: Cmd::ToggleSnap,
+        id: "editor.snap",
+        label: "Toggle snapping",
+        shortcut: Some("G"),
+        menu: "Tools",
+        mutates: false,
+    },
+    CmdSpec {
+        cmd: Cmd::Focus,
+        id: "editor.focus",
+        label: "Focus selection",
+        shortcut: Some("F"),
+        menu: "View",
+        mutates: false,
+    },
+    CmdSpec {
+        cmd: Cmd::Palette,
+        id: "editor.palette",
+        label: "Command palette",
+        shortcut: Some("Mod+K / Mod+Shift+P"),
+        menu: "View",
+        mutates: false,
+    },
 ];
 
 impl Cmd {

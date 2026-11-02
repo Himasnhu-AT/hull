@@ -176,3 +176,31 @@ only and never committed or shipped.
 ```
 `content.check` fails on library assets with no entry or a forbidden licence
 (`ue-only`, `reference-only`, `epic-sample`). `scripts/assets.py fetch|import|list`.
+
+## Changes requested by Stream B (editor-ui)
+
+- `EditorBackend::snapshot(id) -> Result<EntitySnapshot, String>` added: the UI needs it to build
+  `Op::Despawn` (with children) for Delete. Required for undo of delete.
+- `TreeFilter { text, include_generated, include_hidden }`, `Placement { position, parent }`,
+  `Tool { Move, Rotate, Scale }`, `ViewportCmd::{FocusSelection, SetTool, SetSnap{enabled, step}}`
+  fixed as concrete shapes. `NodeKind` = Mesh, Light, Camera, Empty, Audio, Logic, Generated, Other.
+  `StableOrId` serialises externally tagged (`{"Stable": 5}` / `{"Id": 5}`).
+- `Op::merge` and `Op::is_noop` are in editor-proto (drag merging in the UI's undo stack).
+- Undo is an own journal of `Op`s in editor-ui, not `ashlar-store`: the document is in the engine,
+  so snapshot history does not fit; `Op::inverse` is the undo.
+- Backend rules the UI relies on: `apply` of `SetComponent` carries the whole component value
+  (`before` = value the UI last saw); the backend may reject a stale `before`. `place_asset` applies
+  the spawn itself and returns the op (UI only records it). Selection ids that disappear from
+  `tree()` are dropped by the UI. Ops should address entities by `StableId` whenever the node has
+  one, because a session `EntityId` changes when undo respawns an entity.
+- `EditorUi::show` takes the whole screen; the host places the 3D camera at `UiOutput.viewport`.
+- **egui-snarl blank (not reproduced outside Bevy)**: snarl renders correctly in an eframe/kittest
+  host at 700x170 and 700x400, 1x and 2x (`examples/snarl_probe.rs`, and inside the dock). The
+  spike's blank graph (re-run: background draws, nodes missing) is host-specific. egui-snarl calls
+  `request_discard("NodeState initialization")` / `("Initial placing")` and its nodes are drawn
+  after the request; egui draws nothing after a discard request in that pass. bevy_egui's primary
+  context runs begin_pass/end_pass once per frame (no multi-pass loop; the loop only runs for
+  contexts with `EguiSchedule`), so the discarded pass is what reaches the screen. Untested fix to
+  try first: `ctx.options_mut(|o| o.max_passes = NonZeroUsize::new(1).unwrap())` in the host (makes
+  egui ignore `request_discard`), or give the egui context an `EguiSchedule` so it gets the pass
+  loop. Until verified in Bevy, feature `snarl` is off by default.

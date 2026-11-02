@@ -161,7 +161,9 @@ fn edit(ui: &mut Ui, cx: &mut Cx, name: &str, schema: &TypeSchema, value: &mut V
             });
         }
         TypeSchema::String => {
-            let Some(orig) = value.as_str().map(str::to_owned) else { return readonly(ui, name, value) };
+            let Some(orig) = value.as_str().map(str::to_owned) else {
+                return readonly(ui, name, value);
+            };
             let mut text = orig.clone();
             row(ui, name, |ui| {
                 let r = ui.add_enabled(!ro, egui::TextEdit::singleline(&mut text).desired_width(f32::INFINITY));
@@ -172,11 +174,14 @@ fn edit(ui: &mut Ui, cx: &mut Cx, name: &str, schema: &TypeSchema, value: &mut V
             });
         }
         TypeSchema::AssetPath { kind } => {
-            let Some(orig) = value.as_str().map(str::to_owned) else { return readonly(ui, name, value) };
+            let Some(orig) = value.as_str().map(str::to_owned) else {
+                return readonly(ui, name, value);
+            };
             let mut text = orig.clone();
             row(ui, name, |ui| {
                 // Browse button: placeholder until the content browser can pick for a field.
-                ui.add_enabled(false, egui::Button::new("...")).on_disabled_hover_text(format!("Browse {kind} assets (not available yet)"));
+                ui.add_enabled(false, egui::Button::new("..."))
+                    .on_disabled_hover_text(format!("Browse {kind} assets (not available yet)"));
                 let r = ui.add_enabled(!ro, egui::TextEdit::singleline(&mut text).desired_width(f32::INFINITY));
                 if r.lost_focus() && text != orig {
                     *value = json!(text);
@@ -244,7 +249,9 @@ fn number(ui: &mut Ui, cx: &mut Cx, id: &str, label: &str, v: &mut f64, decimals
 }
 
 fn vec_n(ui: &mut Ui, cx: &mut Cx, name: &str, value: &mut Value, path: &str, axes: &[&str]) {
-    let Some(arr) = value.as_array().filter(|a| a.len() == axes.len()) else { return readonly(ui, name, value) };
+    let Some(arr) = value.as_array().filter(|a| a.len() == axes.len()) else {
+        return readonly(ui, name, value);
+    };
     let mut vals: Vec<f64> = arr.iter().map(|v| v.as_f64().unwrap_or(0.0)).collect();
     let mut changed = None;
     row(ui, name, |ui| {
@@ -269,7 +276,9 @@ fn vec_n(ui: &mut Ui, cx: &mut Cx, name: &str, value: &mut Value, path: &str, ax
 }
 
 fn quat(ui: &mut Ui, cx: &mut Cx, name: &str, value: &mut Value, path: &str) {
-    let Some(arr) = value.as_array().filter(|a| a.len() == 4) else { return readonly(ui, name, value) };
+    let Some(arr) = value.as_array().filter(|a| a.len() == 4) else {
+        return readonly(ui, name, value);
+    };
     let q: [f32; 4] = std::array::from_fn(|i| arr[i].as_f64().unwrap_or(0.0) as f32);
     // Keep the euler triple the user is editing; recomputing it from the quaternion each frame
     // makes angles jump between equivalent representations.
@@ -338,7 +347,9 @@ fn qmul(a: [f32; 4], b: [f32; 4]) -> [f32; 4] {
 }
 
 fn color(ui: &mut Ui, cx: &mut Cx, name: &str, value: &mut Value, path: &str) {
-    let Some(arr) = value.as_array().filter(|a| a.len() == 3 || a.len() == 4) else { return readonly(ui, name, value) };
+    let Some(arr) = value.as_array().filter(|a| a.len() == 3 || a.len() == 4) else {
+        return readonly(ui, name, value);
+    };
     let n = arr.len();
     let mut c: [f32; 4] = std::array::from_fn(|i| arr.get(i).and_then(Value::as_f64).unwrap_or(1.0) as f32);
     let before = c;
@@ -364,7 +375,9 @@ fn enum_edit(ui: &mut Ui, cx: &mut Cx, name: &str, variants: &[(String, Option<T
         Value::Object(m) if m.len() == 1 => m.keys().next().cloned(),
         _ => None,
     };
-    let Some(current) = current.filter(|c| variants.iter().any(|(n, _)| n == c)) else { return readonly(ui, name, value) };
+    let Some(current) = current.filter(|c| variants.iter().any(|(n, _)| n == c)) else {
+        return readonly(ui, name, value);
+    };
     let mut picked = None;
     row(ui, name, |ui| {
         ui.add_enabled_ui(!cx.read_only, |ui| {
@@ -404,19 +417,22 @@ fn list_edit(ui: &mut Ui, cx: &mut Cx, name: &str, item: &TypeSchema, value: &mu
     let len = items.len();
     let mut remove = None;
     let mut add = false;
-    egui::CollapsingHeader::new(format!("{name} ({len})")).id_salt((&cx.id, path)).default_open(len <= 8).show(ui, |ui| {
-        for (i, v) in items.iter_mut().enumerate() {
-            ui.horizontal(|ui| {
-                if !cx.read_only && ui.small_button("x").on_hover_text("Remove item").clicked() {
-                    remove = Some(i);
-                }
-                ui.vertical(|ui| edit(ui, cx, &i.to_string(), item, v, &join(path, &i.to_string()), depth + 1));
-            });
-        }
-        if !cx.read_only && ui.small_button("+ Add item").clicked() {
-            add = true;
-        }
-    });
+    egui::CollapsingHeader::new(format!("{name} ({len})"))
+        .id_salt((&cx.id, path))
+        .default_open(len <= 8)
+        .show(ui, |ui| {
+            for (i, v) in items.iter_mut().enumerate() {
+                ui.horizontal(|ui| {
+                    if !cx.read_only && ui.small_button("x").on_hover_text("Remove item").clicked() {
+                        remove = Some(i);
+                    }
+                    ui.vertical(|ui| edit(ui, cx, &i.to_string(), item, v, &join(path, &i.to_string()), depth + 1));
+                });
+            }
+            if !cx.read_only && ui.small_button("+ Add item").clicked() {
+                add = true;
+            }
+        });
     if let Some(i) = remove {
         items.remove(i);
         cx.set(path, Phase::Commit);
@@ -428,7 +444,8 @@ fn list_edit(ui: &mut Ui, cx: &mut Cx, name: &str, item: &TypeSchema, value: &mu
 
 /// Right-aligned small button helper used by section headers.
 pub(crate) fn right_button(ui: &mut Ui, text: &str, hover: &str) -> bool {
-    ui.with_layout(Layout::right_to_left(Align::Center), |ui| ui.small_button(text).on_hover_text(hover).clicked()).inner
+    ui.with_layout(Layout::right_to_left(Align::Center), |ui| ui.small_button(text).on_hover_text(hover).clicked())
+        .inner
 }
 
 #[cfg(test)]
@@ -455,7 +472,12 @@ mod tests {
             fields: vec![
                 ("on".into(), TypeSchema::Bool),
                 ("p".into(), TypeSchema::Vec3),
-                ("mode".into(), TypeSchema::Enum { variants: vec![("A".into(), None), ("B".into(), Some(TypeSchema::Float { min: None, max: None, step: None }))] }),
+                (
+                    "mode".into(),
+                    TypeSchema::Enum {
+                        variants: vec![("A".into(), None), ("B".into(), Some(TypeSchema::Float { min: None, max: None, step: None }))],
+                    },
+                ),
             ],
         };
         assert_eq!(default_value(&s), json!({"on": false, "p": [0.0, 0.0, 0.0], "mode": "A"}));

@@ -16,17 +16,33 @@ fn paint_viewport(ctx: &egui::Context, rect: egui::Rect) {
     let p = ctx.layer_painter(egui::LayerId::background()).with_clip_rect(rect);
     p.rect_filled(rect, 0.0, egui::Color32::from_rgb(34, 38, 46));
     let horizon = rect.top() + rect.height() * 0.38;
-    p.rect_filled(egui::Rect::from_min_max(rect.min, egui::pos2(rect.right(), horizon)), 0.0, egui::Color32::from_rgb(52, 62, 80));
+    p.rect_filled(
+        egui::Rect::from_min_max(rect.min, egui::pos2(rect.right(), horizon)),
+        0.0,
+        egui::Color32::from_rgb(52, 62, 80),
+    );
     let stroke = egui::Stroke::new(1.0, egui::Color32::from_rgb(70, 78, 92));
     for i in -12..=12 {
         let x = rect.center().x + i as f32 * rect.width() * 0.09;
-        p.line_segment([egui::pos2(rect.center().x + i as f32 * 8.0, horizon), egui::pos2(x * 1.0 + (x - rect.center().x) * 2.0, rect.bottom())], stroke);
+        p.line_segment(
+            [
+                egui::pos2(rect.center().x + i as f32 * 8.0, horizon),
+                egui::pos2(x * 1.0 + (x - rect.center().x) * 2.0, rect.bottom()),
+            ],
+            stroke,
+        );
     }
     for k in 1..9 {
         let y = horizon + (rect.bottom() - horizon) * (k as f32 / 9.0).powf(2.0);
         p.line_segment([egui::pos2(rect.left(), y), egui::pos2(rect.right(), y)], stroke);
     }
-    p.text(rect.center_top() + egui::vec2(0.0, 14.0), egui::Align2::CENTER_TOP, "3D viewport (host draws here)", egui::FontId::proportional(12.0), egui::Color32::from_gray(150));
+    p.text(
+        rect.center_top() + egui::vec2(0.0, 14.0),
+        egui::Align2::CENTER_TOP,
+        "3D viewport (host draws here)",
+        egui::FontId::proportional(12.0),
+        egui::Color32::from_gray(150),
+    );
 }
 
 impl eframe::App for App {
@@ -45,13 +61,24 @@ fn main() -> eframe::Result {
         let path = args.get(i + 1).cloned().unwrap_or_else(|| "mock_editor.png".into());
         return shot(&path, args.get(i + 2).map(String::as_str));
     }
-    let options = eframe::NativeOptions { viewport: egui::ViewportBuilder::default().with_inner_size([1400.0, 860.0]).with_title("editor-ui mock"), ..Default::default() };
-    eframe::run_native("editor-ui mock", options, Box::new(|_cc| Ok(Box::new(App { ui: EditorUi::new(), backend: MockBackend::demo() }))))
+    let options = eframe::NativeOptions {
+        viewport: egui::ViewportBuilder::default().with_inner_size([1400.0, 860.0]).with_title("editor-ui mock"),
+        ..Default::default()
+    };
+    eframe::run_native(
+        "editor-ui mock",
+        options,
+        Box::new(|_cc| {
+            Ok(Box::new(App {
+                ui: EditorUi::new(),
+                backend: MockBackend::demo(),
+            }))
+        }),
+    )
 }
 
 /// Headless frame via egui_kittest's wgpu renderer.
 fn shot(path: &str, tab: Option<&str>) -> eframe::Result {
-    use editor_proto::EditorBackend;
     use egui_kittest::Harness;
     use egui_kittest::kittest::Queryable;
     let mut h = Harness::builder().with_size(egui::vec2(1400.0, 860.0)).with_max_steps(30).wgpu().build_ui_state(
@@ -62,7 +89,10 @@ fn shot(path: &str, tab: Option<&str>) -> eframe::Result {
                 paint_viewport(&ctx, r);
             }
         },
-        App { ui: EditorUi::new(), backend: MockBackend::demo() },
+        App {
+            ui: EditorUi::new(),
+            backend: MockBackend::demo(),
+        },
     );
     h.run_steps(3);
     h.get_by_label("Crate").click();

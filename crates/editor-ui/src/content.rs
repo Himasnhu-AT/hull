@@ -77,7 +77,10 @@ pub(crate) fn show(ui: &mut Ui, st: &mut ContentState, entries: &[AssetEntry], r
         }
     });
     ui.horizontal(|ui| {
-        SearchField::new("content.search", &mut st.search).hint("Search assets").width(ui.available_width()).show(ui);
+        SearchField::new("content.search", &mut st.search)
+            .hint("Search assets")
+            .width(ui.available_width())
+            .show(ui);
     });
     let list = filtered(entries, &st.search);
     if list.is_empty() {
@@ -86,33 +89,49 @@ pub(crate) fn show(ui: &mut Ui, st: &mut ContentState, entries: &[AssetEntry], r
     }
     let selected = st.selected;
     let label_of = |i: usize| list.get(i).map_or("", |e| e.name.as_str());
-    let out = VirtualList::new("content.list", list.len(), RowHeights::Uniform(t.control_height + 4.0)).selected(selected).stripes(true).row_label(&label_of).show(ui, |ui, row| {
-        let Some(e) = list.get(row.index) else { return };
-        crate::model::a11y_row(ui, row.rect, egui::Id::new(("content.row", &e.path)), &e.name, row.selected);
-        let mid = row.rect.center().y;
-        let color = if row.selected { t.selection_text } else { t.text.primary };
-        ui.painter().text(pos2(row.rect.left() + 4.0, mid), egui::Align2::LEFT_CENTER, glyph(e.kind), Tokens::font(t.type_scale.small), if row.selected { t.selection_text } else { t.accent });
-        ui.painter().text(pos2(row.rect.left() + 44.0, mid), egui::Align2::LEFT_CENTER, &e.name, Tokens::font(t.type_scale.body), color);
-        let mut right = row.rect.right() - 6.0;
-        if e.kind != AssetKind::Folder {
-            let br = Rect::from_center_size(pos2(right - 24.0, mid), vec2(48.0, t.control_height - 6.0));
-            let r = ui.put(br, egui::Button::new("Place").small());
-            if r.clicked() {
-                reqs.push(Req::Place(e.path.clone()));
+    let out = VirtualList::new("content.list", list.len(), RowHeights::Uniform(t.control_height + 4.0))
+        .selected(selected)
+        .stripes(true)
+        .row_label(&label_of)
+        .show(ui, |ui, row| {
+            let Some(e) = list.get(row.index) else { return };
+            crate::model::a11y_row(ui, row.rect, egui::Id::new(("content.row", &e.path)), &e.name, row.selected);
+            let mid = row.rect.center().y;
+            let color = if row.selected { t.selection_text } else { t.text.primary };
+            ui.painter().text(
+                pos2(row.rect.left() + 4.0, mid),
+                egui::Align2::LEFT_CENTER,
+                glyph(e.kind),
+                Tokens::font(t.type_scale.small),
+                if row.selected { t.selection_text } else { t.accent },
+            );
+            ui.painter().text(
+                pos2(row.rect.left() + 44.0, mid),
+                egui::Align2::LEFT_CENTER,
+                &e.name,
+                Tokens::font(t.type_scale.body),
+                color,
+            );
+            let mut right = row.rect.right() - 6.0;
+            if e.kind != AssetKind::Folder {
+                let br = Rect::from_center_size(pos2(right - 24.0, mid), vec2(48.0, t.control_height - 6.0));
+                let r = ui.put(br, egui::Button::new("Place").small());
+                if r.clicked() {
+                    reqs.push(Req::Place(e.path.clone()));
+                }
+                r.on_hover_text("Place at the origin");
+                right = br.left() - 6.0;
             }
-            r.on_hover_text("Place at the origin");
-            right = br.left() - 6.0;
-        }
-        if let Some(l) = &e.license {
-            let g = ui.painter().layout_no_wrap(l.clone(), Tokens::font(t.type_scale.small), t.text.primary);
-            let r = Rect::from_center_size(pos2(right - g.size().x / 2.0 - 6.0, mid), g.size() + vec2(12.0, 4.0));
-            let c = licence_color(l, &t);
-            ui.painter().rect_filled(r, 8.0, c.gamma_multiply(0.25));
-            ui.painter().rect_stroke(r, 8.0, egui::Stroke::new(1.0, c), egui::StrokeKind::Inside);
-            ui.painter().galley(r.center() - g.size() / 2.0, g, c);
-            let _ = Sense::hover();
-        }
-    });
+            if let Some(l) = &e.license {
+                let g = ui.painter().layout_no_wrap(l.clone(), Tokens::font(t.type_scale.small), t.text.primary);
+                let r = Rect::from_center_size(pos2(right - g.size().x / 2.0 - 6.0, mid), g.size() + vec2(12.0, 4.0));
+                let c = licence_color(l, &t);
+                ui.painter().rect_filled(r, 8.0, c.gamma_multiply(0.25));
+                ui.painter().rect_stroke(r, 8.0, egui::Stroke::new(1.0, c), egui::StrokeKind::Inside);
+                ui.painter().galley(r.center() - g.size() / 2.0, g, c);
+                let _ = Sense::hover();
+            }
+        });
     if let Some(i) = out.select.or(out.clicked) {
         st.selected = Some(i);
     }
@@ -141,7 +160,13 @@ mod tests {
     use super::*;
 
     fn entry(name: &str) -> AssetEntry {
-        AssetEntry { path: name.into(), kind: AssetKind::Model, name: name.into(), thumbnail: None, license: None }
+        AssetEntry {
+            path: name.into(),
+            kind: AssetKind::Model,
+            name: name.into(),
+            thumbnail: None,
+            license: None,
+        }
     }
 
     #[test]

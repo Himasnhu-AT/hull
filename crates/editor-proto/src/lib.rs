@@ -57,7 +57,15 @@ pub struct TreeNode {
 
 impl TreeNode {
     pub fn new(id: EntityId, name: impl Into<String>) -> Self {
-        TreeNode { id, stable: None, name: name.into(), icon: NodeKind::Empty, children: Vec::new(), generated: false, hidden: false }
+        TreeNode {
+            id,
+            stable: None,
+            name: name.into(),
+            icon: NodeKind::Empty,
+            children: Vec::new(),
+            generated: false,
+            hidden: false,
+        }
     }
     /// The entity reference an `Op` should use for this node.
     pub fn reference(&self) -> StableOrId {
@@ -77,7 +85,11 @@ pub struct TreeFilter {
 
 impl Default for TreeFilter {
     fn default() -> Self {
-        TreeFilter { text: String::new(), include_generated: true, include_hidden: true }
+        TreeFilter {
+            text: String::new(),
+            include_generated: true,
+            include_hidden: true,
+        }
     }
 }
 
@@ -85,8 +97,15 @@ impl Default for TreeFilter {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum TypeSchema {
     Bool,
-    Int { min: Option<i64>, max: Option<i64> },
-    Float { min: Option<f64>, max: Option<f64>, step: Option<f64> },
+    Int {
+        min: Option<i64>,
+        max: Option<i64>,
+    },
+    Float {
+        min: Option<f64>,
+        max: Option<f64>,
+        step: Option<f64>,
+    },
     String,
     /// `[r, g, b, a]` floats (3 or 4 numbers).
     Color,
@@ -95,10 +114,16 @@ pub enum TypeSchema {
     Vec4,
     /// `[x, y, z, w]`; shown as euler degrees.
     Quat,
-    AssetPath { kind: String },
+    AssetPath {
+        kind: String,
+    },
     /// A unit variant is a JSON string, a variant with data is `{ "Name": payload }`.
-    Enum { variants: Vec<(String, Option<TypeSchema>)> },
-    Struct { fields: Vec<(String, TypeSchema)> },
+    Enum {
+        variants: Vec<(String, Option<TypeSchema>)>,
+    },
+    Struct {
+        fields: Vec<(String, TypeSchema)>,
+    },
     List(Box<TypeSchema>),
     Map(Box<TypeSchema>),
     Entity,
@@ -131,11 +156,28 @@ pub struct EntitySnapshot {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum Op {
     /// `before`/`after` of `None` = component absent (add / remove).
-    SetComponent { entity: StableOrId, type_path: String, before: Option<Value>, after: Option<Value> },
-    Spawn { snapshot: EntitySnapshot },
-    Despawn { snapshot: EntitySnapshot },
-    Reparent { entity: StableOrId, before: Option<StableOrId>, after: Option<StableOrId> },
-    Rename { entity: StableOrId, before: String, after: String },
+    SetComponent {
+        entity: StableOrId,
+        type_path: String,
+        before: Option<Value>,
+        after: Option<Value>,
+    },
+    Spawn {
+        snapshot: EntitySnapshot,
+    },
+    Despawn {
+        snapshot: EntitySnapshot,
+    },
+    Reparent {
+        entity: StableOrId,
+        before: Option<StableOrId>,
+        after: Option<StableOrId>,
+    },
+    Rename {
+        entity: StableOrId,
+        before: String,
+        after: String,
+    },
     Batch(Vec<Op>),
 }
 
@@ -143,13 +185,24 @@ impl Op {
     /// The op that exactly undoes this one.
     pub fn inverse(&self) -> Op {
         match self {
-            Op::SetComponent { entity, type_path, before, after } => {
-                Op::SetComponent { entity: *entity, type_path: type_path.clone(), before: after.clone(), after: before.clone() }
-            }
+            Op::SetComponent { entity, type_path, before, after } => Op::SetComponent {
+                entity: *entity,
+                type_path: type_path.clone(),
+                before: after.clone(),
+                after: before.clone(),
+            },
             Op::Spawn { snapshot } => Op::Despawn { snapshot: snapshot.clone() },
             Op::Despawn { snapshot } => Op::Spawn { snapshot: snapshot.clone() },
-            Op::Reparent { entity, before, after } => Op::Reparent { entity: *entity, before: *after, after: *before },
-            Op::Rename { entity, before, after } => Op::Rename { entity: *entity, before: after.clone(), after: before.clone() },
+            Op::Reparent { entity, before, after } => Op::Reparent {
+                entity: *entity,
+                before: *after,
+                after: *before,
+            },
+            Op::Rename { entity, before, after } => Op::Rename {
+                entity: *entity,
+                before: after.clone(),
+                after: before.clone(),
+            },
             Op::Batch(ops) => Op::Batch(ops.iter().rev().map(Op::inverse).collect()),
         }
     }
@@ -160,8 +213,18 @@ impl Op {
     pub fn merge(&mut self, next: &Op) -> bool {
         match (self, next) {
             (
-                Op::SetComponent { entity: e1, type_path: t1, after: a1, .. },
-                Op::SetComponent { entity: e2, type_path: t2, after: a2, .. },
+                Op::SetComponent {
+                    entity: e1,
+                    type_path: t1,
+                    after: a1,
+                    ..
+                },
+                Op::SetComponent {
+                    entity: e2,
+                    type_path: t2,
+                    after: a2,
+                    ..
+                },
             ) if e1 == e2 && t1 == t2 => {
                 *a1 = a2.clone();
                 true
@@ -267,7 +330,10 @@ pub enum ViewportCmd {
     FocusSelection,
     SetTool(Tool),
     /// Snap on/off with its step (metres for move/scale, degrees for rotate).
-    SetSnap { enabled: bool, step: f32 },
+    SetSnap {
+        enabled: bool,
+        step: f32,
+    },
 }
 
 #[cfg(test)]

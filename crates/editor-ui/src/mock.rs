@@ -39,7 +39,11 @@ pub const HEALTH: &str = "game::Health";
 
 fn transform_schema() -> TypeSchema {
     TypeSchema::Struct {
-        fields: vec![("translation".into(), TypeSchema::Vec3), ("rotation".into(), TypeSchema::Quat), ("scale".into(), TypeSchema::Vec3)],
+        fields: vec![
+            ("translation".into(), TypeSchema::Vec3),
+            ("rotation".into(), TypeSchema::Quat),
+            ("scale".into(), TypeSchema::Vec3),
+        ],
     }
 }
 
@@ -56,8 +60,22 @@ impl MockBackend {
             TypeSchema::Struct {
                 fields: vec![
                     ("color".into(), TypeSchema::Color),
-                    ("intensity".into(), TypeSchema::Float { min: Some(0.0), max: Some(100000.0), step: Some(10.0) }),
-                    ("range".into(), TypeSchema::Float { min: Some(0.0), max: None, step: None }),
+                    (
+                        "intensity".into(),
+                        TypeSchema::Float {
+                            min: Some(0.0),
+                            max: Some(100000.0),
+                            step: Some(10.0),
+                        },
+                    ),
+                    (
+                        "range".into(),
+                        TypeSchema::Float {
+                            min: Some(0.0),
+                            max: None,
+                            step: None,
+                        },
+                    ),
                     ("shadows".into(), TypeSchema::Bool),
                 ],
             },
@@ -69,7 +87,22 @@ impl MockBackend {
                     ("max".into(), TypeSchema::Int { min: Some(1), max: Some(1000) }),
                     ("label".into(), TypeSchema::String),
                     ("mesh".into(), TypeSchema::AssetPath { kind: "mesh".into() }),
-                    ("mode".into(), TypeSchema::Enum { variants: vec![("Normal".into(), None), ("Armored".into(), Some(TypeSchema::Float { min: Some(0.0), max: Some(1.0), step: None }))] }),
+                    (
+                        "mode".into(),
+                        TypeSchema::Enum {
+                            variants: vec![
+                                ("Normal".into(), None),
+                                (
+                                    "Armored".into(),
+                                    Some(TypeSchema::Float {
+                                        min: Some(0.0),
+                                        max: Some(1.0),
+                                        step: None,
+                                    }),
+                                ),
+                            ],
+                        },
+                    ),
                     ("tags".into(), TypeSchema::List(Box::new(TypeSchema::String))),
                 ],
             },
@@ -82,7 +115,10 @@ impl MockBackend {
             schemas,
             applied: Vec::new(),
             viewport_cmds: Vec::new(),
-            level: LevelInfo { path: Some("levels/demo.level.ron".into()), dirty: false },
+            level: LevelInfo {
+                path: Some("levels/demo.level.ron".into()),
+                dirty: false,
+            },
             play: PlayState::Editing,
             saved: Vec::new(),
             opened: Vec::new(),
@@ -95,7 +131,16 @@ impl MockBackend {
     /// A small level: Sun, Ground, a Crate with a child, a generated Skybox.
     pub fn demo() -> Self {
         let mut m = MockBackend::empty();
-        let sun = m.add("Sun", None, NodeKind::Light, false, vec![(TRANSFORM, transform(0.0, 10.0, 0.0)), (LIGHT, json!({"color": [1.0, 0.95, 0.8, 1.0], "intensity": 8000.0, "range": 20.0, "shadows": true}))]);
+        let sun = m.add(
+            "Sun",
+            None,
+            NodeKind::Light,
+            false,
+            vec![
+                (TRANSFORM, transform(0.0, 10.0, 0.0)),
+                (LIGHT, json!({"color": [1.0, 0.95, 0.8, 1.0], "intensity": 8000.0, "range": 20.0, "shadows": true})),
+            ],
+        );
         let _ = sun;
         m.add("Ground", None, NodeKind::Mesh, false, vec![(TRANSFORM, transform(0.0, 0.0, 0.0))]);
         let cr = m.add(
@@ -105,21 +150,60 @@ impl MockBackend {
             false,
             vec![
                 (TRANSFORM, transform(2.0, 0.5, -1.0)),
-                (HEALTH, json!({"max": 100, "label": "Crate", "mesh": "library/props/crate.glb", "mode": "Normal", "tags": ["wood", "breakable"]})),
+                (
+                    HEALTH,
+                    json!({"max": 100, "label": "Crate", "mesh": "library/props/crate.glb", "mode": "Normal", "tags": ["wood", "breakable"]}),
+                ),
             ],
         );
         m.add("Lid", Some(cr), NodeKind::Mesh, false, vec![(TRANSFORM, transform(0.0, 0.5, 0.0))]);
         m.add("Player", None, NodeKind::Camera, false, vec![(TRANSFORM, transform(0.0, 1.7, 5.0))]);
         m.add("Skybox", None, NodeKind::Generated, true, vec![(TRANSFORM, transform(0.0, 0.0, 0.0))]);
         m.assets = vec![
-            (String::new(), vec![asset("library", AssetKind::Folder, None), asset("levels", AssetKind::Folder, None), asset("hero.glb", AssetKind::Model, None)]),
-            ("library".into(), vec![asset("library/cars", AssetKind::Folder, None), asset("library/crate.glb", AssetKind::Model, Some("CC0-1.0")), asset("library/rock.glb", AssetKind::Model, Some("CC-BY-4.0")), asset("library/ue_tree.glb", AssetKind::Model, Some("ue-only"))]),
+            (
+                String::new(),
+                vec![
+                    asset("library", AssetKind::Folder, None),
+                    asset("levels", AssetKind::Folder, None),
+                    asset("hero.glb", AssetKind::Model, None),
+                ],
+            ),
+            (
+                "library".into(),
+                vec![
+                    asset("library/cars", AssetKind::Folder, None),
+                    asset("library/crate.glb", AssetKind::Model, Some("CC0-1.0")),
+                    asset("library/rock.glb", AssetKind::Model, Some("CC-BY-4.0")),
+                    asset("library/ue_tree.glb", AssetKind::Model, Some("ue-only")),
+                ],
+            ),
             ("library/cars".into(), vec![asset("library/cars/sedan.glb", AssetKind::Model, Some("CC0-1.0"))]),
         ];
         m.diag = vec![
-            Diagnostic { level: Level::Info, source: "engine".into(), message: "level loaded".into(), file: None, line: None, col: None },
-            Diagnostic { level: Level::Warn, source: "assets".into(), message: "missing texture, using fallback".into(), file: Some("assets/props/crate.glb".into()), line: None, col: None },
-            Diagnostic { level: Level::Error, source: "ruspy".into(), message: "unexpected token ')'".into(), file: Some("scripts/door.ruspy".into()), line: Some(12), col: Some(8) },
+            Diagnostic {
+                level: Level::Info,
+                source: "engine".into(),
+                message: "level loaded".into(),
+                file: None,
+                line: None,
+                col: None,
+            },
+            Diagnostic {
+                level: Level::Warn,
+                source: "assets".into(),
+                message: "missing texture, using fallback".into(),
+                file: Some("assets/props/crate.glb".into()),
+                line: None,
+                col: None,
+            },
+            Diagnostic {
+                level: Level::Error,
+                source: "ruspy".into(),
+                message: "unexpected token ')'".into(),
+                file: Some("scripts/door.ruspy".into()),
+                line: Some(12),
+                col: Some(8),
+            },
         ];
         m
     }
@@ -127,7 +211,17 @@ impl MockBackend {
     pub fn add(&mut self, name: &str, parent: Option<EntityId>, kind: NodeKind, generated: bool, comps: Vec<(&str, Value)>) -> EntityId {
         let id = self.next_id;
         self.next_id += 1;
-        self.ents.insert(id, Ent { stable: StableId(100 + id), name: name.into(), parent, generated, kind, components: comps.into_iter().map(|(k, v)| (k.to_owned(), v)).collect() });
+        self.ents.insert(
+            id,
+            Ent {
+                stable: StableId(100 + id),
+                name: name.into(),
+                parent,
+                generated,
+                kind,
+                components: comps.into_iter().map(|(k, v)| (k.to_owned(), v)).collect(),
+            },
+        );
         self.order.push(id);
         id
     }
@@ -157,7 +251,12 @@ impl MockBackend {
     fn resolve(&self, r: StableOrId) -> Result<EntityId, String> {
         match r {
             StableOrId::Id(i) if self.ents.contains_key(&i) => Ok(i),
-            StableOrId::Stable(s) => self.ents.iter().find(|(_, e)| e.stable == s).map(|(i, _)| *i).ok_or_else(|| format!("no entity with stable id {}", s.0)),
+            StableOrId::Stable(s) => self
+                .ents
+                .iter()
+                .find(|(_, e)| e.stable == s)
+                .map(|(i, _)| *i)
+                .ok_or_else(|| format!("no entity with stable id {}", s.0)),
             StableOrId::Id(i) => Err(format!("no entity {i}")),
         }
     }
@@ -167,25 +266,59 @@ impl MockBackend {
         if (e.generated && !f.include_generated) || !f.include_hidden && false {
             return None;
         }
-        let children: Vec<TreeNode> = self.order.iter().filter(|c| self.ents.get(c).is_some_and(|x| x.parent == Some(id))).filter_map(|c| self.node(*c, f)).collect();
+        let children: Vec<TreeNode> = self
+            .order
+            .iter()
+            .filter(|c| self.ents.get(c).is_some_and(|x| x.parent == Some(id)))
+            .filter_map(|c| self.node(*c, f))
+            .collect();
         let matches = f.text.is_empty() || e.name.to_lowercase().contains(&f.text.to_lowercase());
         if !matches && children.is_empty() {
             return None;
         }
-        Some(TreeNode { id, stable: Some(e.stable), name: e.name.clone(), icon: e.kind, children, generated: e.generated, hidden: false })
+        Some(TreeNode {
+            id,
+            stable: Some(e.stable),
+            name: e.name.clone(),
+            icon: e.kind,
+            children,
+            generated: e.generated,
+            hidden: false,
+        })
     }
 
     fn snapshot_of(&self, id: EntityId) -> Result<EntitySnapshot, String> {
         let e = self.ents.get(&id).ok_or_else(|| format!("no entity {id}"))?;
         let parent = e.parent.and_then(|p| self.ents.get(&p)).map(|p| p.stable);
-        let children = self.order.iter().filter(|c| self.ents.get(c).is_some_and(|x| x.parent == Some(id))).map(|c| self.snapshot_of(*c)).collect::<Result<Vec<_>, _>>()?;
-        Ok(EntitySnapshot { stable: e.stable, name: e.name.clone(), parent, components: e.components.iter().map(|(k, v)| (k.clone(), v.clone())).collect(), children })
+        let children = self
+            .order
+            .iter()
+            .filter(|c| self.ents.get(c).is_some_and(|x| x.parent == Some(id)))
+            .map(|c| self.snapshot_of(*c))
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(EntitySnapshot {
+            stable: e.stable,
+            name: e.name.clone(),
+            parent,
+            components: e.components.iter().map(|(k, v)| (k.clone(), v.clone())).collect(),
+            children,
+        })
     }
 
     fn spawn(&mut self, s: &EntitySnapshot, parent: Option<EntityId>) -> EntityId {
         let id = self.next_id;
         self.next_id += 1;
-        self.ents.insert(id, Ent { stable: s.stable, name: s.name.clone(), parent, generated: false, kind: NodeKind::Mesh, components: s.components.iter().cloned().collect() });
+        self.ents.insert(
+            id,
+            Ent {
+                stable: s.stable,
+                name: s.name.clone(),
+                parent,
+                generated: false,
+                kind: NodeKind::Mesh,
+                components: s.components.iter().cloned().collect(),
+            },
+        );
         self.order.push(id);
         for c in &s.children {
             self.spawn(c, Some(id));
@@ -262,12 +395,22 @@ impl MockBackend {
 }
 
 fn asset(path: &str, kind: AssetKind, license: Option<&str>) -> AssetEntry {
-    AssetEntry { path: path.into(), kind, name: path.rsplit('/').next().unwrap_or(path).into(), thumbnail: None, license: license.map(str::to_owned) }
+    AssetEntry {
+        path: path.into(),
+        kind,
+        name: path.rsplit('/').next().unwrap_or(path).into(),
+        thumbnail: None,
+        license: license.map(str::to_owned),
+    }
 }
 
 impl EditorBackend for MockBackend {
     fn tree(&mut self, filter: &TreeFilter) -> Vec<TreeNode> {
-        self.order.iter().filter(|i| self.ents.get(i).is_some_and(|e| e.parent.is_none())).filter_map(|i| self.node(*i, filter)).collect()
+        self.order
+            .iter()
+            .filter(|i| self.ents.get(i).is_some_and(|e| e.parent.is_none()))
+            .filter_map(|i| self.node(*i, filter))
+            .collect()
     }
 
     fn components(&mut self, id: EntityId) -> Result<Vec<ComponentDoc>, String> {
@@ -346,7 +489,10 @@ impl EditorBackend for MockBackend {
 
     fn open_level(&mut self, path: &str) -> Result<(), String> {
         self.opened.push(path.to_owned());
-        self.level = LevelInfo { path: Some(path.to_owned()), dirty: false };
+        self.level = LevelInfo {
+            path: Some(path.to_owned()),
+            dirty: false,
+        };
         Ok(())
     }
 

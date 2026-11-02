@@ -48,7 +48,12 @@ impl UndoStack {
         if op.is_noop() {
             return;
         }
-        self.undo.push(Entry { label: label.to_owned(), op, key, at: now });
+        self.undo.push(Entry {
+            label: label.to_owned(),
+            op,
+            key,
+            at: now,
+        });
         if self.undo.len() > MAX_STEPS {
             self.undo.remove(0);
         }
@@ -125,7 +130,12 @@ mod tests {
     use serde_json::json;
 
     fn set(before: i32, after: i32) -> Op {
-        Op::SetComponent { entity: StableOrId::Id(1), type_path: "T".into(), before: Some(json!(before)), after: Some(json!(after)) }
+        Op::SetComponent {
+            entity: StableOrId::Id(1),
+            type_path: "T".into(),
+            before: Some(json!(before)),
+            after: Some(json!(after)),
+        }
     }
 
     #[test]

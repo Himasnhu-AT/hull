@@ -69,10 +69,23 @@ impl Panel {
 /// viewport.
 pub fn default_layout() -> Layout<Panel> {
     let tabs = |panels: Vec<Panel>| Node::Tabs { panels, active: 0 };
-    let split = |axis, size, a, b| Node::Split { axis, size, first: Box::new(a), second: Box::new(b) };
-    let centre = split(SplitAxis::Vertical, SplitSize::FixedSecond(230.0), tabs(vec![Panel::Viewport]), tabs(vec![Panel::Content, Panel::Output, Panel::Logic]));
+    let split = |axis, size, a, b| Node::Split {
+        axis,
+        size,
+        first: Box::new(a),
+        second: Box::new(b),
+    };
+    let centre = split(
+        SplitAxis::Vertical,
+        SplitSize::FixedSecond(230.0),
+        tabs(vec![Panel::Viewport]),
+        tabs(vec![Panel::Content, Panel::Output, Panel::Logic]),
+    );
     let right = split(SplitAxis::Horizontal, SplitSize::FixedSecond(320.0), centre, tabs(vec![Panel::Details]));
-    Layout { root: Some(split(SplitAxis::Horizontal, SplitSize::FixedFirst(250.0), tabs(vec![Panel::Outliner]), right)), floating: vec![] }
+    Layout {
+        root: Some(split(SplitAxis::Horizontal, SplitSize::FixedFirst(250.0), tabs(vec![Panel::Outliner]), right)),
+        floating: vec![],
+    }
 }
 
 /// What the host needs after a frame.
@@ -146,6 +159,7 @@ pub struct EditorUi {
     details: details::DetailsState,
     content: content::ContentState,
     output: output::OutputState,
+    logic: logic::LogicState,
 
     // Refresh bookkeeping.
     last_viewport: Option<egui::Rect>,
@@ -189,8 +203,12 @@ impl EditorUi {
             play: PlayState::Editing,
             outliner: Default::default(),
             details: Default::default(),
-            content: content::ContentState { dir_changed: true, ..Default::default() },
+            content: content::ContentState {
+                dir_changed: true,
+                ..Default::default()
+            },
             output: Default::default(),
+            logic: Default::default(),
             last_viewport: None,
             dirty_tree: true,
             dirty_components: true,
@@ -203,7 +221,13 @@ impl EditorUi {
 
     /// Persisted layout and tool settings as JSON.
     pub fn save_state(&self) -> String {
-        serde_json::to_string(&Persisted { layout: self.layout.clone(), tool: self.tool, snap: self.snap, snap_step: self.snap_step }).unwrap_or_default()
+        serde_json::to_string(&Persisted {
+            layout: self.layout.clone(),
+            tool: self.tool,
+            snap: self.snap,
+            snap_step: self.snap_step,
+        })
+        .unwrap_or_default()
     }
 
     /// Restore `save_state` output. A layout that is invalid or lacks the viewport is rejected
@@ -291,7 +315,11 @@ impl EditorUi {
             }
         }
 
-        let mut root = Ui::new(ctx.clone(), "editor_root".into(), egui::UiBuilder::new().layer_id(egui::LayerId::background()).max_rect(ctx.content_rect()));
+        let mut root = Ui::new(
+            ctx.clone(),
+            "editor_root".into(),
+            egui::UiBuilder::new().layer_id(egui::LayerId::background()).max_rect(ctx.content_rect()),
+        );
         // Behind the dock: fill everything except the viewport (the host draws the 3D view
         // there), so the gaps between panels are not the host's clear colour.
         {
@@ -336,7 +364,12 @@ impl EditorUi {
                     match panel {
                         Panel::Viewport => viewport = Some(ui.max_rect()),
                         Panel::Outliner => {
-                            let v = outliner::View { tree: &self.tree, tree_rev: self.tree_rev, nodes: &self.nodes, selection: &self.selection };
+                            let v = outliner::View {
+                                tree: &self.tree,
+                                tree_rev: self.tree_rev,
+                                nodes: &self.nodes,
+                                selection: &self.selection,
+                            };
                             outliner::show(ui, &mut self.outliner, &v, &mut reqs);
                         }
                         Panel::Details => {
@@ -352,7 +385,7 @@ impl EditorUi {
                         }
                         Panel::Content => content::show(ui, &mut self.content, &self.assets, &mut reqs),
                         Panel::Output => output::show(ui, &mut self.output, &self.diagnostics, &mut clear_output, &mut reqs),
-                        Panel::Logic => logic::show(ui),
+                        Panel::Logic => logic::show(ui, &mut self.logic),
                     }
                 },
             );
@@ -408,7 +441,10 @@ impl EditorUi {
             return;
         }
         if due || self.dirty_tree {
-            let filter = TreeFilter { text: self.outliner.filter.clone(), ..Default::default() };
+            let filter = TreeFilter {
+                text: self.outliner.filter.clone(),
+                ..Default::default()
+            };
             let tree = backend.tree(&filter);
             if tree != self.tree {
                 self.nodes = Nodes::build(&tree);
@@ -498,7 +534,11 @@ impl EditorUi {
                     reqs.push(Req::Cmd(Cmd::Redo));
                 }
                 ui.separator();
-                for (tool, cmd, name) in [(Tool::Move, Cmd::ToolMove, "Move"), (Tool::Rotate, Cmd::ToolRotate, "Rotate"), (Tool::Scale, Cmd::ToolScale, "Scale")] {
+                for (tool, cmd, name) in [
+                    (Tool::Move, Cmd::ToolMove, "Move"),
+                    (Tool::Rotate, Cmd::ToolRotate, "Rotate"),
+                    (Tool::Scale, Cmd::ToolScale, "Scale"),
+                ] {
                     if ui.selectable_label(self.tool == tool, name).on_hover_text(tip(cmd)).clicked() {
                         reqs.push(Req::Cmd(cmd));
                     }
@@ -578,24 +618,30 @@ impl EditorUi {
         let Some(d) = self.dialog.as_mut() else { return };
         let title = if d.kind == DialogKind::Open { "Open level" } else { "Save level as" };
         let mut action: Option<bool> = None;
-        egui::Window::new(title).collapsible(false).resizable(false).anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO).show(ctx, |ui| {
-            ui.label("Path relative to the game folder (e.g. levels/valley.level.ron)");
-            let r = ui.add(egui::TextEdit::singleline(&mut d.text).desired_width(360.0).id(egui::Id::new("editor.dialog.path")));
-            if d.focus_pending {
-                r.request_focus();
-                d.focus_pending = false;
-            }
-            let enter = r.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter));
-            ui.horizontal(|ui| {
-                let ok = ui.add_enabled(!d.text.trim().is_empty(), egui::Button::new(if d.kind == DialogKind::Open { "Open" } else { "Save" })).clicked();
-                if ok || (enter && !d.text.trim().is_empty()) {
-                    action = Some(true);
+        egui::Window::new(title)
+            .collapsible(false)
+            .resizable(false)
+            .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
+            .show(ctx, |ui| {
+                ui.label("Path relative to the game folder (e.g. levels/valley.level.ron)");
+                let r = ui.add(egui::TextEdit::singleline(&mut d.text).desired_width(360.0).id(egui::Id::new("editor.dialog.path")));
+                if d.focus_pending {
+                    r.request_focus();
+                    d.focus_pending = false;
                 }
-                if ui.button("Cancel").clicked() || ui.input(|i| i.key_pressed(Key::Escape)) {
-                    action = Some(false);
-                }
+                let enter = r.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter));
+                ui.horizontal(|ui| {
+                    let ok = ui
+                        .add_enabled(!d.text.trim().is_empty(), egui::Button::new(if d.kind == DialogKind::Open { "Open" } else { "Save" }))
+                        .clicked();
+                    if ok || (enter && !d.text.trim().is_empty()) {
+                        action = Some(true);
+                    }
+                    if ui.button("Cancel").clicked() || ui.input(|i| i.key_pressed(Key::Escape)) {
+                        action = Some(false);
+                    }
+                });
             });
-        });
         match action {
             Some(true) => {
                 let (kind, path) = (d.kind, d.text.trim().to_owned());
@@ -727,16 +773,28 @@ impl EditorUi {
                 if self.level.path.is_some() {
                     self.save(backend, None);
                 } else {
-                    self.dialog = Some(Dialog { kind: DialogKind::SaveAs, text: "levels/new.level.ron".into(), focus_pending: true });
+                    self.dialog = Some(Dialog {
+                        kind: DialogKind::SaveAs,
+                        text: "levels/new.level.ron".into(),
+                        focus_pending: true,
+                    });
                 }
             }
             Cmd::SaveAs => {
                 let text = backend.level().path.unwrap_or_else(|| "levels/new.level.ron".into());
-                self.dialog = Some(Dialog { kind: DialogKind::SaveAs, text, focus_pending: true });
+                self.dialog = Some(Dialog {
+                    kind: DialogKind::SaveAs,
+                    text,
+                    focus_pending: true,
+                });
             }
             Cmd::Open => {
                 let text = backend.level().path.unwrap_or_else(|| "levels/".into());
-                self.dialog = Some(Dialog { kind: DialogKind::Open, text, focus_pending: true });
+                self.dialog = Some(Dialog {
+                    kind: DialogKind::Open,
+                    text,
+                    focus_pending: true,
+                });
             }
             Cmd::Undo => match self.undo.undo() {
                 Some(op) => match backend.apply(&op) {
@@ -771,7 +829,10 @@ impl EditorUi {
             Cmd::ToolScale => self.set_tool(backend, Tool::Scale),
             Cmd::ToggleSnap => {
                 self.snap = !self.snap;
-                backend.viewport(ViewportCmd::SetSnap { enabled: self.snap, step: self.snap_step });
+                backend.viewport(ViewportCmd::SetSnap {
+                    enabled: self.snap,
+                    step: self.snap_step,
+                });
             }
             Cmd::Focus => backend.viewport(ViewportCmd::FocusSelection),
             Cmd::Delete => {

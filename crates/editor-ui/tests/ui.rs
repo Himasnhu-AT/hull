@@ -18,7 +18,10 @@ fn harness() -> Harness<'static, App> {
             let ctx = ui.ctx().clone();
             app.ui.show(&ctx, &mut app.backend);
         },
-        App { ui: EditorUi::new(), backend: MockBackend::demo() },
+        App {
+            ui: EditorUi::new(),
+            backend: MockBackend::demo(),
+        },
     );
     h.run_steps(3);
     h
@@ -59,7 +62,9 @@ fn value_field_edit_reaches_the_backend_and_undo_restores_it() {
     assert_ne!(after["max"], json!(100), "value changed: {after}");
     let op = h.state().backend.applied.last().cloned().expect("an op reached the backend");
     match &op {
-        Op::SetComponent { type_path, before: b, after: a, .. } => {
+        Op::SetComponent {
+            type_path, before: b, after: a, ..
+        } => {
             assert_eq!(type_path, HEALTH);
             assert_eq!(b.as_ref(), Some(&before));
             assert_eq!(a.as_ref(), Some(&after));
@@ -156,6 +161,10 @@ fn layout_persists() {
     ui.reset_layout();
     ui.load_state(&s).expect("round trip");
     assert!(ui.load_state("{ nope").is_err());
-    assert!(ui.load_state(r#"{"layout":{"root":null,"floating":[]},"tool":"Move","snap":false,"snap_step":0.5}"#).is_err(), "no viewport");
+    assert!(
+        ui.load_state(r#"{"layout":{"root":null,"floating":[]},"tool":"Move","snap":false,"snap_step":0.5}"#)
+            .is_err(),
+        "no viewport"
+    );
     let _ = TRANSFORM;
 }

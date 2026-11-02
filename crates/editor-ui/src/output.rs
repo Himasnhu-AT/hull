@@ -20,7 +20,12 @@ pub(crate) struct OutputState {
 
 impl Default for OutputState {
     fn default() -> Self {
-        OutputState { min_level: Level::Info, selected: None, location: None, follow: true }
+        OutputState {
+            min_level: Level::Info,
+            selected: None,
+            location: None,
+            follow: true,
+        }
     }
 }
 
@@ -71,7 +76,10 @@ pub(crate) fn show(ui: &mut Ui, st: &mut OutputState, all: &[Diagnostic], clear:
     let label_of = |i: usize| shown.get(i).map_or("", |d| d.message.as_str());
     let footer = if st.location.is_some() { 22.0 } else { 0.0 };
     let max_h = (ui.available_height() - footer).max(40.0);
-    let mut list = VirtualList::new("output.list", n, RowHeights::Uniform(t.control_height - 4.0)).selected(selected).row_label(&label_of).max_height(max_h);
+    let mut list = VirtualList::new("output.list", n, RowHeights::Uniform(t.control_height - 4.0))
+        .selected(selected)
+        .row_label(&label_of)
+        .max_height(max_h);
     if st.follow && n > 0 && selected.is_none() {
         list = list.scroll_to(Some(n - 1));
     }
@@ -82,7 +90,8 @@ pub(crate) fn show(ui: &mut Ui, st: &mut OutputState, all: &[Diagnostic], clear:
         let mid = row.rect.center().y;
         let c = if row.selected { t.selection_text } else { level_color(d.level, &t) };
         let font = Tokens::font(t.type_scale.small);
-        ui.painter().text(pos2(row.rect.left() + 4.0, mid), egui::Align2::LEFT_CENTER, tag(d.level), font.clone(), c);
+        ui.painter()
+            .text(pos2(row.rect.left() + 4.0, mid), egui::Align2::LEFT_CENTER, tag(d.level), font.clone(), c);
         let mut x = row.rect.left() + 36.0;
         let g = ui.painter().layout_no_wrap(format!("{src}{}", d.message), Tokens::font(t.type_scale.body), c);
         let w = g.size().x;
@@ -111,7 +120,14 @@ mod tests {
 
     #[test]
     fn location_text() {
-        let mut d = Diagnostic { level: Level::Error, source: "ruspy".into(), message: "m".into(), file: Some("a.ruspy".into()), line: Some(3), col: Some(7) };
+        let mut d = Diagnostic {
+            level: Level::Error,
+            source: "ruspy".into(),
+            message: "m".into(),
+            file: Some("a.ruspy".into()),
+            line: Some(3),
+            col: Some(7),
+        };
         assert_eq!(location(&d).as_deref(), Some("a.ruspy:3:7"));
         d.col = None;
         assert_eq!(location(&d).as_deref(), Some("a.ruspy:3"));

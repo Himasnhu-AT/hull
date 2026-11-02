@@ -52,9 +52,23 @@ fn header(ui: &mut Ui, id: EntityId, info: &NodeInfo, extra: usize, reqs: &mut V
     let t = tokens::current(ui.ctx());
     ui.horizontal(|ui| {
         let mut name = info.name.clone();
-        let r = ui.add_enabled(!info.generated, egui::TextEdit::singleline(&mut name).font(egui::TextStyle::Heading).desired_width(ui.available_width() - 70.0));
+        let r = ui.add_enabled(
+            !info.generated,
+            egui::TextEdit::singleline(&mut name)
+                .font(egui::TextStyle::Heading)
+                .desired_width(ui.available_width() - 70.0),
+        );
         if r.lost_focus() && name.trim() != info.name && !name.trim().is_empty() {
-            reqs.push(Req::Edit { op: Op::Rename { entity: info.reference, before: info.name.clone(), after: name.trim().to_owned() }, label: "Rename".into(), key: None, seal: true });
+            reqs.push(Req::Edit {
+                op: Op::Rename {
+                    entity: info.reference,
+                    before: info.name.clone(),
+                    after: name.trim().to_owned(),
+                },
+                label: "Rename".into(),
+                key: None,
+                seal: true,
+            });
         }
         ui.label(RichText::new(format!("#{id}")).color(t.text.disabled).small());
     });
@@ -91,7 +105,12 @@ fn section(ui: &mut Ui, id: EntityId, eref: StableOrId, generated: bool, doc: &C
                 && working != doc.value
             {
                 reqs.push(Req::Edit {
-                    op: Op::SetComponent { entity: eref, type_path: doc.type_path.clone(), before: Some(doc.value.clone()), after: Some(working) },
+                    op: Op::SetComponent {
+                        entity: eref,
+                        type_path: doc.type_path.clone(),
+                        before: Some(doc.value.clone()),
+                        after: Some(working),
+                    },
                     label: format!("Edit {}", doc.short_name),
                     key: Some(format!("{id}|{}|{}", doc.type_path, change.path)),
                     seal: matches!(change.phase, Phase::Commit | Phase::Cancel),
@@ -100,7 +119,12 @@ fn section(ui: &mut Ui, id: EntityId, eref: StableOrId, generated: bool, doc: &C
         });
     if remove {
         reqs.push(Req::Edit {
-            op: Op::SetComponent { entity: eref, type_path: doc.type_path.clone(), before: Some(doc.value.clone()), after: None },
+            op: Op::SetComponent {
+                entity: eref,
+                type_path: doc.type_path.clone(),
+                before: Some(doc.value.clone()),
+                after: None,
+            },
             label: format!("Remove {}", doc.short_name),
             key: None,
             seal: true,
@@ -109,29 +133,37 @@ fn section(ui: &mut Ui, id: EntityId, eref: StableOrId, generated: bool, doc: &C
 }
 
 fn add_component(ui: &mut Ui, st: &mut DetailsState, eref: StableOrId, have: &[ComponentDoc], types: &[(String, TypeSchema)], reqs: &mut Vec<Req>) {
-    egui::ComboBox::from_id_salt("details.add_component").selected_text("Add component").width(ui.available_width() - 8.0).show_ui(ui, |ui| {
-        ui.add(egui::TextEdit::singleline(&mut st.add_filter).hint_text("Filter").desired_width(f32::INFINITY));
-        let f = st.add_filter.to_lowercase();
-        egui::ScrollArea::vertical().max_height(260.0).show(ui, |ui| {
-            for (path, schema) in types {
-                if have.iter().any(|d| d.type_path == *path) {
-                    continue;
+    egui::ComboBox::from_id_salt("details.add_component")
+        .selected_text("Add component")
+        .width(ui.available_width() - 8.0)
+        .show_ui(ui, |ui| {
+            ui.add(egui::TextEdit::singleline(&mut st.add_filter).hint_text("Filter").desired_width(f32::INFINITY));
+            let f = st.add_filter.to_lowercase();
+            egui::ScrollArea::vertical().max_height(260.0).show(ui, |ui| {
+                for (path, schema) in types {
+                    if have.iter().any(|d| d.type_path == *path) {
+                        continue;
+                    }
+                    let short = path.rsplit("::").next().unwrap_or(path);
+                    if !f.is_empty() && !short.to_lowercase().contains(&f) {
+                        continue;
+                    }
+                    if ui.selectable_label(false, short).on_hover_text(path).clicked() {
+                        reqs.push(Req::Edit {
+                            op: Op::SetComponent {
+                                entity: eref,
+                                type_path: path.clone(),
+                                before: None,
+                                after: Some(props::default_value(schema)),
+                            },
+                            label: format!("Add {short}"),
+                            key: None,
+                            seal: true,
+                        });
+                        st.add_filter.clear();
+                        ui.close();
+                    }
                 }
-                let short = path.rsplit("::").next().unwrap_or(path);
-                if !f.is_empty() && !short.to_lowercase().contains(&f) {
-                    continue;
-                }
-                if ui.selectable_label(false, short).on_hover_text(path).clicked() {
-                    reqs.push(Req::Edit {
-                        op: Op::SetComponent { entity: eref, type_path: path.clone(), before: None, after: Some(props::default_value(schema)) },
-                        label: format!("Add {short}"),
-                        key: None,
-                        seal: true,
-                    });
-                    st.add_filter.clear();
-                    ui.close();
-                }
-            }
+            });
         });
-    });
 }
