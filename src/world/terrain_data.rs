@@ -193,6 +193,34 @@ impl TerrainData {
         let text = ron::ser::to_string_pretty(&self.meta, ron::ser::PrettyConfig::default()).map_err(|e| TerrainDataError::Format(e.to_string()))?;
         write_atomic(&dir.join(META_FILE), text.as_bytes())
     }
+
+    /// Writes `terrain.r16` and `terrain.ron` (not the splat map). For a save after a height edit.
+    pub fn save_heights(&self, dir: &Path) -> Result<(), TerrainDataError> {
+        self.validate()?;
+        std::fs::create_dir_all(dir).map_err(|e| TerrainDataError::Io(format!("{}: {e}", dir.display())))?;
+        let mut raw = Vec::with_capacity(self.heights.len() * 2);
+        for h in &self.heights {
+            raw.extend_from_slice(&h.to_le_bytes());
+        }
+        write_atomic(&dir.join(HEIGHTS_FILE), &raw)?;
+        self.write_meta(dir)
+    }
+
+    /// Writes `terrain.ron` only.
+    pub fn write_meta(&self, dir: &Path) -> Result<(), TerrainDataError> {
+        std::fs::create_dir_all(dir).map_err(|e| TerrainDataError::Io(format!("{}: {e}", dir.display())))?;
+        let text = ron::ser::to_string_pretty(&self.meta, ron::ser::PrettyConfig::default()).map_err(|e| TerrainDataError::Format(e.to_string()))?;
+        write_atomic(&dir.join(META_FILE), text.as_bytes())
+    }
+
+    /// Writes `terrain_splat.rgba8` only (`bytes` = `res² * 4`).
+    pub fn write_splat(dir: &Path, res: u32, bytes: &[u8]) -> Result<(), TerrainDataError> {
+        if res == 0 || bytes.len() as u64 != (res as u64).pow(2) * 4 {
+            return Err(TerrainDataError::Format(format!("splat has {} bytes for resolution {res}", bytes.len())));
+        }
+        std::fs::create_dir_all(dir).map_err(|e| TerrainDataError::Io(format!("{}: {e}", dir.display())))?;
+        write_atomic(&dir.join(SPLAT_FILE), bytes)
+    }
 }
 
 /// Write to `<path>.tmp`, then rename over `path`.

@@ -70,13 +70,17 @@ pub struct LevelConfig {
     pub poll_secs: f32,
     /// Level loaded once when the game starts (`--level`).
     pub startup: Option<PathBuf>,
+    /// The level file this one is a copy of (`--level-origin`, env `EDITOR_LEVEL_ORIGIN`): the
+    /// editor's Play writes a copy, and relative world / terrain paths are resolved next to the
+    /// original.
+    pub origin: Option<PathBuf>,
     /// Extra component types never saved (on top of [`RUNTIME_ONLY`]).
     pub deny: Vec<TypeId>,
 }
 
 impl Default for LevelConfig {
     fn default() -> Self {
-        LevelConfig { hot_reload: cfg!(feature = "devtools"), poll_secs: 1.0, startup: None, deny: Vec::new() }
+        LevelConfig { hot_reload: cfg!(feature = "devtools"), poll_secs: 1.0, startup: None, origin: None, deny: Vec::new() }
     }
 }
 
@@ -137,9 +141,25 @@ fn hash(text: &str) -> u64 {
     h.finish()
 }
 
-/// Relative paths: as given (project folder), else under the assets folder.
+/// The folder paths inside a level are relative to: the original level's folder when this is a
+/// copy (`LevelConfig::origin`), else the folder of the open level.
+pub fn origin_dir(world: &World) -> Option<PathBuf> {
+    let from = world.get_resource::<LevelConfig>().and_then(|c| c.origin.clone()).or_else(|| world.get_resource::<LevelState>().and_then(|s| s.path.clone()))?;
+    from.parent().map(Path::to_path_buf).filter(|p| !p.as_os_str().is_empty())
+}
+
+/// Relative paths: next to the original level, else as given (project folder), else under the
+/// assets folder.
 fn resolve(world: &World, p: &Path) -> PathBuf {
-    if p.is_absolute() || p.exists() {
+    if p.is_absolute() {
+        return p.to_path_buf();
+    }
+    if let Some(o) = world.get_resource::<LevelConfig>().and_then(|c| c.origin.as_ref()).and_then(|o| o.parent())
+        && o.join(p).exists()
+    {
+        return o.join(p);
+    }
+    if p.exists() {
         return p.to_path_buf();
     }
     match world.get_resource::<AssetsDir>() {
@@ -216,7 +236,7 @@ fn load_inner(world: &mut World, path: &Path) -> Result<usize, LevelError> {
     };
     #[cfg(feature = "world")]
     let world_desc = match &parsed.header.world {
-        Some(w) => Some(read_world_desc(world, w)?),
+        Some(w) => Some(read_world_desc(world, w, path)?),
         None => None,
     };
     #[cfg(feature = "look")]
@@ -265,10 +285,21 @@ fn load_inner(world: &mut World, path: &Path) -> Result<usize, LevelError> {
 }
 
 #[cfg(feature = "world")]
-fn read_world_desc(world: &World, rel: &str) -> Result<crate::world::WorldDesc, LevelError> {
+fn read_world_desc(world: &World, rel: &str, level: &Path) -> Result<crate::world::WorldDesc, LevelError> {
     let p = resolve(world, Path::new(rel));
     let text = std::fs::read_to_string(&p).map_err(|e| LevelError::World(format!("{}: {e}", p.display())))?;
-    crate::world::WorldDesc::from_ron(&text).map_err(|e| LevelError::World(format!("{}: {e}", p.display())))
+    let mut desc = crate::world::WorldDesc::from_ron(&text).map_err(|e| LevelError::World(format!("{}: {e}", p.display())))?;
+    // A terrain folder given relative to the level (not the assets folder) is found next to the
+    // original level (the one `--level-origin` names when this file is a copy), and saved there.
+    if let crate::world::desc::HeightSource::TerrainFiles { dir } = &mut desc.terrain.source
+        && Path::new(dir.as_str()).is_relative()
+    {
+        let base = world.get_resource::<LevelConfig>().and_then(|c| c.origin.clone()).unwrap_or_else(|| level.to_path_buf());
+        if let Some(d) = base.parent().map(|b| b.join(dir.as_str())).filter(|d| d.join("terrain.ron").is_file()) {
+            *dir = d.display().to_string();
+        }
+    }
+    Ok(desc)
 }
 
 /// Summary of the open level (`level.info`).
@@ -417,6 +448,7 @@ impl Plugin for LevelPlugin {
             cfg.startup = Some(PathBuf::from(p));
             app.insert_resource(SkipMenu(true));
         }
+        cfg.origin = cli::dev_value("level-origin").or_else(|| cfg!(feature = "devtools").then(|| std::env::var("EDITOR_LEVEL_ORIGIN").ok()).flatten()).map(PathBuf::from);
         app.insert_resource(cfg)
             .init_resource::<LevelState>()
             .init_resource::<LevelMigrations>()
