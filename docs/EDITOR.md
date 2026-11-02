@@ -130,7 +130,7 @@ protocol.
 )
 ```
 - Entities carry `LevelEntity { id: StableId }`, `Name`, `Transform`, `ChildOf`, and their
-  reflected components; meshes by asset path (`SceneRoot("library/cars/x/car.glb#Scene0")`,
+  reflected components; meshes by asset path (`WorldAssetRoot` for glTF scenes, e.g. `library/cars/kenney-car-kit/sedan.glb#Scene0`; Bevy 0.20 has no `SceneRoot`),
   materials by path). Runtime-only components are skipped (a skip list + `#[reflect(skip)]`).
 - Save: atomic write + `.bak`; load: migrate old versions; hot reload when the file changes.
 - `--level <file>` plays it; code-built content keeps working and shows as `generated`.
