@@ -90,6 +90,8 @@ pub(crate) enum Req {
     Place(String),
     /// Activate a tool by id (`None`: back to the transform gizmo tools).
     Tool(Option<String>),
+    /// Open a level by path (File > Recent).
+    OpenPath(String),
     ToolSettings { id: String, settings: serde_json::Value },
     Cmd(Cmd),
     /// Refetch the tree (the outliner search text changed).
@@ -105,14 +107,21 @@ pub enum Cmd {
     Undo,
     Redo,
     PlayStop,
+    ToolSelect,
     ToolMove,
     ToolRotate,
     ToolScale,
     ToggleSnap,
+    ToggleLocalSpace,
+    ToggleGrid,
     Focus,
     Delete,
+    Duplicate,
+    SelectAll,
     Rename,
     Palette,
+    Help,
+    ResetLayout,
 }
 
 pub(crate) struct CmdSpec {
@@ -193,24 +202,24 @@ pub(crate) const COMMANDS: &[CmdSpec] = &[
     CmdSpec {
         cmd: Cmd::ToolMove,
         id: "editor.tool_move",
-        label: "Tool: Move",
-        shortcut: Some("W"),
+        label: "Move tool",
+        shortcut: Some("2"),
         menu: "Tools",
         mutates: false,
     },
     CmdSpec {
         cmd: Cmd::ToolRotate,
         id: "editor.tool_rotate",
-        label: "Tool: Rotate",
-        shortcut: Some("E"),
+        label: "Rotate tool",
+        shortcut: Some("3"),
         menu: "Tools",
         mutates: false,
     },
     CmdSpec {
         cmd: Cmd::ToolScale,
         id: "editor.tool_scale",
-        label: "Tool: Scale",
-        shortcut: Some("R"),
+        label: "Scale tool",
+        shortcut: Some("4"),
         menu: "Tools",
         mutates: false,
     },
@@ -238,6 +247,62 @@ pub(crate) const COMMANDS: &[CmdSpec] = &[
         menu: "View",
         mutates: false,
     },
+    CmdSpec {
+        cmd: Cmd::ToolSelect,
+        id: "editor.tool_select",
+        label: "Select tool",
+        shortcut: Some("1"),
+        menu: "Tools",
+        mutates: false,
+    },
+    CmdSpec {
+        cmd: Cmd::ToggleLocalSpace,
+        id: "editor.local_space",
+        label: "Local / world gizmo",
+        shortcut: Some("L"),
+        menu: "Tools",
+        mutates: false,
+    },
+    CmdSpec {
+        cmd: Cmd::ToggleGrid,
+        id: "editor.grid",
+        label: "Show grid",
+        shortcut: None,
+        menu: "View",
+        mutates: false,
+    },
+    CmdSpec {
+        cmd: Cmd::Duplicate,
+        id: "editor.duplicate",
+        label: "Duplicate",
+        shortcut: Some("Mod+D"),
+        menu: "Edit",
+        mutates: true,
+    },
+    CmdSpec {
+        cmd: Cmd::SelectAll,
+        id: "editor.select_all",
+        label: "Select all",
+        shortcut: Some("Mod+A"),
+        menu: "Edit",
+        mutates: false,
+    },
+    CmdSpec {
+        cmd: Cmd::Help,
+        id: "editor.help",
+        label: "Controls and shortcuts",
+        shortcut: Some("F1"),
+        menu: "Help",
+        mutates: false,
+    },
+    CmdSpec {
+        cmd: Cmd::ResetLayout,
+        id: "editor.reset_layout",
+        label: "Reset panel layout",
+        shortcut: None,
+        menu: "View",
+        mutates: false,
+    },
 ];
 
 impl Cmd {
@@ -248,6 +313,13 @@ impl Cmd {
         // Every variant is in the table (checked by a test), so the fallback is never used.
         COMMANDS.iter().find(|c| c.cmd == self).unwrap_or(&COMMANDS[0])
     }
+}
+
+/// Outliner folders are not entities: they get ids counted down from the top of the range.
+pub const FOLDER_BASE: u64 = u64::MAX - 64;
+
+pub fn is_folder(id: EntityId) -> bool {
+    id >= FOLDER_BASE
 }
 
 #[cfg(test)]

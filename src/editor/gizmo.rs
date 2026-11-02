@@ -178,6 +178,7 @@ fn hit_test(tool: Tool, f: &Frame, camera: &Camera, gt: &GlobalTransform, mouse:
         }
     };
     match tool {
+        Tool::Select => {}
         Tool::Move => {
             for i in 0..3 {
                 if let Some(t) = proj(f.origin + f.axes[i] * f.size) {
@@ -275,7 +276,7 @@ pub fn interact(
     let Some(window) = window else { return };
     let Some((camera, cam_gt, projection)) = cam.entity.and_then(|e| cams.get(e).ok()) else { return };
     let tool = st.tool;
-    let primary = st.selection.first().copied().filter(|e| levels.contains(*e)).filter(|_| !tool_active.is_some_and(|t| t.active.is_some()));
+    let primary = st.selection.first().copied().filter(|e| levels.contains(*e)).filter(|_| tool != Tool::Select && !tool_active.is_some_and(|t| t.active.is_some()));
     let Some(target) = primary else {
         gizmo.hover = None;
         if gizmo.drag.take().is_some() {
@@ -457,7 +458,9 @@ pub fn draw(
     if !camera.is_active {
         return;
     }
-    grid.grid(Isometry3d::from_rotation(Quat::from_rotation_x(std::f32::consts::FRAC_PI_2)), UVec2::splat(40), Vec2::ONE, Color::srgba(1.0, 1.0, 1.0, 0.07)).outer_edges();
+    if st.show_grid {
+        grid.grid(Isometry3d::from_rotation(Quat::from_rotation_x(std::f32::consts::FRAC_PI_2)), UVec2::splat(40), Vec2::ONE, Color::srgba(1.0, 1.0, 1.0, 0.07)).outer_edges();
+    }
     // Markers so lights can be seen (and picked) even without a mesh.
     for (gt, p, s, d) in &lights {
         let pos = gt.translation();
@@ -494,6 +497,7 @@ pub fn draw(
     let active = gizmo.drag.as_ref().map(|d| d.handle).or(gizmo.hover);
     let col = |h: Handle, i: usize| if active == Some(h) { HOVER } else { AXIS_COLORS[i] };
     match st.tool {
+        Tool::Select => {}
         Tool::Move => {
             for i in 0..3 {
                 let c = col(Handle::Axis(i), i);

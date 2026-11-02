@@ -10,12 +10,14 @@
 //! The UI owns undo (a journal of [`Op`]s), layout and view state. The backend owns the world:
 //! every edit is an `Op` handed to `EditorBackend::apply`. See the README for hosting.
 
+mod chrome;
 mod content;
 mod details;
 mod logic;
 mod model;
 mod outliner;
 mod output;
+mod place;
 mod props;
 mod tool;
 mod undo;
@@ -27,12 +29,11 @@ use std::collections::HashSet;
 use ashlar_command::shortcut::Platform;
 use ashlar_command::{CommandInfo, Keymap};
 use ashlar_ui::commands::{CommandPalette, dispatch};
-use ashlar_ui::docking::{DockArea, DockStyle, Layout, Node, Permissions};
+use ashlar_ui::docking::{Action, DockArea, DockStyle, Layout, Node, Permissions};
 use ashlar_ui::layout::{SplitAxis, SplitSize};
-use ashlar_ui::status_bar::StatusBar;
 use ashlar_ui::toasts::Toasts;
 use ashlar_ui::tokens::{self, ThemeMode, Tokens};
-use editor_proto::{AssetEntry, ComponentDoc, Diagnostic, EditorBackend, EntityId, Op, PlaceableDoc, PlayState, Tool, ToolDoc, TreeFilter, TreeNode, TypeSchema, ViewportCmd};
+use editor_proto::{AssetEntry, ComponentDoc, Diagnostic, EditorBackend, EntityId, Op, PlaceableDoc, PlayState, Tool, ToolDoc, TreeFilter, TreeNode, TypeSchema, ViewInfo, ViewportCmd};
 use egui::{Context, Key, Ui};
 use serde::{Deserialize, Serialize};
 
@@ -52,10 +53,12 @@ pub enum Panel {
     Logic,
     /// Settings of the active tool and the Place palette.
     Tool,
+    /// Placeable types and library models.
+    Place,
 }
 
 impl Panel {
-    pub const ALL: [Panel; 7] = [Panel::Viewport, Panel::Outliner, Panel::Details, Panel::Content, Panel::Output, Panel::Logic, Panel::Tool];
+    pub const ALL: [Panel; 8] = [Panel::Viewport, Panel::Outliner, Panel::Details, Panel::Content, Panel::Output, Panel::Logic, Panel::Tool, Panel::Place];
     pub fn title(self) -> &'static str {
         match self {
             Panel::Viewport => "Viewport",
@@ -65,6 +68,7 @@ impl Panel {
             Panel::Output => "Output",
             Panel::Logic => "Logic",
             Panel::Tool => "Tool",
+            Panel::Place => "Place",
         }
     }
 }
@@ -87,7 +91,7 @@ pub fn default_layout() -> Layout<Panel> {
     );
     let right = split(SplitAxis::Horizontal, SplitSize::FixedSecond(320.0), centre, tabs(vec![Panel::Details, Panel::Tool]));
     Layout {
-        root: Some(split(SplitAxis::Horizontal, SplitSize::FixedFirst(250.0), tabs(vec![Panel::Outliner]), right)),
+        root: Some(split(SplitAxis::Horizontal, SplitSize::FixedFirst(250.0), tabs(vec![Panel::Outliner, Panel::Place]), right)),
         floating: vec![],
     }
 }
@@ -116,6 +120,14 @@ struct Persisted {
     tool: Tool,
     snap: bool,
     snap_step: f32,
+    #[serde(default = "yes")]
+    hint_open: bool,
+    #[serde(default)]
+    recent: Vec<String>,
+}
+
+fn yes() -> bool {
+    true
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -146,6 +158,8 @@ pub struct EditorUi {
 
     // Cached backend state.
     tree: Vec<TreeNode>,
+    display: Vec<TreeNode>,
+    grouped: bool,
     tree_rev: u64,
     nodes: Nodes,
     selection: Vec<EntityId>,
@@ -157,6 +171,13 @@ pub struct EditorUi {
     diag_cursor: u64,
     level: editor_proto::LevelInfo,
     play: PlayState,
+    view: ViewInfo,
+    help_open: bool,
+    about_open: bool,
+    hint_open: bool,
+    recent: Vec<String>,
+    last_msg: Option<String>,
+    models: Vec<AssetEntry>,
     tools: Vec<ToolDoc>,
     active_tool: Option<String>,
     placeables: Vec<PlaceableDoc>,
@@ -167,6 +188,7 @@ pub struct EditorUi {
     content: content::ContentState,
     output: output::OutputState,
     logic: logic::LogicState,
+    place: place::PlaceState,
 
     // Refresh bookkeeping.
     last_viewport: Option<egui::Rect>,
@@ -197,6 +219,8 @@ impl EditorUi {
             snap_step: 0.5,
             dialog: None,
             tree: Vec::new(),
+            display: Vec::new(),
+            grouped: false,
             tree_rev: 0,
             nodes: Nodes::default(),
             selection: Vec::new(),
@@ -208,6 +232,13 @@ impl EditorUi {
             diag_cursor: 0,
             level: Default::default(),
             play: PlayState::Editing,
+            view: ViewInfo::default(),
+            help_open: false,
+            about_open: false,
+            hint_open: true,
+            recent: Vec::new(),
+            last_msg: None,
+            models: Vec::new(),
             tools: Vec::new(),
             active_tool: None,
             placeables: Vec::new(),
@@ -219,6 +250,7 @@ impl EditorUi {
             },
             output: Default::default(),
             logic: Default::default(),
+            place: Default::default(),
             last_viewport: None,
             dirty_tree: true,
             dirty_components: true,
@@ -236,6 +268,8 @@ impl EditorUi {
             tool: self.tool,
             snap: self.snap,
             snap_step: self.snap_step,
+            hint_open: self.hint_open,
+            recent: self.recent.clone(),
         })
         .unwrap_or_default()
     }
@@ -249,6 +283,12 @@ impl EditorUi {
             return Err("layout has no viewport".into());
         }
         self.layout = p.layout;
+        self.hint_open = p.hint_open;
+        self.recent = p.recent;
+        // Layouts saved before the Place tab existed get it next to the Outliner.
+        if !self.layout.contains(&Panel::Place) && self.layout.contains(&Panel::Outliner) {
+            let _ = self.layout.apply(Action::Open { panel: Panel::Place, anchor: Some(Panel::Outliner) });
+        }
         self.tool = p.tool;
         self.snap = p.snap;
         if p.snap_step.is_finite() && p.snap_step > 0.0 {
@@ -267,7 +307,6 @@ impl EditorUi {
     /// Bring a panel's tab to the front (opening it when closed). `name` is the panel title,
     /// case-insensitive (`"Logic"`). For scripts and tests.
     pub fn show_panel(&mut self, name: &str) -> Result<(), String> {
-        use ashlar_ui::docking::Action;
         let panel = Panel::ALL.into_iter().find(|p| p.title().eq_ignore_ascii_case(name)).ok_or_else(|| format!("no panel `{name}`"))?;
         if self.layout.apply(Action::Activate { panel }).is_ok() {
             return Ok(());
@@ -322,13 +361,33 @@ impl EditorUi {
     /// Draw the editor over the whole egui screen. Call once per egui pass.
     pub fn show(&mut self, ctx: &Context, backend: &mut dyn EditorBackend) -> UiOutput {
         if !self.themed {
-            tokens::install(ctx, &Tokens::light(), &Tokens::dark(), ThemeMode::Dark);
+            // Readable sizes: the stock scale is 12 px body.
+            let big = |mut t: Tokens| {
+                t.type_scale.small = 12.0;
+                t.type_scale.body = 14.0;
+                t.type_scale.button = 14.0;
+                t.type_scale.heading = 18.0;
+                t.control_height = 26.0;
+                t
+            };
+            tokens::install(ctx, &big(Tokens::light()), &big(Tokens::dark()), ThemeMode::Dark);
             self.themed = true;
         }
         self.now = ctx.input(|i| i.time);
         self.poll(backend);
 
         let mut reqs: Vec<Req> = Vec::new();
+        // 5-9: the world tools, in toolbar order (not while typing).
+        if !ctx.egui_wants_keyboard_input() {
+            for (i, key) in [Key::Num5, Key::Num6, Key::Num7, Key::Num8, Key::Num9].into_iter().enumerate() {
+                if ctx.input(|inp| inp.key_pressed(key) && !inp.modifiers.any())
+                    && let Some(tool) = self.tools.get(i)
+                {
+                    let on = self.active_tool.as_deref() == Some(tool.id.as_str());
+                    reqs.push(Req::Tool((!on).then(|| tool.id.clone())));
+                }
+            }
+        }
         for _ in 0..4 {
             match dispatch(ctx, &self.keymap).as_deref().and_then(Cmd::from_id) {
                 Some(c) => reqs.push(Req::Cmd(c)),
@@ -359,6 +418,7 @@ impl EditorUi {
                 }
             }
         }
+        self.menu_bar(&mut root, &mut reqs);
         self.toolbar(&mut root, &mut reqs);
         self.status_bar(&mut root);
 
@@ -386,7 +446,7 @@ impl EditorUi {
                         Panel::Viewport => viewport = Some(ui.max_rect()),
                         Panel::Outliner => {
                             let v = outliner::View {
-                                tree: &self.tree,
+                                tree: &self.display,
                                 tree_rev: self.tree_rev,
                                 nodes: &self.nodes,
                                 selection: &self.selection,
@@ -407,8 +467,12 @@ impl EditorUi {
                         Panel::Content => content::show(ui, &mut self.content, &self.assets, &mut reqs),
                         Panel::Output => output::show(ui, &mut self.output, &self.diagnostics, &mut clear_output, &mut reqs),
                         Panel::Logic => logic::show(ui, &mut self.logic),
+                        Panel::Place => {
+                            let active = self.active_tool.as_ref().filter(|id| id.as_str() == "place").and_then(|id| self.tools.iter().find(|t| &t.id == id)).and_then(|t| t.settings.get("type_path")).and_then(|v| v.as_str());
+                            place::show(ui, &mut self.place, &self.placeables, &self.models, active, &mut reqs);
+                        }
                         Panel::Tool => {
-                            let v = tool::View { tool: self.active_tool.as_ref().and_then(|id| self.tools.iter().find(|t| &t.id == id)), placeables: &self.placeables };
+                            let v = tool::View { tool: self.active_tool.as_ref().and_then(|id| self.tools.iter().find(|t| &t.id == id)) };
                             tool::show(ui, &v, &mut reqs);
                         }
                     }
@@ -426,6 +490,10 @@ impl EditorUi {
         }
 
         // Overlays.
+        if let Some(v) = viewport {
+            self.viewport_overlay(ctx, v, backend, &mut reqs);
+        }
+        self.help_windows(ctx);
         let infos = self.palette.is_open().then(|| self.command_infos());
         if let Some(infos) = &infos
             && let Some(id) = self.palette.show(ctx, infos, 0, Platform::current())
@@ -461,6 +529,7 @@ impl EditorUi {
     // ---- polling -------------------------------------------------------------------------
 
     fn poll(&mut self, backend: &mut dyn EditorBackend) {
+        self.view = backend.view_info();
         // Ops the engine applied itself (tool strokes, drags) go on the undo stack.
         for r in backend.take_recorded() {
             if !matches!(r.op, Op::SetComponent { .. } | Op::TerrainPatch { .. }) {
@@ -480,9 +549,13 @@ impl EditorUi {
                 ..Default::default()
             };
             let tree = backend.tree(&filter);
-            if tree != self.tree {
-                self.nodes = Nodes::build(&tree);
+            let grouped = filter.text.is_empty();
+            if tree != self.tree || grouped != self.grouped {
+                // Without a search the roots sit in folders by kind; a search shows the plain tree.
+                self.display = if grouped { outliner::group(&tree) } else { tree.clone() };
+                self.nodes = Nodes::build(&self.display);
                 self.tree = tree;
+                self.grouped = grouped;
                 self.tree_rev += 1;
             }
             self.dirty_tree = false;
@@ -494,6 +567,11 @@ impl EditorUi {
                 self.dirty_components = true;
             }
             self.level = backend.level();
+            if let Some(p) = self.level.path.clone()
+                && self.recent.first() != Some(&p)
+            {
+                self.remember(&p);
+            }
             self.play = backend.play_state();
             let (next, new) = backend.diagnostics(self.diag_cursor);
             self.diag_cursor = next;
@@ -530,6 +608,9 @@ impl EditorUi {
             }
             self.dirty_components = false;
         }
+        if (due && self.models.is_empty() && self.now > 1.0) || self.dirty_assets {
+            self.models = place::scan_models(backend);
+        }
         if due || self.dirty_assets || self.content.dir_changed {
             self.assets = backend.assets(&self.content.dir);
             self.dirty_assets = false;
@@ -541,101 +622,6 @@ impl EditorUi {
     }
 
     // ---- chrome ----------------------------------------------------------------------------
-
-    fn toolbar(&mut self, root: &mut Ui, reqs: &mut Vec<Req>) {
-        let t = tokens::current(root.ctx());
-        let frame = egui::Frame::new().fill(t.surface.panel).inner_margin(egui::Margin::symmetric(t.space.md as i8, 4));
-        egui::Panel::top("editor_toolbar").resizable(false).show_separator_line(true).frame(frame).show(root, |ui| {
-            ui.horizontal(|ui| {
-                ui.spacing_mut().item_spacing.x = t.space.sm;
-                let playing = self.play != PlayState::Editing;
-                let label = match self.play {
-                    PlayState::Editing => "Play",
-                    PlayState::Building => "Building... (Stop)",
-                    PlayState::Playing => "Stop",
-                };
-                let btn = egui::Button::new(egui::RichText::new(label).color(t.text.on_accent)).fill(if playing { t.status.danger } else { t.accent });
-                if ui.add(btn).on_hover_text(tip(Cmd::PlayStop)).clicked() {
-                    reqs.push(Req::Cmd(Cmd::PlayStop));
-                }
-                ui.separator();
-                if ui.button("Save").on_hover_text(tip(Cmd::Save)).clicked() {
-                    reqs.push(Req::Cmd(Cmd::Save));
-                }
-                if ui.button("Open").on_hover_text(tip(Cmd::Open)).clicked() {
-                    reqs.push(Req::Cmd(Cmd::Open));
-                }
-                ui.separator();
-                if ui.add_enabled(self.undo.can_undo(), egui::Button::new("Undo")).on_hover_text(tip(Cmd::Undo)).clicked() {
-                    reqs.push(Req::Cmd(Cmd::Undo));
-                }
-                if ui.add_enabled(self.undo.can_redo(), egui::Button::new("Redo")).on_hover_text(tip(Cmd::Redo)).clicked() {
-                    reqs.push(Req::Cmd(Cmd::Redo));
-                }
-                ui.separator();
-                for (tool, cmd, name) in [
-                    (Tool::Move, Cmd::ToolMove, "Move"),
-                    (Tool::Rotate, Cmd::ToolRotate, "Rotate"),
-                    (Tool::Scale, Cmd::ToolScale, "Scale"),
-                ] {
-                    if ui.selectable_label(self.tool == tool && self.active_tool.is_none(), name).on_hover_text(tip(cmd)).clicked() {
-                        reqs.push(Req::Cmd(cmd));
-                    }
-                }
-                if !self.tools.is_empty() {
-                    ui.separator();
-                    for tool in &self.tools {
-                        let on = self.active_tool.as_deref() == Some(tool.id.as_str());
-                        if ui.selectable_label(on, &tool.label).on_hover_text(&tool.hint).clicked() {
-                            reqs.push(Req::Tool((!on).then(|| tool.id.clone())));
-                        }
-                    }
-                }
-                ui.separator();
-                if ui.selectable_label(self.snap, "Snap").on_hover_text(tip(Cmd::ToggleSnap)).clicked() {
-                    reqs.push(Req::Cmd(Cmd::ToggleSnap));
-                }
-                if self.snap {
-                    let mut step = self.snap_step;
-                    if ui.add(egui::DragValue::new(&mut step).speed(0.05).range(0.01..=100.0)).changed() {
-                        self.snap_step = step;
-                        reqs.push(Req::Cmd(Cmd::ToggleSnap));
-                        reqs.push(Req::Cmd(Cmd::ToggleSnap));
-                    }
-                }
-                ui.separator();
-                if ui.button("Commands").on_hover_text(tip(Cmd::Palette)).clicked() {
-                    reqs.push(Req::Cmd(Cmd::Palette));
-                }
-            });
-        });
-    }
-
-    fn status_bar(&mut self, root: &mut Ui) {
-        let level = match (&self.level.path, self.level.dirty) {
-            (Some(p), true) => format!("{p} *"),
-            (Some(p), false) => p.clone(),
-            (None, _) => "Unsaved level".to_owned(),
-        };
-        let play = match self.play {
-            PlayState::Editing => "Editing",
-            PlayState::Building => "Building",
-            PlayState::Playing => "Playing",
-        };
-        let undo = self.undo.undo_label().map_or("Nothing to undo".to_owned(), |l| format!("Undo: {l}"));
-        let sel = format!("{} selected", self.selection.len());
-        StatusBar::new("editor.status").show(
-            root,
-            |ui| {
-                ashlar_ui::status_bar::text(ui, "status.level", &level);
-                ashlar_ui::status_bar::text(ui, "status.play", play);
-            },
-            |ui| {
-                ashlar_ui::status_bar::text(ui, "status.sel", &sel);
-                ashlar_ui::status_bar::text(ui, "status.undo", &undo);
-            },
-        );
-    }
 
     fn command_infos(&self) -> Vec<CommandInfo> {
         COMMANDS
@@ -700,10 +686,10 @@ impl EditorUi {
                             self.undo.clear();
                             self.selection.clear();
                             self.refresh();
-                            self.toasts.success(format!("Opened {path}"));
+                            self.say_success(format!("Opened {path}"));
                         }
                         Err(e) => {
-                            self.toasts.error(format!("Open failed: {e}"));
+                            self.say_error(format!("Open failed: {e}"));
                         }
                     },
                     DialogKind::SaveAs => self.save(backend, Some(&path)),
@@ -712,6 +698,27 @@ impl EditorUi {
             Some(false) => self.dialog = None,
             None => {}
         }
+    }
+
+    fn say(&mut self, msg: String) -> String {
+        self.last_msg = Some(msg.clone());
+        msg
+    }
+    fn say_success(&mut self, m: impl Into<String>) {
+        let m = self.say(m.into());
+        self.toasts.success(m);
+    }
+    fn say_error(&mut self, m: impl Into<String>) {
+        let m = self.say(m.into());
+        self.toasts.error(m);
+    }
+    fn say_info(&mut self, m: impl Into<String>) {
+        let m = self.say(m.into());
+        self.toasts.info(m);
+    }
+    fn say_warning(&mut self, m: impl Into<String>) {
+        let m = self.say(m.into());
+        self.toasts.warning(m);
     }
 
     // ---- requests --------------------------------------------------------------------------
@@ -729,17 +736,26 @@ impl EditorUi {
                     Ok(op) => {
                         self.undo.record("Place asset", op, None, self.now);
                         self.dirty_tree = true;
-                        self.toasts.info(format!("Placed {path}"));
+                        self.say_info(format!("Placed {path}"));
                     }
                     Err(e) => {
-                        self.toasts.error(format!("Place failed: {e}"));
+                        self.say_error(format!("Place failed: {e}"));
                     }
                 },
                 Req::Cmd(c) => self.command(ctx, backend, c),
                 Req::Tool(id) => self.activate_tool(backend, id),
+                Req::OpenPath(path) => match backend.open_level(&path) {
+                    Ok(()) => {
+                        self.undo.clear();
+                        self.selection.clear();
+                        self.refresh();
+                        self.say_success(format!("Opened {path}"));
+                    }
+                    Err(e) => self.say_error(format!("Open failed: {e}")),
+                },
                 Req::ToolSettings { id, settings } => {
                     if let Err(e) = backend.set_tool_settings(&id, settings) {
-                        self.toasts.error(format!("Tool settings: {e}"));
+                        self.say_error(format!("Tool settings: {e}"));
                     }
                     // Show the new values next frame.
                     self.last_poll = f64::NEG_INFINITY;
@@ -764,7 +780,7 @@ impl EditorUi {
                 }
             }
             Err(e) => {
-                self.toasts.error(format!("{label}: {e}"));
+                self.say_error(format!("{label}: {e}"));
             }
         }
     }
@@ -790,7 +806,7 @@ impl EditorUi {
             .collect();
         if roots.is_empty() {
             if !ids.is_empty() {
-                self.toasts.warning("Generated entities can't be deleted");
+                self.say_warning("Generated entities can't be deleted");
             }
             return;
         }
@@ -799,7 +815,7 @@ impl EditorUi {
             match backend.snapshot(*id) {
                 Ok(snapshot) => ops.push(Op::Despawn { snapshot }),
                 Err(e) => {
-                    self.toasts.error(format!("Delete failed: {e}"));
+                    self.say_error(format!("Delete failed: {e}"));
                     return;
                 }
             }
@@ -814,10 +830,10 @@ impl EditorUi {
         match backend.save_level(path) {
             Ok(()) => {
                 self.level = backend.level();
-                self.toasts.success("Level saved");
+                self.say_success("Level saved");
             }
             Err(e) => {
-                self.toasts.error(format!("Save failed: {e}"));
+                self.say_error(format!("Save failed: {e}"));
             }
         }
     }
@@ -856,24 +872,25 @@ impl EditorUi {
                 Ok(()) => self.after_history(),
                 Err(e) => {
                     self.undo.restore_undo();
-                    self.toasts.error(format!("Undo failed: {e}"));
+                    self.say_error(format!("Undo failed: {e}"));
                 }
             } },
             Cmd::Redo => if let Some(op) = self.undo.redo() { match backend.apply(&op) {
                 Ok(()) => self.after_history(),
                 Err(e) => {
                     self.undo.restore_redo();
-                    self.toasts.error(format!("Redo failed: {e}"));
+                    self.say_error(format!("Redo failed: {e}"));
                 }
             } },
             Cmd::PlayStop => match backend.play_state() {
                 PlayState::Editing => {
                     if let Err(e) = backend.play() {
-                        self.toasts.error(format!("Play failed: {e}"));
+                        self.say_error(format!("Play failed: {e}"));
                     }
                 }
                 PlayState::Building | PlayState::Playing => backend.stop(),
             },
+            Cmd::ToolSelect => self.set_tool(backend, Tool::Select),
             Cmd::ToolMove => self.set_tool(backend, Tool::Move),
             Cmd::ToolRotate => self.set_tool(backend, Tool::Rotate),
             Cmd::ToolScale => self.set_tool(backend, Tool::Scale),
@@ -883,6 +900,40 @@ impl EditorUi {
                     enabled: self.snap,
                     step: self.snap_step,
                 });
+            }
+            Cmd::ToggleLocalSpace => {
+                self.view.local_space = !self.view.local_space;
+                backend.viewport(ViewportCmd::SetLocalSpace(self.view.local_space));
+            }
+            Cmd::ToggleGrid => {
+                self.view.show_grid = !self.view.show_grid;
+                backend.viewport(ViewportCmd::SetShowGrid(self.view.show_grid));
+            }
+            Cmd::Help => self.help_open = !self.help_open,
+            Cmd::ResetLayout => self.reset_layout(),
+            Cmd::SelectAll => {
+                let ids: Vec<EntityId> = self.nodes.order.iter().copied().filter(|id| self.nodes.info.get(id).is_some_and(|n| !n.generated && !model::is_folder(*id))).collect();
+                self.selection = ids;
+                backend.set_selection(&self.selection);
+                self.dirty_components = true;
+            }
+            Cmd::Duplicate => {
+                let ids: Vec<EntityId> = self.selection.iter().copied().filter(|id| self.nodes.info.get(id).is_some_and(|n| !n.generated)).collect();
+                if ids.is_empty() {
+                    self.say_warning("Select something to duplicate (generated entities can't be)");
+                } else {
+                    match backend.duplicate(&ids) {
+                        Ok(op) => {
+                            self.undo.record("Duplicate", op, None, self.now);
+                            self.undo.seal();
+                            self.dirty_tree = true;
+                            self.selection = backend.selection();
+                            self.dirty_components = true;
+                            self.say_info("Duplicated");
+                        }
+                        Err(e) => self.say_error(format!("Duplicate failed: {e}")),
+                    }
+                }
             }
             Cmd::Focus => backend.viewport(ViewportCmd::FocusSelection),
             // While a tool is active, Delete is the tool's (a spline point, a tree).
@@ -928,13 +979,5 @@ impl EditorUi {
         self.dirty_tree = true;
         self.dirty_components = true;
         self.level.dirty = true;
-    }
-}
-
-fn tip(cmd: Cmd) -> String {
-    let s = cmd.spec();
-    match s.shortcut.and_then(|sc| ashlar_command::shortcut::display(sc, Platform::current())) {
-        Some(k) => format!("{} ({k})", s.label),
-        None => s.label.to_owned(),
     }
 }

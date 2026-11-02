@@ -81,6 +81,8 @@ pub struct EditorState {
     pub snap_step: f32,
     /// Gizmo in the entity's own axes (default world).
     pub local_space: bool,
+    /// The faint ground grid (View menu).
+    pub show_grid: bool,
     diag: VecDeque<Diagnostic>,
     diag_dropped: u64,
     pub(crate) play: play::PlayRuntime,
@@ -90,6 +92,8 @@ pub struct EditorState {
     pub(crate) cam_busy: bool,
     pub(crate) gizmo_busy: bool,
     pub(crate) tool_busy: bool,
+    /// A world tool (Spline, Sculpt, ...) is active: it owns the left button.
+    pub(crate) tool_active: bool,
     /// Ops the engine applied on its own, waiting for the UI to put them on its undo stack.
     recorded: Vec<editor_proto::RecordedOp>,
 }
@@ -102,6 +106,7 @@ impl Default for EditorState {
             snap: false,
             snap_step: 0.5,
             local_space: false,
+            show_grid: true,
             diag: VecDeque::new(),
             diag_dropped: 0,
             play: play::PlayRuntime::default(),
@@ -109,6 +114,7 @@ impl Default for EditorState {
             cam_busy: false,
             gizmo_busy: false,
             tool_busy: false,
+            tool_active: false,
             recorded: Vec::new(),
         }
     }
@@ -198,9 +204,9 @@ impl Plugin for EditorPlugin {
                     keep_paused,
                     full_resolution,
                     camera::adopt_camera,
-                    camera::control,
                     tools::update,
                     gizmo::interact,
+                    camera::control,
                     picking::click_select,
                     gizmo::draw,
                     tools::draw,

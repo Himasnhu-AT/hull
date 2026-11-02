@@ -8,7 +8,7 @@ use ashlar_ui::virtual_list::{RowHeights, VirtualList};
 use editor_proto::{EntityId, NodeKind, Op, TreeNode};
 use egui::{Color32, Key, Rect, Sense, Ui, pos2, vec2};
 
-use crate::model::{Cmd, Nodes, Req};
+use crate::model::{Cmd, FOLDER_BASE, Nodes, Req, is_folder};
 
 #[derive(Default)]
 pub(crate) struct OutlinerState {
@@ -20,6 +20,7 @@ pub(crate) struct OutlinerState {
     pub renaming: Option<Renaming>,
     anchor: Option<EntityId>,
     scroll_to: Option<EntityId>,
+    folders_init: bool,
 }
 
 pub(crate) struct Renaming {
@@ -49,6 +50,11 @@ impl OutlinerState {
         let key = (tree_rev, self.collapsed_gen, self.filter.is_empty());
         if self.rows_key == Some(key) {
             return;
+        }
+        if !self.folders_init {
+            // The generated entities (terrain cells, internals) start folded away.
+            self.collapsed.insert(GENERATED_FOLDER);
+            self.folders_init = true;
         }
         self.rows.clear();
         let open_all = !self.filter.is_empty();
@@ -87,7 +93,82 @@ fn kind_glyph(k: NodeKind, t: &Tokens) -> (&'static str, Color32) {
         NodeKind::Generated => ("#", t.text.disabled),
         NodeKind::Empty => ("o", t.text.secondary),
         NodeKind::Other => ("?", t.text.secondary),
+        NodeKind::Spline => ("R", t.status.warning),
+        NodeKind::Foliage => ("F", t.status.success),
+        NodeKind::Gameplay => ("G", t.accent),
     }
+}
+
+/// The word in the Type column.
+pub(crate) fn kind_label(k: NodeKind, generated: bool) -> &'static str {
+    if generated {
+        return "Generated";
+    }
+    match k {
+        NodeKind::Mesh => "Mesh",
+        NodeKind::Light => "Light",
+        NodeKind::Camera => "Camera",
+        NodeKind::Audio => "Audio",
+        NodeKind::Logic => "Logic",
+        NodeKind::Generated => "Generated",
+        NodeKind::Empty => "Empty",
+        NodeKind::Other => "Other",
+        NodeKind::Spline => "Road",
+        NodeKind::Foliage => "Foliage",
+        NodeKind::Gameplay => "Gameplay",
+    }
+}
+
+/// Folders, in the order they are listed: (title, kinds). `Generated` is separate (last).
+const FOLDERS: &[(&str, &[NodeKind])] = &[
+    ("Roads / Splines", &[NodeKind::Spline]),
+    ("Gameplay", &[NodeKind::Gameplay]),
+    ("Foliage", &[NodeKind::Foliage]),
+    ("Lights", &[NodeKind::Light]),
+    ("Cameras", &[NodeKind::Camera]),
+    ("Meshes", &[NodeKind::Mesh]),
+    ("Other", &[NodeKind::Empty, NodeKind::Audio, NodeKind::Logic, NodeKind::Other, NodeKind::Generated]),
+];
+
+/// Index of the Generated folder (collapsed by default).
+pub(crate) const GENERATED_FOLDER: u64 = FOLDER_BASE + FOLDERS.len() as u64;
+
+/// The tree with its roots grouped into folders by kind, each with a count. Nodes below the
+/// roots are untouched. Empty folders are left out.
+pub(crate) fn group(tree: &[TreeNode]) -> Vec<TreeNode> {
+    let mut out = Vec::new();
+    let mut folder = |id: u64, title: &str, nodes: Vec<TreeNode>, icon: NodeKind| {
+        if nodes.is_empty() {
+            return;
+        }
+        let mut f = TreeNode::new(id, format!("{title} ({})", nodes.len()));
+        f.icon = icon;
+        f.children = nodes;
+        out.push(f);
+    };
+    for (i, (title, kinds)) in FOLDERS.iter().enumerate() {
+        let nodes: Vec<TreeNode> = tree.iter().filter(|n| !n.generated && kinds.contains(&n.icon)).cloned().collect();
+        folder(FOLDER_BASE + i as u64, title, nodes, kinds[0]);
+    }
+    let generated: Vec<TreeNode> = tree.iter().filter(|n| n.generated).cloned().collect();
+    folder(GENERATED_FOLDER, "Generated", generated, NodeKind::Generated);
+    out
+}
+
+/// Draws `name` with the part matching `filter` highlighted.
+fn highlighted(ui: &Ui, name: &str, filter: &str, font: egui::FontId, color: Color32, hit: Color32) -> std::sync::Arc<egui::Galley> {
+    let mut job = egui::text::LayoutJob::default();
+    let fmt = |c: Color32| egui::TextFormat { font_id: font.clone(), color: c, ..Default::default() };
+    let at = (!filter.is_empty()).then(|| name.to_lowercase().find(&filter.to_lowercase())).flatten();
+    match at {
+        Some(i) if name.is_char_boundary(i) && name.is_char_boundary(i + filter.len()) => {
+            job.append(&name[..i], 0.0, fmt(color));
+            job.append(&name[i..i + filter.len()], 0.0, fmt(hit));
+            job.append(&name[i + filter.len()..], 0.0, fmt(color));
+        }
+        _ => job.append(name, 0.0, fmt(color)),
+    }
+    ui.painter().layout_job(job)
 }
 
 pub(crate) fn show(ui: &mut Ui, st: &mut OutlinerState, v: &View<'_>, reqs: &mut Vec<Req>) {
@@ -102,6 +183,7 @@ pub(crate) fn show(ui: &mut Ui, st: &mut OutlinerState, v: &View<'_>, reqs: &mut
         }
     });
     st.rebuild(v.tree, v.tree_rev);
+    let st_filter = st.filter.clone();
 
     let row_h = t.control_height - 2.0;
     let indent = t.space.xl;
@@ -120,6 +202,8 @@ pub(crate) fn show(ui: &mut Ui, st: &mut OutlinerState, v: &View<'_>, reqs: &mut
     let mut rename_commit: Option<(EntityId, String)> = None;
     let mut cancel_rename = false;
     let mut drop: Option<(EntityId, Option<EntityId>)> = None;
+    let mut eye: Option<(EntityId, bool)> = None;
+    let filter = st_filter.as_str();
 
     let list = VirtualList::new("outliner.list", rows.len(), RowHeights::Uniform(row_h))
         .selected(cursor)
@@ -131,6 +215,28 @@ pub(crate) fn show(ui: &mut Ui, st: &mut OutlinerState, v: &View<'_>, reqs: &mut
         let Some(info) = v.nodes.info.get(&id) else { return };
         let x0 = row.rect.left() + depth as f32 * indent;
         let resp = ui.interact(row.rect, egui::Id::new(("outliner.row", id)), Sense::click_and_drag());
+        if is_folder(id) {
+            // A folder: click folds it. Not selectable, renamable or a drop target.
+            resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, false, &info.name));
+            if resp.clicked() {
+                if !collapsed.remove(&id) {
+                    collapsed.insert(id);
+                }
+                *collapsed_gen += 1;
+            }
+            let open = !collapsed.contains(&id);
+            let ctr = pos2(x0 + indent * 0.5, row.rect.center().y);
+            let pts = if open {
+                vec![pos2(ctr.x - 3.5, ctr.y - 2.0), pos2(ctr.x + 3.5, ctr.y - 2.0), pos2(ctr.x, ctr.y + 3.0)]
+            } else {
+                vec![pos2(ctr.x - 2.0, ctr.y - 3.5), pos2(ctr.x - 2.0, ctr.y + 3.5), pos2(ctr.x + 3.0, ctr.y)]
+            };
+            ui.painter().add(egui::Shape::convex_polygon(pts, t.text.secondary, egui::Stroke::NONE));
+            let (glyph, gc) = kind_glyph(info.kind, &t);
+            ui.painter().text(pos2(x0 + indent + 6.0, row.rect.center().y), egui::Align2::CENTER_CENTER, glyph, Tokens::font(t.type_scale.small), gc);
+            ui.painter().text(pos2(x0 + indent + 20.0, row.rect.center().y), egui::Align2::LEFT_CENTER, &info.name, Tokens::font(t.type_scale.body), t.text.primary);
+            return;
+        }
         if resp.clicked() {
             let m = ui.input(|i| i.modifiers);
             let mut sel: Vec<EntityId> = v.selection.to_vec();
@@ -235,8 +341,29 @@ pub(crate) fn show(ui: &mut Ui, st: &mut OutlinerState, v: &View<'_>, reqs: &mut
                 }
             }
         } else {
-            ui.painter()
-                .text(pos2(tx, row.rect.center().y), egui::Align2::LEFT_CENTER, &info.name, Tokens::font(t.type_scale.body), dim);
+            // Name (matches highlighted), then the Type column and the eye.
+            let eye_rect = Rect::from_center_size(pos2(row.rect.right() - 16.0, row.rect.center().y), vec2(20.0, 18.0));
+            let type_right = eye_rect.left() - 6.0;
+            let label = kind_label(info.kind, info.generated);
+            let tg = ui.painter().layout_no_wrap(label.to_owned(), Tokens::font(t.type_scale.small), if row.selected { t.selection_text } else { t.text.secondary });
+            let tw = tg.size().x;
+            ui.painter().galley(pos2(type_right - tw, row.rect.center().y - tg.size().y / 2.0), tg, t.text.secondary);
+            let name_g = highlighted(ui, &info.name, filter, Tokens::font(t.type_scale.body), dim, t.accent);
+            let clip = Rect::from_min_max(pos2(tx, row.rect.top()), pos2((type_right - tw - 6.0).max(tx + 10.0), row.rect.bottom()));
+            ui.painter().with_clip_rect(clip).galley(pos2(tx, row.rect.center().y - name_g.size().y / 2.0), name_g, dim);
+            // Eye: visible / hidden.
+            let er = ui.interact(eye_rect, egui::Id::new(("outliner.eye", id)), Sense::click());
+            let ec = if info.hidden { t.text.disabled } else if er.hovered() { t.text.primary } else { t.text.secondary };
+            let c = eye_rect.center();
+            ui.painter().circle_stroke(c, 5.5, egui::Stroke::new(1.3, ec));
+            if info.hidden {
+                ui.painter().line_segment([c + vec2(-6.0, 5.0), c + vec2(6.0, -5.0)], egui::Stroke::new(1.5, ec));
+            } else {
+                ui.painter().circle_filled(c, 2.2, ec);
+            }
+            if er.on_hover_text(if info.hidden { "Show" } else { "Hide" }).clicked() && !info.generated {
+                eye = Some((id, info.hidden));
+            }
         }
     });
 
@@ -248,6 +375,22 @@ pub(crate) fn show(ui: &mut Ui, st: &mut OutlinerState, v: &View<'_>, reqs: &mut
         drop = Some((*src, None));
     }
 
+    if let Some((id, hidden)) = eye
+        && let Some(info) = v.nodes.info.get(&id)
+    {
+        let (from, to) = if hidden { ("Hidden", "Inherited") } else { ("Inherited", "Hidden") };
+        reqs.push(Req::Edit {
+            op: Op::SetComponent {
+                entity: info.reference,
+                type_path: "bevy_camera::visibility::Visibility".into(),
+                before: Some(serde_json::json!(from)),
+                after: Some(serde_json::json!(to)),
+            },
+            label: if hidden { "Show".into() } else { "Hide".into() },
+            key: None,
+            seal: true,
+        });
+    }
     if let Some(sel) = new_selection {
         reqs.push(Req::Select(sel));
     }

@@ -91,8 +91,8 @@ fn command_shortcuts_run_the_commands() {
     let mut h = harness();
     h.get_by_label("Crate").click();
     h.run_steps(3);
-    // W / E / R switch tools and tell the viewport.
-    h.key_press(egui::Key::E);
+    // 1 / 2 / 3 / 4 switch tools (W A S D are the camera's) and tell the viewport.
+    h.key_press(egui::Key::Num3);
     h.run_steps(2);
     assert_eq!(h.state().ui.tool(), Tool::Rotate);
     assert!(h.state().backend.viewport_cmds.contains(&ViewportCmd::SetTool(Tool::Rotate)));
@@ -115,6 +115,9 @@ fn command_shortcuts_run_the_commands() {
 #[test]
 fn generated_entities_are_read_only() {
     let mut h = harness();
+    // Generated entities sit in a folder that starts folded.
+    h.get_by_label("Generated (1)").click();
+    h.run_steps(3);
     h.get_by_label("Skybox").click();
     h.run_steps(3);
     let sky = id(&h, "Skybox");
@@ -129,12 +132,10 @@ fn content_browser_navigates_and_places() {
     let mut h = harness();
     // Open the Content tab content: it is the first tab in its group, so it is already shown.
     h.get_by_label("library").click();
-    h.run_steps(2);
-    h.key_press(egui::Key::Enter); // activate the folder
     h.run_steps(3);
     h.get_by_label("crate.glb");
     // Place through the button.
-    h.get_all_by_label("Place").next().expect("a place button").click();
+    h.get_all_by_role_and_label(egui::accesskit::Role::Button, "Place").next().expect("a place button").click();
     h.run_steps(3);
     assert_eq!(h.state().backend.placed.len(), 1);
     assert!(h.state().ui.can_undo(), "the returned Spawn op is on the undo stack");
@@ -205,9 +206,77 @@ fn engine_recorded_ops_land_on_the_undo_stack_and_the_palette_picks_the_place_to
     h.state_mut().backend.recorded.push(RecordedOp { label: "Sculpt".into(), op: Op::TerrainPatch { layer: TerrainKind::Height, rect: [0, 0, 2, 2], before: 1, after: 2 }, key: None });
     h.run_steps(3);
     assert!(h.state().ui.can_undo(), "a stroke the engine recorded is undoable");
-    h.state_mut().ui.show_panel("Tool").unwrap();
+    h.state_mut().ui.show_panel("Place").unwrap();
     h.run_steps(3);
-    h.get_by_label("Start").click();
+    h.get_by_label("Start line").click();
     h.run_steps(4);
     assert_eq!(h.state().backend.active.as_deref(), Some("place"));
+}
+
+#[test]
+fn the_outliner_groups_roots_into_folders_with_counts() {
+    let mut h = harness();
+    h.get_by_label("Meshes (2)");
+    h.get_by_label("Lights (1)");
+    h.get_by_label("Cameras (1)");
+    // Folders fold; clicking one does not select anything.
+    h.get_by_label("Meshes (2)").click();
+    h.run_steps(3);
+    assert!(h.state_mut().backend.selection().is_empty());
+}
+
+#[test]
+fn menus_open_and_run_commands_and_f1_shows_the_controls() {
+    let mut h = harness();
+    h.get_by_label("File").click();
+    h.run_steps(3);
+    h.get_by_label_contains("Save as...");
+    h.get_by_label_contains("Open level...");
+    // Edit > Select all selects every non-generated entity.
+    h.get_by_label("Edit").click();
+    h.run_steps(3);
+    h.get_by_label_contains("Select all").click();
+    h.run_steps(3);
+    assert!(h.state_mut().backend.selection().len() >= 4);
+    h.key_press(egui::Key::F1);
+    h.run_steps(3);
+    assert!(h.get_all_by_label("Controls and shortcuts").count() >= 1);
+    h.get_by_label("W A S D");
+}
+
+#[test]
+fn view_menu_toggles_panels_and_resets_the_layout() {
+    let mut h = harness();
+    h.get_by_label("View").click();
+    h.run_steps(3);
+    h.get_all_by_label("Output").last().expect("the menu checkbox").click();
+    h.run_steps(3);
+    h.state_mut().ui.run(&egui::Context::default(), &mut MockBackend::demo(), Command::ResetLayout);
+    h.run_steps(3);
+    assert!(h.state().ui.layout().contains(&editor_ui::Panel::Place), "the default layout has the Place tab");
+    assert!(h.state().ui.layout().contains(&editor_ui::Panel::Output));
+}
+
+#[test]
+fn the_toolbar_marks_the_active_tool_and_tooltips_carry_the_key() {
+    let mut h = harness();
+    h.get_by_label("Rotate").click();
+    h.run_steps(3);
+    assert_eq!(h.state().ui.tool(), Tool::Rotate);
+    h.get_by_label("Select").click();
+    h.run_steps(3);
+    assert_eq!(h.state().ui.tool(), Tool::Select);
+    assert!(h.state().backend.viewport_cmds.contains(&ViewportCmd::SetTool(Tool::Select)));
+}
+
+#[test]
+fn duplicate_goes_through_the_backend_and_is_undoable() {
+    let mut h = harness();
+    h.get_by_label("Crate").click();
+    h.run_steps(3);
+    let before = h.state().backend.len();
+    h.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::D);
+    h.run_steps(4);
+    assert_eq!(h.state().backend.len(), before + 2, "the crate and its lid");
+    assert!(h.state().ui.can_undo());
 }

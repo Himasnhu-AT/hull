@@ -29,6 +29,17 @@ pub trait EditorBackend {
     fn diagnostics(&mut self, since: u64) -> (u64, Vec<Diagnostic>);
     fn viewport(&mut self, cmd: ViewportCmd);
 
+    /// Copies the entities (children included, fresh stable ids), applies the spawn and returns
+    /// the `Spawn` op for the undo stack (a `Batch` for several).
+    fn duplicate(&mut self, _ids: &[EntityId]) -> Result<Op, String> {
+        Err("duplicate is not supported by this backend".into())
+    }
+
+    /// Camera speed, space, grid and orientation for the viewport overlay.
+    fn view_info(&mut self) -> ViewInfo {
+        ViewInfo::default()
+    }
+
     // ---- tools (defaults: none, so a backend without world tools needs nothing) ----------
     /// The tools beyond Move / Rotate / Scale, with their current settings.
     fn tools(&mut self) -> Vec<ToolDoc> {

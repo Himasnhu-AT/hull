@@ -101,13 +101,19 @@ fn node_kind(world: &World, e: Entity) -> NodeKind {
             NodeKind::Audio
         } else if name.ends_with("::Logic") {
             NodeKind::Logic
+        } else if name.ends_with("::Spline") {
+            NodeKind::Spline
+        } else if name.ends_with("::PcgVolume") {
+            NodeKind::Foliage
+        } else if world.get_resource::<crate::level::Placeables>().is_some_and(|p| p.0.iter().any(|x| x.type_path == name)) {
+            NodeKind::Gameplay
         } else if name.contains("Mesh3d") || name.contains("WorldAssetRoot") || name.ends_with("::Primitive") {
             NodeKind::Mesh
         } else {
             continue;
         };
         // Lights and cameras win over a mesh on the same entity.
-        if kind == NodeKind::Empty || matches!(k, NodeKind::Light | NodeKind::Camera) {
+        if kind == NodeKind::Empty || matches!(k, NodeKind::Light | NodeKind::Camera | NodeKind::Spline | NodeKind::Foliage | NodeKind::Gameplay) {
             kind = k;
         }
     }
@@ -316,6 +322,20 @@ fn spawn_snapshot(world: &mut World, snap: &EntitySnapshot, parent: Option<Entit
         st.next_id = st.next_id.max(snap.stable.0);
     }
     Ok(e)
+}
+
+/// Gives the snapshot and every child a fresh stable id (a copy must not clash with the original).
+fn fresh_ids(world: &mut World, snap: &mut EntitySnapshot) {
+    let old = snap.stable;
+    let new = level::new_stable_id(world);
+    // Reserve the id so the next call differs: the entity does not exist yet, so bump the counter.
+    world.resource_mut::<level::LevelState>().next_id = new.0;
+    snap.stable = StableId(new.0);
+    for c in &mut snap.children {
+        c.parent = Some(snap.stable);
+        fresh_ids(world, c);
+    }
+    let _ = old;
 }
 
 fn apply_op(world: &mut World, op: &Op) -> Result<(), String> {
@@ -578,6 +598,40 @@ impl EditorBackend for WorldBackend<'_> {
         self.world.resource::<EditorState>().diagnostics_since(since)
     }
 
+    fn duplicate(&mut self, ids: &[EntityId]) -> Result<Op, String> {
+        let mut ops = Vec::new();
+        let mut copies = Vec::new();
+        for id in ids {
+            let e = resolve(self.world, StableOrId::Id(*id))?;
+            let mut snap = snapshot_entity(self.world, e)?;
+            fresh_ids(self.world, &mut snap);
+            snap.name = format!("{} copy", snap.name);
+            // Beside the original, so the copy is visible.
+            for (tp, v) in snap.components.iter_mut() {
+                if tp.ends_with("::Transform")
+                    && let Some(x) = v.pointer_mut("/translation/0")
+                    && let Some(f) = x.as_f64()
+                {
+                    *x = serde_json::json!(f + 1.0);
+                }
+            }
+            spawn_snapshot(self.world, &snap, None)?;
+            copies.push(snap.stable);
+            ops.push(Op::Spawn { snapshot: snap });
+        }
+        if let Some(first) = copies.first().and_then(|s| by_stable(self.world, *s)) {
+            self.world.resource_mut::<EditorState>().selection = vec![first];
+        }
+        Ok(if ops.len() == 1 { ops.remove(0) } else { Op::Batch(ops) })
+    }
+
+    fn view_info(&mut self) -> ViewInfo {
+        let st = self.world.resource::<EditorState>();
+        let (local, grid) = (st.local_space, st.show_grid);
+        let cam = self.world.resource::<super::camera::EditorCamera>();
+        ViewInfo { camera_speed: cam.speed, local_space: local, show_grid: grid, camera_rotation: cam.rotation().to_array() }
+    }
+
     fn tools(&mut self) -> Vec<ToolDoc> {
         super::tools::docs(self.world)
     }
@@ -611,6 +665,9 @@ impl EditorBackend for WorldBackend<'_> {
         match cmd {
             ViewportCmd::FocusSelection => super::camera::focus_selection(self.world),
             ViewportCmd::SetTool(t) => self.world.resource_mut::<EditorState>().tool = t,
+            ViewportCmd::SetCameraSpeed(v) => self.world.resource_mut::<super::camera::EditorCamera>().speed = v.clamp(0.2, 400.0),
+            ViewportCmd::SetLocalSpace(on) => self.world.resource_mut::<EditorState>().local_space = on,
+            ViewportCmd::SetShowGrid(on) => self.world.resource_mut::<EditorState>().show_grid = on,
             ViewportCmd::SetSnap { enabled, step } => {
                 let mut st = self.world.resource_mut::<EditorState>();
                 st.snap = enabled;

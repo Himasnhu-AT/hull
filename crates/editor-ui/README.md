@@ -37,7 +37,7 @@ in-memory `mock::MockBackend`); `-- --shot out.png [TabLabel]` renders one headl
 - **Output**: diagnostics with a level filter; click a row to copy `file:line:col`.
 - **Logic**: placeholder; with feature `snarl` a 3-node egui-snarl demo graph.
 - **Command palette** (Cmd+K): every toolbar action is a command (`model::COMMANDS`):
-  Cmd+S save, Cmd+Shift+S save as, Cmd+O open, Cmd+Z undo, Cmd+Shift+Z / Cmd+Y redo, W/E/R tools,
+  Cmd+S save, Cmd+Shift+S save as, Cmd+O open, Cmd+Z undo, Cmd+Shift+Z / Cmd+Y redo, 1-4 tools (Select, Move, Rotate, Scale), 5-9 world tools, Cmd+D duplicate, Cmd+A select all, F1 controls,
   G snap, F focus, F2 rename, Delete, Cmd+P play/stop.
 
 ## Undo

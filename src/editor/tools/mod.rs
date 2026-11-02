@@ -131,6 +131,7 @@ pub fn update(world: &mut World) {
     world.resource_scope(|world, mut ts: Mut<ToolState>| {
         ts.overlay.lines.clear();
         ts.overlay.spheres.clear();
+        world.resource_mut::<EditorState>().tool_active = ts.active.is_some();
         let Some(id) = ts.active.clone() else { return };
         if world.resource::<EditorState>().play.is_running() {
             return;
