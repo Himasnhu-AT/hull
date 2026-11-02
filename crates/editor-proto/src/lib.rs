@@ -41,6 +41,12 @@ pub enum NodeKind {
     Logic,
     Generated,
     Other,
+    /// A `Spline` (roads).
+    Spline,
+    /// A foliage / PCG volume.
+    Foliage,
+    /// A registered placeable (gameplay markers, events).
+    Gameplay,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -368,6 +374,8 @@ pub struct Diagnostic {
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Tool {
+    /// No gizmo: clicking selects.
+    Select,
     #[default]
     Move,
     Rotate,
@@ -384,6 +392,28 @@ pub enum ViewportCmd {
         enabled: bool,
         step: f32,
     },
+    /// Fly speed in metres per second.
+    SetCameraSpeed(f32),
+    /// Gizmo axes: the entity's own (true) or the world's.
+    SetLocalSpace(bool),
+    /// The faint ground grid.
+    SetShowGrid(bool),
+}
+
+/// What the viewport overlay shows, read every frame.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ViewInfo {
+    pub camera_speed: f32,
+    pub local_space: bool,
+    pub show_grid: bool,
+    /// Camera rotation as `[x, y, z, w]` (for the axis gizmo).
+    pub camera_rotation: [f32; 4],
+}
+
+impl Default for ViewInfo {
+    fn default() -> Self {
+        ViewInfo { camera_speed: 8.0, local_space: false, show_grid: true, camera_rotation: [0.0, 0.0, 0.0, 1.0] }
+    }
 }
 
 #[cfg(test)]

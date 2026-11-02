@@ -75,6 +75,12 @@ pub(super) fn register(app: &mut App) {
             camera,
         )
         .add_control_command("editor.command", "Run a UI command by id (editor.undo, editor.redo, editor.tool_move, ...)", params(&[("id", "string", "command id")]), command)
+        .add_control_command(
+            "editor.camera_drive",
+            "Move the camera as the keys / mouse would: `wish` [x right, y up, z back] for `seconds`, `yaw` / `pitch` change in radians",
+            params(&[("wish", "array", "camera-local direction"), ("seconds", "number", "how long"), ("yaw", "number", "radians"), ("pitch", "number", "radians")]),
+            camera_drive,
+        )
         .add_control_command("editor.tools", "The world tools with their settings and schemas", params(&[]), tools_list)
         .add_control_command(
             "editor.tool",
@@ -258,6 +264,7 @@ fn viewport(world: &mut World, p: Value) -> Result<Value, String> {
     // The toolbar owns the tool: go through its command so the UI and the gizmo agree.
     if let ViewportCmd::SetTool(t) = cmd {
         let id = match t {
+            Tool::Select => "editor.tool_select",
             Tool::Move => "editor.tool_move",
             Tool::Rotate => "editor.tool_rotate",
             Tool::Scale => "editor.tool_scale",
@@ -336,4 +343,15 @@ fn tool(world: &mut World, p: Value) -> Result<Value, String> {
 
 fn tool_action(world: &mut World, p: Value) -> Result<Value, String> {
     super::tools::action(world, &p)
+}
+
+fn camera_drive(world: &mut World, p: Value) -> Result<Value, String> {
+    let mut cam = world.resource_mut::<EditorCamera>();
+    if let Some(w) = p.get("wish").and_then(vec3) {
+        let secs = p.get("seconds").and_then(Value::as_f64).unwrap_or(0.5) as f32;
+        cam.script = Some((w, secs.clamp(0.0, 10.0)));
+    }
+    cam.yaw += p.get("yaw").and_then(Value::as_f64).unwrap_or(0.0) as f32;
+    cam.pitch += p.get("pitch").and_then(Value::as_f64).unwrap_or(0.0) as f32;
+    Ok(json!({"pos": cam.pos.to_array(), "yaw": cam.yaw, "pitch": cam.pitch}))
 }

@@ -97,8 +97,17 @@ fn shot(path: &str, tab: Option<&str>) -> eframe::Result {
     h.run_steps(3);
     h.get_by_label("Crate").click();
     h.run_steps(4);
-    if let Some(tab) = tab {
-        h.get_by_label(tab).click();
+    for step in tab.into_iter().flat_map(|t| t.split(',')) {
+        match step {
+            "help" => h.key_press(egui::Key::F1),
+            s if s.starts_with("menu:") => {
+                h.get_by_label(&s[5..]).click();
+                h.run_steps(3);
+                continue;
+            }
+            s if s.starts_with("item:") => h.get_by_label_contains(&s[5..]).click(),
+            s => h.get_all_by_label(s).next().expect("label").click(),
+        }
         h.run_steps(4);
     }
     match h.render() {

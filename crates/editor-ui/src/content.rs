@@ -2,9 +2,8 @@
 
 use ashlar_ui::search::SearchField;
 use ashlar_ui::tokens::{self, Tokens};
-use ashlar_ui::virtual_list::{RowHeights, VirtualList};
 use editor_proto::{AssetEntry, AssetKind};
-use egui::{Color32, Rect, Sense, Ui, pos2, vec2};
+use egui::{Color32, Rect, Sense, Ui, vec2};
 
 use crate::model::Req;
 
@@ -87,55 +86,61 @@ pub(crate) fn show(ui: &mut Ui, st: &mut ContentState, entries: &[AssetEntry], r
         ui.add_space(t.space.md);
         ui.label(egui::RichText::new(if entries.is_empty() { "Empty folder" } else { "No matches" }).color(t.text.disabled));
     }
-    let selected = st.selected;
-    let label_of = |i: usize| list.get(i).map_or("", |e| e.name.as_str());
-    let out = VirtualList::new("content.list", list.len(), RowHeights::Uniform(t.control_height + 4.0))
-        .selected(selected)
-        .stripes(true)
-        .row_label(&label_of)
-        .show(ui, |ui, row| {
-            let Some(e) = list.get(row.index) else { return };
-            crate::model::a11y_row(ui, row.rect, egui::Id::new(("content.row", &e.path)), &e.name, row.selected);
-            let mid = row.rect.center().y;
-            let color = if row.selected { t.selection_text } else { t.text.primary };
-            ui.painter().text(
-                pos2(row.rect.left() + 4.0, mid),
-                egui::Align2::LEFT_CENTER,
-                glyph(e.kind),
-                Tokens::font(t.type_scale.small),
-                if row.selected { t.selection_text } else { t.accent },
-            );
-            ui.painter().text(
-                pos2(row.rect.left() + 44.0, mid),
-                egui::Align2::LEFT_CENTER,
-                &e.name,
-                Tokens::font(t.type_scale.body),
-                color,
-            );
-            let mut right = row.rect.right() - 6.0;
-            if e.kind != AssetKind::Folder {
-                let br = Rect::from_center_size(pos2(right - 24.0, mid), vec2(48.0, t.control_height - 6.0));
-                let r = ui.put(br, egui::Button::new("Place").small());
-                if r.clicked() {
-                    reqs.push(Req::Place(e.path.clone()));
+    // A grid of tiles: a big glyph (a thumbnail when the backend has one), the name, the licence.
+    let tile = vec2(104.0, 98.0);
+    let mut activate: Option<usize> = None;
+    let mut click: Option<usize> = None;
+    egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
+        ui.horizontal_wrapped(|ui| {
+            ui.spacing_mut().item_spacing = vec2(8.0, 8.0);
+            for (i, e) in list.iter().enumerate() {
+                let (rect, resp) = ui.allocate_exact_size(tile, Sense::click());
+                let selected = st.selected == Some(i);
+                crate::model::a11y_row(ui, rect, egui::Id::new(("content.row", &e.path)), &e.name, selected);
+                let bg = if selected { t.selection } else if resp.hovered() { t.surface.raised } else { t.surface.panel };
+                ui.painter().rect_filled(rect, 6.0, bg);
+                ui.painter().rect_stroke(rect, 6.0, egui::Stroke::new(1.0, if selected { t.accent } else { t.text.disabled }), egui::StrokeKind::Inside);
+                let icon = Rect::from_min_size(rect.min + vec2(8.0, 8.0), vec2(tile.x - 16.0, 48.0));
+                let kc = match e.kind {
+                    AssetKind::Folder => t.status.warning,
+                    AssetKind::Model => t.status.info,
+                    AssetKind::Texture => t.status.success,
+                    _ => t.accent,
+                };
+                ui.painter().rect_filled(icon, 4.0, kc.gamma_multiply(0.18));
+                ui.painter().text(icon.center(), egui::Align2::CENTER_CENTER, glyph(e.kind), Tokens::font(t.type_scale.heading), kc);
+                let name = e.name.trim_end_matches(".glb").trim_end_matches(".gltf");
+                let g = ui.painter().layout(name.to_owned(), Tokens::font(t.type_scale.small), if selected { t.selection_text } else { t.text.primary }, tile.x - 10.0);
+                ui.painter().with_clip_rect(Rect::from_min_size(rect.min + vec2(5.0, 60.0), vec2(tile.x - 10.0, 18.0))).galley(rect.min + vec2(5.0, 61.0), g, t.text.primary);
+                if let Some(l) = &e.license {
+                    let c = licence_color(l, &t);
+                    ui.painter().text(rect.min + vec2(6.0, tile.y - 12.0), egui::Align2::LEFT_CENTER, l, Tokens::font(t.type_scale.small), c);
                 }
-                r.on_hover_text("Place at the origin");
-                right = br.left() - 6.0;
-            }
-            if let Some(l) = &e.license {
-                let g = ui.painter().layout_no_wrap(l.clone(), Tokens::font(t.type_scale.small), t.text.primary);
-                let r = Rect::from_center_size(pos2(right - g.size().x / 2.0 - 6.0, mid), g.size() + vec2(12.0, 4.0));
-                let c = licence_color(l, &t);
-                ui.painter().rect_filled(r, 8.0, c.gamma_multiply(0.25));
-                ui.painter().rect_stroke(r, 8.0, egui::Stroke::new(1.0, c), egui::StrokeKind::Inside);
-                ui.painter().galley(r.center() - g.size() / 2.0, g, c);
-                let _ = Sense::hover();
+                if e.kind != AssetKind::Folder {
+                    let br = Rect::from_min_size(rect.right_bottom() - vec2(54.0, 22.0), vec2(50.0, 18.0));
+                    let r = ui.put(br, egui::Button::new(egui::RichText::new("Place").small()).small().wrap_mode(egui::TextWrapMode::Extend));
+                    if r.clicked() {
+                        reqs.push(Req::Place(e.path.clone()));
+                    }
+                    r.on_hover_text("Place at the middle of the view");
+                }
+                resp.clone().on_hover_text(&e.path);
+                if resp.double_clicked() {
+                    activate = Some(i);
+                } else if resp.clicked() {
+                    click = Some(i);
+                }
             }
         });
-    if let Some(i) = out.select.or(out.clicked) {
+    });
+    if let Some(i) = click {
         st.selected = Some(i);
+        // A folder opens on a single click; files select (double-click or Place puts them in).
+        if let Some(e) = list.get(i).filter(|e| e.kind == AssetKind::Folder) {
+            goto = Some(e.path.clone());
+        }
     }
-    if let Some(i) = out.activated.or(out.double_clicked)
+    if let Some(i) = activate
         && let Some(e) = list.get(i)
     {
         if e.kind == AssetKind::Folder {

@@ -277,26 +277,50 @@ still sees them: gate it. The render scale is forced to 1.
 left, Details right, viewport in the middle, Content / Output / Logic tabs below, status bar.
 The dock layout is saved to `<data dir>/editor_ui.json`.
 
-**Viewport controls** (pointer over the viewport):
+**Viewport controls**. No mouse button has to be held, so a trackpad is enough. They work while
+the pointer is over the viewport and no text field has the keyboard (Cmd / Ctrl held = a shortcut,
+not a move):
 
 | Input | Does |
 |---|---|
-| Right mouse + W A S D, Q / E | fly (Shift = 3x); scroll while flying = fly speed |
-| Scroll | dolly forward / back |
+| W A S D | move the camera (Shift = 3x faster); eases in and out |
+| Q / E | down / up |
+| Arrow keys | turn |
+| Drag on empty space (past 4 px) | look around (yaw / pitch). A click without dragging selects (Shift / Cmd adds, empty space clears; lights are picked by their marker) |
+| Drag a gizmo handle | move / rotate / scale; one undo step per drag (a press on a handle never turns the camera) |
+| Right-drag | look around too; scroll while looking = fly speed (also set in the overlay) |
+| Two-finger scroll, pinch | dolly forward / back |
 | Alt + left drag | orbit around the selection (else a point ahead) |
-| Middle drag | pan |
-| Left click | select (Shift / Ctrl / Cmd toggles; empty space clears); lights are picked by their marker |
-| Drag a gizmo handle | move / rotate / scale; one undo step per drag |
+| Middle drag, or Space + left drag | pan |
 | F | frame the selection |
-| W / E / R | Move / Rotate / Scale tool |
-| G | snap on/off (step from the toolbar: metres, degrees for rotate) |
-| Cmd+S, Cmd+Z, Cmd+Shift+Z, Delete, F2, Cmd+P, Cmd+K | save, undo, redo, delete, rename, play/stop, command palette |
+| 1 / 2 / 3 / 4 | Select / Move / Rotate / Scale tool |
+| 5 - 9 | the world tools, in toolbar order (Spline, Sculpt, Paint, Foliage, Place) |
+| G / L | snap on-off / local-world gizmo axes |
+| Cmd+S, Cmd+Z, Cmd+Shift+Z, Cmd+D, Cmd+A, Delete, F2, Cmd+P, Cmd+K, F1 | save, undo, redo, duplicate, select all, delete, rename, play/stop, command palette, the Controls window |
 
-Move: three arrows and three plane squares (world axes; set `EditorState::local_space` for local).
+The input rules are the pure `Mouse` state machine in `src/editor/camera.rs` (click vs look
+threshold, gizmo priority, typing gate; unit tests). A world tool owns the left button, the camera
+keeps right / middle / Alt / Space drags. `editor.camera_drive {wish, seconds, yaw, pitch}` drives
+the camera like the keys do, for scripts.
+
+**The window** (all in `crates/editor-ui`): a menu bar (File with Recent, Edit with Duplicate and
+Select all, View with a checkbox per panel, the ground grid and Reset layout, Tools, Game, Help);
+a toolbar with Play / Stop first (green / red), the transform tools and world tools with the active
+one filled, Undo / Redo, Save, and tooltips that carry the shortcut; a viewport overlay (camera
+speed, Snap with its step, Local / World, an axis gizmo, and a one-line control hint you can
+dismiss); Outliner left with entities in folders by kind (Roads / Splines, Gameplay, Foliage,
+Lights, Cameras, Meshes, Other, and a Generated folder folded by default) with a Type column, an
+eye per row and search matches highlighted; Place next to it (placeable types by category, library
+models by kit); Details right with the name, type and id, a component search and Transform first;
+Tool next to Details; Content, Output, Logic at the bottom (Content is a grid of tiles with
+licence badges); a status bar with the tool, the level (`*` = unsaved), the play state and the last
+message. Help > Controls (F1) lists every shortcut. Type sizes are 14 px body, 12 px small.
+
+Select: no gizmo. Move: three arrows and three plane squares (world axes; Local in the overlay or `L`).
 Rotate: three rings. Scale: three handles with boxes (local axes) and a centre box for uniform
 scale. Handles keep a constant size on screen and are picked by screen-space distance.
 Generated entities (built by code, no `LevelEntity`) show greyed in the Outliner and get no gizmo.
-Holding the right mouse button stops egui getting keys, so W/E/R do not switch tools while flying.
+While the camera is being dragged egui gets no keys.
 
 **Play / Stop**: see `src/editor/play.rs`. Play writes the level to
 `<data dir>/play/editor_play.level.ron` (the open file is untouched), runs

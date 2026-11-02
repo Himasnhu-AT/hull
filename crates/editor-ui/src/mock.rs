@@ -168,6 +168,11 @@ impl MockBackend {
         m.add("Lid", Some(cr), NodeKind::Mesh, false, vec![(TRANSFORM, transform(0.0, 0.5, 0.0))]);
         m.add("Player", None, NodeKind::Camera, false, vec![(TRANSFORM, transform(0.0, 1.7, 5.0))]);
         m.add("Skybox", None, NodeKind::Generated, true, vec![(TRANSFORM, transform(0.0, 0.0, 0.0))]);
+        m.placeable_docs = vec![
+            PlaceableDoc { name: "Event marker".into(), icon: "flag".into(), category: "Gameplay".into(), type_path: "game::EventMarker".into() },
+            PlaceableDoc { name: "Start line".into(), icon: "flag".into(), category: "Gameplay".into(), type_path: "game::StartLine".into() },
+            PlaceableDoc { name: "Point light".into(), icon: "light".into(), category: "Lights".into(), type_path: "game::PointLight".into() },
+        ];
         m.assets = vec![
             (
                 String::new(),
@@ -416,6 +421,29 @@ fn asset(path: &str, kind: AssetKind, license: Option<&str>) -> AssetEntry {
 }
 
 impl EditorBackend for MockBackend {
+    fn duplicate(&mut self, ids: &[EntityId]) -> Result<Op, String> {
+        let mut ops = Vec::new();
+        for id in ids {
+            let mut snap = self.snapshot(*id)?;
+            fn renumber(s: &mut EntitySnapshot, next: &mut u64) {
+                *next += 1;
+                s.stable = StableId(*next);
+                let me = s.stable;
+                for c in &mut s.children {
+                    c.parent = Some(me);
+                    renumber(c, next);
+                }
+            }
+            let mut next = 10_000 + self.len() as u64 * 10;
+            renumber(&mut snap, &mut next);
+            snap.name = format!("{} copy", snap.name);
+            snap.parent = None;
+            self.apply(&Op::Spawn { snapshot: snap.clone() })?;
+            ops.push(Op::Spawn { snapshot: snap });
+        }
+        Ok(if ops.len() == 1 { ops.remove(0) } else { Op::Batch(ops) })
+    }
+
     fn tools(&mut self) -> Vec<ToolDoc> {
         self.tool_docs.clone()
     }
