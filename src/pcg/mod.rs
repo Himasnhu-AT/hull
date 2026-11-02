@@ -617,7 +617,6 @@ pub fn regenerate(world: &mut World) {
 
 #[cfg(feature = "devtools")]
 mod devtools {
-    use bevy::prelude::*;
     use serde_json::{Value, json};
 
     use super::*;

@@ -565,15 +565,15 @@ impl AnimGraphBuilder {
                 Ok(())
             };
             layer.entry_id = match &layer.entry {
-                Some(e) => sid(e).map_err(&wrap)?,
+                Some(e) => sid(e).map_err(wrap)?,
                 None => 0,
             };
             layer.weight_id = match &layer.weight_param {
-                Some(p) => Some(pid(p).map_err(&wrap)?),
+                Some(p) => Some(pid(p).map_err(wrap)?),
                 None => None,
             };
             for t in &mut layer.any {
-                resolve_t(t).map_err(&wrap)?;
+                resolve_t(t).map_err(wrap)?;
             }
             let mut slot = 0u16;
             for st in &mut layer.states {
@@ -584,21 +584,21 @@ impl AnimGraphBuilder {
                 }
                 slot += n as u16;
                 st.speed_id = match &st.speed_param {
-                    Some(p) => Some(pid(p).map_err(&wrap)?),
+                    Some(p) => Some(pid(p).map_err(wrap)?),
                     None => None,
                 };
                 match &mut st.motion {
                     Motion::Clip(_) => {}
                     Motion::Blend1d { param, points, id } => {
-                        *id = pid(param).map_err(&wrap)?;
+                        *id = pid(param).map_err(wrap)?;
                         points.sort_by(|a, b| a.0.total_cmp(&b.0));
                     }
                     Motion::Blend2d { x, y, ids, .. } => {
-                        *ids = [pid(x).map_err(&wrap)?, pid(y).map_err(&wrap)?];
+                        *ids = [pid(x).map_err(wrap)?, pid(y).map_err(wrap)?];
                     }
                 }
                 for t in &mut st.transitions {
-                    resolve_t(t).map_err(&wrap)?;
+                    resolve_t(t).map_err(wrap)?;
                 }
             }
             layer.slots = slot;

@@ -18,7 +18,7 @@ use super::origin::{OriginShifted, WorldOrigin};
 /// The terrain material.
 pub type TerrainMaterial = ExtendedMaterial<StandardMaterial, TerrainExt>;
 
-/// Uniform block of [`TerrainExt`] (see `terrain.wgsl`).
+/// Uniform block of [`TerrainExt`] (see `terrain.wesl`).
 #[derive(ShaderType, Reflect, Clone, Debug, Default)]
 pub struct TerrainParams {
     pub colors: [Vec4; 4],
@@ -54,7 +54,7 @@ pub struct TerrainExt {
 
 impl MaterialExtension for TerrainExt {
     fn fragment_shader() -> ShaderRef {
-        "embedded://engine/world/terrain.wgsl".into()
+        "embedded://engine/world/terrain.wesl".into()
     }
 }
 
@@ -222,7 +222,7 @@ impl Plugin for TerrainMaterialPlugin {
         if !app.is_plugin_added::<bevy::pbr::PbrPlugin>() {
             return;
         }
-        bevy::asset::embedded_asset!(app, "terrain.wgsl");
+        bevy::asset::embedded_asset!(app, "terrain.wesl");
         app.add_plugins(MaterialPlugin::<TerrainMaterial>::default()).add_systems(PostUpdate, follow_origin.in_set(super::WorldSystems::Terrain));
     }
 }

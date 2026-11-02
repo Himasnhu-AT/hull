@@ -98,7 +98,7 @@ pub(super) fn build(app: &mut App) {
     let _ = app
         .world_mut()
         .resource_mut::<Assets<Shader>>()
-        .insert(SHADER.id(), Shader::from_wgsl(include_str!("particle.wgsl"), "engine/vfx/particle.wgsl"));
+        .insert(SHADER.id(), Shader::from_wesl(include_str!("particle.wesl"), "engine/vfx/particle.wesl"));
     let timing = GpuTiming::default();
     app.insert_resource(timing.clone());
     let Some(render_app) = app.get_sub_app_mut(RenderApp) else { return };

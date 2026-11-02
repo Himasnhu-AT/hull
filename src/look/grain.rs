@@ -28,7 +28,7 @@ impl Default for FilmGrain {
 
 impl FullscreenMaterial for FilmGrain {
     fn fragment_shader() -> ShaderRef {
-        "embedded://engine/look/film_grain.wgsl".into()
+        "embedded://engine/look/film_grain.wesl".into()
     }
 }
 
@@ -36,7 +36,7 @@ pub(super) fn plugin(app: &mut App) {
     if app.get_sub_app(bevy::render::RenderApp).is_none() {
         return;
     }
-    bevy::asset::embedded_asset!(app, "film_grain.wgsl");
+    bevy::asset::embedded_asset!(app, "film_grain.wesl");
     app.add_plugins(FullscreenMaterialPlugin::<FilmGrain>::default());
 }
 

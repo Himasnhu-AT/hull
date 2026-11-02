@@ -948,7 +948,7 @@ fn apply_nav(
     mut out: MessageWriter<UiActivated>,
     mut back: MessageWriter<NavBack>,
 ) {
-    let inputs: Vec<NavInput> = queue.0.drain(..).collect();
+    let inputs: Vec<NavInput> = std::mem::take(&mut queue.0);
     for input in inputs {
         let cur = focus.0.and_then(|e| focusables.get(e).ok());
         let row_def = cur.and_then(|(e, _)| rows.get(e).ok()).and_then(|r| reg.as_deref()?.field(r.0));

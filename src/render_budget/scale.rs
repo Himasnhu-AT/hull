@@ -26,7 +26,7 @@ use bevy::camera::{CameraUpdateSystems, RenderTarget};
 use bevy::core_pipeline::tonemapping::{DebandDither, Tonemapping};
 use bevy::image::ImageSampler;
 use bevy::prelude::*;
-use bevy::render::render_resource::{Extent3d, TextureFormat};
+use bevy::render::render_resource::TextureFormat;
 use bevy::ui::IsDefaultUiCamera;
 use bevy::window::{PrimaryWindow, WindowRef};
 
@@ -139,8 +139,8 @@ fn apply_render_scale(
                     ec.insert(IsDefaultUiCamera);
                 }
             }
-            commands.entity(s.camera).despawn();
-            commands.entity(s.sprite).despawn();
+            commands.entity(s.camera).try_despawn();
+            commands.entity(s.sprite).try_despawn();
             images.remove(&s.image);
             commands.remove_resource::<Scaled>();
         }
@@ -154,20 +154,26 @@ fn apply_render_scale(
     let size = scaled_size(physical, want);
 
     match scaled {
-        // Same camera: resize the image when the window or the scale changed.
+        // Same camera: a new image when the window or the scale changed. Resizing the image in
+        // place (`Image::resize`) leaves Bevy 0.20 drawing into the old GPU texture: the 3D view
+        // froze while UI kept updating.
         Some(mut s) if s.main == main => {
             if rs.size != size {
-                if let Some(mut img) = images.get_mut(&s.image) {
-                    img.resize(Extent3d { width: size.x, height: size.y, depth_or_array_layers: 1 });
-                }
+                let mut image = Image::new_target_texture(size.x, size.y, TextureFormat::Rgba8UnormSrgb, None);
+                image.sampler = ImageSampler::linear();
+                let old = std::mem::replace(&mut s.image, images.add(image));
+                images.remove(&old);
                 if let Ok((.., Some(mut taa), _)) = mains.get_mut(main) {
                     taa.reset = true;
                 }
             }
-            if let Ok(mut sprite) = sprites.get_mut(s.sprite)
-                && sprite.custom_size != Some(logical)
-            {
-                sprite.custom_size = Some(logical);
+            if let Ok(mut sprite) = sprites.get_mut(s.sprite) {
+                if sprite.custom_size != Some(logical) {
+                    sprite.custom_size = Some(logical);
+                }
+                if sprite.image != s.image {
+                    sprite.image = s.image.clone();
+                }
             }
             if let Ok((_, mut target, ..)) = mains.get_mut(main)
                 && target.as_image() != Some(&s.image)
@@ -179,8 +185,8 @@ fn apply_render_scale(
         // First time (or the game respawned its camera): build the image and the upscaler.
         stale => {
             if let Some(s) = stale {
-                commands.entity(s.camera).despawn();
-                commands.entity(s.sprite).despawn();
+                commands.entity(s.camera).try_despawn();
+                commands.entity(s.sprite).try_despawn();
                 images.remove(&s.image);
             }
             let mut image = Image::new_target_texture(size.x, size.y, TextureFormat::Rgba8UnormSrgb, None);

@@ -140,7 +140,7 @@ tight loops, each skipped when unused (curl turbulence uses a fast sine). Sub-em
 are delivered to later emitters in the same frame. Same seed + same `dt` sequence = identical
 particles: headless tests assert exact positions (`tests/vfx.rs`, unit tests in each module).
 
-## Rendering (`src/vfx/render.rs`, `src/vfx/gpu.rs`, `src/vfx/particle.wgsl`)
+## Rendering (`src/vfx/render.rs`, `src/vfx/gpu.rs`, `src/vfx/particle.wesl`)
 
 ```text
 PostUpdate  draw: per emitter frustum test, then (parallel over effects) one 52-byte

@@ -1143,7 +1143,7 @@ impl FillCtx<'_> {
                 Some(ms) => (format!("{ms:.1} ms · p95 {}", get("frame.p95_ms").map_or("—".into(), |v| format!("{v:.1} ms"))), t.text_muted),
                 None => none,
             },
-            (Tile::Frame, 2) => (format!("budget {:.1} ms ({:.0} fps) · hitches {}", l.budget_ms, l.target_fps, get("frame.hitches").map_or(0.0, |v| v)), t.text_dim),
+            (Tile::Frame, 2) => (format!("budget {:.1} ms ({:.0} fps) · hitches {}", l.budget_ms, l.target_fps, get("frame.hitches").unwrap_or(0.0)), t.text_dim),
             (Tile::Cpu, 0) => match get("cpu.machine_pct") {
                 Some(p) => (format!("{p:.0}%"), self.palette.value(m.threshold("cpu.machine_pct"), p)),
                 None => dash,

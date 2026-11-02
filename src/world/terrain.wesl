@@ -1,15 +1,12 @@
 // Terrain splat material: StandardMaterial lighting with up to 4 layers blended by an RGBA
 // splat map over the terrain's extent. Each layer: colour × optional tiling texture (sampled
 // with world XZ), roughness. A low-frequency value noise breaks up flat colours.
-#import bevy_pbr::{
+import bevy_pbr::render::{
     pbr_fragment::pbr_input_from_standard_material,
-    pbr_functions::alpha_discard,
+    pbr_functions::{alpha_discard, apply_pbr_lighting, main_pass_post_lighting_processing},
     forward_io::{VertexOutput, FragmentOutput},
-    pbr_functions::{apply_pbr_lighting, main_pass_post_lighting_processing},
-}
-#ifdef VISIBILITY_RANGE_DITHER
-#import bevy_pbr::pbr_functions::visibility_range_dither;
-#endif
+};
+@if(VISIBILITY_RANGE_DITHER) import bevy_pbr::render::pbr_functions::visibility_range_dither;
 
 struct TerrainParams {
     // sRGB-linear colours per layer (a unused)
@@ -22,17 +19,17 @@ struct TerrainParams {
     variation: vec4<f32>,
 };
 
-@group(#{MATERIAL_BIND_GROUP}) @binding(100) var<uniform> terrain: TerrainParams;
-@group(#{MATERIAL_BIND_GROUP}) @binding(101) var splat_tex: texture_2d<f32>;
-@group(#{MATERIAL_BIND_GROUP}) @binding(102) var splat_smp: sampler;
-@group(#{MATERIAL_BIND_GROUP}) @binding(103) var l0_tex: texture_2d<f32>;
-@group(#{MATERIAL_BIND_GROUP}) @binding(104) var l0_smp: sampler;
-@group(#{MATERIAL_BIND_GROUP}) @binding(105) var l1_tex: texture_2d<f32>;
-@group(#{MATERIAL_BIND_GROUP}) @binding(106) var l1_smp: sampler;
-@group(#{MATERIAL_BIND_GROUP}) @binding(107) var l2_tex: texture_2d<f32>;
-@group(#{MATERIAL_BIND_GROUP}) @binding(108) var l2_smp: sampler;
-@group(#{MATERIAL_BIND_GROUP}) @binding(109) var l3_tex: texture_2d<f32>;
-@group(#{MATERIAL_BIND_GROUP}) @binding(110) var l3_smp: sampler;
+@group(constants::MATERIAL_BIND_GROUP) @binding(100) var<uniform> terrain: TerrainParams;
+@group(constants::MATERIAL_BIND_GROUP) @binding(101) var splat_tex: texture_2d<f32>;
+@group(constants::MATERIAL_BIND_GROUP) @binding(102) var splat_smp: sampler;
+@group(constants::MATERIAL_BIND_GROUP) @binding(103) var l0_tex: texture_2d<f32>;
+@group(constants::MATERIAL_BIND_GROUP) @binding(104) var l0_smp: sampler;
+@group(constants::MATERIAL_BIND_GROUP) @binding(105) var l1_tex: texture_2d<f32>;
+@group(constants::MATERIAL_BIND_GROUP) @binding(106) var l1_smp: sampler;
+@group(constants::MATERIAL_BIND_GROUP) @binding(107) var l2_tex: texture_2d<f32>;
+@group(constants::MATERIAL_BIND_GROUP) @binding(108) var l2_smp: sampler;
+@group(constants::MATERIAL_BIND_GROUP) @binding(109) var l3_tex: texture_2d<f32>;
+@group(constants::MATERIAL_BIND_GROUP) @binding(110) var l3_smp: sampler;
 
 fn hash21(p: vec2<f32>) -> f32 {
     let q = fract(p * vec2<f32>(123.34, 456.21));
@@ -59,9 +56,9 @@ fn layer(i: u32, tex: vec3<f32>) -> vec3<f32> {
 @fragment
 fn fragment(vertex_output: VertexOutput, @builtin(front_facing) is_front: bool) -> FragmentOutput {
     var in = vertex_output;
-#ifdef VISIBILITY_RANGE_DITHER
-    visibility_range_dither(in.position, in.visibility_range_dither);
-#endif
+    @if(VISIBILITY_RANGE_DITHER) {
+        visibility_range_dither(in.position, in.visibility_range_dither);
+    }
     var pbr_input = pbr_input_from_standard_material(in, is_front);
 
     let wp = in.world_position.xz;
@@ -83,7 +80,7 @@ fn fragment(vertex_output: VertexOutput, @builtin(front_facing) is_front: bool) 
 
     pbr_input.material.base_color = vec4<f32>(col, 1.0);
     pbr_input.material.perceptual_roughness = clamp(rough, 0.04, 1.0);
-    pbr_input.material.base_color = alpha_discard(pbr_input.material, pbr_input.material.base_color);
+    pbr_input.material.base_color = alpha_discard(pbr_input.material.flags, pbr_input.material.alpha_cutoff, pbr_input.material.base_color);
 
     var out: FragmentOutput;
     out.color = apply_pbr_lighting(pbr_input);

@@ -23,6 +23,9 @@
 //! implementation streams (core, ui, devtools). Don't rename them; add freely.
 
 #![allow(clippy::type_complexity, clippy::too_many_arguments)]
+// Rust 1.99: `chunks_exact(N)` reads fine for byte decoding; the `as_chunks` rewrite it suggests
+// doesn't compile where chunks feed `try_into` (sound/clip.rs).
+#![allow(clippy::chunks_exact_to_as_chunks)]
 
 pub use bevy;
 #[cfg(feature = "physics")]

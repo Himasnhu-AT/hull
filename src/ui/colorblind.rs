@@ -21,7 +21,7 @@ use crate::actions::{Accessibility, ColorblindMode};
 const SHADER: Handle<Shader> = uuid_handle!("8f0c51c2-3c4e-4b5e-9d7f-6a3b2c1d0e11");
 
 const SHADER_SRC: &str = r#"
-#import bevy_core_pipeline::fullscreen_vertex_shader::FullscreenVertexOutput
+import bevy_core_pipeline::fullscreen_vertex_shader::FullscreenVertexOutput;
 
 @group(0) @binding(0) var screen_texture: texture_2d<f32>;
 @group(0) @binding(1) var screen_sampler: sampler;
@@ -98,7 +98,7 @@ pub struct ColorblindPlugin;
 impl Plugin for ColorblindPlugin {
     fn build(&self, app: &mut App) {
         if let Some(mut shaders) = app.world_mut().get_resource_mut::<Assets<Shader>>() {
-            let _ = shaders.insert(SHADER.id(), Shader::from_wgsl(SHADER_SRC, "engine://colorblind.wgsl"));
+            let _ = shaders.insert(SHADER.id(), Shader::from_wesl(SHADER_SRC, "engine://colorblind.wesl"));
         }
         app.add_plugins(FullscreenMaterialPlugin::<ColorFilter>::default()).add_systems(PostUpdate, sync_filter);
     }

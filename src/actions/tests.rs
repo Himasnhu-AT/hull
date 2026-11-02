@@ -1,7 +1,6 @@
 //! Evaluation tests on hand-built device state (no app).
 
 use bevy::input::gamepad::{Gamepad, GamepadButton, GamepadInput};
-use bevy::prelude::*;
 
 use super::state::{Devices, Pads};
 use super::*;

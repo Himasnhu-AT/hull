@@ -3,19 +3,12 @@
 // 2 ribbon segment, 3 flat (plane given by a normal). See `gpu.rs::SpriteInstance`.
 // Output is premultiplied: shading.w = 0 alpha-blends, 1 adds.
 
-#import bevy_pbr::{
-    mesh_view_bindings::{view, lights},
-    view_transformations::{position_world_to_clip, depth_ndc_to_view_z},
-}
-#ifdef DEPTH_PREPASS
-#import bevy_pbr::prepass_utils
-#endif
-#ifdef TONEMAP_IN_SHADER
-#import bevy_core_pipeline::tonemapping::tone_mapping
-#endif
-#ifdef DISTANCE_FOG
-#import bevy_pbr::{mesh_view_bindings::fog, mesh_view_types}
-#endif
+import bevy_pbr::render::mesh_view_bindings::{view, lights};
+import bevy_pbr::render::view_transformations::{position_world_to_clip, depth_ndc_to_view_z};
+@if(DEPTH_PREPASS) import bevy_pbr::prepass::utils as prepass_utils;
+@if(TONEMAP_IN_SHADER) import bevy_core_pipeline::tonemapping::tone_mapping;
+@if(DISTANCE_FOG) import bevy_pbr::render::mesh_view_bindings::fog;
+@if(DISTANCE_FOG) import bevy_pbr::render::mesh_view_types;
 
 struct ParticleUniform {
     // cols, rows, frames, crossfade (0/1)
@@ -114,8 +107,8 @@ fn sample_frame(uv: vec2<f32>, frame: f32) -> vec4<f32> {
     return textureSample(tex, tex_sampler, (cell + uv) / grid);
 }
 
-#ifdef DISTANCE_FOG
 // Fog amount 0..1 at `d` metres (Bevy's formulas, no light scattering).
+@if(DISTANCE_FOG)
 fn fog_amount(d: f32) -> f32 {
     if fog.mode == mesh_view_types::FOG_MODE_LINEAR {
         return 1.0 - clamp((fog.be.y - d) / (fog.be.y - fog.be.x), 0.0, 1.0);
@@ -130,7 +123,6 @@ fn fog_amount(d: f32) -> f32 {
     }
     return 0.0;
 }
-#endif
 
 @fragment
 fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
@@ -160,27 +152,25 @@ fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
     }
 
     var alpha = color.a;
-#ifdef DEPTH_PREPASS
-#ifndef MULTISAMPLED
-    let soft = material.shading.z;
-    if soft > 0.0 {
-        let scene = depth_ndc_to_view_z(prepass_utils::prepass_depth(in.clip, 0u));
-        let here = depth_ndc_to_view_z(in.clip.z);
-        alpha = alpha * clamp((here - scene) / soft, 0.0, 1.0);
+    @if(DEPTH_PREPASS && !MULTISAMPLED) {
+        let soft = material.shading.z;
+        if soft > 0.0 {
+            let scene = depth_ndc_to_view_z(prepass_utils::prepass_depth(in.clip, 0u));
+            let here = depth_ndc_to_view_z(in.clip.z);
+            alpha = alpha * clamp((here - scene) / soft, 0.0, 1.0);
+        }
     }
-#endif
-#endif
 
     let add = material.shading.w;
-#ifdef DISTANCE_FOG
-    let f = fog_amount(length(in.world - view.world_position)) * fog.base_color.a;
-    // Blended particles take the fog colour; additive ones fade out.
-    rgb = mix(mix(rgb, fog.base_color.rgb, f), rgb * (1.0 - f), add);
-#endif
+    @if(DISTANCE_FOG) {
+        let f = fog_amount(length(in.world - view.world_position)) * fog.base_color.a;
+        // Blended particles take the fog colour; additive ones fade out.
+        rgb = mix(mix(rgb, fog.base_color.rgb, f), rgb * (1.0 - f), add);
+    }
     var out = vec4(rgb, alpha);
-#ifdef TONEMAP_IN_SHADER
-    out = tone_mapping(out, view.color_grading);
-#endif
+    @if(TONEMAP_IN_SHADER) {
+        out = tone_mapping(out, view.color_grading);
+    }
     // Premultiplied: alpha blend keeps alpha, additive writes 0 alpha.
     return vec4(out.rgb * out.a, out.a * (1.0 - add));
 }

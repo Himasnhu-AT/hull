@@ -245,6 +245,8 @@ fn spawn_rig(commands: &mut Commands, target: &Handle<Image>, ev100: f32) -> [En
                 RenderTarget::from(target.clone()),
                 Projection::Perspective(PerspectiveProjection { fov: std::f32::consts::FRAC_PI_2, aspect_ratio: 1.0, ..default() }),
                 Tonemapping::None,
+                // Linear HDR captures: no dither (0.20 warns about dither under `None`).
+                bevy::core_pipeline::tonemapping::DebandDither::Disabled,
                 bevy::camera::Hdr,
                 // Forward decals need it in every view that draws them.
                 bevy::core_pipeline::prepass::DepthPrepass,

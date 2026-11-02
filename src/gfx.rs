@@ -171,8 +171,18 @@ pub enum QualitySet {
     Prune,
 }
 
+/// A new main camera gets `Msaa::Off` at once, not a frame later from [`apply_camera_quality`]:
+/// for that frame it would draw with Bevy's default 4x MSAA. A warm-up sent right after spawning
+/// it compiled 4x pipelines that were never used again, and Bevy's prepass depth textures are
+/// shared per render target with the first view's sample count, so a 4x frame next to another
+/// view on the same target failed wgpu validation ("depth sample count 4, colour 1").
+fn main_camera_msaa_off(ev: On<Add<MainCamera>>, mut commands: Commands) {
+    commands.entity(ev.event().entity).try_insert(Msaa::Off);
+}
+
 impl Plugin for GfxPlugin {
     fn build(&self, app: &mut App) {
+        app.add_observer(main_camera_msaa_off);
         app.init_resource::<PendingMips>()
             .init_resource::<QualityPreset>()
             .init_resource::<SsrDeferred>()
@@ -871,5 +881,38 @@ mod tests {
         let Some(VertexAttributeValues::Float32x2(uv)) = m.attribute(Mesh::ATTRIBUTE_UV_0) else { panic!("no uvs") };
         let max = uv.iter().map(|u| u[0].abs()).fold(0.0, f32::max);
         assert!((max - 1.0).abs() < 1e-5);
+    }
+
+    /// Bevy 0.20 dropped naga_oil: shaders with `#import` / `#ifdef` / `#{DEF}` fail to compile
+    /// at runtime (only when first drawn), so `cargo test` never sees it. Engine shaders are WESL.
+    #[test]
+    fn engine_shaders_use_no_naga_oil_directives() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let mut stack = vec![root];
+        let mut checked = 0;
+        while let Some(dir) = stack.pop() {
+            for entry in std::fs::read_dir(&dir).unwrap().flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    stack.push(path);
+                    continue;
+                }
+                let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+                let src = std::fs::read_to_string(&path).unwrap_or_default();
+                // Shader files, and Rust files that carry inline shader source.
+                let shader = matches!(ext, "wgsl" | "wesl") || (ext == "rs" && src.contains("@fragment") && !path.ends_with("gfx.rs"));
+                if !shader {
+                    continue;
+                }
+                checked += 1;
+                assert!(ext != "wgsl" || !src.contains("import "), "{}: imports need a .wesl file", path.display());
+                for (i, line) in src.lines().enumerate() {
+                    let t = line.trim_start();
+                    let bad = ["#import", "#ifdef", "#ifndef", "#else", "#endif", "#define", "#{"].iter().any(|d| t.starts_with(d) || line.contains("#{"));
+                    assert!(!bad, "{}:{}: naga_oil directive (Bevy 0.20 shaders are WESL): {line}", path.display(), i + 1);
+                }
+            }
+        }
+        assert!(checked >= 4, "found only {checked} shaders");
     }
 }

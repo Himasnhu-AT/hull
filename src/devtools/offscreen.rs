@@ -107,7 +107,7 @@ fn retarget_cameras(
     let mut fallback_cam = None;
     for (e, t, .., fallback) in &cams {
         if to_window(t) {
-            commands.entity(e).insert(RenderTarget::from(handle.clone()));
+            commands.entity(e).try_insert(RenderTarget::from(handle.clone()));
             if fallback {
                 fallback_cam.get_or_insert(e);
             } else {
@@ -119,11 +119,12 @@ fn retarget_cameras(
     // Exactly one default UI camera: without a window target, UI only renders through it.
     for (e, _, _, is_ui, _) in &cams {
         if is_ui && Some(e) != ui_cam {
-            commands.entity(e).remove::<IsDefaultUiCamera>();
+            commands.entity(e).try_remove::<IsDefaultUiCamera>();
         }
     }
+    // `try_`: render scale may have queued this camera's despawn this frame (scale back to 1).
     if let Some(e) = ui_cam {
-        commands.entity(e).insert(IsDefaultUiCamera);
+        commands.entity(e).try_insert(IsDefaultUiCamera);
     }
 }
 
