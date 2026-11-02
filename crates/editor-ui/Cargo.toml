@@ -1,0 +1,21 @@
+[package]
+name = "editor-ui"
+description = "Editor UI: egui panels over the EditorBackend trait. No Bevy."
+edition = "2024"
+version = "0.1.0"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[dependencies]
+editor-proto = { path = "../editor-proto" }
+egui = { version = "0.36", default-features = false }
+ashlar-ui = { git = "https://github.com/Himasnhu-AT/ashlar", rev = "561745aaf96e07a0efe2ed61f37b0a365f46a530", features = ["serde"] }
+ashlar-command = { git = "https://github.com/Himasnhu-AT/ashlar", rev = "561745aaf96e07a0efe2ed61f37b0a365f46a530" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[dev-dependencies]
+egui = { version = "0.36", default-features = false, features = ["default_fonts"] }
+egui_kittest = { version = "0.36", features = ["wgpu"] }
+eframe = "0.36"
+image = { version = "0.25", default-features = false, features = ["png"] }
