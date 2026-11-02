@@ -236,7 +236,7 @@ fn finish_builds(
             src += s;
             state.built.push((*cell, key.clone(), mesh.count_vertices()));
             if let (Some(meshes), Some(mats), Some(root)) = (meshes.as_mut(), mats.as_mut(), root) {
-                let aabb = mesh.compute_aabb();
+                let aabb = mesh.get_aabb();
                 let mut mesh = mesh;
                 mesh.asset_usage = RenderAssetUsages::RENDER_WORLD;
                 let corner = cells.cell_min(*cell);

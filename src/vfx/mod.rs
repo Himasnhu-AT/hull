@@ -568,7 +568,7 @@ fn finish(mut commands: Commands, budget: Res<VfxBudget>, mut pool: ResMut<VfxPo
 }
 
 /// Render entities go with their effect.
-fn on_instance_removed(ev: On<Remove, VfxInstance>, q: Query<&VfxInstance>, mut pool: ResMut<VfxPool>, mut commands: Commands) {
+fn on_instance_removed(ev: On<Remove<VfxInstance>>, q: Query<&VfxInstance>, mut pool: ResMut<VfxPool>, mut commands: Commands) {
     let Ok(inst) = q.get(ev.entity) else { return };
     for &r in inst.renders.iter().chain([&inst.light]) {
         if r != Entity::PLACEHOLDER {

@@ -227,7 +227,7 @@ fn setup_probes(
 }
 
 /// A despawned probe takes its filter worker with it.
-fn drop_probe(ev: On<Remove, ProbeTargets>, probes: Query<&ProbeTargets>, mut commands: Commands) {
+fn drop_probe(ev: On<Remove<ProbeTargets>>, probes: Query<&ProbeTargets>, mut commands: Commands) {
     if let Ok(t) = probes.get(ev.event().entity) {
         commands.entity(t.worker).try_despawn();
     }

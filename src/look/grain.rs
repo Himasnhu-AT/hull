@@ -9,6 +9,7 @@ use bevy::shader::ShaderRef;
 
 /// Per-camera film grain settings (inserted by the look; usable by hand too).
 #[derive(Component, ExtractComponent, Clone, Copy, ShaderType, Debug)]
+#[extract_app(bevy::render::RenderApp)]
 pub struct FilmGrain {
     /// 0..1, ≈ 0.05 is subtle.
     pub intensity: f32,

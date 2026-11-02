@@ -460,7 +460,7 @@ fn sample_gpu_objects(instance: Res<bevy::render::renderer::RenderInstance>, out
         return;
     }
     *last = Some(std::time::Instant::now());
-    let Some(r) = instance.0.generate_report() else { return };
+    let Some(r) = instance.generate_report() else { return };
     let h = r.hub_report();
     let n = [&h.buffers, &h.textures, &h.texture_views, &h.bind_groups, &h.render_pipelines, &h.compute_pipelines, &h.samplers]
         .map(|x| x.num_kept_from_user as u32);

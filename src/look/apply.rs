@@ -13,7 +13,7 @@ use bevy::light::{
     Atmosphere, AtmosphereEnvironmentMapLight, CascadeShadowConfigBuilder, EnvironmentMapLight, FogVolume, GeneratedEnvironmentMapLight,
     GlobalAmbientLight, Skybox, SunDisk, VolumetricFog, VolumetricLight,
 };
-use bevy::math::cubic_splines::LinearSpline;
+use bevy::curve::cubic_splines::LinearSpline;
 use bevy::pbr::{AtmosphereSettings, DistanceFog, FogFalloff};
 use bevy::post_process::auto_exposure::{AutoExposure, AutoExposureCompensationCurve};
 use bevy::post_process::bloom::{Bloom, BloomCompositeMode, BloomPrefilter};
@@ -533,7 +533,9 @@ fn exposure_curve(world: &mut World, look: &Look) -> Option<Handle<AutoExposureC
 
 pub(crate) fn tonemapping(t: ToneMap) -> Tonemapping {
     match t {
-        ToneMap::None => Tonemapping::None,
+        // No tone curve, but grading, dither and the clamp still apply (0.20's `None` is a
+        // full passthrough that skips them).
+        ToneMap::None => Tonemapping::Linear,
         ToneMap::Reinhard => Tonemapping::Reinhard,
         ToneMap::ReinhardLuminance => Tonemapping::ReinhardLuminance,
         ToneMap::AcesFitted => Tonemapping::AcesFitted,

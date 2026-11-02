@@ -16,7 +16,11 @@
 use std::collections::HashMap;
 
 use bevy::input::mouse::{AccumulatedMouseMotion, AccumulatedMouseScroll, MouseScrollUnit};
+use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
+// Bevy 0.20: `ui_widgets::Button` + `Hovered` / `Pressed` replace `ui::Button` + `Interaction`.
+use bevy::ui::Pressed;
+use bevy::ui_widgets::Button;
 use bevy::ui::{ComputedNode, RelativeCursorPosition, ScrollPosition, UiGlobalTransform};
 
 use super::menus::MenuAction;
@@ -368,6 +372,7 @@ fn tab_look(t: &Theme) -> Look {
 pub fn nav_button(p: &mut ChildSpawnerCommands, t: &Theme, label_text: &str, action: impl Into<UiAction>, order: u32) {
     p.spawn((
         Button,
+        Hovered::default(),
         ActionButton(action.into()),
         Focusable { order },
         nav_look(t),
@@ -407,6 +412,7 @@ pub fn action_button(
 ) {
     let mut e = p.spawn((
         Button,
+        Hovered::default(),
         ActionButton(action.into()),
         if primary { primary_look(t) } else { secondary_look(t) },
         Node {
@@ -432,6 +438,7 @@ pub fn action_button(
 pub fn tab_button(p: &mut ChildSpawnerCommands, t: &Theme, label_text: &str, index: usize, active: bool) {
     p.spawn((
         Button,
+        Hovered::default(),
         ActionButton(UiAction::Tab(index)),
         TabButton { active },
         tab_look(t),
@@ -458,6 +465,7 @@ pub fn tab_button(p: &mut ChildSpawnerCommands, t: &Theme, label_text: &str, ind
 pub fn field_row(p: &mut ChildSpawnerCommands, t: &Theme, def: &FieldDef, order: u32) {
     p.spawn((
         Button,
+        Hovered::default(),
         FieldRow(def.key),
         Focusable { order },
         row_look(t),
@@ -504,6 +512,7 @@ fn spawn_toggle(p: &mut ChildSpawnerCommands, t: &Theme, key: &'static str) {
             r.spawn((FieldValue(key), text("", label(20.0), t.text_muted), KeepColor, Node { width: px(40), ..default() }));
             r.spawn((
                 Button,
+                Hovered::default(),
                 ToggleSwitch(key),
                 Node {
                     width: px(60),
@@ -541,7 +550,7 @@ fn segment_node() -> Node {
 fn spawn_segments(p: &mut ChildSpawnerCommands, t: &Theme, key: &'static str, options: &[&str]) {
     p.spawn((Node { width: percent(100), column_gap: px(4), ..default() }, Pickable::IGNORE)).with_children(|r| {
         for (i, o) in options.iter().enumerate() {
-            r.spawn((Button, Segment { key, index: i }, segment_look(t), segment_node(), BackgroundColor(CLEAR), BorderColor::all(CLEAR)))
+            r.spawn((Button, Hovered::default(), Segment { key, index: i }, segment_look(t), segment_node(), BackgroundColor(CLEAR), BorderColor::all(CLEAR)))
                 .with_child(text(super::tl(o).to_uppercase(), label(19.0), t.text_muted));
         }
     });
@@ -550,7 +559,7 @@ fn spawn_segments(p: &mut ChildSpawnerCommands, t: &Theme, key: &'static str, op
 fn spawn_swatches(p: &mut ChildSpawnerCommands, t: &Theme, key: &'static str, colors: &[[f32; 3]]) {
     p.spawn((Node { width: percent(100), column_gap: px(4), ..default() }, Pickable::IGNORE)).with_children(|r| {
         for (i, c) in colors.iter().enumerate() {
-            r.spawn((Button, Segment { key, index: i }, swatch_look(t), segment_node(), BackgroundColor(CLEAR), BorderColor::all(CLEAR)))
+            r.spawn((Button, Hovered::default(), Segment { key, index: i }, swatch_look(t), segment_node(), BackgroundColor(CLEAR), BorderColor::all(CLEAR)))
                 .with_child((
                     Node { width: px(20), height: px(20), border_radius: BorderRadius::all(px(10)), ..default() },
                     BackgroundColor(Color::srgb(c[0], c[1], c[2])),
@@ -565,6 +574,7 @@ fn spawn_slider(p: &mut ChildSpawnerCommands, t: &Theme, key: &'static str) {
         .with_children(|r| {
             r.spawn((
                 Button,
+                Hovered::default(),
                 SliderTrack(key),
                 RelativeCursorPosition::default(),
                 // Tall invisible hit area around a thin track.
@@ -622,6 +632,7 @@ pub fn card_row(p: &mut ChildSpawnerCommands, t: &Theme, def: &FieldDef, order: 
     };
     p.spawn((
         Button,
+        Hovered::default(),
         FieldRow(def.key),
         Focusable { order },
         Look::new([CLEAR; 3], [CLEAR; 3], [t.text; 3]),
@@ -632,6 +643,7 @@ pub fn card_row(p: &mut ChildSpawnerCommands, t: &Theme, def: &FieldDef, order: 
         for (i, (title_text, blurb)) in cards.iter().enumerate() {
             r.spawn((
                 Button,
+                Hovered::default(),
                 Segment { key: def.key, index: i },
                 card_look(t),
                 Node {
@@ -827,14 +839,14 @@ fn focus_owner(e: Entity, focusables: &Query<&Focusable>, parents: &Query<&Child
 /// doesn't fight the keyboard).
 fn mouse_focus(
     motion: Option<Res<AccumulatedMouseMotion>>,
-    hovered: Query<(Entity, &Interaction), Changed<Interaction>>,
-    all: Query<(Entity, &Interaction)>,
+    hovered: Query<(Entity, &Hovered), Changed<Hovered>>,
+    all: Query<(Entity, &Hovered)>,
     focusables: Query<&Focusable>,
     parents: Query<&ChildOf>,
     mut focus: ResMut<Focus>,
 ) {
     let moved = motion.is_some_and(|m| m.delta != Vec2::ZERO);
-    let pick = |e: Entity, i: &Interaction| (*i != Interaction::None).then(|| focus_owner(e, &focusables, &parents)).flatten();
+    let pick = |e: Entity, h: &Hovered| h.0.then(|| focus_owner(e, &focusables, &parents)).flatten();
     let mut target = hovered.iter().find_map(|(e, i)| pick(e, i));
     if target.is_none() && moved {
         target = all.iter().find_map(|(e, i)| pick(e, i));
@@ -847,41 +859,35 @@ fn mouse_focus(
 }
 
 fn press_widgets(
-    buttons: Query<(&Interaction, &ActionButton), Changed<Interaction>>,
-    segments: Query<(&Interaction, &Segment), Changed<Interaction>>,
-    toggles: Query<(&Interaction, &ToggleSwitch), Changed<Interaction>>,
-    tracks: Query<(Entity, &Interaction), (With<SliderTrack>, Changed<Interaction>)>,
+    // `Pressed` is inserted on pointer down: `Added` fires once per press, like 0.19's
+    // `Changed<Interaction>` + `Interaction::Pressed`.
+    buttons: Query<&ActionButton, Added<Pressed>>,
+    segments: Query<&Segment, Added<Pressed>>,
+    toggles: Query<&ToggleSwitch, Added<Pressed>>,
+    tracks: Query<Entity, (With<SliderTrack>, Added<Pressed>)>,
     reg: Option<Res<SettingsRegistry>>,
     mut values: ResMut<FieldValues>,
     mut edits: ResMut<FieldEdits>,
     mut dragging: ResMut<Dragging>,
     mut out: MessageWriter<UiActivated>,
 ) {
-    for (i, b) in &buttons {
-        if *i == Interaction::Pressed {
-            out.write(UiActivated(b.0));
-        }
+    for b in &buttons {
+        out.write(UiActivated(b.0));
     }
     let Some(reg) = reg else { return };
-    for (i, s) in &segments {
-        if *i == Interaction::Pressed
-            && let Some(def) = reg.field(s.key)
-        {
+    for s in &segments {
+        if let Some(def) = reg.field(s.key) {
             edit(&mut values, &mut edits, def, s.index as f32);
         }
     }
-    for (i, t) in &toggles {
-        if *i == Interaction::Pressed
-            && let Some(def) = reg.field(t.0)
-        {
+    for t in &toggles {
+        if let Some(def) = reg.field(t.0) {
             let v = cycle_value(&def.kind, values.get(def.key));
             edit(&mut values, &mut edits, def, v);
         }
     }
-    for (e, i) in &tracks {
-        if *i == Interaction::Pressed {
-            dragging.0 = Some(e);
-        }
+    if let Some(e) = tracks.iter().last() {
+        dragging.0 = Some(e);
     }
 }
 
@@ -1082,7 +1088,7 @@ fn refresh_fields(
 fn paint(
     focus: Res<Focus>,
     values: Res<FieldValues>,
-    looks: Query<(Entity, &Look, Option<&Interaction>, Option<&Segment>, Option<&TabButton>)>,
+    looks: Query<(Entity, &Look, Option<&Hovered>, Has<Pressed>, Option<&Segment>, Option<&TabButton>)>,
     rows: Query<&FieldRow>,
     parents: Query<&ChildOf>,
     children: Query<&Children>,
@@ -1092,8 +1098,8 @@ fn paint(
     mut texts: Query<&mut TextColor, Without<KeepColor>>,
     look_bgs: Query<&LookBg>,
 ) {
-    for (e, look, interaction, segment, tab) in &looks {
-        let hovered = interaction.is_some_and(|i| *i != Interaction::None);
+    for (e, look, hover, pressed, segment, tab) in &looks {
+        let hovered = pressed || hover.is_some_and(|h| h.0);
         let mut hot = hovered || focus.0 == Some(e);
         let on = match (segment, tab) {
             (Some(s), _) => values.0.get(s.key).is_some_and(|v| v.round() as usize == s.index),

@@ -11,7 +11,10 @@
 //!   `"input"`).
 //! - Footers show gamepad prompts when the gamepad was used last.
 
+use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
+use bevy::ui::Pressed;
+use bevy::ui_widgets::Button;
 use bevy::ui::{RelativeCursorPosition, ScrollPosition};
 
 use super::menus::{MenuAction, MenuEvent};
@@ -118,6 +121,7 @@ pub fn build(world: &mut World, root: Entity) {
                     let waiting = capture.action == Some(a.def.name);
                     list.spawn((
                         Button,
+                        Hovered::default(),
                         RebindRow(a.def.name),
                         Focusable { order: i as u32 + 1 },
                         row_look(&t),
@@ -154,6 +158,7 @@ pub fn build(world: &mut World, root: Entity) {
                             row.spawn((Node { width: px(300), flex_direction: FlexDirection::Column, row_gap: px(2), ..default() }, Pickable::IGNORE)).with_children(|c| {
                                 c.spawn((
                                     Button,
+                                    Hovered::default(),
                                     RebindCap { action: a.def.name, device: dev },
                                     cap_look(&t, !conflicts.is_empty()),
                                     Node {
@@ -216,11 +221,9 @@ fn start_from_ui(world: &mut World) {
         return;
     }
     let mut target: Option<(&'static str, Device)> = None;
-    let mut caps = world.query::<(&Interaction, &RebindCap)>();
-    for (i, c) in caps.iter(world) {
-        if *i == Interaction::Pressed {
-            target = Some((c.action, c.device));
-        }
+    let mut caps = world.query_filtered::<&RebindCap, With<Pressed>>();
+    for c in caps.iter(world) {
+        target = Some((c.action, c.device));
     }
     if target.is_none() {
         let accept = world.get_resource::<ActionState>().and_then(|s| s.get("ui.accept").copied());
@@ -233,9 +236,9 @@ fn start_from_ui(world: &mut World) {
         }
     }
     if target.is_none() {
-        let mut rows = world.query::<(&Interaction, &RebindRow)>();
+        let mut rows = world.query_filtered::<&RebindRow, With<Pressed>>();
         // A click on the row outside the caps rebinds keyboard/mouse.
-        target = rows.iter(world).find(|(i, _)| **i == Interaction::Pressed).map(|(_, r)| (r.0, Device::KeyboardMouse));
+        target = rows.iter(world).next().map(|r| (r.0, Device::KeyboardMouse));
         if target.is_some() && !world.get_resource::<ButtonInput<MouseButton>>().is_some_and(|m| m.just_pressed(MouseButton::Left)) {
             target = None;
         }

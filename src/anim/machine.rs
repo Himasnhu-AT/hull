@@ -60,7 +60,7 @@ struct Fade {
     duration: f32,
     /// Weight the incoming state already had.
     c0: f32,
-    ease: bevy::math::curve::EaseFunction,
+    ease: bevy::curve::EaseFunction,
     interruptible: bool,
 }
 
@@ -528,7 +528,7 @@ fn compute_entry_weights(rt: &mut LayerRt) {
     match rt.fade {
         Some(f) => {
             let x = if f.duration > 0.0 { (f.elapsed / f.duration).clamp(0.0, 1.0) } else { 1.0 };
-            let c = f.c0 + (1.0 - f.c0) * bevy::math::curve::Curve::sample_clamped(&f.ease, x);
+            let c = f.c0 + (1.0 - f.c0) * bevy::curve::Curve::sample_clamped(&f.ease, x);
             for (i, e) in rt.entries.iter_mut().enumerate() {
                 e.weight = if i + 1 == n { c } else { (1.0 - c) * e.w0 };
             }

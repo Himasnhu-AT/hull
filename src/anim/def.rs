@@ -25,7 +25,7 @@ use std::borrow::Cow;
 use std::sync::Arc;
 
 use bevy::animation::AnimationClip;
-use bevy::math::curve::EaseFunction;
+use bevy::curve::EaseFunction;
 use bevy::prelude::*;
 
 /// Index of a parameter in [`AnimGraphDef::params`].

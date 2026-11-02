@@ -303,7 +303,7 @@ settings (own `CourierSettings` section, "Gameplay"/"Camera" tabs), menus (`Menu
 (~9 000 props streamed by cell, colliders spawned once), metrics, control port and trace.
 Engine additions it needed (branch `game-support`), all generic:
 
-- **A new game's Cargo.toml** names bevy itself, with no features: `bevy = { version = "=0.19.1",
+- **A new game's Cargo.toml** names bevy itself, with no features: `bevy = { version = "=0.20.1",
   default-features = false }` next to `engine = { path = .., default-features = false }`. Bevy's
   derives (`Component`, `Resource`, `Message`, `SystemSet`) expand to `bevy::ecs::..` paths found
   through the game's own manifest, so `engine::bevy` alone fails with "cannot find `bevy_ecs`".

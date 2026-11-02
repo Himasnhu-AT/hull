@@ -533,7 +533,7 @@ fn stream_clusters(
             // Merged rule: one mesh for the whole cluster.
             c.vertices += mesh.count_vertices() as u32;
             item_budget(mesh.count_vertices() / super::MERGED_VERTICES_PER_ITEM, &mut spawn_left);
-            let aabb = mesh.compute_aabb().unwrap_or_default();
+            let aabb = mesh.get_aabb().unwrap_or_default();
             let mut mesh = mesh;
             mesh.asset_usage = RenderAssetUsages::RENDER_WORLD;
             let range = VisibilityRange { start_margin: 0.0..0.0, end_margin: (tiers.cull - tiers.fade)..tiers.cull, use_aabb: false };
@@ -742,7 +742,7 @@ mod tests {
         place(&rule, 1, &hf, &[], Vec2::ZERO, Vec2::splat(16.0), &mut v);
         let g = builtin_mesh(&ScatterMesh::Grass).unwrap();
                 let m = merge_meshes(v.iter().map(|i| (&g, i.affine(Vec3::ZERO), [1.0; 4])));
-        let a = m.compute_aabb().unwrap();
+        let a = m.get_aabb().unwrap();
                 assert!(a.min().y > 9.8 && a.max().y < 10.8, "{a:?}");
         // Cluster origins sit on the ground at the centre (not at y = 0).
         let hill = Heightfield::flat(65, 65, 2.0, Vec2::ZERO, 150.0);

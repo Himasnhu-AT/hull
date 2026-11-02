@@ -179,7 +179,7 @@ impl SpecializedRenderPipeline for SpritePipeline {
             defs.push(ShaderDefVal::UInt("TONEMAPPING_LUT_SAMPLER_BINDING_INDEX".into(), TONEMAPPING_LUT_SAMPLER_BINDING_INDEX));
             let method = key.intersection(MeshPipelineKey::TONEMAP_METHOD_RESERVED_BITS);
             let name = [
-                (MeshPipelineKey::TONEMAP_METHOD_NONE, "TONEMAP_METHOD_NONE"),
+                (MeshPipelineKey::TONEMAP_METHOD_LINEAR, "TONEMAP_METHOD_LINEAR"),
                 (MeshPipelineKey::TONEMAP_METHOD_REINHARD, "TONEMAP_METHOD_REINHARD"),
                 (MeshPipelineKey::TONEMAP_METHOD_REINHARD_LUMINANCE, "TONEMAP_METHOD_REINHARD_LUMINANCE"),
                 (MeshPipelineKey::TONEMAP_METHOD_ACES_FITTED, "TONEMAP_METHOD_ACES_FITTED"),
@@ -215,12 +215,14 @@ impl SpecializedRenderPipeline for SpritePipeline {
                         VertexAttribute { format: VertexFormat::Unorm8x4, offset: 48, shader_location: 3 },
                     ],
                 }],
+                constants: Vec::new(),
             },
             fragment: Some(FragmentState {
                 shader: SHADER,
                 shader_defs: defs,
                 entry_point: Some("fragment".into()),
                 targets: vec![Some(ColorTargetState { format: key.target_format(), blend: Some(BlendState::PREMULTIPLIED_ALPHA_BLENDING), write_mask: ColorWrites::ALL })],
+                constants: Vec::new(),
             }),
             primitive: PrimitiveState { topology: PrimitiveTopology::TriangleStrip, cull_mode: None, ..default() },
             depth_stencil: Some(DepthStencilState {

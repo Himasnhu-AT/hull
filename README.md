@@ -1,7 +1,7 @@
 # Hull
 
-A code-first game engine in Rust, built on [Bevy](https://bevyengine.org) 0.19 and
-[avian3d](https://github.com/Jondolf/avian) 0.7.
+A code-first game engine in Rust, built on [Bevy](https://bevyengine.org) 0.20 and
+[avian3d](https://github.com/Jondolf/avian) 0.8.
 
 Hull is the shell around your game: window, settings, main and pause menus, a themed UI kit,
 input actions with rebinding, rendering presets and a render budget, plus optional systems for
@@ -31,7 +31,7 @@ features = [
 ]   # add "net" for multiplayer
 
 [dependencies]
-bevy = { version = "=0.19.1", default-features = false }
+bevy = { version = "=0.20.1", default-features = false }
 
 [features]
 # cargo run / cargo test keep every debug tool; ship builds use --no-default-features

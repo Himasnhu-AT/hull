@@ -292,9 +292,13 @@ impl Plugin for RenderBudgetPlugin {
                 PostUpdate,
                 (
                     RenderBudgetSystems::Stream.before(TransformSystems::Propagate),
+                    // Not `.after(CalculateBounds)`: in Bevy 0.20 that closes a cycle (bounds run after
+                    // asset events, which UI text layout in `UiSystems::PostLayout` precedes, while
+                    // `ui_widgets` orders a menu system after `VisibilityPropagate` and before
+                    // `PostLayout`), and every app panics at startup. A new scenery mesh without
+                    // bounds yet is classified the next frame (`classify_meshes` waits for them).
                     RenderBudgetSystems::Detail
                         .after(TransformSystems::Propagate)
-                        .after(VisibilitySystems::CalculateBounds)
                         .before(VisibilitySystems::VisibilityPropagate)
                         .before(VisibilitySystems::CheckVisibility),
                     RenderBudgetSystems::Stats.after(VisibilitySystems::CheckVisibility),

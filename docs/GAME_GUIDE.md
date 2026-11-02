@@ -16,7 +16,7 @@ Contents: [1 Architecture](#1-architecture-what-to-use-when) ·
 
 ## 1. Architecture: what to use when
 
-The engine is a code-first shell on Bevy 0.19.1 + avian3d 0.7. Everything is Rust or small
+The engine is a code-first shell on Bevy 0.20.1 + avian3d 0.8 (Rust 1.97.1 or newer). Everything is Rust or small
 JSON/RON files; no editor, no binary scenes. `engine::app(GameInfo)` builds the app with Bevy's
 plugins and `EnginePlugin` (flow states, settings, pause, input, audio, gfx, UI kit, render
 budget, devtools when enabled). Your game is a `Plugin` added on top.

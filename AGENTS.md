@@ -1,6 +1,6 @@
 # AGENTS.md: working on `engine` as an AI agent
 
-`engine` is a code-first game shell on Bevy 0.19.1 + avian3d 0.7. Everything is Rust or small
+`engine` is a code-first game shell on Bevy 0.20.1 + avian3d 0.8 (Rust 1.97.1 or newer). Everything is Rust or small
 JSON files: no editor, no binary scene assets. You can read, change, run and verify all of it
 from the shell.
 

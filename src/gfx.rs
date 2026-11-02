@@ -188,11 +188,12 @@ impl Plugin for GfxPlugin {
     }
 }
 
-/// The buggy lines in Bevy 0.19's `tonemapping_shared.wgsl` (`sectional_color_grading`).
+/// The buggy lines in Bevy's tonemapping shader (`sectional_color_grading`): 0.19's
+/// `tonemapping_shared.wgsl`, still there in 0.20's `tonemapping.wesl`.
 const GRADING_BUG: &str = "levels.y = ((level - midtone_range.x) * LEVEL_MARGIN_DIV) + 0.5;\n        levels.z = 1.0 - levels.y;";
 const GRADING_FIX: &str = "levels.y = ((level - midtone_range.x) * LEVEL_MARGIN_DIV) + 0.5;\n        levels.x = 1.0 - levels.y;";
 
-/// Fixes Bevy 0.19's sectional colour grading in `source`, or `None` if it has nothing to fix.
+/// Fixes Bevy's (0.19, 0.20) sectional colour grading in `source`, or `None` if it has nothing to fix.
 ///
 /// Between shadows and midtones Bevy blends the midtone settings with the *highlight* ones
 /// (`levels.z`) instead of the shadow ones, so any shadow lift / gamma / gain / saturation
@@ -213,7 +214,12 @@ fn patch_grading_shader(mut events: MessageReader<AssetEvent<Shader>>, mut shade
     for ev in events.read() {
         let AssetEvent::LoadedWithDependencies { id } = ev else { continue };
         let Some(shader) = shaders.get(*id) else { continue };
-        let bevy::shader::Source::Wgsl(src) = &shader.source else { continue };
+        // 0.20 ships the tonemapping library as WESL; keep the source kind when patching.
+        let (src, wesl) = match &shader.source {
+            bevy::shader::Source::Wgsl(s) => (s, false),
+            bevy::shader::Source::Wesl(s) => (s, true),
+            _ => continue,
+        };
         if !src.contains("fn sectional_color_grading") {
             continue;
         }
@@ -221,7 +227,7 @@ fn patch_grading_shader(mut events: MessageReader<AssetEvent<Shader>>, mut shade
         match fix_sectional_grading(src) {
             Some(fixed) => {
                 if let Some(mut shader) = shaders.get_mut(*id) {
-                    shader.source = bevy::shader::Source::Wgsl(fixed.into());
+                    shader.source = if wesl { bevy::shader::Source::Wesl(fixed.into()) } else { bevy::shader::Source::Wgsl(fixed.into()) };
                 }
             }
             None => debug!("gfx: sectional colour grading has no known bug to patch (newer Bevy?)"),
@@ -819,7 +825,8 @@ mod tests {
         let Some(dir) = std::env::var_os("CARGO_HOME").map(std::path::PathBuf::from).or_else(|| std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join(".cargo"))) else { return };
         let Ok(regs) = std::fs::read_dir(dir.join("registry/src")) else { return };
         for reg in regs.flatten() {
-            let f = reg.path().join("bevy_core_pipeline-0.19.1/src/tonemapping/tonemapping_shared.wgsl");
+            // Update with the Bevy version in Cargo.toml (the old copy stays in the cache).
+            let f = reg.path().join("bevy_core_pipeline-0.20.1/src/tonemapping.wesl");
             if let Ok(src) = std::fs::read_to_string(&f) {
                 assert!(fix_sectional_grading(&src).is_some(), "{} no longer has the grading bug", f.display());
                 return;

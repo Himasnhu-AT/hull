@@ -38,6 +38,7 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
 
 /// The filter on a camera: rows of the 3×3 colour matrix.
 #[derive(Component, ExtractComponent, Clone, Copy, ShaderType, Default, Debug, PartialEq)]
+#[extract_app(bevy::render::RenderApp)]
 pub struct ColorFilter {
     pub r0: Vec4,
     pub r1: Vec4,

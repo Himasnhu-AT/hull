@@ -2,7 +2,7 @@
 
 ## Phase 0: Brief
 
-- **Subject:** `engine`, a code-first Rust engine on Bevy 0.19.1 + avian3d 0.7. It started as a
+- **Subject:** `engine`, a code-first Rust engine on Bevy 0.20.1 + avian3d 0.8. It started as a
   game's whole shell (bootstrap, states, settings, menus, pause, UI kit, input, audio, quality
   presets, FPS and chase cameras, MeshKit, render budget, devtools, ship builds) and has since
   grown the systems a game needs after that: look (lighting as data), anim, vfx, ai, sound,
@@ -120,7 +120,7 @@ Radius 4 px everywhere (the engine's `RADIUS`). Panels are flat fills with a 1 p
 Home (`/`):
 ```
 HERO / poster+split (100svh)
-[eyebrow: Game shell for Bevy 0.19]                  [FPS 120  8.3 ms]
+[eyebrow: Game shell for Bevy 0.20]                  [FPS 120  8.3 ms]
 HULL                                         +--------------------------+
 Your game starts at gameplay.                |  real main menu capture  |
 > START       (selection bar)                |  (accent-matched)        |

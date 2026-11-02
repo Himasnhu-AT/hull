@@ -923,7 +923,7 @@ mod tests {
     #[test]
     fn spawn_triggers_mesh_surface_orbit_and_attractor() {
         // Every spawned carrier spawns 2 sparks where it is (Trigger::Spawn).
-        let mesh: bevy::mesh::Mesh = bevy::math::primitives::Cuboid::new(2.0, 2.0, 2.0).into();
+        let mesh: bevy::mesh::Mesh = bevy::shape::Cuboid::new(2.0, 2.0, 2.0).into();
         let fx = CompiledEffect::new(
             EffectDef::new("t")
                 .with(EmitterDef {
