@@ -61,6 +61,8 @@ pub mod devtools;
 pub mod l10n;
 #[cfg(feature = "fps")]
 pub mod fps;
+#[cfg(feature = "level")]
+pub mod level;
 #[cfg(feature = "look")]
 pub mod look;
 #[cfg(feature = "world")]
