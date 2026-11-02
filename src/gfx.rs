@@ -132,6 +132,12 @@ pub struct QualityPreset {
     /// uses: build RGBA8 mips on the CPU, then drop the top levels. Off → only images that
     /// arrive with a mip chain (cooked KTX2) or get one from [`load_pbr`] are capped.
     pub cap_material_images: bool,
+    /// Highest render scale per tier on a high-DPI window (scale factor at or above
+    /// `hidpi_scale_factor`): `render_budget::RenderScale` never draws above it there. A Retina
+    /// panel at 0.7 still has more pixels than 1080p. 1 = no cap.
+    pub hidpi_render_scale: [f32; 4],
+    /// Window scale factor from which `hidpi_render_scale` applies (Retina is 2).
+    pub hidpi_scale_factor: f32,
 }
 
 impl Default for QualityPreset {
@@ -168,6 +174,8 @@ impl Default for QualityPreset {
             // BC7 2048² with mips is 5.6 MB, 1024² 1.4 MB: Low fits an 8 GB Mac's budget.
             max_texture_size: [1024, 2048, 4096, 0],
             cap_material_images: true,
+            hidpi_render_scale: [0.7, 0.85, 1.0, 1.0],
+            hidpi_scale_factor: 1.5,
         }
     }
 }

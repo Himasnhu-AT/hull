@@ -142,6 +142,12 @@ What runs by default:
   Bevy's `MainPassResolutionOverride` is no substitute: post passes ignore it (DLSS only).
   While scaled, `world_to_viewport` on the main camera is in scaled-image pixels. Township Ultra
   offscreen: GPU 13.8 ms at 1.0, 10.6 ms at 0.5 (fixed costs: 4096 sun cascades, probes).
+  On a high-DPI window (scale factor ≥ `QualityPreset::hidpi_scale_factor`, 1.5) the tier
+  ceiling `QualityPreset::hidpi_render_scale` (Low 0.7, Medium 0.85, High/Ultra 1) caps it:
+  applied = min(`scale`, ceiling), so the governor and games still go lower but never higher.
+  It starts once the main camera has its quality settings (`AppliedQuality`, `Msaa::Off`), so
+  warm-up isn't scaled with MSAA still on. `render.governor` shows `scale.ceiling`. At 3024×1964,
+  0.7 cuts the 3D view's targets (two Rgba16F main textures, depth, prepass) roughly in half.
 - **Quality governor** (`QualityGovernor`, `render_budget/governor.rs`). Holds `target_fps`
   (60, budget B = 1000/fps ms).
   - *Signal.* In devtools builds: `GpuLoad::sample`, this process's GPU time per frame over a

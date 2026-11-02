@@ -367,7 +367,7 @@ mod devtools {
             "game_level": st.game_level,
             "hold_until": st.hold_until, "changes": st.changes, "last_reason": st.last_reason.map(|r| format!("{r:?}")),
             "footprint_mb": st.footprint_mb, "memory_budget_mb": st.memory_budget_mb,
-            "scale": {"wanted": rs.scale, "applied": rs.applied, "size": [rs.size.x, rs.size.y]},
+            "scale": {"wanted": rs.scale, "ceiling": rs.ceiling, "applied": rs.applied, "size": [rs.size.x, rs.size.y]},
         })
     }
 
