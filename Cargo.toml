@@ -163,3 +163,7 @@ required-features = ["world"]
 [[example]]
 name = "net_demo"
 required-features = ["net"]
+
+[[example]]
+name = "level_demo"
+required-features = ["level"]

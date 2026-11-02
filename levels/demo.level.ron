@@ -1,0 +1,200 @@
+(
+  version: 1,
+  world: None,
+  look: Some(Preset("clear_day")),
+  entities: (
+    resources: {},
+    entities: {
+      4294967294: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Ground",
+          "bevy_transform::components::transform::Transform": (
+            translation: (0.0, 0.0, 0.0),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.0, 1.0, 1.0),
+          ),
+          "engine::level::LevelEntity": (
+            id: (1),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Plane,
+            size: (30.0, 0.0, 30.0),
+            color: Srgba((
+              red: 0.36,
+              green: 0.42,
+              blue: 0.34,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+        },
+      ),
+      4294967293: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Pillar",
+          "bevy_transform::components::transform::Transform": (
+            translation: (-3.0, 1.5, -1.0),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.0, 1.0, 1.0),
+          ),
+          "engine::level::LevelEntity": (
+            id: (2),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Cylinder,
+            size: (1.0, 3.0, 1.0),
+            color: Srgba((
+              red: 0.75,
+              green: 0.72,
+              blue: 0.65,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+        },
+      ),
+      4294967292: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Crate",
+          "bevy_transform::components::transform::Transform": (
+            translation: (0.0, 0.6, 0.0),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.0, 1.0, 1.0),
+          ),
+          "engine::level::LevelEntity": (
+            id: (3),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Cuboid,
+            size: (1.2, 1.2, 1.2),
+            color: Srgba((
+              red: 0.85,
+              green: 0.5,
+              blue: 0.2,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+        },
+      ),
+      4294967291: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::hierarchy::ChildOf": (4294967292),
+          "bevy_ecs::name::Name": "Ball",
+          "bevy_transform::components::transform::Transform": (
+            translation: (0.0, 1.5, 0.0),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.0, 1.0, 1.0),
+          ),
+          "engine::level::LevelEntity": (
+            id: (4),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Sphere,
+            size: (1.0, 1.0, 1.0),
+            color: Srgba((
+              red: 0.2,
+              green: 0.5,
+              blue: 0.9,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+        },
+      ),
+      4294967290: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Slab",
+          "bevy_transform::components::transform::Transform": (
+            translation: (3.0, 0.15, 2.0),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.0, 1.0, 1.0),
+          ),
+          "engine::level::LevelEntity": (
+            id: (5),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Cuboid,
+            size: (4.0, 0.3, 1.5),
+            color: Srgba((
+              red: 0.6,
+              green: 0.6,
+              blue: 0.65,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+        },
+      ),
+      4294967289: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Sun",
+          "bevy_light::directional_light::DirectionalLight": (
+            color: LinearRgba((
+              red: 1.0,
+              green: 1.0,
+              blue: 1.0,
+              alpha: 1.0,
+            )),
+            illuminance: 9000.0,
+            shadow_maps_enabled: true,
+            contact_shadows_enabled: false,
+            affects_lightmapped_mesh_diffuse: true,
+            shadow_depth_bias: 0.02,
+            shadow_normal_bias: 1.8,
+          ),
+          "bevy_transform::components::transform::Transform": (
+            translation: (4.0, 8.0, 3.0),
+            rotation: (-0.43359014, 0.39115202, 0.21679507, 0.78230405),
+            scale: (1.0, 1.0, 1.0),
+          ),
+          "engine::level::LevelEntity": (
+            id: (6),
+          ),
+        },
+      ),
+      4294967288: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Lamp",
+          "bevy_light::point_light::PointLight": (
+            color: Srgba((
+              red: 1.0,
+              green: 0.8,
+              blue: 0.6,
+              alpha: 1.0,
+            )),
+            intensity: 400000.0,
+            range: 14.0,
+            radius: 0.0,
+            shadow_maps_enabled: false,
+            contact_shadows_enabled: false,
+            affects_lightmapped_mesh_diffuse: true,
+            shadow_depth_bias: 0.08,
+            shadow_normal_bias: 0.6,
+            shadow_map_near_z: 0.1,
+          ),
+          "bevy_transform::components::transform::Transform": (
+            translation: (-1.0, 3.0, 3.0),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.0, 1.0, 1.0),
+          ),
+          "engine::level::LevelEntity": (
+            id: (7),
+          ),
+        },
+      ),
+    },
+  ),
+)

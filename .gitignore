@@ -12,3 +12,6 @@
 # Benchmarks: Godot import cache, raw results
 bench/godot/.godot/
 bench/results/
+
+# level file backups
+*.level.ron.bak

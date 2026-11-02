@@ -71,6 +71,8 @@ pub const RUNTIME_ONLY: &[&str] = &[
     "ColorGradingState",
     "VisibilityRange",
     "Mesh3dWireframe",
+    "Sphere",
+    "RenderTarget",
 ];
 
 /// Look of a level: a preset name or a complete [`crate::look::Look`].
