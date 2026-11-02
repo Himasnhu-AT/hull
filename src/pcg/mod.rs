@@ -18,6 +18,7 @@
 //!   ([`PcgScalability`]) and by the governor's [`crate::render_budget::GovernorStep::PcgDensity`],
 //!   deterministically (lower quality ⊂ higher); changing it respawns from the cache.
 //!   `Essential` (gameplay) never thins.
+//! - **Overrides** ([`PcgOverrides`]): hand edits (delete, move, add, clear areas) applied to the cached output; `docs/PCG.md`.
 //! - **Streaming** (optional, [`PcgStreaming`] next to the volume): only cells within `radius`
 //!   of the main camera (and `world::StreamSource`s, feature `world`) are evaluated and kept;
 //!   cells past `radius + margin` are dropped (entities, cached output, emitted points: a
@@ -789,7 +790,7 @@ mod devtools {
             .add_control_command(
                 "pcg.inspect",
                 "Points per node in one cell of a volume",
-                params(&[("x", "number", "cell x"), ("z", "number", "cell z"), ("volume", "number", "volume index (default 0)")]),
+                params(&[("x", "number", "cell x"), ("z", "number", "cell z"), ("volume", "number", "volume index (default 0)"), ("node", "string", "also list this Spawn node's points with their override keys (max 200)")]),
                 inspect,
             );
     }
@@ -798,7 +799,7 @@ mod devtools {
         let s = world.resource::<PcgStats>().clone();
         Ok(json!({
             "volumes": s.volumes, "cells": s.cells, "cells_pending": s.cells_pending, "evaluations": s.evaluations,
-            "cache_hits": s.cache_hits, "cells_dropped": s.cells_dropped, "cell_roots": s.entities, "points_spawned": s.points_spawned,
+            "cache_hits": s.cache_hits, "override_respawns": s.override_respawns, "cells_dropped": s.cells_dropped, "cell_roots": s.entities, "points_spawned": s.points_spawned,
             "points_thinned": s.points_thinned, "last_eval_us": s.last_eval_us, "errors": s.errors,
             "density": world.resource::<PcgSettings>().density,
         }))
@@ -822,7 +823,19 @@ mod devtools {
         let cells = q.iter(world).nth(i).ok_or("no such volume")?;
         let c = cells.cells.get(&cell).ok_or("no such cell")?;
         let out = c.output.as_ref().ok_or("cell not evaluated yet")?;
+        let out = c.shown.as_ref().unwrap_or(out);
+        let points: Vec<Value> = match p.get("node").and_then(Value::as_str) {
+            Some(n) => out
+                .spawns
+                .iter()
+                .filter(|s| s.node == n)
+                .flat_map(|s| (0..s.points.len()).map(move |i| json!({"key": {"node": s.node, "seed": s.points.seed[i].to_string()}, "item": s.def.items[s.item[i] as usize].0, "pos": s.points.pos[i].to_array()})))
+                .take(200)
+                .collect(),
+            None => Vec::new(),
+        };
         Ok(json!({
+            "points": points,
             "counts": out.counts.iter().map(|(n, c)| json!([n, c])).collect::<Vec<_>>(),
             "spawns": out.spawns.iter().map(|s| json!({"node": s.node, "points": s.points.len()})).collect::<Vec<_>>(),
             "emits": out.emits.iter().map(|(k, v)| json!({"port": k, "points": v.len()})).collect::<Vec<_>>(),

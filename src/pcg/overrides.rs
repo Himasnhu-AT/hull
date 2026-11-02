@@ -835,6 +835,34 @@ mod tests {
         assert_eq!(a.cell_hash(IVec2::new(2, 0)), 0);
     }
 
+    /// Cost of applying: 1000 hand edits (removed, moved, areas) on a 4000-point cell.
+    #[test]
+    fn apply_cost_is_small() {
+        let mut pts = PointSet::default();
+        for k in 0..4000u64 {
+            pts.push(Point { pos: Vec3::new((k % 64) as f32 * 0.5, 0.0, (k / 64) as f32 * 0.5), seed: mix64(k), ..Default::default() });
+        }
+        let mut ov = PcgOverrides::default();
+        for k in 0..500u64 {
+            ov.remove_point(&PointKey { node: "n".into(), seed: mix64(k * 7) }, Vec3::ZERO);
+            ov.move_point(&PointKey { node: "n".into(), seed: mix64(k * 7 + 3) }, Vec3::ZERO, Transform::from_xyz(1.0, 0.0, 1.0));
+        }
+        ov.areas.push(OverrideArea { polygon: vec![Vec2::ZERO, Vec2::new(20.0, 0.0), Vec2::new(20.0, 20.0), Vec2::new(0.0, 20.0)], density: 0.5, nodes: None });
+        let t0 = std::time::Instant::now();
+        let ix = ov.index(32.0);
+        let build = t0.elapsed();
+        let t1 = std::time::Instant::now();
+        let mut n = 0;
+        for _ in 0..20 {
+            let mut p = pts.clone();
+            ix.apply_points("n", Area::cell(0, 0, 32.0), &mut p);
+            n = p.len();
+        }
+        let per = t1.elapsed() / 20;
+        eprintln!("overrides: index of 1000 edits {build:?}; apply to 4000 points {per:?} (-> {n})");
+        assert!(per.as_millis() < 20 && build.as_millis() < 20);
+    }
+
     #[test]
     fn empty_overrides_do_nothing() {
         let area = Area::cell(0, 0, 32.0);
