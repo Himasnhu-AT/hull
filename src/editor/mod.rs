@@ -42,6 +42,7 @@ mod gizmo;
 mod host;
 mod picking;
 mod play;
+pub mod tools;
 pub mod schema;
 
 pub use backend::WorldBackend;
@@ -88,6 +89,9 @@ pub struct EditorState {
     /// Camera drag / gizmo drag in progress: the egui pass must not take the pointer or keys.
     pub(crate) cam_busy: bool,
     pub(crate) gizmo_busy: bool,
+    pub(crate) tool_busy: bool,
+    /// Ops the engine applied on its own, waiting for the UI to put them on its undo stack.
+    recorded: Vec<editor_proto::RecordedOp>,
 }
 
 impl Default for EditorState {
@@ -104,6 +108,8 @@ impl Default for EditorState {
             ui: UiFrame::default(),
             cam_busy: false,
             gizmo_busy: false,
+            tool_busy: false,
+            recorded: Vec::new(),
         }
     }
 }
@@ -121,7 +127,16 @@ pub struct UiFrame {
 
 impl EditorState {
     pub fn busy(&self) -> bool {
-        self.cam_busy || self.gizmo_busy
+        self.cam_busy || self.gizmo_busy || self.tool_busy
+    }
+
+    /// Queues an op the engine applied (a stroke, a drag) for the UI's undo stack.
+    pub fn record(&mut self, label: &str, op: editor_proto::Op, key: Option<String>) {
+        self.recorded.push(editor_proto::RecordedOp { label: label.into(), op, key });
+    }
+
+    pub fn take_recorded(&mut self) -> Vec<editor_proto::RecordedOp> {
+        std::mem::take(&mut self.recorded)
     }
 
     /// Diagnostics after cursor `since` (a count of all diagnostics ever pushed).
@@ -167,6 +182,7 @@ impl Plugin for EditorPlugin {
             .init_resource::<EditorConfig>()
             .init_resource::<camera::EditorCamera>()
             .init_resource::<gizmo::GizmoState>()
+            .init_resource::<tools::ToolState>()
             .register_type::<EditorOnly>()
             .add_systems(Startup, host::setup)
             .add_systems(EguiPrimaryContextPass, host::ui_pass)
@@ -178,9 +194,11 @@ impl Plugin for EditorPlugin {
                     full_resolution,
                     camera::adopt_camera,
                     camera::control,
+                    tools::update,
                     gizmo::interact,
                     picking::click_select,
                     gizmo::draw,
+                    tools::draw,
                     play::poll,
                     host::persist_layout,
                 )

@@ -75,6 +75,19 @@ pub(super) fn register(app: &mut App) {
             camera,
         )
         .add_control_command("editor.command", "Run a UI command by id (editor.undo, editor.redo, editor.tool_move, ...)", params(&[("id", "string", "command id")]), command)
+        .add_control_command("editor.tools", "The world tools with their settings and schemas", params(&[]), tools_list)
+        .add_control_command(
+            "editor.tool",
+            "Activate a tool (`id` spline|sculpt|paint|foliage|place, or omit / null for the gizmo tools) and merge `settings` into its settings",
+            params(&[("id", "string", "tool id"), ("settings", "object", "settings to set (missing fields keep their value)")]),
+            tool,
+        )
+        .add_control_command(
+            "editor.tool_action",
+            "Do what a pointer would with the active tool: sculpt/paint `stroke {points:[[x,z]], shift?}`; spline `select|add|move|delete|set`; foliage `pick|delete|move|area|place`; place `place {at}`",
+            params(&[("action", "string", "action name"), ("points", "array", ""), ("at", "array", "[x,z]")]),
+            tool_action,
+        )
         .add_control_command("editor.tab", "Bring a panel tab to the front", params(&[("tab", "string", "Outliner|Details|Content|Output|Logic")]), tab);
 }
 
@@ -87,7 +100,7 @@ fn to_value<T: serde::Serialize>(v: &T) -> Result<Value, String> {
 }
 
 /// `id` (bits), `stable` or `name`.
-fn entity_param(world: &mut World, p: &Value) -> Result<Entity, String> {
+pub(super) fn entity_param(world: &mut World, p: &Value) -> Result<Entity, String> {
     if let Some(bits) = p.get("id").and_then(Value::as_u64) {
         return super::backend::resolve(world, StableOrId::Id(bits));
     }
@@ -146,6 +159,7 @@ fn label_of(op: &Op) -> &'static str {
         Op::Despawn { .. } => "Delete",
         Op::Reparent { .. } => "Reparent",
         Op::Rename { .. } => "Rename",
+        Op::TerrainPatch { .. } => "Terrain",
         Op::Batch(_) => "Edit",
     }
 }
@@ -292,4 +306,34 @@ fn tab(world: &mut World, p: Value) -> Result<Value, String> {
     let mut ui = world.get_resource_mut::<EditorUiRes>().ok_or("the editor UI is not up yet")?;
     ui.0.show_panel(name)?;
     Ok(json!({"ok": true}))
+}
+
+fn tools_list(world: &mut World, _: Value) -> Result<Value, String> {
+    let active = WorldBackend::new(world).active_tool();
+    Ok(json!({"active": active, "tools": to_value(&super::tools::docs(world))?}))
+}
+
+fn tool(world: &mut World, p: Value) -> Result<Value, String> {
+    let id = p.get("id").and_then(Value::as_str).map(str::to_owned);
+    if let Some(i) = &id
+        && let Some(s) = p.get("settings")
+    {
+        // Merge into the current settings so a script sets only what it names.
+        let ts = world.resource::<super::tools::ToolState>();
+        let mut cur = super::tools::settings_of(world, ts, i).map(|(v, _)| v).ok_or_else(|| format!("no tool `{i}`"))?;
+        crate::devkit::reflect_json::merge_patch(&mut cur, s);
+        super::tools::apply_settings(world, i, cur)?;
+    }
+    super::tools::activate(world, id.as_deref())?;
+    // The toolbar follows the backend; show the Tool tab like a click would.
+    if id.is_some()
+        && let Some(mut ui) = world.get_resource_mut::<EditorUiRes>()
+    {
+        let _ = ui.0.show_panel("Tool");
+    }
+    Ok(json!({"active": id}))
+}
+
+fn tool_action(world: &mut World, p: Value) -> Result<Value, String> {
+    super::tools::action(world, &p)
 }
