@@ -266,3 +266,45 @@ fn save_and_reload_through_the_world_desc() {
     bad.terrain.source = engine::world::desc::HeightSource::TerrainFiles { dir: "/nonexistent/terrain".into() };
     assert!(engine::world::spawn_world(app2.world_mut(), bad).is_err());
 }
+
+#[test]
+fn level_save_writes_edited_terrain_to_its_files() {
+    // A world whose terrain comes from files.
+    let mut app = app("lvl-src");
+    spawn(&mut app);
+    let dir = temp_dir("lvl-terrain").join("open");
+    TerrainEdit::save(app.world(), &dir).unwrap();
+    let mut app2 = engine::app_with(GameInfo::new("terrain-edit-lvl", "x"), EngineOptions::headless_test(temp_dir("lvl2")));
+    app2.insert_resource(bevy::time::TimeUpdateStrategy::ManualDuration(STEP));
+    app2.finish();
+    app2.cleanup();
+    let mut desc = WorldDesc::default();
+    desc.terrain.chunk_quads = 64;
+    desc.terrain.source = engine::world::desc::HeightSource::TerrainFiles { dir: dir.display().to_string() };
+    engine::world::spawn_world(app2.world_mut(), desc).expect("spawns from terrain files");
+    run(&mut app2, 2);
+    {
+        let t = app2.world().resource::<TerrainSaveTarget>();
+        assert_eq!(t.dir.as_deref(), Some(dir.as_path()));
+        assert!(!t.dirty, "freshly loaded terrain is clean");
+    }
+    let level = temp_dir("lvl-file").join("open.level.ron");
+    let r16 = dir.join("terrain.r16");
+    let before = std::fs::read(&r16).unwrap();
+
+    // No edits: a level save leaves the terrain files alone.
+    engine::level::save_level(app2.world_mut(), &level).unwrap();
+    assert_eq!(std::fs::read(&r16).unwrap(), before);
+
+    // A sculpt marks it dirty; the next level save writes it and clears the flag.
+    TerrainEdit::dab(app2.world_mut(), &raise(40.0, 12.0), Vec2::new(60.0, 80.0)).unwrap();
+    assert!(app2.world().resource::<TerrainSaveTarget>().dirty);
+    let edited = app2.world().resource::<TerrainHeights>().height_at(60.0, 80.0);
+    engine::level::save_level(app2.world_mut(), &level).unwrap();
+    assert!(!app2.world().resource::<TerrainSaveTarget>().dirty);
+    assert_ne!(std::fs::read(&r16).unwrap(), before, "terrain written with the level");
+    let data = TerrainData::load(&dir).unwrap();
+    let hf = data.to_heightfield().unwrap();
+    let step = (hf.max_height() - hf.min_height()) / 65535.0;
+    assert!((hf.height_at(60.0, 80.0) - edited).abs() <= step * 2.0, "{} vs {edited}", hf.height_at(60.0, 80.0));
+}

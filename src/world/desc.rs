@@ -437,6 +437,12 @@ pub fn spawn_world_with(world: &mut World, desc: WorldDesc, heightfield: Option<
         world.insert_resource(sp);
     }
     world.insert_resource(TerrainHeights::new(terrain.heightfield_arc()));
+    // Where a level save writes edited terrain: the files it came from, else what the game set.
+    let save_dir = match &desc.terrain.source {
+        HeightSource::TerrainFiles { dir } => Some(std::path::PathBuf::from(dir)),
+        _ => world.get_resource::<super::TerrainSaveTarget>().and_then(|t| t.dir.clone()),
+    };
+    world.insert_resource(super::TerrainSaveTarget { dir: save_dir, dirty: false });
     world.insert_resource(terrain);
     let mut st = world.resource_mut::<WorldStats>();
     st.spawned = true;

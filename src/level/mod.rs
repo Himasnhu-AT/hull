@@ -167,6 +167,10 @@ pub fn save_level(world: &mut World, path: impl AsRef<Path>) -> Result<SaveRepor
 }
 
 fn save_inner(world: &mut World, path: &Path) -> Result<SaveReport, LevelError> {
+    // Terrain edits (sculpt/paint) go to the level's terrain files first: a level that points
+    // at terrain must never be saved ahead of it.
+    #[cfg(feature = "world")]
+    crate::world::TerrainEdit::save_if_dirty(world).map_err(|e| LevelError::Io(format!("terrain: {e}")))?;
     let header = world.resource::<LevelState>().header.clone();
     let deny = world.resource::<LevelConfig>().deny.clone();
     let (text, report) = file::to_text(world, &header, &deny)?;

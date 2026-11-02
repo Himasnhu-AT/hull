@@ -259,3 +259,26 @@ fn orphan_parent_becomes_root() {
     let e = id(app.world_mut(), 7);
     assert!(app.world().get::<ChildOf>(e).is_none());
 }
+
+/// A level entity may carry components that aren't Reflect (a game inserts them at runtime,
+/// e.g. Pacenote's `PcgVolume` on its foliage entities): saving skips them silently and the
+/// reflected rest round-trips.
+#[test]
+fn runtime_only_components_on_level_entities_are_skipped() {
+    #[derive(Component)]
+    struct RuntimeOnly(#[allow(dead_code)] std::sync::Arc<Vec<u8>>);
+    let d = dir("runtime_only");
+    let path = d.join("r.level.ron");
+    let mut app = app();
+    app.world_mut().spawn((LevelEntity { id: StableId(1) }, Name::new("foliage"), Transform::from_xyz(1.0, 0.0, 0.0), RuntimeOnly(Default::default())));
+    app.update();
+    let rep = save_level(app.world_mut(), &path).unwrap();
+    assert_eq!(rep.entities, 1);
+    assert!(rep.skipped.is_empty(), "{:?}", rep.skipped);
+    file::despawn_level(app.world_mut());
+    assert_eq!(load_level(app.world_mut(), &path).unwrap(), 1);
+    app.update();
+    let w = app.world_mut();
+    let (name, t, rt) = w.query::<(&Name, &Transform, Has<RuntimeOnly>)>().single(w).unwrap();
+    assert_eq!((name.as_str(), t.translation.x, rt), ("foliage", 1.0, false));
+}

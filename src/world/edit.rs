@@ -452,6 +452,41 @@ impl TerrainEdit {
     }
 }
 
+/// Where this world's terrain files live and whether edits since the last save are unsaved.
+/// `spawn_world` fills `dir` for `HeightSource::TerrainFiles`; games that pass their own
+/// heights set it themselves. Saving a level (`level::save_level`) writes the terrain there
+/// when `dirty`.
+#[derive(Resource, Clone, Debug, Default)]
+pub struct TerrainSaveTarget {
+    /// Folder for `terrain.ron` / `terrain.r16` / `terrain_splat.rgba8` (relative = under the
+    /// assets folder). `None`: the terrain isn't saved with the level.
+    pub dir: Option<std::path::PathBuf>,
+    /// Heights or splat changed since the terrain was loaded or last saved.
+    pub dirty: bool,
+}
+
+impl TerrainEdit {
+    /// Writes the terrain to `TerrainSaveTarget::dir` if it has unsaved edits. Returns whether
+    /// it wrote.
+    pub fn save_if_dirty(world: &mut World) -> Result<bool, EditError> {
+        let Some(t) = world.get_resource::<TerrainSaveTarget>() else { return Ok(false) };
+        let Some(dir) = t.dir.clone().filter(|_| t.dirty) else { return Ok(false) };
+        TerrainEdit::save(world, &dir)?;
+        if let Some(mut t) = world.get_resource_mut::<TerrainSaveTarget>() {
+            t.dirty = false;
+        }
+        Ok(true)
+    }
+}
+
+fn mark_dirty(world: &mut World) {
+    if let Some(mut t) = world.get_resource_mut::<TerrainSaveTarget>() {
+        t.dirty = true;
+    } else {
+        world.insert_resource(TerrainSaveTarget { dir: None, dirty: true });
+    }
+}
+
 /// `dir` as a path on disk: absolute stays, relative goes under the assets folder.
 pub fn resolve_dir(world: &World, dir: &std::path::Path) -> std::path::PathBuf {
     match world.get_resource::<crate::paths::AssetsDir>() {
@@ -573,6 +608,14 @@ fn sync_splat_image(world: &mut World, rect: SampleRect) {
 }
 
 fn write_heights(world: &mut World, rect: SampleRect, values: &[f32]) -> Result<(), EditError> {
+    let r = write_heights_inner(world, rect, values);
+    if r.is_ok() {
+        mark_dirty(world);
+    }
+    r
+}
+
+fn write_heights_inner(world: &mut World, rect: SampleRect, values: &[f32]) -> Result<(), EditError> {
     world.resource_scope(|world, mut t: Mut<Terrain>| {
         let (nx, nz) = (t.heightfield().nx(), t.heightfield().nz());
         if rect.is_empty() || rect.x1() > nx || rect.z1() > nz || values.len() != rect.len() {
@@ -598,6 +641,14 @@ fn write_heights(world: &mut World, rect: SampleRect, values: &[f32]) -> Result<
 }
 
 fn write_splat(world: &mut World, rect: SampleRect, texels: &[u8]) -> Result<(), EditError> {
+    let r = write_splat_inner(world, rect, texels);
+    if r.is_ok() {
+        mark_dirty(world);
+    }
+    r
+}
+
+fn write_splat_inner(world: &mut World, rect: SampleRect, texels: &[u8]) -> Result<(), EditError> {
     let mut sp = world.get_resource_mut::<TerrainSplat>().ok_or(EditError::NoSplat)?;
     if rect.is_empty() || rect.x1() > sp.res || rect.z1() > sp.res || texels.len() != rect.len() * 4 {
         return Err(EditError::BadRect(format!("{}×{} at ({}, {}) with {} bytes on a {}² splat map", rect.w, rect.h, rect.x0, rect.z0, texels.len(), sp.res)));

@@ -124,3 +124,13 @@ app.register_type::<EventStart>().register_placeable::<EventStart>("Event start"
 `Placeables` (resource) lists them in registration order; `Placeable::spawn(world, transform, name)`
 spawns `T::default()` with `Name`, `Transform`, `Visibility` and a fresh `LevelEntity`. `T` must be
 `Reflect` with `#[reflect(Component, Default)]` and registered, so Details can edit it and levels save it.
+
+## Terrain saved with the level
+
+When the world's terrain comes from files (`HeightSource::TerrainFiles { dir }`), or a game sets
+`world::TerrainSaveTarget { dir: Some(..) }` for heights it passed in itself, `save_level` first
+writes sculpt/paint edits there (`TerrainEdit::save_if_dirty`), then the level. Nothing is
+written when the terrain has no unsaved edits. A terrain write error fails the level save.
+
+Components that aren't `Reflect` (inserted by the game at runtime, e.g. a `PcgVolume` on a level
+foliage entity) are skipped silently on save; re-insert them when the level loads.

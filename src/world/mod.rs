@@ -67,7 +67,7 @@ pub use origin::{OriginShifted, WorldOrigin};
 pub use prefab::{MaterialDesc, PartDesc, PrefabDef, ShapeDesc, WorldAssets, WorldTags};
 pub use scatter::{ScatterMesh, ScatterRule};
 pub use brush::{BrushKind, BrushSettings, Falloff, SampleRect, SmoothKernel};
-pub use edit::{BlobId, EditError, StrokeBlobs, TerrainChanged, TerrainEdit, TerrainHeights, TerrainLayer, TerrainPatchStore, TerrainSplat};
+pub use edit::{BlobId, EditError, StrokeBlobs, TerrainChanged, TerrainEdit, TerrainHeights, TerrainLayer, TerrainPatchStore, TerrainSaveTarget, TerrainSplat};
 pub use terrain::{Terrain, TerrainChunk};
 pub use terrain_data::{TerrainData, TerrainDataError, TerrainMeta};
 
