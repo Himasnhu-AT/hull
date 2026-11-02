@@ -186,12 +186,18 @@ pub fn settings_of(world: &World, ts: &ToolState, id: &str) -> Option<(Value, Ty
         "foliage" => {
             let (v, mut s) = of!(&ts.foliage, foliage::FoliageSettings);
             // The catalog's items as a choice.
-            if let Some(items) = foliage::catalog_items(world)
-                && !items.is_empty()
-                && let TypeSchema::Struct { fields } = &mut s
-                && let Some(f) = fields.iter_mut().find(|(n, _)| n == "item")
-            {
-                f.1 = TypeSchema::Enum { variants: items.into_iter().map(|i| (i, None)).collect() };
+            // The items of the chosen volume's graph, else the whole catalog.
+            let chosen = world.try_query_filtered::<(Entity, &Name), With<crate::pcg::PcgVolume>>().and_then(|mut q| q.iter(world).find(|(_, n)| n.as_str() == ts.foliage.volume).map(|(e, _)| e));
+            let items = chosen.map(|e| foliage::volume_items(world, e)).filter(|v| !v.is_empty()).or_else(|| foliage::catalog_items(world));
+            if let TypeSchema::Struct { fields } = &mut s {
+                if let Some(items) = items.filter(|i| !i.is_empty())
+                    && let Some(f) = fields.iter_mut().find(|(n, _)| n == "item")
+                {
+                    f.1 = TypeSchema::Enum { variants: items.into_iter().map(|i| (i, None)).collect() };
+                }
+                if let Some(f) = fields.iter_mut().find(|(n, _)| n == "volume") {
+                    f.1 = TypeSchema::Enum { variants: foliage::volume_names_ro(world).into_iter().map(|i| (i, None)).collect() };
+                }
             }
             (v, s)
         }
