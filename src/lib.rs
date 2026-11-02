@@ -73,6 +73,8 @@ pub mod trace;
 pub mod vfx;
 #[cfg(feature = "pcg")]
 pub mod pcg;
+#[cfg(feature = "logic")]
+pub mod logic;
 #[cfg(feature = "props")]
 pub mod props;
 #[cfg(feature = "sound")]

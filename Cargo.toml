@@ -29,6 +29,9 @@ image = { version = "0.25", default-features = false, features = ["png"], option
 # world: RON world descriptions and 16-bit PNG heightmaps (both already in Bevy's tree; no new features).
 ron = { version = "0.12", default-features = false, optional = true }
 pcg-core = { path = "crates/pcg-core", optional = true }
+logic-core = { path = "crates/logic-core", optional = true }
+# TEMPORARY: local path, switched to the pushed git rev (branch `embed`) at merge.
+ruspy = { path = "/Users/himanshu/codes/ruspy", default-features = false, optional = true }
 png = { version = "0.18", default-features = false, optional = true }
 # net: compact serde wire format for replicated components / messages (pulls only cobs + serde).
 postcard = { version = "1", default-features = false, features = ["alloc"], optional = true }
@@ -51,6 +54,7 @@ default = [
     "actions",
     "l10n",
     "props",
+    "logic",
 ]
 # AI-friendly dev loop: ECS inspector commands, scenario test kit, perf assertions, scope
 # profiling, JSON hot reload, save slots, asset checks (docs/DEVKIT.md).
@@ -95,6 +99,8 @@ actions = []
 l10n = []
 # Breakable / bendable props: toppling posts, debris, plants that sway (src/props, docs/PROPS.md).
 props = []
+# Game logic as node graphs (assets/logic/*.logic.ron) and ruspy scripts (assets/scripts/*.ruspy): src/logic, docs/LOGIC.md.
+logic = ["dep:logic-core", "dep:ruspy"]
 # Multiplayer: transports, channels, replication, prediction (not in default: many games are single-player).
 net = ["dep:postcard"]
 
@@ -156,6 +162,10 @@ required-features = ["ai", "devtools"]
 [[example]]
 name = "open_world"
 required-features = ["world"]
+
+[[example]]
+name = "logic_demo"
+required-features = ["logic", "devtools", "physics"]
 
 [[example]]
 name = "net_demo"
