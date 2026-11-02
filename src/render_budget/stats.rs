@@ -164,6 +164,8 @@ fn count_stats(
     classes: Query<(Option<&BudgetClass>, Option<&DetailTier>)>,
     ranges: Option<Res<VisibleEntityRanges>>,
     cpu: Res<super::BudgetCpu>,
+    batch_keys: Query<(&Mesh3d, Option<&MeshMaterial3d<StandardMaterial>>, Has<bevy::mesh::skinning::SkinnedMesh>, Has<bevy::render::batching::NoAutomaticBatching>)>,
+    mut seen: Local<(bevy::platform::collections::HashSet<(AssetId<Mesh>, u64)>, bevy::platform::collections::HashSet<u64>)>,
 ) {
     let _cpu = cpu.time();
     let s = &mut *stats;
@@ -186,6 +188,27 @@ fn count_stats(
     if !budget.detailed_stats {
         return;
     }
+    // Draws after batching: one per (mesh, material) bin. Materials other than
+    // StandardMaterial are keyed by entity (counted one each: an upper bound).
+    let (bins, sets) = &mut *seen;
+    bins.clear();
+    sets.clear();
+    let mut single = 0u32;
+    for &e in visible {
+        let Ok((mesh, mat, skinned, no_batch)) = batch_keys.get(e) else { continue };
+        if skinned || no_batch {
+            single += 1;
+            continue;
+        }
+        let m = match mat {
+            Some(m) => std::hash::BuildHasher::hash_one(&bevy::platform::hash::FixedHasher, m.0.id()) & !(1 << 63),
+            None => e.to_bits() | 1 << 63,
+        };
+        bins.insert((mesh.0.id(), m));
+        sets.insert(m);
+    }
+    s.draws = bins.len() as u32 + single;
+    s.draw_sets = sets.len() as u32 + single;
     let (mut actors, mut scenery, mut near, mut far) = (0, 0, 0, 0);
     for &e in visible {
         match classes.get(e) {
@@ -407,6 +430,7 @@ mod devtools {
         m.record("render.frames_skipped", s.frames_skipped as f64);
         m.record("render.meshes_total", s.meshes_total as f64);
         m.record("render.meshes_visible", s.meshes_visible as f64);
+        m.record("render.draws", s.draws as f64);
         m.record("render.culled_frustum", s.culled_frustum as f64);
         m.record("render.culled_distance", s.culled_distance as f64);
         if let Some(n) = s.culled_occlusion {
@@ -442,7 +466,7 @@ mod devtools {
         let r = &world.resource::<EffectiveRanges>().0;
         json!({
             "frames_rendered": s.frames_rendered, "frames_skipped": s.frames_skipped,
-            "meshes_total": s.meshes_total, "meshes_visible": s.meshes_visible,
+            "meshes_total": s.meshes_total, "meshes_visible": s.meshes_visible, "draws": s.draws, "draw_sets": s.draw_sets,
             "culled_frustum": s.culled_frustum, "culled_distance": s.culled_distance, "culled_occlusion": s.culled_occlusion,
             "actors_visible": s.actors_visible, "scenery_visible": s.scenery_visible,
             "lod_near": s.lod_near, "lod_far": s.lod_far,

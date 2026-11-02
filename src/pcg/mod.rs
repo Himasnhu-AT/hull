@@ -240,7 +240,9 @@ impl Plugin for PcgPlugin {
             .init_resource::<PcgStats>()
             .add_message::<PcgEmitted>()
             .add_message::<PcgCellDropped>()
-            .add_systems(Update, (schedule_cells, collect_cells, spawn_cells).chain());
+            .init_resource::<RetiredRoots>()
+            .add_systems(Update, (schedule_cells, collect_cells, spawn_cells).chain())
+            .add_systems(Last, despawn_retired);
         #[cfg(feature = "devtools")]
         devtools::register(app);
     }
@@ -307,6 +309,18 @@ fn streamed_cells(area: Area, size: f32, s: &PcgStreaming, sources: &[Vec2], loa
     }
 }
 
+/// Cell roots replaced or dropped this frame. They are despawned in `Last`, after every
+/// `Update` / `PostUpdate` command has applied: a game system that tags fresh PCG output
+/// (`commands.entity(e).insert(..)` on `Added` entities) never meets a root despawned under it.
+#[derive(Resource, Default)]
+struct RetiredRoots(Vec<Entity>);
+
+fn despawn_retired(mut commands: Commands, mut retired: ResMut<RetiredRoots>) {
+    for r in retired.0.drain(..) {
+        commands.entity(r).try_despawn();
+    }
+}
+
 /// Starts evaluations for cells whose key (graph + nearby inputs) changed, nearest first.
 /// Streamed volumes ([`PcgStreaming`]) also load and drop cells around the sources here.
 #[allow(clippy::too_many_arguments, clippy::type_complexity)]
@@ -318,6 +332,7 @@ fn schedule_cells(
     cam: Query<&GlobalTransform, With<MainCamera>>,
     #[cfg(feature = "world")] stream_sources: Query<&GlobalTransform, (With<crate::world::StreamSource>, Without<MainCamera>)>,
     mut dropped: MessageWriter<PcgCellDropped>,
+    mut retired: ResMut<RetiredRoots>,
     mut stats: ResMut<PcgStats>,
     mut todo: Local<Vec<(f32, Entity, IVec2)>>,
     mut sources: Local<Vec<Vec2>>,
@@ -371,7 +386,7 @@ fn schedule_cells(
                 let keep = want.contains(k);
                 if !keep {
                     if let Some(r) = c.root.take() {
-                        commands.entity(r).try_despawn();
+                        retired.0.push(r);
                     }
                     if c.spawned_with.is_some() {
                         dropped.write(PcgCellDropped { volume: e, cell: *k });
@@ -468,6 +483,7 @@ fn spawn_cells(
     governor: Option<Res<crate::render_budget::GovernorState>>,
     mut meshes: Option<ResMut<Assets<Mesh>>>,
     mut emitted: MessageWriter<PcgEmitted>,
+    mut retired: ResMut<RetiredRoots>,
     mut stats: ResMut<PcgStats>,
 ) {
     let thin = thinning(&scal, &settings, quality.as_deref(), governor.as_deref());
@@ -494,7 +510,7 @@ fn spawn_cells(
             }
             budget -= 1;
             if let Some(r) = c.root.take() {
-                commands.entity(r).try_despawn();
+                retired.0.push(r);
             }
             let first = c.spawned_with.is_none();
             if !first {
@@ -906,6 +922,37 @@ mod tests {
         run_until_done(&mut app);
         assert_eq!(near(&mut app), west);
         assert_eq!(points(&mut app, IVec2::new(-7, 0)), Some(first));
+    }
+
+    /// A game system that tags PCG output in `Update` (plain `insert`, no `try_`) while
+    /// streaming drops cells must not hit a despawned entity. Commands apply in system order
+    /// at the end of `Update` (no auto sync), the order that panicked when drops despawned in
+    /// `schedule_cells`.
+    #[test]
+    fn tagging_output_while_cells_drop_is_safe() {
+        #[derive(Component)]
+        struct Tagged;
+        fn tag(mut commands: Commands, roots: Query<Entity, With<PcgCellRoot>>) {
+            for e in &roots {
+                commands.entity(e).insert(Tagged);
+            }
+        }
+        let mut app = app();
+        app.edit_schedule(Update, |s| {
+            s.set_build_settings(bevy::ecs::schedule::ScheduleBuildSettings { auto_insert_apply_deferred: false, ..default() });
+        });
+        app.add_systems(Update, tag.after(schedule_cells).before(collect_cells));
+        let inputs = Inputs::default().rects("lots", vec![Rect::new(Vec2::ZERO, Vec2::new(256.0, 32.0))]);
+        app.world_mut().spawn((PcgVolume { cell: 32.0, ..PcgVolume::new(graph(), inputs, Area::new(Vec2::new(-256.0, -32.0), Vec2::new(256.0, 32.0))) }, PcgStreaming { radius: 30.0, margin: 0.0 }));
+        let cam = app.world_mut().spawn((MainCamera, GlobalTransform::from_xyz(-240.0, 2.0, 0.0))).id();
+        run_until_done(&mut app);
+        // Fast drive east: cells drop every few frames.
+        for i in 0..240 {
+            let x = -240.0 + i as f32 * 2.0;
+            app.world_mut().entity_mut(cam).insert(GlobalTransform::from_xyz(x, 2.0, 0.0));
+            app.update();
+        }
+        assert!(app.world().resource::<PcgStats>().cells_dropped > 10);
     }
 
     #[test]

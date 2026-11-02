@@ -133,6 +133,10 @@ commands.spawn((PcgVolume { cell: 64.0, ..PcgVolume::new(graph, inputs, area) },
   flight. Cells that had spawned send `PcgCellDropped { volume, cell }`: drop whatever you
   built from that cell's `PcgEmitted` points. On re-entry the cell evaluates again (same
   seeds, same points) and emits again.
+- Dropped and replaced cell roots are despawned in `Last`, after every `Update` / `PostUpdate`
+  command has applied, so a game system that tags fresh output (`insert` on `Added`
+  entities) never meets a root despawned under it. A system in `Last` should still use
+  `try_insert` / `try_remove`.
 - Only cells around the sources are visited each frame; `pcg.stats` shows `cells` (loaded)
   and `cells_dropped`.
 - Things that must exist far away (impostor fields, map markers) shouldn't come from a

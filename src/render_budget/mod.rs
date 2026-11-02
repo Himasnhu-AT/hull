@@ -85,6 +85,12 @@ pub struct RenderStats {
     /// Meshes in the world / meshes the camera drew this frame.
     pub meshes_total: u32,
     pub meshes_visible: u32,
+    /// Draws after batching (detailed stats): visible meshes grouped the way Bevy bins them,
+    /// one per distinct (mesh, material). Skinned, morphed or `NoAutomaticBatching` meshes
+    /// count one each. On Metal each is one indirect draw; `draw_sets` (distinct materials)
+    /// is the number of multi-draw calls when GPU culling batches them.
+    pub draws: u32,
+    pub draw_sets: u32,
     /// Hidden this frame by: view frustum, distance (detail ranges), occlusion (GPU, when known).
     pub culled_frustum: u32,
     pub culled_distance: u32,

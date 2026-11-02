@@ -196,6 +196,14 @@ What runs by default:
   window events, and a Shroud window opened behind a fullscreen app in another macOS Space once
   culled nearly all scenery for a round. `render.stats` also reports `eye`, `eye_forward`,
   `aspect` and `viewport`.
+- **Draws after batching** (`render.stats` → `draws`, `draw_sets`; metric `render.draws`;
+  detailed stats only). `meshes_visible` counts entities; Bevy draws each visible
+  (mesh, material) pair once, instancing every entity that shares it. `draws` counts those
+  pairs (skinned and `NoAutomaticBatching` meshes one each; materials other than
+  `StandardMaterial` one per entity, an upper bound). `draw_sets` counts distinct materials:
+  with GPU culling each is one multi-draw call (on Metal still one indirect draw per pair).
+  Budgets "after batching" mean `draws`. To lower it, share mesh and material handles (PCG
+  does: instanced items share them) and merge static pieces.
 - **Frame pacing.** Menus, pause and boot update reactively (30 Hz when focused, 8 Hz unfocused;
   30 Hz in control-port/offscreen runs) so the GPU idles; unpaused gameplay is continuous.
 - **CPU frustum culling** (Bevy, always on) is counted; `RenderStats` is filled every frame and
