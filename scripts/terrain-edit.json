@@ -1,0 +1,219 @@
+[
+ {
+  "sleep": 4
+ },
+ {
+  "cmd": "terrain.info",
+  "expect": {
+   "result.source_samples": [
+    501,
+    501
+   ]
+  }
+ },
+ {
+  "cmd": "cam.set",
+  "params": {
+   "pos": [
+    -150,
+    120,
+    -200
+   ],
+   "target": [
+    20,
+    20,
+    20
+   ]
+  }
+ },
+ {
+  "sleep": 2
+ },
+ {
+  "shot": "01_before"
+ },
+ {
+  "cmd": "terrain.stroke",
+  "params": {
+   "points": [
+    [
+     -30,
+     12
+    ],
+    [
+     60,
+     12
+    ]
+   ],
+   "settings": {
+    "kind": "Raise",
+    "radius": 50,
+    "strength": 9,
+    "falloff": "Smooth"
+   }
+  },
+  "expect": {
+   "result.before": 1,
+   "result.after": 2
+  }
+ },
+ {
+  "cmd": "terrain.stroke",
+  "params": {
+   "points": [
+    [
+     110,
+     -70
+    ]
+   ],
+   "settings": {
+    "kind": "Flatten",
+    "radius": 40,
+    "strength": 1,
+    "falloff": "Linear",
+    "pick_target": true
+   }
+  },
+  "expect": {
+   "result.before": 3
+  }
+ },
+ {
+  "cmd": "terrain.stroke",
+  "params": {
+   "points": [
+    [
+     -110,
+     -40
+    ],
+    [
+     -20,
+     -90
+    ],
+    [
+     70,
+     -110
+    ],
+    [
+     130,
+     -60
+    ]
+   ],
+   "settings": {
+    "kind": "Paint",
+    "layer": 3,
+    "radius": 9,
+    "strength": 1,
+    "falloff": "Constant"
+   }
+  },
+  "expect": {
+   "result.layer": "Splat"
+  }
+ },
+ {
+  "sleep": 2
+ },
+ {
+  "shot": "02_after"
+ },
+ {
+  "cmd": "cam.set",
+  "params": {
+   "pos": [
+    12,
+    70,
+    -60
+   ],
+   "target": [
+    12,
+    25,
+    12
+   ]
+  }
+ },
+ {
+  "sleep": 2
+ },
+ {
+  "shot": "03_seam_closeup"
+ },
+ {
+  "cmd": "terrain.info"
+ },
+ {
+  "cmd": "terrain.apply_blob",
+  "params": {
+   "id": 1
+  }
+ },
+ {
+  "cmd": "terrain.apply_blob",
+  "params": {
+   "id": 3
+  }
+ },
+ {
+  "cmd": "terrain.apply_blob",
+  "params": {
+   "id": 5
+  }
+ },
+ {
+  "sleep": 2
+ },
+ {
+  "shot": "04_undone"
+ },
+ {
+  "cmd": "terrain.apply_blob",
+  "params": {
+   "id": 2
+  }
+ },
+ {
+  "cmd": "terrain.apply_blob",
+  "params": {
+   "id": 4
+  }
+ },
+ {
+  "cmd": "terrain.apply_blob",
+  "params": {
+   "id": 6
+  }
+ },
+ {
+  "sleep": 2
+ },
+ {
+  "shot": "05_redone"
+ },
+ {
+  "cmd": "terrain.save",
+  "params": {
+   "dir": "/tmp/terrain-edit-saved"
+  }
+ },
+ {
+  "cmd": "cam.set",
+  "params": {
+   "pos": [
+    30,
+    75,
+    -260
+   ],
+   "target": [
+    30,
+    20,
+    -60
+   ]
+  }
+ },
+ {
+  "sleep": 2
+ },
+ {
+  "shot": "06_pad_and_paint"
+ }
+]

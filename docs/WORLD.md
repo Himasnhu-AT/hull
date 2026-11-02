@@ -96,6 +96,73 @@ off (default) that is Bevy world space. With it on, Bevy space = absolute − `W
 - **Colliders** (`physics`): one avian heightfield per chunk, owned by the chunk's cell.
 - Tags: chunks are `Scenery + KeepDetail` (the render budget leaves them alone).
 
+## Editing terrain
+
+Unreal-style landscape editing for the editor and scripts (`world::edit`, `world::brush`,
+`world::terrain_data`; example `terrain_edit`; tests `tests/terrain_edit.rs` + unit tests).
+
+- **Data files** (a folder next to the level, e.g. `levels/<name>/`): `terrain.ron`
+  (`TerrainMeta`: `size_samples`, `spacing`, `origin`, `height_min`, `height_max`,
+  `splat_resolution`), `terrain.r16` (u16 little-endian, row-major, 0 = min, 65535 = max) and
+  optional `terrain_splat.rgba8` (`splat_resolution`² texels, byte i = layer i, sums to 255).
+  `TerrainData::{from_heightfield, to_heightfield, load, save}`; writes are atomic (temp file +
+  rename, `terrain.ron` last). Quantisation error ≤ (max-min)/65535 (tested; a second save of
+  loaded data is bit-identical). Bad files are errors, never panics. A `WorldDesc` points at
+  the folder with `HeightSource::TerrainFiles { dir }` (size, spacing and origin come from
+  `terrain.ron`; a saved splat map replaces the generated one). Games that build a custom
+  `Heightfield` for `spawn_world_with` save with `TerrainEdit::save` / `terrain.save {dir}`.
+  The saved height grid is the source size (chunk padding is cropped); the splat map covers the
+  padded extent, so keep `chunk_quads` when reloading.
+- **`TerrainEdit`** (functions on `&mut World`): `set_heights(rect, values)`, `set_splat(rect,
+  texels)`, `dab(settings, pos)`, `begin_stroke` / `end_stroke`, `stroke(settings, points)`,
+  `apply_blob(id)`, `save(dir)`. An edit writes the shared grid in place (scatter and
+  `TerrainHeights` let go of it first; if a background mesh build still holds the old grid,
+  `Arc::make_mut` copies once, 16 MB at 2001²), recomputes LOD errors and skirts of the touched
+  chunks, rebuilds their meshes at the LOD they show now (same mesh handle, new AABB) and their
+  colliders, and writes `TerrainChanged { layer, rect, rect_world }`. The rebuild covers the
+  rectangle plus a 1-sample border, so normals across chunk edges stay seamless.
+  `TerrainHeights` (resource) gives games `height_at / normal_at / slope_deg` on the live heights.
+- **Brushes** (`BrushSettings`, Reflect + serde; pure functions in `brush.rs`): `kind` Raise,
+  Lower, Smooth (box / gaussian 3×3), Flatten (`target`, or the height under the first dab with
+  `pick_target`), Ramp (grade between the first and last stroke point; far-end height `target`
+  or the terrain's own with `pick_target`), Noise (`noise_scale`, `noise_seed`), Paint (`layer`
+  0..3, weights renormalised to 255). `falloff` Smooth / Linear / Constant, `radius` metres.
+  `strength`: metres per dab for Raise / Lower / Noise, 0..1 blend per dab for the rest.
+  `stroke` places a dab every quarter radius (at least one sample spacing).
+- **Undo**: `TerrainPatchStore` (resource, default cap 256 MB, oldest dropped, the newest blob is
+  always kept) holds before / after blobs (`BlobId`) of the touched rectangle only (f32 heights,
+  RGBA8 texels); one stroke = one blob pair, applied back bit for bit. The editor's
+  `Op::TerrainPatch` stores the ids.
+- **Control commands**: `terrain.info`, `terrain.brush {x, z, settings, record?}`,
+  `terrain.stroke {points, settings}` (→ `{layer, rect, before, after}`), `terrain.stroke_begin`
+  / `terrain.stroke_end` (live editing: `terrain.brush` calls in between are one undo step),
+  `terrain.apply_blob {id}`, `terrain.save {dir}`. `settings` is `BrushSettings` JSON.
+- **Cost** (M5 Pro, 2001² samples at 2 m, 64-quad chunks, `terrain_edit --size 4000`, 400 random
+  dabs each, whole dab: brush math + write + chunk info + mesh + collider; the Paint row is
+  brush + CPU copy only):
+
+  | Dab | mean | p95 | max | chunks / dab |
+  |---|---|---|---|---|
+  | Raise r=20 m | 290 µs | 670 µs | 730 µs | 1.7 |
+  | Smooth r=20 m | 292 µs | 682 µs | 719 µs | 1.7 |
+  | Flatten r=20 m | 291 µs | 683 µs | 705 µs | 1.7 |
+  | Noise r=20 m | 312 µs | 689 µs | 1.06 ms | 1.7 |
+  | Raise r=60 m | 646 µs | 719 µs | 1.14 ms | 3.8 |
+  | Paint r=20 m | 9 µs | 21 µs | 26 µs | 0 |
+
+  Nearly all of it is the mesh and LOD-error rebuild (about 170 µs per 64-quad chunk). Brush math
+  plus writing is 3 to 20 µs. Idle terrain pays one `Option` check per frame
+  (the streamed-mode coarse collider refresh, `physics` builds).
+- **Limits**: a splat edit re-uploads the whole splat image (16 MB at 2048²) next frame, and a
+  second CPU copy (`TerrainSplat`, 16 MB) is kept; the splat map is square, so a 2048² map over
+  4 km is 2 m texels. Scatter clusters already spawned and prefabs placed on the ground do not
+  move with an edit (`TerrainChanged` lets the game refresh them); new clusters see the new
+  heights. HLOD proxies cover prefabs only, so terrain edits do not touch them. In streamed mode
+  the coarse fallback collider is rebuilt 0.75 s after the last edit (loaded cells' colliders
+  update at once). Stroke undo capture is the bounding rectangle of the stroke. Heights are
+  clamped to ±20 km. Splat editing needs the render path or a `TerrainSplat` inserted by the
+  game (headless worlds only have one when loaded from `terrain_splat.rgba8`).
+
 ## Scatter
 
 `ScatterRule`s place items on a jittered grid in absolute space (one candidate per
@@ -193,6 +260,7 @@ colliders and gameplay components only.
 | `world.height` | `{x, z}` | `{height, normal, slope_deg, inside, chunk, lod, cell, loaded}` |
 | `world.teleport` | `{x, z, y?, up?}` | moves the player `StreamSource` (no radius) or the main camera's root; `{at, ground, cell, ready}` |
 | `world.settings` | `{mode?, pixel_error?, load_radius?, unload_radius?, scatter?, scatter_scale?, hlod?, hlod_distance?, origin?}` | current values |
+| `terrain.*` | see "Editing terrain" | `terrain.info`, `terrain.brush`, `terrain.stroke`, `terrain.stroke_begin/end`, `terrain.apply_blob`, `terrain.save` |
 
 Metrics (dev builds): `world.cpu_us`, `world.terrain_triangles`, `world.terrain_chunks_drawn`,
 `world.cells_loaded`, `world.scatter_instances`, `world.scatter_clusters`, `world.hlod_cells_far`.

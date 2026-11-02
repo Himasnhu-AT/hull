@@ -30,9 +30,11 @@ use serde_json::{Value, json};
 #[cfg(feature = "devtools")]
 mod control;
 pub mod file;
+pub mod placeable;
 pub mod primitive;
 
 pub use file::{LEVEL_VERSION, LevelError, LevelHeader, LevelMigrations, LookRef, MigrateFn, RUNTIME_ONLY, SaveReport};
+pub use placeable::{Placeable, Placeables, RegisterPlaceable};
 pub use primitive::{Primitive, PrimitiveShape, sync_primitives};
 
 use crate::cli;
@@ -414,6 +416,7 @@ impl Plugin for LevelPlugin {
         app.insert_resource(cfg)
             .init_resource::<LevelState>()
             .init_resource::<LevelMigrations>()
+            .init_resource::<Placeables>()
             .init_resource::<primitive::PrimitiveCache>()
             .add_message::<LoadLevel>()
             .add_message::<LevelEvent>()

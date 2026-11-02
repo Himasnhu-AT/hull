@@ -48,6 +48,8 @@ from the shell.
 | `src/actions/`, `src/l10n/` | action mapping, gamepad, rebinding, accessibility; localization (`actions.*`, `l10n.*`): **docs/ACTIONS.md**, **docs/L10N.md** |
 | `src/level/` | level files: `LevelEntity` + `levels/*.level.ron` (reflected scene format), hot reload, `--level`, `tree` (`level.*`): **docs/LEVELS.md** |
 | `src/editor/` | the level editor, feature `editor`: `--editor` hosts `crates/editor-ui` through bevy_egui, backend on the World, camera, gizmo, Play/Stop, `editor.*` commands: **docs/EDITOR.md** |
+| `src/spline/` | splines: points with width/bank/tags, Catmull-Rom, arc length, fast `nearest`, road ribbon, gizmos (`spline.*`): **docs/SPLINES.md** |
+| `src/logic/`, `crates/logic-core/` | game logic as node graphs (`assets/logic/*.logic.ron`) + ruspy scripts (`assets/scripts/*.ruspy`) (`logic.*`): **docs/LOGIC.md** |
 | `src/net/` | multiplayer, feature `net` (off by default; test with `--features net`) (`net.*`): **docs/NET.md** |
 | `assets/library/`, `scripts/assets.py` | licence-tracked CC0 / Fab models, textures, HDRIs, fetched on demand (`assets.py fetch\|import\|list\|check`): **docs/ASSETS.md** |
 | `docs/PORTING.md` | conventions, devtools, metrics, ship builds, render budget measurements |
