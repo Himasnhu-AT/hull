@@ -148,6 +148,7 @@ pub struct EditorUi {
     output: output::OutputState,
 
     // Refresh bookkeeping.
+    last_viewport: Option<egui::Rect>,
     dirty_tree: bool,
     dirty_components: bool,
     dirty_assets: bool,
@@ -190,6 +191,7 @@ impl EditorUi {
             details: Default::default(),
             content: content::ContentState { dir_changed: true, ..Default::default() },
             output: Default::default(),
+            last_viewport: None,
             dirty_tree: true,
             dirty_components: true,
             dirty_assets: true,
@@ -290,6 +292,24 @@ impl EditorUi {
         }
 
         let mut root = Ui::new(ctx.clone(), "editor_root".into(), egui::UiBuilder::new().layer_id(egui::LayerId::background()).max_rect(ctx.content_rect()));
+        // Behind the dock: fill everything except the viewport (the host draws the 3D view
+        // there), so the gaps between panels are not the host's clear colour.
+        {
+            let screen = ctx.content_rect();
+            let app = tokens::current(ctx).surface.app;
+            let p = root.painter();
+            match self.last_viewport.filter(|r| screen.contains_rect(*r)) {
+                Some(v) => {
+                    p.rect_filled(egui::Rect::from_min_max(screen.min, egui::pos2(screen.right(), v.top())), 0.0, app);
+                    p.rect_filled(egui::Rect::from_min_max(egui::pos2(screen.left(), v.bottom()), screen.max), 0.0, app);
+                    p.rect_filled(egui::Rect::from_min_max(egui::pos2(screen.left(), v.top()), egui::pos2(v.left(), v.bottom())), 0.0, app);
+                    p.rect_filled(egui::Rect::from_min_max(egui::pos2(v.right(), v.top()), egui::pos2(screen.right(), v.bottom())), 0.0, app);
+                }
+                None => {
+                    p.rect_filled(screen, 0.0, app);
+                }
+            }
+        }
         self.toolbar(&mut root, &mut reqs);
         self.status_bar(&mut root);
 
@@ -342,6 +362,7 @@ impl EditorUi {
         for a in actions {
             let _ = self.layout.apply(a);
         }
+        self.last_viewport = viewport;
         if clear_output {
             self.diagnostics.clear();
         }
