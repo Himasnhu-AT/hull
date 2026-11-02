@@ -452,38 +452,62 @@ impl TerrainEdit {
     }
 }
 
-/// Where this world's terrain files live and whether edits since the last save are unsaved.
+/// Where this world's terrain files live and which edits since the last save are unsaved.
 /// `spawn_world` fills `dir` for `HeightSource::TerrainFiles`; games that pass their own
-/// heights set it themselves. Saving a level (`level::save_level`) writes the terrain there
-/// when `dirty`.
+/// heights set it themselves. Saving a level (`level::save_level`) writes what changed there:
+/// heights (`terrain.r16` + `terrain.ron`) and the splat map (16 MB at 2048², so only when
+/// painted) separately.
 #[derive(Resource, Clone, Debug, Default)]
 pub struct TerrainSaveTarget {
     /// Folder for `terrain.ron` / `terrain.r16` / `terrain_splat.rgba8` (relative = under the
     /// assets folder). `None`: the terrain isn't saved with the level.
     pub dir: Option<std::path::PathBuf>,
-    /// Heights or splat changed since the terrain was loaded or last saved.
-    pub dirty: bool,
+    /// Heights changed since the terrain was loaded or last saved.
+    pub heights_dirty: bool,
+    /// The splat map changed since the terrain was loaded or last saved.
+    pub splat_dirty: bool,
+}
+
+impl TerrainSaveTarget {
+    /// Anything unsaved.
+    pub fn dirty(&self) -> bool {
+        self.heights_dirty || self.splat_dirty
+    }
 }
 
 impl TerrainEdit {
-    /// Writes the terrain to `TerrainSaveTarget::dir` if it has unsaved edits. Returns whether
-    /// it wrote.
+    /// Writes what changed to `TerrainSaveTarget::dir`. Returns whether it wrote anything.
     pub fn save_if_dirty(world: &mut World) -> Result<bool, EditError> {
         let Some(t) = world.get_resource::<TerrainSaveTarget>() else { return Ok(false) };
-        let Some(dir) = t.dir.clone().filter(|_| t.dirty) else { return Ok(false) };
-        TerrainEdit::save(world, &dir)?;
+        let (heights, splat) = (t.heights_dirty, t.splat_dirty);
+        let Some(dir) = t.dir.clone().filter(|_| t.dirty()) else { return Ok(false) };
+        let dir = resolve_dir(world, &dir);
+        let terrain = world.get_resource::<Terrain>().ok_or(EditError::NoTerrain)?;
+        let mut data = TerrainData::from_heightfield(terrain.heightfield(), terrain.source_samples().to_array(), None);
+        let splat_res = world.get_resource::<TerrainSplat>().map(|s| s.res);
+        data.meta.splat_resolution = splat_res.unwrap_or(0);
+        if heights {
+            data.save_heights(&dir)?;
+        } else {
+            // The splat map's resolution lives in the meta file.
+            data.write_meta(&dir)?;
+        }
+        if splat && let Some(sp) = world.get_resource::<TerrainSplat>() {
+            TerrainData::write_splat(&dir, sp.res, &sp.bytes)?;
+        }
         if let Some(mut t) = world.get_resource_mut::<TerrainSaveTarget>() {
-            t.dirty = false;
+            t.heights_dirty = false;
+            t.splat_dirty = false;
         }
         Ok(true)
     }
 }
 
-fn mark_dirty(world: &mut World) {
-    if let Some(mut t) = world.get_resource_mut::<TerrainSaveTarget>() {
-        t.dirty = true;
-    } else {
-        world.insert_resource(TerrainSaveTarget { dir: None, dirty: true });
+fn mark_dirty(world: &mut World, layer: TerrainLayer) {
+    let mut t = world.get_resource_or_insert_with(TerrainSaveTarget::default);
+    match layer {
+        TerrainLayer::Height => t.heights_dirty = true,
+        TerrainLayer::Splat => t.splat_dirty = true,
     }
 }
 
@@ -610,7 +634,7 @@ fn sync_splat_image(world: &mut World, rect: SampleRect) {
 fn write_heights(world: &mut World, rect: SampleRect, values: &[f32]) -> Result<(), EditError> {
     let r = write_heights_inner(world, rect, values);
     if r.is_ok() {
-        mark_dirty(world);
+        mark_dirty(world, TerrainLayer::Height);
     }
     r
 }
@@ -643,7 +667,7 @@ fn write_heights_inner(world: &mut World, rect: SampleRect, values: &[f32]) -> R
 fn write_splat(world: &mut World, rect: SampleRect, texels: &[u8]) -> Result<(), EditError> {
     let r = write_splat_inner(world, rect, texels);
     if r.is_ok() {
-        mark_dirty(world);
+        mark_dirty(world, TerrainLayer::Splat);
     }
     r
 }

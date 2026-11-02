@@ -291,6 +291,11 @@ fn run_game(world: &mut World, level: &Path, built: Option<PathBuf>) -> Result<(
         None => std::env::current_exe().map_err(|e| format!("current exe: {e}"))?,
     };
     let mut cmd = Command::new(exe);
+    // Relative paths inside the level (terrain folders) resolve next to the file you are editing.
+    let origin = world.get_resource::<crate::level::LevelState>().and_then(|s| s.path.clone()).and_then(|p| if p.is_absolute() { Some(p) } else { std::env::current_dir().ok().map(|c| c.join(p)) });
+    if let Some(o) = &origin {
+        cmd.arg("--level-origin").arg(o).env("EDITOR_LEVEL_ORIGIN", o);
+    }
     cmd.arg("--level").arg(level).args(["--control", "0"]).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
     own_group(&mut cmd);
     let child = cmd.spawn().map_err(|e| format!("cannot start the game: {e}"))?;

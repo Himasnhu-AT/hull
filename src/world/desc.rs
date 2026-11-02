@@ -442,7 +442,7 @@ pub fn spawn_world_with(world: &mut World, desc: WorldDesc, heightfield: Option<
         HeightSource::TerrainFiles { dir } => Some(std::path::PathBuf::from(dir)),
         _ => world.get_resource::<super::TerrainSaveTarget>().and_then(|t| t.dir.clone()),
     };
-    world.insert_resource(super::TerrainSaveTarget { dir: save_dir, dirty: false });
+    world.insert_resource(super::TerrainSaveTarget { dir: save_dir, ..default() });
     world.insert_resource(terrain);
     let mut st = world.resource_mut::<WorldStats>();
     st.spawned = true;

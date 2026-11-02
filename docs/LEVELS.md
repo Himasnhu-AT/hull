@@ -134,3 +134,18 @@ written when the terrain has no unsaved edits. A terrain write error fails the l
 
 Components that aren't `Reflect` (inserted by the game at runtime, e.g. a `PcgVolume` on a level
 foliage entity) are skipped silently on save; re-insert them when the level loads.
+
+## Level origin (Play copies)
+
+The editor's Play writes a copy of the level to `<data>/play/editor_play.level.ron` and starts the
+game on it. Paths inside a level that are relative to the level's own folder (the `world:` file,
+a terrain folder `HeightSource::TerrainFiles { dir }`) would not resolve from there, so Play also
+passes the original file: `--level-origin <path>` (devtools builds) or env `EDITOR_LEVEL_ORIGIN`.
+`LevelConfig::origin` holds it and `level::origin_dir(world)` returns its folder (else the open
+level's). `resolve` looks next to the origin first, and a relative terrain `dir` that exists
+there (it must contain `terrain.ron`) is made absolute, so the loaded world also *saves* its
+terrain into the original folder. Without an origin the level's own folder is used the same way.
+
+Terrain saving is split: `TerrainSaveTarget { heights_dirty, splat_dirty }` (`dirty()` = either).
+A level save writes `terrain.r16` + `terrain.ron` only after a height edit and
+`terrain_splat.rgba8` (16 MB at 2048²) only after painting.

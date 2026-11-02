@@ -286,7 +286,7 @@ fn level_save_writes_edited_terrain_to_its_files() {
     {
         let t = app2.world().resource::<TerrainSaveTarget>();
         assert_eq!(t.dir.as_deref(), Some(dir.as_path()));
-        assert!(!t.dirty, "freshly loaded terrain is clean");
+        assert!(!t.dirty(), "freshly loaded terrain is clean");
     }
     let level = temp_dir("lvl-file").join("open.level.ron");
     let r16 = dir.join("terrain.r16");
@@ -298,13 +298,92 @@ fn level_save_writes_edited_terrain_to_its_files() {
 
     // A sculpt marks it dirty; the next level save writes it and clears the flag.
     TerrainEdit::dab(app2.world_mut(), &raise(40.0, 12.0), Vec2::new(60.0, 80.0)).unwrap();
-    assert!(app2.world().resource::<TerrainSaveTarget>().dirty);
+    assert!(app2.world().resource::<TerrainSaveTarget>().heights_dirty);
     let edited = app2.world().resource::<TerrainHeights>().height_at(60.0, 80.0);
     engine::level::save_level(app2.world_mut(), &level).unwrap();
-    assert!(!app2.world().resource::<TerrainSaveTarget>().dirty);
+    assert!(!app2.world().resource::<TerrainSaveTarget>().dirty());
     assert_ne!(std::fs::read(&r16).unwrap(), before, "terrain written with the level");
     let data = TerrainData::load(&dir).unwrap();
     let hf = data.to_heightfield().unwrap();
     let step = (hf.max_height() - hf.min_height()) / 65535.0;
     assert!((hf.height_at(60.0, 80.0) - edited).abs() <= step * 2.0, "{} vs {edited}", hf.height_at(60.0, 80.0));
+}
+
+/// A fresh app with terrain loaded from `dir` and a splat map of `res`² texels.
+fn from_files(dir: &std::path::Path, tag: &str, res: u32) -> App {
+    let mut app = engine::app_with(GameInfo::new("terrain-edit-save", "x"), EngineOptions::headless_test(temp_dir(tag)));
+    app.insert_resource(bevy::time::TimeUpdateStrategy::ManualDuration(STEP));
+    app.finish();
+    app.cleanup();
+    let mut desc = WorldDesc::default();
+    desc.terrain.chunk_quads = 64;
+    desc.terrain.source = engine::world::desc::HeightSource::TerrainFiles { dir: dir.display().to_string() };
+    engine::world::spawn_world(app.world_mut(), desc).expect("spawns from terrain files");
+    run(&mut app, 2);
+    let bytes: Vec<u8> = (0..res * res * 4).map(|i| if i % 4 == 0 { 255 } else { 0 }).collect();
+    app.world_mut().insert_resource(TerrainSplat::new(res, bytes, None).unwrap());
+    app
+}
+
+#[test]
+fn a_heights_only_save_leaves_the_splat_file_alone() {
+    let mut app = app("split-src");
+    spawn(&mut app);
+    let dir = temp_dir("split").join("terrain");
+    TerrainEdit::save(app.world(), &dir).unwrap();
+    let mut app2 = from_files(&dir, "split2", 16);
+    let splat = dir.join("terrain_splat.rgba8");
+    let (r16, meta) = (dir.join("terrain.r16"), dir.join("terrain.ron"));
+
+    // Painting writes the splat map (and the meta that names its resolution), not the heights.
+    let r16_before = std::fs::read(&r16).unwrap();
+    TerrainEdit::set_splat(app2.world_mut(), SampleRect::new(0, 0, 4, 4), &[0u8; 4 * 4 * 4]).unwrap();
+    assert!(app2.world().resource::<TerrainSaveTarget>().splat_dirty && !app2.world().resource::<TerrainSaveTarget>().heights_dirty);
+    assert!(TerrainEdit::save_if_dirty(app2.world_mut()).unwrap());
+    assert_eq!(std::fs::read(&r16).unwrap(), r16_before, "a splat-only save does not rewrite the heights");
+    assert_eq!(std::fs::metadata(&splat).unwrap().len(), 16 * 16 * 4);
+    let splat_bytes = std::fs::read(&splat).unwrap();
+    let splat_time = std::fs::metadata(&splat).unwrap().modified().unwrap();
+    assert!(std::fs::read_to_string(&meta).unwrap().contains("16"), "meta names the splat resolution");
+
+    // Sculpting writes the heights, not the splat map.
+    std::thread::sleep(Duration::from_millis(30));
+    TerrainEdit::dab(app2.world_mut(), &raise(40.0, 12.0), Vec2::new(60.0, 80.0)).unwrap();
+    let t = app2.world().resource::<TerrainSaveTarget>().clone();
+    assert!(t.heights_dirty && !t.splat_dirty);
+    assert!(TerrainEdit::save_if_dirty(app2.world_mut()).unwrap());
+    assert_ne!(std::fs::read(&r16).unwrap(), r16_before, "heights written");
+    assert_eq!(std::fs::read(&splat).unwrap(), splat_bytes, "splat bytes unchanged");
+    assert_eq!(std::fs::metadata(&splat).unwrap().modified().unwrap(), splat_time, "splat file not rewritten");
+    assert!(!app2.world().resource::<TerrainSaveTarget>().dirty());
+    assert!(!TerrainEdit::save_if_dirty(app2.world_mut()).unwrap(), "nothing left to write");
+}
+
+#[test]
+fn a_level_copy_finds_terrain_next_to_its_origin() {
+    let mut src = app("origin-src");
+    spawn(&mut src);
+    let home = temp_dir("origin-home");
+    TerrainEdit::save(src.world(), &home.join("terrain")).unwrap();
+    // The level and its world file sit next to the terrain folder, which they name relatively.
+    std::fs::write(home.join("world.ron"), "(seed: 3, terrain: (size: (1024.0, 1024.0), spacing: 2.0, chunk_quads: 64, source: TerrainFiles(dir: \"terrain\")), cell_size: 256.0)").unwrap();
+    let level_text = "(version: 1, world: Some(\"world.ron\"), look: None, entities: (resources: {}, entities: {}))";
+    let original = home.join("open.level.ron");
+    std::fs::write(&original, level_text).unwrap();
+    // Play's copy lives somewhere else entirely.
+    let copy = temp_dir("origin-play").join("editor_play.level.ron");
+    std::fs::write(&copy, level_text).unwrap();
+
+    let mut game = app("origin-game");
+    game.world_mut().resource_mut::<engine::level::LevelConfig>().origin = Some(original.clone());
+    assert_eq!(engine::level::origin_dir(game.world()), Some(home.clone()));
+    engine::level::load_level(game.world_mut(), &copy).expect("the copy loads: the terrain dir resolves next to the origin");
+    run(&mut game, 2);
+    assert!(game.world().get_resource::<Terrain>().is_some(), "terrain spawned");
+    let target = game.world().resource::<TerrainSaveTarget>();
+    assert_eq!(target.dir.as_deref(), Some(home.join("terrain").as_path()), "edits save to the original folder");
+
+    // Without the origin the same copy cannot find it.
+    let mut lost = app("origin-lost");
+    assert!(engine::level::load_level(lost.world_mut(), &copy).is_err());
 }
