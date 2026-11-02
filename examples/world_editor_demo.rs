@@ -12,7 +12,7 @@ use std::sync::Arc;
 use engine::editor::EditorConfig;
 use engine::level::{LevelEntity, RegisterPlaceable, new_stable_id};
 use engine::pcg::pcg_core::{Area, Graph, Inputs, Rect, Surface, Tier};
-use engine::pcg::{PcgCatalog, PcgGraphRef, PcgVolume};
+use engine::pcg::{PcgCatalog, PcgFollowTerrain, PcgGraphRef, PcgVolume};
 use engine::prelude::*;
 use engine::spline::{Spline, SplinePoint, SplineRoad};
 use engine::world::*;
@@ -105,7 +105,7 @@ fn setup(world: &mut World) {
         .expect("graph");
     let inputs = Inputs::default().rects("lots", vec![Rect::new(Vec2::ZERO, Vec2::splat(280.0))]).surface(Surface::Heightfield { origin: Vec2::splat(a0), cell: 2.0, width: w, heights });
     let id = new_stable_id(world);
-    world.spawn((LevelEntity { id }, Name::new("Dressing"), PcgVolume { graph: PcgGraphRef::Inline(Arc::new(graph)), inputs: Arc::new(inputs), area: Area::new(Vec2::splat(-280.0), Vec2::splat(280.0)), cell: 64.0 }));
+    world.spawn((LevelEntity { id }, Name::new("Dressing"), PcgVolume { graph: PcgGraphRef::Inline(Arc::new(graph)), inputs: Arc::new(inputs), area: Area::new(Vec2::splat(-280.0), Vec2::splat(280.0)), cell: 64.0 }, PcgFollowTerrain));
 
     if !world.resource::<Headless>().0 {
         let h = ground(world, 0.0, 0.0);
