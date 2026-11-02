@@ -114,7 +114,17 @@ fn apply_render_scale(
     >,
     mut sprites: Query<&mut Sprite>,
     outputs: Query<&Camera, Without<MainCamera>>,
+    mut projections: Query<&mut Projection, (With<MainCamera>, With<Camera3d>)>,
 ) {
+    // Bevy 0.20 recomputes a camera's target size (`computed.target_info`) on window/image
+    // events or a projection change, not when its `RenderTarget` changes. After a retarget the
+    // camera kept the old target's size and scale factor, so UI laid out on it (results
+    // screen after scale went back to 1) sat in the wrong place and ignored the mouse.
+    let mut retarget = |e: Entity| {
+        if let Ok(mut p) = projections.get_mut(e) {
+            p.set_changed();
+        }
+    };
     let Ok(window) = window.single() else { return };
     // What the upscale camera draws to (the window, or the offscreen image), once known.
     let out = scaled.as_ref().and_then(|s| outputs.get(s.camera).ok()).and_then(|c| c.physical_target_size().zip(c.logical_target_size()));
@@ -128,6 +138,7 @@ fn apply_render_scale(
         if let Some(s) = scaled {
             if let Ok((_, mut target, _, _, taa, _)) = mains.get_mut(s.main) {
                 *target = RenderTarget::Window(WindowRef::Primary);
+                retarget(s.main);
                 if let Some(mut taa) = taa {
                     taa.reset = true;
                 }
@@ -179,6 +190,7 @@ fn apply_render_scale(
                 && target.as_image() != Some(&s.image)
             {
                 *target = RenderTarget::from(s.image.clone());
+                retarget(main);
             }
             s.main = main;
         }
@@ -194,6 +206,7 @@ fn apply_render_scale(
             let handle = images.add(image);
             let Ok((_, mut target, cam, was_ui, taa, own_cas)) = mains.get_mut(main) else { return };
             *target = RenderTarget::from(handle.clone());
+            retarget(main);
             if let Some(mut taa) = taa {
                 taa.reset = true;
             }
