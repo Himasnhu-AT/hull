@@ -168,3 +168,46 @@ fn layout_persists() {
     );
     let _ = TRANSFORM;
 }
+
+fn with_brush(h: &mut Harness<'static, App>) {
+    h.state_mut().backend.tool_docs = vec![ToolDoc {
+        id: "sculpt".into(),
+        label: "Sculpt".into(),
+        hint: "LMB drag paints".into(),
+        settings: json!({"radius": 20.0}),
+        schema: TypeSchema::Struct { fields: vec![("radius".into(), TypeSchema::Float { min: Some(1.0), max: Some(200.0), step: None })] },
+    }];
+    h.state_mut().backend.placeable_docs = vec![PlaceableDoc { name: "Start".into(), icon: "flag".into(), category: "Gameplay".into(), type_path: "game::Start".into() }];
+    h.state_mut().ui.refresh();
+    h.run_steps(4);
+}
+
+#[test]
+fn tool_buttons_activate_a_tool_and_show_its_settings() {
+    let mut h = harness();
+    with_brush(&mut h);
+    h.get_by_label("Sculpt").click();
+    h.run_steps(5);
+    assert_eq!(h.state().backend.active.as_deref(), Some("sculpt"));
+    // The Tool tab came forward with the tool's help and its settings.
+    h.get_by_label("LMB drag paints");
+    h.get_by_role_and_label(egui::accesskit::Role::Slider, "radius");
+    // Back to Move deactivates it.
+    h.get_by_label("Move").click();
+    h.run_steps(3);
+    assert_eq!(h.state().backend.active, None);
+}
+
+#[test]
+fn engine_recorded_ops_land_on_the_undo_stack_and_the_palette_picks_the_place_tool() {
+    let mut h = harness();
+    with_brush(&mut h);
+    h.state_mut().backend.recorded.push(RecordedOp { label: "Sculpt".into(), op: Op::TerrainPatch { layer: TerrainKind::Height, rect: [0, 0, 2, 2], before: 1, after: 2 }, key: None });
+    h.run_steps(3);
+    assert!(h.state().ui.can_undo(), "a stroke the engine recorded is undoable");
+    h.state_mut().ui.show_panel("Tool").unwrap();
+    h.run_steps(3);
+    h.get_by_label("Start").click();
+    h.run_steps(4);
+    assert_eq!(h.state().backend.active.as_deref(), Some("place"));
+}
