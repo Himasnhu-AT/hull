@@ -66,9 +66,9 @@ yourself with `--control 0`, which prints `control: port=<n> key=<file>`, and sp
 lines protocol (see `tests/control.rs`); or use `--mcp` for MCP over stdio.
 
 To start a game on screen for the user to play, launch it detached with output to a file
-(`nohup memgate -- cargo run -q > run.log 2>&1 &`). On macOS with Bevy 0.20, a window started
-from a background task with stdout piped (`cargo run | tail`) can stay blank grey while the
-game runs behind it.
+(`nohup memgate -- cargo run -q > run.log 2>&1 &`) so it outlives the agent's command. (A blank
+grey window or an unclickable menu in dev runs was not the launch method: the UI fallback
+camera was removed when the metrics window's camera appeared; fixed in `ui::fallback_camera`.)
 
 The command catalogue is live: call `engine.commands`. The main ones:
 

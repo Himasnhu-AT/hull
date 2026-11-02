@@ -138,18 +138,23 @@ impl Plugin for UiKitPlugin {
 }
 
 /// A plain 2D camera so menus render when the game has no camera yet (title screens before a
-/// level loads). Removed as soon as any other camera exists.
+/// level loads). Removed as soon as any other camera exists, except cameras drawing to another
+/// window (the dev metrics window): with those counted, opening the metrics window removed the
+/// menu's only camera, so the menu stopped drawing (blank window or a frozen last frame) and
+/// ignored clicks.
 #[derive(Component)]
 pub struct UiFallbackCamera;
 
 fn fallback_camera(
     mut commands: Commands,
     theme: Res<theme::Theme>,
-    others: Query<(), (With<Camera>, Without<UiFallbackCamera>)>,
+    others: Query<&bevy::camera::RenderTarget, (With<Camera>, Without<UiFallbackCamera>)>,
     mine: Query<Entity, With<UiFallbackCamera>>,
-    windows: Query<(), With<PrimaryWindow>>,
+    windows: Query<Entity, With<PrimaryWindow>>,
 ) {
-    let need = others.is_empty() && !windows.is_empty();
+    let Ok(primary) = windows.single() else { return };
+    let other_window = |t: &bevy::camera::RenderTarget| matches!(t, bevy::camera::RenderTarget::Window(bevy::window::WindowRef::Entity(e)) if *e != primary);
+    let need = others.iter().all(other_window);
     if need && mine.is_empty() {
         commands.spawn((
             UiFallbackCamera,
