@@ -114,3 +114,13 @@ holds it. Ship builds ignore the flag.
   are silently not saved (and an unregistered type in a file fails the load).
 - Feature `level` is default-on and adds only `ron`; ship builds (`--no-default-features`) have none of it.
 - Tests: `memgate -- cargo test --lib level`. Example: `examples/level_demo.rs` (`levels/demo.level.ron`).
+
+## Placeable types (editor Place palette)
+
+```rust
+use engine::level::RegisterPlaceable;
+app.register_type::<EventStart>().register_placeable::<EventStart>("Event start", "flag", "Gameplay");
+```
+`Placeables` (resource) lists them in registration order; `Placeable::spawn(world, transform, name)`
+spawns `T::default()` with `Name`, `Transform`, `Visibility` and a fresh `LevelEntity`. `T` must be
+`Reflect` with `#[reflect(Component, Default)]` and registered, so Details can edit it and levels save it.
