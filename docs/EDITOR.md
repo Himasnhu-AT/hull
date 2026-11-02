@@ -362,7 +362,7 @@ settings, schema }` (`EditorBackend::tools / active_tool / set_active_tool / set
 | Sculpt | brush ring on the terrain (ray vs `TerrainHeights`); drag dabs 20 times a second (and every quarter radius); `[` `]` radius; Shift inverts Raise / Lower | `BrushSettings`: kind (Raise, Lower, Smooth, Flatten, Ramp, Noise), radius, strength, falloff, target, ... | `TerrainPatch { layer: Height, rect, before, after }` (blob ids in `TerrainPatchStore`; undo = `TerrainEdit::apply_blob`); a Ramp stroke applies on release |
 | Paint | same ring; Shift paints layer 0 (erase) | layer 0..3, radius, strength, falloff | `TerrainPatch { layer: Splat }` |
 | Spline | select the Spline entity in the Outliner. Click a point selects it (drawn highlighted), dragging it follows the ground (terrain, else y = 0) plus `ground_offset`; Ctrl+click adds a point (into the nearest segment, or appended / prepended past an end); Delete removes the selected point (a spline keeps two) | `ground_offset`, `snap_to_ground`, and the selected point: `point` (change to select another), `width`, `bank`, `tags`, `data` | `SetComponent(Spline)`; a drag is one op from where it started; field edits merge per point |
-| Foliage | **Select**: hover highlights what `pcg_pick` finds (works on merged meshes), click picks, drag moves it (applied on release), Delete removes it. **Paint**: drag a capsule-shaped area. **Place**: click adds one catalog item (its Spawn node is found in the graph) | `mode`, `radius`, `density` (0 clears, 0.3 thins), `item` (catalog items), `node`, `random_yaw`, `scale` | `SetComponent(PcgOverrides)` on the `PcgVolume`'s entity (added if missing); the volume entity must be a level entity |
+| Foliage | **Select**: hover highlights what `pcg_pick` finds (works on merged meshes), click picks, drag moves it (applied on release), Delete removes it. **Paint**: drag a capsule-shaped area. **Place**: click adds one catalog item (its Spawn node is found in the graph) | `mode`, `radius`, `density` (0 clears, 0.3 thins), `item` (catalog items), `node`, `random_yaw`, `scale` | `SetComponent(PcgOverrides)` on the chosen volume's entity (added if missing); the volume entity must be a level entity |
 | Place | click puts the palette's type at the first mesh under the cursor, else the ground | `type_path` (from `Placeables`) | `Spawn`; the new entity is selected |
 
 Scripting: `editor.tools` lists them; `editor.tool {id, settings}` activates one and merges the
@@ -374,6 +374,8 @@ items), `move {to}`, `delete`, `area {center | from + to, radius, density}`, `pl
 place `place {at, type_path?}`. Example: `examples/world_editor_demo.rs` driven by
 `scripts`-style steps (the run in the Stream C report: sculpt, paint, spline, foliage, place, each
 with a before / after screenshot and an undo).
+
+**Which volume** (Foliage `volume` setting, a combo of volume names; `Auto` default): a named volume; else the selected entity if it is a volume; else, among the volumes holding the point, the smallest one whose graph has a Spawn/Emit node for the item (Place) or the `node` (Paint with a node filter); else the only volume there. Several left: an error in the Output panel ("several foliage volumes here: pick one in the Tool panel"), never a guess. With a volume chosen the `item` combo lists the items its graph spawns.
 
 Known gaps of the world tools: a PCG volume follows sculpting only with `PcgFollowTerrain`
 (docs/PCG.md; the demo's Dressing has it), otherwise its surface is a copy of the heights; a spline point
