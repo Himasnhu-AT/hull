@@ -46,6 +46,7 @@ from the shell.
 | `src/sound/`, `src/audio.rs` | mixer buses, snapshots, ducking, cues, 3D, occlusion, music, captions (`sound.*`): **docs/SOUND.md** |
 | `src/world/` | terrain, scatter, cell streaming, HLOD, floating origin, worlds as data (`world.*`): **docs/WORLD.md** |
 | `src/actions/`, `src/l10n/` | action mapping, gamepad, rebinding, accessibility; localization (`actions.*`, `l10n.*`): **docs/ACTIONS.md**, **docs/L10N.md** |
+| `src/level/` | level files: `LevelEntity` + `levels/*.level.ron` (reflected scene format), hot reload, `--level`, `tree` (`level.*`): **docs/LEVELS.md** |
 | `src/net/` | multiplayer, feature `net` (off by default; test with `--features net`) (`net.*`): **docs/NET.md** |
 | `assets/library/`, `scripts/assets.py` | licence-tracked CC0 / Fab models, textures, HDRIs, fetched on demand (`assets.py fetch\|import\|list\|check`): **docs/ASSETS.md** |
 | `docs/PORTING.md` | conventions, devtools, metrics, ship builds, render budget measurements |

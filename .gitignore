@@ -16,3 +16,6 @@ bench/results/
 # Asset library: binaries are fetched on demand (scripts/assets.py fetch); the licence ledger is committed.
 /assets/library/*
 !/assets/library/LICENSES.json
+
+# level file backups
+*.level.ron.bak
