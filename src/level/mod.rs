@@ -24,6 +24,7 @@ use std::time::{Duration, SystemTime};
 use bevy::ecs::reflect::AppTypeRegistry;
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "devkit")]
 use serde_json::{Value, json};
 
 #[cfg(feature = "devtools")]
