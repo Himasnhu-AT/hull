@@ -161,6 +161,10 @@ fn fallback_camera(
             Name::new("UI fallback camera"),
             Camera2d,
             Camera { clear_color: ClearColorConfig::Custom(theme.bg), ..default() },
+            // Every other engine camera is single-sampled. Between two stages this camera and
+            // the render-scale upscale camera can share the window for a frame; with Bevy's
+            // default 4x MSAA here the shared depth view failed GPU validation and quit.
+            Msaa::Off,
         ));
     } else if !need {
         for e in &mine {
