@@ -133,7 +133,13 @@ pub fn click_select(
     editor_only: Query<(), With<EditorOnly>>,
     lights: Query<(Entity, &GlobalTransform), (With<LevelEntity>, Or<(With<PointLight>, With<SpotLight>, With<DirectionalLight>)>)>,
     mut press: Local<Option<Vec2>>,
+    tools: Option<Res<super::tools::ToolState>>,
 ) {
+    // A tool owns the left button.
+    if tools.is_some_and(|t| t.active.is_some()) {
+        *press = None;
+        return;
+    }
     let Some(window) = window else { return };
     let over = st.ui.pointer_over_viewport && !st.ui.wants_pointer;
     let alt = keys.any_pressed([KeyCode::AltLeft, KeyCode::AltRight]);

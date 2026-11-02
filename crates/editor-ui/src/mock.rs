@@ -31,6 +31,11 @@ pub struct MockBackend {
     pub placed: Vec<String>,
     pub diag: Vec<Diagnostic>,
     pub assets: Vec<(String, Vec<AssetEntry>)>,
+    /// Tools the mock offers (`tools()`), the active one, and what the engine recorded on its own.
+    pub tool_docs: Vec<ToolDoc>,
+    pub active: Option<String>,
+    pub recorded: Vec<RecordedOp>,
+    pub placeable_docs: Vec<PlaceableDoc>,
 }
 
 pub const TRANSFORM: &str = "bevy_transform::components::transform::Transform";
@@ -125,6 +130,10 @@ impl MockBackend {
             placed: Vec::new(),
             diag: Vec::new(),
             assets: Vec::new(),
+            tool_docs: Vec::new(),
+            active: None,
+            recorded: Vec::new(),
+            placeable_docs: Vec::new(),
         }
     }
 
@@ -338,6 +347,8 @@ impl MockBackend {
 
     fn apply_inner(&mut self, op: &Op) -> Result<(), String> {
         match op {
+            // The mock has no terrain: the op is just recorded.
+            Op::TerrainPatch { .. } => {}
             Op::SetComponent { entity, type_path, before, after } => {
                 let id = self.resolve(*entity)?;
                 let e = self.ents.get_mut(&id).ok_or("gone")?;
@@ -405,6 +416,27 @@ fn asset(path: &str, kind: AssetKind, license: Option<&str>) -> AssetEntry {
 }
 
 impl EditorBackend for MockBackend {
+    fn tools(&mut self) -> Vec<ToolDoc> {
+        self.tool_docs.clone()
+    }
+    fn active_tool(&mut self) -> Option<String> {
+        self.active.clone()
+    }
+    fn set_active_tool(&mut self, id: Option<&str>) {
+        self.active = id.map(str::to_owned);
+    }
+    fn set_tool_settings(&mut self, id: &str, settings: Value) -> Result<(), String> {
+        let t = self.tool_docs.iter_mut().find(|t| t.id == id).ok_or("no such tool")?;
+        t.settings = settings;
+        Ok(())
+    }
+    fn take_recorded(&mut self) -> Vec<RecordedOp> {
+        std::mem::take(&mut self.recorded)
+    }
+    fn placeables(&mut self) -> Vec<PlaceableDoc> {
+        self.placeable_docs.clone()
+    }
+
     fn tree(&mut self, filter: &TreeFilter) -> Vec<TreeNode> {
         self.order
             .iter()

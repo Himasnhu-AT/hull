@@ -178,7 +178,24 @@ pub enum Op {
         before: String,
         after: String,
     },
+    /// A terrain edit (a sculpt or paint stroke). The data lives in the engine's undo blob
+    /// store, `before` / `after` are blob ids (not JSON): applying the op writes `after` back,
+    /// its inverse writes `before`.
+    TerrainPatch {
+        layer: TerrainKind,
+        /// `[x0, z0, w, h]` in samples (height) or texels (splat).
+        rect: [u32; 4],
+        before: u64,
+        after: u64,
+    },
     Batch(Vec<Op>),
+}
+
+/// Which terrain data a [`Op::TerrainPatch`] changes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum TerrainKind {
+    Height,
+    Splat,
 }
 
 impl Op {
@@ -203,6 +220,7 @@ impl Op {
                 before: after.clone(),
                 after: before.clone(),
             },
+            Op::TerrainPatch { layer, rect, before, after } => Op::TerrainPatch { layer: *layer, rect: *rect, before: *after, after: *before },
             Op::Batch(ops) => Op::Batch(ops.iter().rev().map(Op::inverse).collect()),
         }
     }
@@ -243,6 +261,7 @@ impl Op {
             Op::SetComponent { before, after, .. } => before == after,
             Op::Reparent { before, after, .. } => before == after,
             Op::Rename { before, after, .. } => before == after,
+            Op::TerrainPatch { before, after, .. } => before == after,
             Op::Batch(ops) => ops.iter().all(Op::is_noop),
             Op::Spawn { .. } | Op::Despawn { .. } => false,
         }
@@ -294,6 +313,37 @@ pub enum PlayState {
     /// `cargo build` of the game is running.
     Building,
     Playing,
+}
+
+/// An editor tool beyond Move / Rotate / Scale (Spline, Sculpt, Paint, Foliage, Place ...): the
+/// engine implements it, the UI shows a toolbar button and a settings panel built from `schema`.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ToolDoc {
+    pub id: String,
+    pub label: String,
+    /// One line of help (keys, what a click does).
+    pub hint: String,
+    /// The tool's settings as JSON (same value forms as component values).
+    pub settings: Value,
+    pub schema: TypeSchema,
+}
+
+/// An op the engine applied itself (tool strokes, drags); the UI records it for undo.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct RecordedOp {
+    pub label: String,
+    pub op: Op,
+    /// Consecutive ops with the same key within a short time fold into one step.
+    pub key: Option<String>,
+}
+
+/// A type the Place palette lists.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct PlaceableDoc {
+    pub name: String,
+    pub icon: String,
+    pub category: String,
+    pub type_path: String,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]

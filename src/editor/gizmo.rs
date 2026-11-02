@@ -270,11 +270,12 @@ pub fn interact(
     levels: Query<&LevelEntity>,
     mut transforms: Query<&mut Transform>,
     ui: Option<ResMut<EditorUiRes>>,
+    tool_active: Option<Res<super::tools::ToolState>>,
 ) {
     let Some(window) = window else { return };
     let Some((camera, cam_gt, projection)) = cam.entity.and_then(|e| cams.get(e).ok()) else { return };
     let tool = st.tool;
-    let primary = st.selection.first().copied().filter(|e| levels.contains(*e));
+    let primary = st.selection.first().copied().filter(|e| levels.contains(*e)).filter(|_| !tool_active.is_some_and(|t| t.active.is_some()));
     let Some(target) = primary else {
         gizmo.hover = None;
         if gizmo.drag.take().is_some() {
@@ -450,6 +451,7 @@ pub fn draw(
     levels: Query<(), With<LevelEntity>>,
     bq: BoundsQuery,
     lights: Query<(&GlobalTransform, Option<&PointLight>, Option<&SpotLight>, Option<&DirectionalLight>), (With<LevelEntity>, Or<(With<PointLight>, With<SpotLight>, With<DirectionalLight>)>)>,
+    tool_active: Option<Res<super::tools::ToolState>>,
 ) {
     let Some((camera, cam_gt, projection)) = cam.entity.and_then(|e| cams.get(e).ok()) else { return };
     if !camera.is_active {
@@ -467,9 +469,12 @@ pub fn draw(
             g.arrow(pos, pos + *gt.forward() * (depth * 0.08), c);
         }
     }
+    let tool_on = tool_active.is_some_and(|t| t.active.is_some());
     for &e in &st.selection {
         let Ok(gt) = gts.get(e) else { continue };
         match bounds(&bq, e) {
+            // A tool works on the entity's contents (a road's points): no box over the map.
+            Some(_) if tool_on => {}
             Some((min, max)) => {
                 g.cube(Transform::from_translation((min + max) * 0.5).with_scale(max - min), SELECT);
             }
@@ -478,6 +483,9 @@ pub fn draw(
                 g.sphere(Isometry3d::from_translation(gt.translation()), 0.03 * depth, SELECT);
             }
         }
+    }
+    if tool_on {
+        return;
     }
     let Some(target) = st.selection.first().copied().filter(|e| levels.contains(*e)) else { return };
     let Ok(target_gt) = gts.get(target) else { return };

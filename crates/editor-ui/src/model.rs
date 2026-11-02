@@ -88,6 +88,9 @@ pub(crate) enum Req {
     },
     Select(Vec<EntityId>),
     Place(String),
+    /// Activate a tool by id (`None`: back to the transform gizmo tools).
+    Tool(Option<String>),
+    ToolSettings { id: String, settings: serde_json::Value },
     Cmd(Cmd),
     /// Refetch the tree (the outliner search text changed).
     TreeFilterChanged,

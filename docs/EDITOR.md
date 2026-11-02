@@ -345,6 +345,42 @@ scripted mouse input (offscreen runs have no cursor). `SetComponent` does not re
 subtree of a level entity (glTF nodes, LOD children) is not listed in the Outliner. Play does not
 close the metrics viewer on Stop. Terrain / spline / foliage tools (World tools) are not built.
 
+### World tools
+
+Toolbar buttons after Scale (a tool is only listed when the level can use it): **Spline**,
+**Sculpt**, **Paint**, **Foliage**, **Place**. Picking one switches the transform gizmo off, shows
+the **Tool** tab (right dock, next to Details: the tool's help line, its settings in the same
+property grid as Details, and the Place palette) and gives the tool the left mouse button. Move /
+Rotate / Scale go back to the gizmo. While a tool is active **Delete is the tool's** (a spline
+point, a tree), not "delete entity". The UI knows tools only as `ToolDoc { id, label, hint,
+settings, schema }` (`EditorBackend::tools / active_tool / set_active_tool / set_tool_settings`);
+`src/editor/tools/` implements them. Every edit is an `Op` the engine hands to the UI's undo stack
+(`EditorBackend::take_recorded`), so Undo / Redo (Cmd+Z) work the same for all of them.
+
+| Tool | Pointer | Settings | Op |
+|---|---|---|---|
+| Sculpt | brush ring on the terrain (ray vs `TerrainHeights`); drag dabs 20 times a second (and every quarter radius); `[` `]` radius; Shift inverts Raise / Lower | `BrushSettings`: kind (Raise, Lower, Smooth, Flatten, Ramp, Noise), radius, strength, falloff, target, ... | `TerrainPatch { layer: Height, rect, before, after }` (blob ids in `TerrainPatchStore`; undo = `TerrainEdit::apply_blob`); a Ramp stroke applies on release |
+| Paint | same ring; Shift paints layer 0 (erase) | layer 0..3, radius, strength, falloff | `TerrainPatch { layer: Splat }` |
+| Spline | select the Spline entity in the Outliner. Click a point selects it (drawn highlighted), dragging it follows the ground (terrain, else y = 0) plus `ground_offset`; Ctrl+click adds a point (into the nearest segment, or appended / prepended past an end); Delete removes the selected point (a spline keeps two) | `ground_offset`, `snap_to_ground`, and the selected point: `point` (change to select another), `width`, `bank`, `tags`, `data` | `SetComponent(Spline)`; a drag is one op from where it started; field edits merge per point |
+| Foliage | **Select**: hover highlights what `pcg_pick` finds (works on merged meshes), click picks, drag moves it (applied on release), Delete removes it. **Paint**: drag a capsule-shaped area. **Place**: click adds one catalog item (its Spawn node is found in the graph) | `mode`, `radius`, `density` (0 clears, 0.3 thins), `item` (catalog items), `node`, `random_yaw`, `scale` | `SetComponent(PcgOverrides)` on the `PcgVolume`'s entity (added if missing); the volume entity must be a level entity |
+| Place | click puts the palette's type at the first mesh under the cursor, else the ground | `type_path` (from `Placeables`) | `Spawn`; the new entity is selected |
+
+Scripting: `editor.tools` lists them; `editor.tool {id, settings}` activates one and merges the
+settings (`id` omitted = back to the gizmo tools); `editor.tool_action {action, ...}` does what a
+pointer would: sculpt / paint `stroke {points: [[x, z], ...], shift?}` and `sample {at}`;
+spline `select {stable | id | name, point?}`, `add {pos}`, `move {point, to}`, `delete`,
+`set {width?, bank?, tags?, data?}`; foliage `pick {at}`, `scan {at, radius}` (lists pickable
+items), `move {to}`, `delete`, `area {center | from + to, radius, density}`, `place {at, item?, node?}`;
+place `place {at, type_path?}`. Example: `examples/world_editor_demo.rs` driven by
+`scripts`-style steps (the run in the Stream C report: sculpt, paint, spline, foliage, place, each
+with a before / after screenshot and an undo).
+
+Known gaps of the world tools: the PCG surface of a volume (`Inputs::surface`) is a copy of the
+heights, so sculpting does not move generated trees until the game rebuilds it; a spline point
+drags on the ground (no 3D gizmo on a point); the foliage Paint area is a capsule (start to end of
+the drag), not a free polygon; Ramp has no live preview; sculpt / paint strokes by mouse are
+covered by the math tests and the scripted strokes, not by synthetic mouse events.
+
 ## Changes requested by Stream C (engine adapter)
 
 - `editor-ui`: `EditorUi::show_panel(name)` brings a tab to the front (for `editor.tab` and tests);

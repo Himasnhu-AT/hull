@@ -17,6 +17,7 @@ mod model;
 mod outliner;
 mod output;
 mod props;
+mod tool;
 mod undo;
 
 pub mod mock;
@@ -31,7 +32,7 @@ use ashlar_ui::layout::{SplitAxis, SplitSize};
 use ashlar_ui::status_bar::StatusBar;
 use ashlar_ui::toasts::Toasts;
 use ashlar_ui::tokens::{self, ThemeMode, Tokens};
-use editor_proto::{AssetEntry, ComponentDoc, Diagnostic, EditorBackend, EntityId, Op, PlayState, Tool, TreeFilter, TreeNode, TypeSchema, ViewportCmd};
+use editor_proto::{AssetEntry, ComponentDoc, Diagnostic, EditorBackend, EntityId, Op, PlaceableDoc, PlayState, Tool, ToolDoc, TreeFilter, TreeNode, TypeSchema, ViewportCmd};
 use egui::{Context, Key, Ui};
 use serde::{Deserialize, Serialize};
 
@@ -49,10 +50,12 @@ pub enum Panel {
     Content,
     Output,
     Logic,
+    /// Settings of the active tool and the Place palette.
+    Tool,
 }
 
 impl Panel {
-    pub const ALL: [Panel; 6] = [Panel::Viewport, Panel::Outliner, Panel::Details, Panel::Content, Panel::Output, Panel::Logic];
+    pub const ALL: [Panel; 7] = [Panel::Viewport, Panel::Outliner, Panel::Details, Panel::Content, Panel::Output, Panel::Logic, Panel::Tool];
     pub fn title(self) -> &'static str {
         match self {
             Panel::Viewport => "Viewport",
@@ -61,6 +64,7 @@ impl Panel {
             Panel::Content => "Content",
             Panel::Output => "Output",
             Panel::Logic => "Logic",
+            Panel::Tool => "Tool",
         }
     }
 }
@@ -81,7 +85,7 @@ pub fn default_layout() -> Layout<Panel> {
         tabs(vec![Panel::Viewport]),
         tabs(vec![Panel::Content, Panel::Output, Panel::Logic]),
     );
-    let right = split(SplitAxis::Horizontal, SplitSize::FixedSecond(320.0), centre, tabs(vec![Panel::Details]));
+    let right = split(SplitAxis::Horizontal, SplitSize::FixedSecond(320.0), centre, tabs(vec![Panel::Details, Panel::Tool]));
     Layout {
         root: Some(split(SplitAxis::Horizontal, SplitSize::FixedFirst(250.0), tabs(vec![Panel::Outliner]), right)),
         floating: vec![],
@@ -153,6 +157,9 @@ pub struct EditorUi {
     diag_cursor: u64,
     level: editor_proto::LevelInfo,
     play: PlayState,
+    tools: Vec<ToolDoc>,
+    active_tool: Option<String>,
+    placeables: Vec<PlaceableDoc>,
 
     // Panel state.
     outliner: outliner::OutlinerState,
@@ -201,6 +208,9 @@ impl EditorUi {
             diag_cursor: 0,
             level: Default::default(),
             play: PlayState::Editing,
+            tools: Vec::new(),
+            active_tool: None,
+            placeables: Vec::new(),
             outliner: Default::default(),
             details: Default::default(),
             content: content::ContentState {
@@ -397,6 +407,10 @@ impl EditorUi {
                         Panel::Content => content::show(ui, &mut self.content, &self.assets, &mut reqs),
                         Panel::Output => output::show(ui, &mut self.output, &self.diagnostics, &mut clear_output, &mut reqs),
                         Panel::Logic => logic::show(ui, &mut self.logic),
+                        Panel::Tool => {
+                            let v = tool::View { tool: self.active_tool.as_ref().and_then(|id| self.tools.iter().find(|t| &t.id == id)), placeables: &self.placeables };
+                            tool::show(ui, &v, &mut reqs);
+                        }
                     }
                 },
             );
@@ -447,6 +461,15 @@ impl EditorUi {
     // ---- polling -------------------------------------------------------------------------
 
     fn poll(&mut self, backend: &mut dyn EditorBackend) {
+        // Ops the engine applied itself (tool strokes, drags) go on the undo stack.
+        for r in backend.take_recorded() {
+            if !matches!(r.op, Op::SetComponent { .. } | Op::TerrainPatch { .. }) {
+                self.dirty_tree = true;
+            }
+            self.undo.record(&r.label, r.op, r.key, self.now);
+            self.dirty_components = true;
+            self.level.dirty = true;
+        }
         let due = self.now - self.last_poll >= POLL_SECS;
         if !(due || self.dirty_tree || self.dirty_components || self.dirty_assets) {
             return;
@@ -481,6 +504,11 @@ impl EditorUi {
             }
             if self.types.is_empty() {
                 self.types = backend.component_types();
+            }
+            self.tools = backend.tools();
+            self.active_tool = backend.active_tool();
+            if self.placeables.is_empty() {
+                self.placeables = backend.placeables();
             }
         }
         // Drop selected ids that no longer exist (undo of a spawn, a reload).
@@ -550,8 +578,17 @@ impl EditorUi {
                     (Tool::Rotate, Cmd::ToolRotate, "Rotate"),
                     (Tool::Scale, Cmd::ToolScale, "Scale"),
                 ] {
-                    if ui.selectable_label(self.tool == tool, name).on_hover_text(tip(cmd)).clicked() {
+                    if ui.selectable_label(self.tool == tool && self.active_tool.is_none(), name).on_hover_text(tip(cmd)).clicked() {
                         reqs.push(Req::Cmd(cmd));
+                    }
+                }
+                if !self.tools.is_empty() {
+                    ui.separator();
+                    for tool in &self.tools {
+                        let on = self.active_tool.as_deref() == Some(tool.id.as_str());
+                        if ui.selectable_label(on, &tool.label).on_hover_text(&tool.hint).clicked() {
+                            reqs.push(Req::Tool((!on).then(|| tool.id.clone())));
+                        }
                     }
                 }
                 ui.separator();
@@ -699,6 +736,14 @@ impl EditorUi {
                     }
                 },
                 Req::Cmd(c) => self.command(ctx, backend, c),
+                Req::Tool(id) => self.activate_tool(backend, id),
+                Req::ToolSettings { id, settings } => {
+                    if let Err(e) = backend.set_tool_settings(&id, settings) {
+                        self.toasts.error(format!("Tool settings: {e}"));
+                    }
+                    // Show the new values next frame.
+                    self.last_poll = f64::NEG_INFINITY;
+                }
                 Req::TreeFilterChanged => self.dirty_tree = true,
                 Req::Copy(text) => ctx.copy_text(text),
             }
@@ -840,6 +885,8 @@ impl EditorUi {
                 });
             }
             Cmd::Focus => backend.viewport(ViewportCmd::FocusSelection),
+            // While a tool is active, Delete is the tool's (a spline point, a tree).
+            Cmd::Delete if self.active_tool.is_some() => {}
             Cmd::Delete => {
                 let ids = self.selection.clone();
                 self.delete(backend, &ids);
@@ -859,7 +906,20 @@ impl EditorUi {
         ctx.request_repaint();
     }
 
+    fn activate_tool(&mut self, backend: &mut dyn EditorBackend, id: Option<String>) {
+        backend.set_active_tool(id.as_deref());
+        self.active_tool = id;
+        if self.active_tool.is_some() {
+            // The settings live in the Tool tab.
+            let _ = self.show_panel("Tool");
+        }
+        self.last_poll = f64::NEG_INFINITY;
+    }
+
     fn set_tool(&mut self, backend: &mut dyn EditorBackend, tool: Tool) {
+        if self.active_tool.take().is_some() {
+            backend.set_active_tool(None);
+        }
         self.tool = tool;
         backend.viewport(ViewportCmd::SetTool(tool));
     }

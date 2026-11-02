@@ -238,3 +238,16 @@ fn json_round_trip_of_every_type() {
     rt(ViewportCmd::FocusSelection);
     rt(ViewportCmd::SetSnap { enabled: true, step: 0.5 });
 }
+
+#[test]
+fn terrain_patch_swaps_blobs_and_survives_json() {
+    let op = Op::TerrainPatch { layer: TerrainKind::Height, rect: [1, 2, 3, 4], before: 7, after: 8 };
+    assert_eq!(op.inverse(), Op::TerrainPatch { layer: TerrainKind::Height, rect: [1, 2, 3, 4], before: 8, after: 7 });
+    assert_eq!(op.inverse().inverse(), op);
+    assert!(!op.is_noop());
+    assert!(Op::TerrainPatch { layer: TerrainKind::Splat, rect: [0; 4], before: 5, after: 5 }.is_noop());
+    let mut a = op.clone();
+    assert!(!a.merge(&op), "strokes never merge");
+    let back: Op = serde_json::from_str(&serde_json::to_string(&op).unwrap()).unwrap();
+    assert_eq!(back, op);
+}

@@ -117,7 +117,9 @@ fn node_kind(world: &World, e: Entity) -> NodeKind {
 const MAX_TREE_NODES: usize = 6000;
 
 /// Generated entities the engine and Bevy make for themselves: not level content, never shown.
-const INTERNAL_NAMES: &[&str] = &["far detail", "FPS counter", "Perf overlay", "LineGizmoRenderer", "LineJointGizmoRenderer", "LineStripGizmoRenderer"];
+const INTERNAL_NAMES: &[&str] = &["far detail", "FPS counter", "Perf overlay", "LineGizmoRenderer", "LineJointGizmoRenderer", "LineStripGizmoRenderer", "World", "terrain collider"];
+/// Streaming cells, terrain chunks and the like.
+const INTERNAL_PREFIXES: &[&str] = &["cell ", "chunk ", "pcg "];
 
 fn build_node(world: &World, e: Entity, budget: &mut usize, under_level: bool) -> Option<TreeNode> {
     if *budget == 0 || world.get::<EditorOnly>(e).is_some() {
@@ -126,7 +128,7 @@ fn build_node(world: &World, e: Entity, budget: &mut usize, under_level: bool) -
     let stable = stable_of(world, e);
     let named = world.get::<Name>(e).map(|n| n.as_str().to_string());
     // What a level entity builds for itself (glTF nodes, LOD children) is not listed.
-    if stable.is_none() && (under_level || named.as_deref().is_some_and(|n| INTERNAL_NAMES.contains(&n))) {
+    if stable.is_none() && (under_level || named.as_deref().is_some_and(|n| INTERNAL_NAMES.contains(&n) || INTERNAL_PREFIXES.iter().any(|p| n.starts_with(p)))) {
         return None;
     }
     // Unnamed generated entities (render and UI internals) are not shown; their children attach
@@ -227,6 +229,18 @@ pub fn component_docs(world: &World, e: Entity) -> Result<Vec<ComponentDoc>, Str
         rank(a).cmp(&rank(b)).then_with(|| a.short_name.cmp(&b.short_name))
     });
     Ok(docs)
+}
+
+/// One component of an entity in UI JSON (`None` if absent or not serialisable).
+pub fn read_component(world: &World, e: Entity, type_path: &str) -> Option<Value> {
+    let registry = registry(world);
+    let reg = registry.read();
+    let r = find_type(&reg, type_path).ok()?;
+    let rc = r.data::<ReflectComponent>()?;
+    let er = world.get_entity(e).ok()?;
+    let value = rc.reflect(er)?;
+    let raw = schema::serialize(&reg, value.as_partial_reflect()).ok()?;
+    Some(schema::to_ui(&reg, r.type_info(), raw))
 }
 
 /// Sets (inserts or replaces) a component from UI JSON; `None` removes it.
@@ -337,6 +351,7 @@ fn apply_op(world: &mut World, op: &Op) -> Result<(), String> {
             world.entity_mut(e).insert(Name::new(after.clone()));
             Ok(())
         }
+        Op::TerrainPatch { after, .. } => crate::world::TerrainEdit::apply_blob(world, crate::world::BlobId(*after)).map(|_| ()).map_err(|e| e.to_string()),
         Op::Batch(ops) => {
             for (i, o) in ops.iter().enumerate() {
                 if let Err(err) = apply_op(world, o) {
@@ -561,6 +576,35 @@ impl EditorBackend for WorldBackend<'_> {
 
     fn diagnostics(&mut self, since: u64) -> (u64, Vec<Diagnostic>) {
         self.world.resource::<EditorState>().diagnostics_since(since)
+    }
+
+    fn tools(&mut self) -> Vec<ToolDoc> {
+        super::tools::docs(self.world)
+    }
+
+    fn active_tool(&mut self) -> Option<String> {
+        self.world.get_resource::<super::tools::ToolState>().and_then(|t| t.active.clone())
+    }
+
+    fn set_active_tool(&mut self, id: Option<&str>) {
+        if let Err(e) = super::tools::activate(self.world, id) {
+            super::log(self.world, Level::Warn, "tools", e);
+        }
+    }
+
+    fn set_tool_settings(&mut self, id: &str, settings: Value) -> Result<(), String> {
+        super::tools::apply_settings(self.world, id, settings)
+    }
+
+    fn take_recorded(&mut self) -> Vec<RecordedOp> {
+        self.world.get_resource_mut::<EditorState>().map(|mut s| s.take_recorded()).unwrap_or_default()
+    }
+
+    fn placeables(&mut self) -> Vec<PlaceableDoc> {
+        self.world
+            .get_resource::<crate::level::Placeables>()
+            .map(|l| l.0.iter().map(|p| PlaceableDoc { name: p.name.clone(), icon: p.icon.clone(), category: p.category.clone(), type_path: p.type_path.to_string() }).collect())
+            .unwrap_or_default()
     }
 
     fn viewport(&mut self, cmd: ViewportCmd) {

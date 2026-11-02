@@ -118,7 +118,7 @@ logic = ["dep:logic-core", "dep:ruspy"]
 net = ["dep:postcard"]
 # The level editor: `--editor` opens the game's own binary as an Unreal-style editor (src/editor, docs/EDITOR.md).
 # Off by default; default and ship builds do not pull bevy_egui or editor-ui.
-editor = ["devtools", "devkit", "level", "dep:bevy_egui", "dep:editor-proto", "dep:editor-ui"]
+editor = ["devtools", "devkit", "level", "world", "pcg", "spline", "dep:bevy_egui", "dep:editor-proto", "dep:editor-ui"]
 
 [dev-dependencies]
 ashlar-control = { git = "https://github.com/Himasnhu-AT/ashlar", rev = "561745aaf96e07a0efe2ed61f37b0a365f46a530" }
@@ -201,4 +201,8 @@ required-features = ["level"]
 
 [[example]]
 name = "editor_demo"
+required-features = ["editor"]
+
+[[example]]
+name = "world_editor_demo"
 required-features = ["editor"]
