@@ -46,6 +46,7 @@ from the shell.
 | `src/sound/`, `src/audio.rs` | mixer buses, snapshots, ducking, cues, 3D, occlusion, music, captions (`sound.*`): **docs/SOUND.md** |
 | `src/world/` | terrain, scatter, cell streaming, HLOD, floating origin, worlds as data (`world.*`): **docs/WORLD.md** |
 | `src/actions/`, `src/l10n/` | action mapping, gamepad, rebinding, accessibility; localization (`actions.*`, `l10n.*`): **docs/ACTIONS.md**, **docs/L10N.md** |
+| `src/logic/`, `crates/logic-core/` | game logic as node graphs (`assets/logic/*.logic.ron`) + ruspy scripts (`assets/scripts/*.ruspy`) (`logic.*`): **docs/LOGIC.md** |
 | `src/net/` | multiplayer, feature `net` (off by default; test with `--features net`) (`net.*`): **docs/NET.md** |
 | `docs/PORTING.md` | conventions, devtools, metrics, ship builds, render budget measurements |
 | `tests/*.rs` | headless `App::update()` tests and control-port tests (they spawn an example) |

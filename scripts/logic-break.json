@@ -1,0 +1,17 @@
+[
+  {"cmd": "logic.diagnostics", "expect": {"result.errors": []}},
+  {"write": "assets/scripts/score.ruspy", "text": "fn on_open(who) {\n    opens = get(\"Door.opens\") + ;\n    return opens;\n}\n"},
+  {"sleep": 1.5},
+  {"cmd": "logic.diagnostics", "expect": {"result.errors.0.file": "scripts/score.ruspy", "result.errors.0.line": 2}},
+  {"cmd": "input.key", "params": {"key": "e", "action": "tap"}},
+  {"sleep": 1.0},
+  {"cmd": "logic.diagnostics"},
+  {"cmd": "perf.stats", "expect": {"ok": true}},
+  {"shot": "after-break"},
+  {"write": "assets/scripts/score.ruspy", "text": "fn on_open(who) {\n    opens = get(\"Door.opens\") + 1;\n    set(\"Door.opens\", opens);\n    log(\"fixed, opens \" + opens);\n    return opens;\n}\n"},
+  {"sleep": 1.5},
+  {"cmd": "logic.diagnostics", "expect": {"result.errors": []}},
+  {"cmd": "input.key", "params": {"key": "e", "action": "tap"}},
+  {"sleep": 1.5},
+  {"cmd": "logic.diagnostics"}
+]
