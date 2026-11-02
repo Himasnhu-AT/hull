@@ -289,6 +289,7 @@ pub fn activate(world: &mut World, id: Option<&str>) -> Result<(), String> {
         let on = id == Some("spline");
         if let Some(mut g) = world.get_resource_mut::<crate::spline::SplineGizmos>() {
             g.enabled = on;
+            g.selected_only = on;
             // The default draws only within 400 m of the camera; the editor looks from further.
             g.range = 5000.0;
         }

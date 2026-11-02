@@ -89,6 +89,21 @@ fn setup(world: &mut World) {
     let id = new_stable_id(world);
     world.spawn((LevelEntity { id }, Name::new("Road"), Spline { points, closed: true, ..default() }, SplineRoad { step: 2.0, uv_scale: 8.0, color: Color::srgb(0.22, 0.22, 0.24) }, Transform::default(), Visibility::default()));
 
+    // `--roads N`: N more roads (like a real map's 23), for the Spline tool's clutter check.
+    let extra: usize = engine::cli::arg_value("roads").and_then(|s| s.parse().ok()).unwrap_or(0);
+    for k in 0..extra {
+        let (cx, cz) = (((k * 7) % 11) as f32 * 80.0 - 400.0, ((k * 5) % 9) as f32 * 80.0 - 320.0);
+        let pts: Vec<SplinePoint> = (0..6)
+            .map(|i| {
+                let a = i as f32 * 0.9 + k as f32;
+                let (x, z) = (cx + a.cos() * 60.0 + i as f32 * 20.0, cz + a.sin() * 40.0);
+                SplinePoint::at(Vec3::new(x, ground(world, x, z) + 1.0, z)).with_width(7.0)
+            })
+            .collect();
+        let id = new_stable_id(world);
+        world.spawn((LevelEntity { id }, Name::new(format!("Road {}", k + 2)), Spline::new(pts), Transform::default(), Visibility::default()));
+    }
+
     // PCG dressing: trees and rocks over the middle of the map.
     {
         let mut meshes = world.resource_mut::<Assets<Mesh>>();
