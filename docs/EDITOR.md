@@ -257,3 +257,110 @@ ghost replays are keyed by the level's content hash.
   try first: `ctx.options_mut(|o| o.max_passes = NonZeroUsize::new(1).unwrap())` in the host (makes
   egui ignore `request_discard`), or give the egui context an `EguiSchedule` so it gets the pass
   loop. Until verified in Bevy, feature `snarl` is off by default.
+
+## Using the editor
+
+Build the game with the engine feature `editor` (the game's own feature, e.g. `dev = ["engine/editor"]`;
+the example is `cargo run --example editor_demo --features editor -- --editor`) and start it with
+`--editor [--level levels/x.level.ron]`. Without `--editor` the same binary is the game. Default
+and ship builds do not contain any of this (`cargo tree` shows no `bevy_egui` without the feature).
+
+**What `--editor` does** (`src/editor/mod.rs`): `engine::app` adds `EditorPlugin` after the engine
+plugins. There is no extra `AppState`: the game stays in `AppState::InGame` (so the code that
+builds its world on entering the game still runs and shows up as *generated*), with the
+`EditorMode` resource present, `Paused(true)` (virtual and physics time frozen; gameplay sets gated
+with `not_paused` do not run), `PauseAllowed(false)` (no pause menu on focus loss) and so the
+engine's "gameplay" action context off. A game system that ignores `Paused` and reads raw keys
+still sees them: gate it. The render scale is forced to 1.
+
+**Layout**: toolbar (Play, Save, Open, Undo, Redo, Move, Rotate, Scale, Snap, Commands), Outliner
+left, Details right, viewport in the middle, Content / Output / Logic tabs below, status bar.
+The dock layout is saved to `<data dir>/editor_ui.json`.
+
+**Viewport controls** (pointer over the viewport):
+
+| Input | Does |
+|---|---|
+| Right mouse + W A S D, Q / E | fly (Shift = 3x); scroll while flying = fly speed |
+| Scroll | dolly forward / back |
+| Alt + left drag | orbit around the selection (else a point ahead) |
+| Middle drag | pan |
+| Left click | select (Shift / Ctrl / Cmd toggles; empty space clears); lights are picked by their marker |
+| Drag a gizmo handle | move / rotate / scale; one undo step per drag |
+| F | frame the selection |
+| W / E / R | Move / Rotate / Scale tool |
+| G | snap on/off (step from the toolbar: metres, degrees for rotate) |
+| Cmd+S, Cmd+Z, Cmd+Shift+Z, Delete, F2, Cmd+P, Cmd+K | save, undo, redo, delete, rename, play/stop, command palette |
+
+Move: three arrows and three plane squares (world axes; set `EditorState::local_space` for local).
+Rotate: three rings. Scale: three handles with boxes (local axes) and a centre box for uniform
+scale. Handles keep a constant size on screen and are picked by screen-space distance.
+Generated entities (built by code, no `LevelEntity`) show greyed in the Outliner and get no gizmo.
+Holding the right mouse button stops egui getting keys, so W/E/R do not switch tools while flying.
+
+**Play / Stop**: see `src/editor/play.rs`. Play writes the level to
+`<data dir>/play/editor_play.level.ron` (the open file is untouched), runs
+`memgate -- cargo build --manifest-path <game> (--bin|--example <exe name>) [--features F]`
+(plain `cargo` without memgate; output streams into the Output panel with `file:line:col`), then
+starts the freshly built executable with `--level <that file> --control 0` and the metrics viewer.
+The editor viewport stops drawing while the game runs (the toolbar shows Stop). Stop kills the
+game's process group. The game is found through `EditorConfig::manifest`, env
+`EDITOR_GAME_MANIFEST`, the parent of `GameInfo::assets_fallback`, the working folder or the
+executable's folders. `EditorConfig::play_features` / env `EDITOR_PLAY_FEATURES` give `--features`
+(needed when the game's `editor` feature is not a default one); `skip_build` runs the executable
+as is.
+
+**Scripting**: every backend call is an `editor.*` control command (`src/editor/control.rs`; the
+table is in its module docs and in `engine.commands`). Example, with `scripts/play.py`:
+
+```json
+[{"cmd": "editor.select", "params": {"names": ["Crate"]}},
+ {"cmd": "editor.apply", "params": {"op": {"SetComponent": {"entity": {"Stable": 3},
+   "type_path": "bevy_transform::components::transform::Transform",
+   "before": null, "after": {"translation": [2.5, 0.6, 0], "rotation": [0,0,0,1], "scale": [1,1,1]}}}}},
+ {"cmd": "editor.command", "params": {"id": "editor.undo"}},
+ {"cmd": "editor.save", "params": {"path": "levels/x.level.ron"}},
+ {"cmd": "editor.tab", "params": {"tab": "Logic"}},
+ {"shot": "editor"}]
+```
+`editor.apply` records the op on the UI's undo stack (`"undoable": false` to skip). Run it with
+`python3 -I scripts/play.py steps.json --example editor_demo --features editor -- --editor`
+(offscreen by default: cameras and the whole egui window render into the 1920x1080 image
+`screenshot` captures).
+
+**Data shown in Details** (`src/editor/schema.rs`): reflect JSON, with `Handle<A>` as the asset
+path string (`""` for a handle made in code), `Color` / `Srgba` / `LinearRgba` as `[r,g,b,a]`,
+`Option<T>` as `"None"` / `{"Some": v}`; `TypeSchema` from the type info (`#[reflect(@0.0..=1.0)]`
+ranges as `RangeInclusive<f32>` custom attributes become `min`/`max`). Components the UI never
+shows: `Name`, `ChildOf`, `Children`, `LevelEntity`, the runtime-only list of `level::RUNTIME_ONLY`
+(plus `Mesh3d`/material on a `Primitive`).
+
+**Known gaps**: the 3D view is an image shown by egui (not a window sub-rect: Bevy's atmosphere
+breaks in an offset `Camera::viewport`); it is reallocated when the hole's size has held for four
+frames, so dragging a divider stretches the old image first. Click picking and gizmo drags use a
+window cursor and are covered by unit tests of the math and the headless backend, not by
+scripted mouse input (offscreen runs have no cursor). `SetComponent` does not reject a stale
+`before`. A handle made in code (no path) shows as `""` and, edited, becomes the default handle.
+`Color` variants other than `Srgba` / `LinearRgba` are passed through unconverted. The generated
+subtree of a level entity (glTF nodes, LOD children) is not listed in the Outliner. Play does not
+close the metrics viewer on Stop. Terrain / spline / foliage tools (World tools) are not built.
+
+## Changes requested by Stream C (engine adapter)
+
+- `editor-ui`: `EditorUi::show_panel(name)` brings a tab to the front (for `editor.tab` and tests);
+  the `snarl` feature is on in the engine's `editor` feature (the Logic tab renders, see below).
+- **egui-snarl blank**: not a problem with bevy_egui 0.43.1. Its primary context carries an
+  `EguiSchedule` and the pass loop runs `egui::Context::run_ui`, which repeats the pass on
+  `request_discard`; the nodes render in the first screenshot of the Logic tab. No `max_passes`
+  change is needed. Keep the primary context on `PrimaryEguiContext` (a context without
+  `EguiSchedule` runs one pass per frame and would show the discarded one).
+- `EditorUi::show` can run several times per frame (that pass loop): it must stay free of side
+  effects on the first pass of a discarded pair other than reading input (it is today).
+- `place_asset` with `Placement::position == [0,0,0]` places at the viewport centre (mesh hit,
+  else the ground plane, else 8 m ahead); any other position is used as is.
+- `SetComponent` values are the UI form of `src/editor/schema.rs` (above); `before` is not checked.
+- Tree: unnamed generated entities are skipped (children attach to the nearest shown ancestor),
+  engine internals ("far detail" LOD children, gizmo renderers, FPS counter, perf overlay) and the
+  generated subtree of a level entity are not listed.
+- Not done yet, for a later stream: logic diagnostics in the Output panel, a Tool panel for the
+  world tools, Delete of generated entities (refused by design).

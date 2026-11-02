@@ -2,6 +2,7 @@
 //! Engine flags: `--headless`, `--offscreen`, `--control <port>`, `--play` (skip the menu),
 //! `--quit-after <s>`, `--seed <n>`, `--mute`, `--sound`, `--volume <0..1>`, `--crash-test`,
 //! `--level <file>` (feature `level`: load that level file on entering the game, skip the menu),
+//! `--editor` (feature `editor`: open the game as the level editor, docs/EDITOR.md),
 //! `--uncapped` (vsync off and full speed while unfocused: frame-time benchmarks in hidden
 //! `--offscreen` windows; never saved to settings).
 //!

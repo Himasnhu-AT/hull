@@ -254,6 +254,17 @@ impl EditorUi {
         self.layout = default_layout();
     }
 
+    /// Bring a panel's tab to the front (opening it when closed). `name` is the panel title,
+    /// case-insensitive (`"Logic"`). For scripts and tests.
+    pub fn show_panel(&mut self, name: &str) -> Result<(), String> {
+        use ashlar_ui::docking::Action;
+        let panel = Panel::ALL.into_iter().find(|p| p.title().eq_ignore_ascii_case(name)).ok_or_else(|| format!("no panel `{name}`"))?;
+        if self.layout.apply(Action::Activate { panel }).is_ok() {
+            return Ok(());
+        }
+        self.layout.apply(Action::Open { panel, anchor: None }).map_err(|e| format!("{e:?}"))
+    }
+
     pub fn can_undo(&self) -> bool {
         self.undo.can_undo()
     }

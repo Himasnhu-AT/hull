@@ -187,7 +187,15 @@ pub fn app_with(info: GameInfo, mut options: EngineOptions) -> App {
     }
     #[cfg(feature = "physics")]
     app.add_plugins(avian3d::prelude::PhysicsPlugins::default());
+    #[cfg(feature = "editor")]
+    let editor = !options.headless && dev_flag("editor");
     app.add_plugins(EnginePlugin { info, options });
+    // `--editor`: this process is the level editor (docs/EDITOR.md). After the engine, before the
+    // game's own plugins, so it overrides the menu flow.
+    #[cfg(feature = "editor")]
+    if editor {
+        app.add_plugins(crate::editor::EditorPlugin);
+    }
     app
 }
 
