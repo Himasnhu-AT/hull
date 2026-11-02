@@ -65,6 +65,11 @@ Steps: `{"cmd": "...", "params": {...}, "expect": {"result.path": value}}`,
 yourself with `--control 0`, which prints `control: port=<n> key=<file>`, and speak the JSON
 lines protocol (see `tests/control.rs`); or use `--mcp` for MCP over stdio.
 
+To start a game on screen for the user to play, launch it detached with output to a file
+(`nohup memgate -- cargo run -q > run.log 2>&1 &`). On macOS with Bevy 0.20, a window started
+from a background task with stdout piped (`cargo run | tail`) can stay blank grey while the
+game runs behind it.
+
 The command catalogue is live: call `engine.commands`. The main ones:
 
 - **Engine:** `engine.state/start/menu/pause/resume/quit`, `time.scale`, `time.step {frames}`
