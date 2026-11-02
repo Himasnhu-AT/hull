@@ -80,6 +80,7 @@ fn retarget_cameras(
     mut images: ResMut<Assets<Image>>,
     target: Option<Res<OffscreenTarget>>,
     cams: Query<(Entity, &RenderTarget, Has<MainCamera>, Has<IsDefaultUiCamera>, Has<crate::ui::UiFallbackCamera>), With<Camera>>,
+    mut projections: Query<&mut Projection>,
 ) {
     let to_window = |t: &RenderTarget| matches!(t, RenderTarget::Window(WindowRef::Primary));
     if !cams.iter().any(|(_, t, ..)| to_window(t)) {
@@ -108,6 +109,12 @@ fn retarget_cameras(
     for (e, t, .., fallback) in &cams {
         if to_window(t) {
             commands.entity(e).try_insert(RenderTarget::from(handle.clone()));
+            // Bevy 0.20 recomputes a camera's target size on a Projection change, not on a
+            // RenderTarget change: without this a camera moved back here (render scale → 1)
+            // keeps the old target's size.
+            if let Ok(mut p) = projections.get_mut(e) {
+                p.set_changed();
+            }
             if fallback {
                 fallback_cam.get_or_insert(e);
             } else {

@@ -137,6 +137,11 @@ pub fn app(info: GameInfo) -> App {
 
 /// [`app`] with explicit options.
 pub fn app_with(info: GameInfo, mut options: EngineOptions) -> App {
+    // `--metrics-viewer`: this process is the metrics viewer, not the game (dev builds).
+    #[cfg(feature = "devtools")]
+    if crate::cli::dev_flag("metrics-viewer") {
+        crate::devtools::metrics_viewer::run(info);
+    }
     let assets = options.assets_dir.clone().unwrap_or_else(|| crate::paths::assets_dir(&info));
     options.assets_dir = Some(assets.clone());
     let asset_plugin = AssetPlugin { file_path: assets.to_string_lossy().into_owned(), ..default() };

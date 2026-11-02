@@ -22,6 +22,7 @@ pub mod control;
 pub mod metrics;
 mod metrics_chart;
 pub mod metrics_history;
+pub mod metrics_viewer;
 pub mod metrics_window;
 pub mod offscreen;
 pub mod perf;

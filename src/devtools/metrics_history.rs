@@ -119,6 +119,12 @@ pub struct RunInfo {
 }
 
 impl RunInfo {
+    /// A run read back from its session log (the metrics viewer); no git probe.
+    pub fn from_log(id: String, game: String, version: String, start_ts: u64, mode: &'static str, args: Vec<String>) -> Self {
+        let profile = if cfg!(debug_assertions) { "debug" } else { "release" };
+        RunInfo { id, game, version, start_ts, profile, mode, args, git: Arc::new(Mutex::new(Some((None, None)))) }
+    }
+
     /// `(commit, dirty)` once the git probe finished.
     pub fn git(&self) -> (Option<String>, Option<bool>) {
         self.git.lock().ok().and_then(|g| g.clone()).unwrap_or((None, None))
