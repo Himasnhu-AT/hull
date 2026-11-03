@@ -14,8 +14,9 @@ use crate::props::{self, Cx, Phase};
 pub(crate) const CATEGORIES: [&str; 6] = ["Transform", "Rendering", "Physics", "Gameplay", "Logic", "Other"];
 
 /// Logic graph templates `logic_create` is asked for: `(id, label, what it does)`.
-pub(crate) const TEMPLATES: [(&str, &str, &str); 7] = [
-    ("empty", "Empty", "Start -> Log, nothing else"),
+pub(crate) const TEMPLATES: [(&str, &str, &str); 8] = [
+    ("empty", "Empty", "A blank graph"),
+    ("basic", "Start and Log", "Start -> Log, to build on"),
     ("trigger_zone", "Trigger zone", "Runs when something enters or leaves this object"),
     ("door", "Door", "Opens and closes on an action key"),
     ("pickup", "Pickup", "Collected when the player touches it"),

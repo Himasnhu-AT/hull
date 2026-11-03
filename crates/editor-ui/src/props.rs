@@ -283,7 +283,10 @@ fn edit(ui: &mut Ui, cx: &mut Cx, raw_name: &str, schema: &TypeSchema, value: &m
         return;
     }
     let schema = schema.inner();
-    let d = Deco::new(cx, raw_name, meta, value, path);
+    let mut d = Deco::new(cx, raw_name, meta, value, path);
+    if matches!(schema, TypeSchema::Quat) && d.unit.is_none() {
+        d.unit = Some("deg".into());
+    }
     let name = &d;
     if depth > MAX_DEPTH {
         row(ui, name, |ui| {

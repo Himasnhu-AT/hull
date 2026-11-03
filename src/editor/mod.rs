@@ -38,6 +38,7 @@ use editor_proto::{Diagnostic, Level, Tool};
 mod backend;
 mod camera;
 mod control;
+mod engine_log;
 mod gizmo;
 mod host;
 mod picking;
@@ -47,6 +48,7 @@ pub mod tools;
 pub mod schema;
 
 pub use backend::WorldBackend;
+pub use engine_log::layer as engine_log_layer;
 
 /// Present while the app runs as the editor (`--editor`).
 #[derive(Resource, Default, Debug)]
@@ -200,6 +202,8 @@ impl Plugin for EditorPlugin {
             .init_resource::<gizmo::GizmoState>()
             .init_resource::<tools::ToolState>()
             .register_type::<EditorOnly>()
+            .add_systems(Update, engine_log::drain)
+            .add_systems(Update, route_logic_diagnostics)
             .add_systems(Startup, host::setup)
             .add_systems(EguiPrimaryContextPass, host::ui_pass)
             .add_systems(PreUpdate, host::gate_egui_keys.before(bevy_egui::EguiPreUpdateSet::ProcessInput))
@@ -236,6 +240,43 @@ impl Plugin for EditorPlugin {
         gizmo::build(app);
         control::register(app);
     }
+}
+
+/// Graph and script problems (`LogicDiagnostics`) into the Output panel, each once.
+fn route_logic_diagnostics(world: &mut World, mut seen: Local<std::collections::HashSet<String>>) {
+    #[cfg(feature = "logic")]
+    {
+        use crate::logic::{LogicDiagnostics, Severity};
+        let Some(d) = world.get_resource::<LogicDiagnostics>() else { return };
+        let mut now = std::collections::HashSet::new();
+        let mut fresh = Vec::new();
+        for it in &d.items {
+            let key = format!("{}|{}|{}|{:?}|{}", it.file, it.line, it.col, it.node, it.message);
+            if !seen.contains(&key) {
+                let text = match it.node {
+                    Some(n) => format!("node {n}: {}", it.message),
+                    None => it.message.clone(),
+                };
+                let level = if it.severity == Severity::Error { Level::Error } else { Level::Warn };
+                let source = if it.file.ends_with(".ruspy") { "ruspy" } else { "logic" };
+                let mut diag = Diagnostic::new(level, source, text);
+                if !it.file.is_empty() {
+                    diag = diag.at(it.file.clone(), (it.line > 0).then_some(it.line), (it.col > 0).then_some(it.col));
+                }
+                fresh.push(diag);
+            }
+            now.insert(key);
+        }
+        // Forget fixed problems so they show again if they come back.
+        *seen = now;
+        if let Some(mut st) = world.get_resource_mut::<EditorState>() {
+            for diag in fresh {
+                st.push_diag(diag);
+            }
+        }
+    }
+    #[cfg(not(feature = "logic"))]
+    let _ = (world, &mut seen);
 }
 
 /// Game time stays frozen while editing (not while a Play process runs: that is another process).
@@ -285,5 +326,37 @@ pub fn set_show_all_scenery(world: &mut World, on: bool) {
         && let Err(e) = std::fs::write(p, text)
     {
         warn!("editor prefs not saved: {e}");
+    }
+}
+
+#[cfg(all(test, feature = "logic"))]
+mod tests {
+    use super::*;
+    use crate::logic::LogicDiagnostics;
+
+    #[test]
+    fn logic_diagnostics_reach_the_output_once() {
+        let mut app = App::new();
+        app.init_resource::<EditorState>().init_resource::<LogicDiagnostics>().add_systems(Update, route_logic_diagnostics);
+        app.world_mut().resource_mut::<LogicDiagnostics>().error("scripts/door.ruspy", 12, 8, None, "unexpected token ')'");
+        app.world_mut().resource_mut::<LogicDiagnostics>().error("logic/door.logic.ron", 0, 0, Some(3), "pin `then`: nothing connected");
+        app.update();
+        app.update();
+        let (_, items) = app.world().resource::<EditorState>().diagnostics_since(0);
+        assert_eq!(items.len(), 2, "each problem once: {items:?}");
+        let script = &items[0];
+        assert_eq!((script.source.as_str(), script.level, script.line, script.col), ("ruspy", Level::Error, Some(12), Some(8)));
+        assert_eq!(script.file.as_deref(), Some("scripts/door.ruspy"));
+        let graph = &items[1];
+        assert_eq!(graph.source, "logic");
+        assert!(graph.message.starts_with("node 3: "), "{}", graph.message);
+        assert_eq!(graph.line, None);
+        // Fixed, then back: it shows again.
+        app.world_mut().resource_mut::<LogicDiagnostics>().clear_file("scripts/door.ruspy");
+        app.update();
+        app.world_mut().resource_mut::<LogicDiagnostics>().error("scripts/door.ruspy", 12, 8, None, "unexpected token ')'");
+        app.update();
+        let (_, items) = app.world().resource::<EditorState>().diagnostics_since(0);
+        assert_eq!(items.len(), 3);
     }
 }

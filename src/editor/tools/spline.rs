@@ -18,6 +18,7 @@ use super::{Pointer, ToolState, component_op, ground_hit, ground_y, ok, vec3, xz
 use crate::editor::backend::read_component;
 use crate::editor::control::entity_param;
 use crate::editor::EditorState;
+use crate::editor::schema::{Choose, Hidden, Tip, Unit};
 use crate::spline::{Spline, SplineCache, SplinePoint, SplineSelection};
 
 /// Pixels within which a point can be picked.
@@ -32,25 +33,42 @@ fn type_path() -> &'static str {
 #[serde(default)]
 pub struct SplineSettings {
     /// Metres above the ground for points you drag or add.
+    #[reflect(@Unit("m"), @Tip("Height above the ground for points you drag or add"))]
     pub ground_offset: f32,
     /// Follow the ground (off: drag in the horizontal plane of the point).
+    #[reflect(@Tip("Points follow the terrain under the cursor; off drags in the point's own horizontal plane"))]
     pub snap_to_ground: bool,
-    /// Selected control point, -1 for none. Change it to select another.
-    #[reflect(@-1i32..=1000i32)]
+    /// Selected control point, -1 for none. Click a row of the list to select another.
+    #[reflect(@-1i32..=1000i32, @Choose("points"), @Tip("Click a point to select it (click again to deselect)"))]
     pub point: i32,
+    /// Every control point, for the list (read-only mirror).
+    #[serde(skip_deserializing)]
+    #[reflect(@Hidden)]
+    pub points: Vec<PointRow>,
     /// Selected point: full width in metres.
+    #[reflect(@Unit("m"), @Tip("Full road width at the selected point"))]
     pub width: f32,
     /// Selected point: roll in radians.
+    #[reflect(@Unit("rad"), @Tip("Roll of the selected point"))]
     pub bank: f32,
     /// Selected point: game-defined bits.
+    #[reflect(@Tip("Game-defined flag bits of the selected point"))]
     pub tags: u32,
     /// Selected point: game-defined payload (empty = none).
+    #[reflect(@Tip("Game-defined text payload of the selected point"))]
     pub data: String,
+}
+
+/// One row of the point list.
+#[derive(Reflect, Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct PointRow {
+    pub pos: [f32; 3],
+    pub width: f32,
 }
 
 impl Default for SplineSettings {
     fn default() -> Self {
-        SplineSettings { ground_offset: 0.1, snap_to_ground: true, point: -1, width: 0.0, bank: 0.0, tags: 0, data: String::new() }
+        SplineSettings { ground_offset: 0.1, snap_to_ground: true, point: -1, points: Vec::new(), width: 0.0, bank: 0.0, tags: 0, data: String::new() }
     }
 }
 
@@ -85,7 +103,9 @@ fn select_point(world: &mut World, e: Entity, i: Option<usize>) {
 /// Mirrors the selected point into the settings.
 fn mirror(world: &World, ts: &mut ToolState, e: Option<Entity>) {
     let sel = world.resource::<SplineSelection>().point;
-    let p = e.and_then(|e| world.get::<Spline>(e)).zip(sel).and_then(|(s, i)| s.points.get(i));
+    let spline = e.and_then(|e| world.get::<Spline>(e));
+    ts.spline.points = spline.map_or_else(Vec::new, |s| s.points.iter().map(|p| PointRow { pos: p.pos.to_array(), width: p.width }).collect());
+    let p = spline.zip(sel).and_then(|(s, i)| s.points.get(i));
     match p {
         Some(p) => {
             ts.spline.point = sel.map_or(-1, |i| i as i32);
