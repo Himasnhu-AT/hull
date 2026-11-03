@@ -435,7 +435,7 @@ fn graph_ui(ui: &mut Ui, tab: &mut LogicTab, doc: &mut GraphDoc, backend: &mut d
     // Panels.
     let mut goto = None;
     let id = ui.id().with(&doc.path);
-    egui::Panel::left(id.with("left")).resizable(true).default_size(190.0).show(ui, |ui| my_logic(ui, tab, doc, &mut goto, backend, now));
+    egui::Panel::left(id.with("left")).resizable(true).default_size(190.0).show(ui, |ui| my_logic(ui, tab, doc, &mut goto));
     egui::Panel::right(id.with("right")).resizable(true).default_size(260.0).show(ui, |ui| {
         egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| inspector::show(ui, doc));
     });
@@ -630,7 +630,7 @@ fn apply_toolbar(tab: &mut LogicTab, doc: &mut GraphDoc, backend: &mut dyn Edito
     }
 }
 
-fn my_logic(ui: &mut Ui, tab: &mut LogicTab, doc: &mut GraphDoc, goto: &mut Option<u32>, backend: &mut dyn EditorBackend, now: f64) {
+fn my_logic(ui: &mut Ui, tab: &mut LogicTab, doc: &mut GraphDoc, goto: &mut Option<u32>) {
     let t = tokens::current(ui.ctx());
     egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
         ui.label(RichText::new("MY LOGIC").strong().color(t.text.secondary).size(11.0));
@@ -681,7 +681,7 @@ fn my_logic(ui: &mut Ui, tab: &mut LogicTab, doc: &mut GraphDoc, goto: &mut Opti
                 });
             }
             if let Some(p) = open {
-                tab.open_now(backend, &p, now);
+                tab.open(&p);
             }
         });
         egui::CollapsingHeader::new("Messages").default_open(false).show(ui, |ui| {
@@ -701,7 +701,7 @@ fn my_logic(ui: &mut Ui, tab: &mut LogicTab, doc: &mut GraphDoc, goto: &mut Opti
                 }
             }
             if let Some(p) = open {
-                tab.open_now(backend, &p, now);
+                tab.open(&p);
             }
         });
     });

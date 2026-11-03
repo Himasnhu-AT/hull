@@ -8,7 +8,6 @@ use engine::devkit::Scenario;
 use engine::editor::WorldBackend;
 use engine::level::{LevelEntity, StableId};
 use engine::prelude::*;
-use serde_json::json;
 
 #[derive(Component, Reflect, Default)]
 #[reflect(Component)]

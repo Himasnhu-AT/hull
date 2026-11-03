@@ -85,7 +85,7 @@ fn drag(h: &mut Harness<'static, App>, from: egui::Pos2, to: egui::Pos2) {
 
 /// The text field with this placeholder.
 fn text_input<'a>(h: &'a Harness<'static, App>, placeholder: &str) -> egui_kittest::Node<'a> {
-    h.get_all_by_role(egui::accesskit::Role::TextInput).find(|n| n.accesskit_node().placeholder().as_deref() == Some(placeholder)).unwrap_or_else(|| panic!("no text field with placeholder `{placeholder}`"))
+    h.get_all_by_role(egui::accesskit::Role::TextInput).find(|n| n.accesskit_node().placeholder() == Some(placeholder)).unwrap_or_else(|| panic!("no text field with placeholder `{placeholder}`"))
 }
 
 fn graph(h: &Harness<'static, App>) -> logic_core::Graph {
@@ -263,7 +263,7 @@ fn a_file_changed_on_disk_reloads_when_there_are_no_local_edits() {
 
 #[test]
 fn a_script_opens_in_a_text_tab_with_its_functions_and_saves() {
-    let mut h = harness_with(&[], "scripts/score.ruspy");
+    let h = harness_with(&[], "scripts/score.ruspy");
     h.get_by_label("on_open");
     h.get_by_label_contains("scripts/score.ruspy");
     assert!(h.state().tab.active_path().is_some_and(|p| p.ends_with("score.ruspy")));

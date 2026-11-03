@@ -32,11 +32,13 @@ use logic_core::{Compiled, Entry, Host, Payload, Runner, Trigger, Value};
 use crate::pause::not_paused;
 
 pub use script::ScriptHost;
-#[cfg(feature = "devtools")]
+#[cfg(all(feature = "devtools", feature = "editor"))]
 pub(crate) use devtools::fire as fire_event;
+#[cfg(feature = "editor")]
 pub(crate) use script::reload_script;
 
-/// Reloads the graph asset at `path` if some entity uses it (a no-op otherwise).
+/// Reloads the graph asset at `path` if some entity uses it (a no-op otherwise). For the editor.
+#[cfg(feature = "editor")]
 pub(crate) fn reload_graph(world: &mut World, path: &str) {
     if world.resource::<LogicGraphs>().slots.contains_key(path) {
         let server = world.resource::<AssetServer>().clone();
@@ -507,6 +509,7 @@ fn run_queue(world: &mut World) {
 /// Runs `kind` on `entity` and returns the ids of the nodes that ran. Delays are not waited
 /// for: their continuation runs right away, so the trace shows the whole flow.
 pub(crate) fn fire_traced(world: &mut World, entity: Entity, kind: EventKind) -> (usize, Vec<u32>) {
+    world.init_resource::<LogicTraceCapture>();
     world.resource_mut::<LogicTraceCapture>().0 = Some(Vec::new());
     let ran = run_fire(world, Fire { entity, kind });
     for _ in 0..16 {
@@ -582,7 +585,7 @@ pub(crate) fn run_fire(world: &mut World, fire: Fire) -> usize {
     };
     let resume = matches!(kind, EventKind::Resume(..));
     let mut runner = world.resource_mut::<LogicGraphs>().slots.get_mut(&path).and_then(|s| s.runner.take()).unwrap_or_default();
-    let tracing = world.resource::<LogicTraceCapture>().0.is_some();
+    let tracing = world.get_resource::<LogicTraceCapture>().is_some_and(|c| c.0.is_some());
     runner.tracing = tracing;
     let prev = world.resource::<LogicCtx>().clone();
     *world.resource_mut::<LogicCtx>() = LogicCtx { me: entity };
@@ -595,7 +598,7 @@ pub(crate) fn run_fire(world: &mut World, fire: Fire) -> usize {
         {
             host.world.resource_mut::<LogicDiagnostics>().error(&path, 0, 0, Some(e.node), e.message.clone());
         }
-        if tracing && let Some(c) = host.world.resource_mut::<LogicTraceCapture>().0.as_mut() {
+        if tracing && let Some(mut cap) = host.world.get_resource_mut::<LogicTraceCapture>() && let Some(c) = cap.0.as_mut() {
             c.extend(runner.trace.iter().copied());
         }
         let _ = node;
