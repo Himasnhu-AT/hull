@@ -183,16 +183,7 @@ impl Graph {
     /// The pins of `kind` in this graph: like [`crate::pins`], with variable pins typed by the
     /// variable's declaration.
     pub fn pins_of(&self, kind: &NodeKind) -> crate::PinSpec {
-        let mut s = crate::pins(kind);
-        let ty = match kind {
-            NodeKind::GetVar(n) | NodeKind::SetVar(n) => self.var(n).map(|v| v.ty),
-            _ => None,
-        };
-        if let Some(ty) = ty {
-            s.data_out.iter_mut().for_each(|o| o.1 = ty);
-            s.data_in.iter_mut().filter(|i| i.name == "value").for_each(|i| i.ty = ty);
-        }
-        s
+        pins_in(&self.vars, kind)
     }
 
     /// Smallest unused node id above every existing one.
@@ -213,4 +204,19 @@ impl Graph {
         self.data.push(Link { from: Pin(from.0, from.1.into()), to: Pin(to.0, to.1.into()) });
         self
     }
+}
+
+/// The pins of `kind` given the declared variables: like [`crate::pins`], with `GetVar` /
+/// `SetVar` pins typed by the variable.
+pub fn pins_in(vars: &[Var], kind: &NodeKind) -> crate::PinSpec {
+    let mut s = crate::pins(kind);
+    let ty = match kind {
+        NodeKind::GetVar(n) | NodeKind::SetVar(n) => vars.iter().find(|v| v.name == *n).map(|v| v.ty),
+        _ => None,
+    };
+    if let Some(ty) = ty {
+        s.data_out.iter_mut().for_each(|o| o.1 = ty);
+        s.data_in.iter_mut().filter(|i| i.name == "value").for_each(|i| i.ty = ty);
+    }
+    s
 }

@@ -14,18 +14,15 @@ ashlar-command = { git = "https://github.com/Himasnhu-AT/ashlar", rev = "561745a
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
-egui-snarl = { version = "0.12", optional = true }
+egui-snarl = "0.12"
+logic-core = { path = "../logic-core" }
 
 [features]
-# Node graph canvas in the Logic panel (egui-snarl).
-snarl = ["dep:egui-snarl"]
+# Kept so `features = ["snarl"]` still resolves: the node canvas is always built in.
+snarl = []
 
 [dev-dependencies]
 egui = { version = "0.36", default-features = false, features = ["default_fonts"] }
 egui_kittest = { version = "0.36", features = ["wgpu"] }
 eframe = "0.36"
 image = { version = "0.25", default-features = false, features = ["png"] }
-
-[[example]]
-name = "snarl_probe"
-required-features = ["snarl"]

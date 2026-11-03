@@ -13,7 +13,7 @@
 mod chrome;
 mod content;
 mod details;
-mod logic;
+pub mod logic;
 mod model;
 mod outliner;
 mod output;
@@ -197,7 +197,7 @@ pub struct EditorUi {
     details: details::DetailsState,
     content: content::ContentState,
     output: output::OutputState,
-    logic: logic::LogicState,
+    logic: logic::LogicTab,
     place: place::PlaceState,
 
     // Refresh bookkeeping.
@@ -312,6 +312,7 @@ impl EditorUi {
     /// Logic editor (WP-C) takes it with [`EditorUi::take_logic_request`].
     pub fn open_logic_tab(&mut self, path: &str) {
         self.logic_request = Some(path.to_string());
+        let _ = self.show_panel("Logic");
     }
     /// The path last passed to `open_logic_tab`, once.
     pub fn take_logic_request(&mut self) -> Option<String> {
@@ -409,6 +410,8 @@ impl EditorUi {
                 }
             }
         }
+        // The Logic canvas takes Undo / Delete / Save while the pointer is over it.
+        self.logic.capture_keys(ctx);
         for _ in 0..4 {
             match dispatch(ctx, &self.keymap).as_deref().and_then(Cmd::from_id) {
                 Some(c) => reqs.push(Req::Cmd(c)),
@@ -487,7 +490,16 @@ impl EditorUi {
                         }
                         Panel::Content => content::show(ui, &mut self.content, &self.assets, &mut reqs),
                         Panel::Output => output::show(ui, &mut self.output, &self.diagnostics, &mut clear_output, &mut reqs),
-                        Panel::Logic => logic::show(ui, &mut self.logic),
+                        Panel::Logic => {
+                            if let Some(p) = self.logic_request.take() {
+                                self.logic.open(&p);
+                            }
+                            logic::show(ui, &mut self.logic, backend);
+                            for (label, op) in self.logic.take_applied() {
+                                self.undo.record(&label, op, None, self.now);
+                                self.dirty_components = true;
+                            }
+                        }
                         Panel::Place => {
                             let active = self.active_tool.as_ref().filter(|id| id.as_str() == "place").and_then(|id| self.tools.iter().find(|t| &t.id == id)).and_then(|t| t.settings.get("type_path")).and_then(|v| v.as_str());
                             place::show(ui, &mut self.place, &self.placeables, &self.models, active, &mut reqs);

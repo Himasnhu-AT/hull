@@ -18,7 +18,7 @@ mod value;
 
 pub use compile::{Compiled, DataIn, Dflt, GraphError, PinSpec, Severity, TimerDef, Trigger, MAX_DATA_DEPTH, kind_name, param_names, pins};
 pub use docs::{Template, category, cmp_symbol, docs, label, templates};
-pub use graph::{CmpOp, Comment, Graph, Link, MathOp, Node, NodeKind, ParseError, Pin, Var};
+pub use graph::{CmpOp, Comment, Graph, Link, MathOp, Node, NodeKind, ParseError, Pin, Var, pins_in};
 pub use lint::{Catalog, ScriptFn};
 pub use run::{Entry, Host, Payload, RunError, Runner};
 pub use value::{Ty, Value};
