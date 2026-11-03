@@ -343,37 +343,72 @@ fn add_component_menu(ui: &mut Ui, st: &mut DetailsState, eref: StableOrId, have
     ui.add_space(4.0);
     let mut shown = 0;
     egui::ScrollArea::vertical().max_height(280.0).show(ui, |ui| {
-        let mut sorted: Vec<&(String, TypeSchema)> = types.iter().collect();
+        let mut sorted: Vec<&(String, TypeSchema)> = types
+            .iter()
+            .filter(|(p, _)| !have.iter().any(|d| d.type_path == *p))
+            .filter(|(p, _)| short_name(p) != "Logic" && (f.is_empty() || short_name(p).to_lowercase().contains(&f)))
+            .collect();
         sorted.sort_by(|a, b| short_name(&a.0).cmp(short_name(&b.0)));
-        for (path, schema) in sorted {
-            if have.iter().any(|d| d.type_path == *path) {
+        for (group, open) in [(AddGroup::Common, true), (AddGroup::Game, true), (AddGroup::Engine, false)] {
+            let items: Vec<&&(String, TypeSchema)> = sorted.iter().filter(|(p, _)| add_group(p) == group).collect();
+            if items.is_empty() {
                 continue;
             }
-            let short = short_name(path);
-            if short == "Logic" || (!f.is_empty() && !short.to_lowercase().contains(&f)) {
-                continue;
-            }
-            shown += 1;
-            if ui.selectable_label(false, short).on_hover_text(path).clicked() {
-                reqs.push(Req::Edit {
-                    op: Op::SetComponent {
-                        entity: eref,
-                        type_path: path.clone(),
-                        before: None,
-                        after: Some(props::default_value(schema)),
-                    },
-                    label: format!("Add {short}"),
-                    key: None,
-                    seal: true,
-                });
-                st.add_filter.clear();
-                ui.close();
-            }
+            shown += items.len();
+            let title = format!("{} ({})", group.title(), items.len());
+            // A search opens every group that has a match.
+            egui::CollapsingHeader::new(title).id_salt(("details.add.group", group.title())).default_open(open || !f.is_empty()).open(if f.is_empty() { None } else { Some(true) }).show(ui, |ui| {
+                for (path, schema) in items {
+                    add_item(ui, st, eref, path, schema, reqs);
+                }
+            });
         }
         if shown == 0 {
             ui.weak("No component type matches");
         }
     });
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum AddGroup {
+    Common,
+    Game,
+    Engine,
+}
+
+impl AddGroup {
+    fn title(self) -> &'static str {
+        match self {
+            AddGroup::Common => "Common",
+            AddGroup::Game => "Game",
+            AddGroup::Engine => "Engine",
+        }
+    }
+}
+
+/// Where a component type is listed in the `+ Add` popup.
+fn add_group(path: &str) -> AddGroup {
+    const COMMON: &[&str] = &["PointLight", "SpotLight", "DirectionalLight", "Primitive", "Collider", "RigidBody", "Logic", "Spline", "SplineRoad", "PcgVolume", "PcgFollowTerrain", "PcgOverrides", "AudioEmitter", "SoundEmitter", "Sensor"];
+    let short = short_name(path);
+    if COMMON.contains(&short) {
+        return AddGroup::Common;
+    }
+    const ENGINE: &[&str] = &["bevy", "avian", "engine::", "glam", "egui", "wgpu", "core::", "alloc::", "std::"];
+    if ENGINE.iter().any(|p| path.starts_with(p)) { AddGroup::Engine } else { AddGroup::Game }
+}
+
+fn add_item(ui: &mut Ui, st: &mut DetailsState, eref: StableOrId, path: &str, schema: &TypeSchema, reqs: &mut Vec<Req>) {
+    let short = short_name(path);
+    if ui.selectable_label(false, short).on_hover_text(path).clicked() {
+        reqs.push(Req::Edit {
+            op: Op::SetComponent { entity: eref, type_path: path.to_owned(), before: None, after: Some(props::default_value(schema)) },
+            label: format!("Add {short}"),
+            key: None,
+            seal: true,
+        });
+        st.add_filter.clear();
+        ui.close();
+    }
 }
 
 /// `a::b::Thing<c::D>` -> `Thing`.

@@ -156,6 +156,24 @@ fn fallback_name(world: &World, e: Entity) -> String {
     format!("{kind} {}", e.index().index())
 }
 
+/// Components a level designer never adds by hand: input accumulators, accessibility, picking,
+/// computed render and transform state, relationships, egui and the editor's own.
+fn is_internal(path: &str, short: &str) -> bool {
+    const PREFIXES: &[&str] = &["bevy_input", "bevy_a11y", "bevy_picking", "bevy_egui", "bevy_window", "bevy_winit", "bevy_ecs::hierarchy", "bevy_ecs::relationship", "engine::editor", "bevy_camera::visibility", "bevy_render", "bevy_ui::"];
+    const SHORT: &[&str] = &["GlobalTransform", "TransformTreeChanged", "Aabb", "Anchor", "LevelEntity", "ChildOf", "Children", "Observer", "Disabled", "Window", "Monitor"];
+    PREFIXES.iter().any(|p| path.starts_with(p))
+        || SHORT.contains(&short)
+        || short.starts_with("Accumulated")
+        || short.starts_with("Accessib")
+        || short.starts_with("Computed")
+        || short.starts_with("Calculated")
+        || short.starts_with("Inherited")
+        || short.starts_with("Collider") && short != "Collider"
+        || short.ends_with("Marker")
+        || short.ends_with("Cache")
+        || short.ends_with("Internal")
+}
+
 fn build_node(world: &World, e: Entity, budget: &mut usize, under_level: bool, selected: &[Entity], keep: &HashSet<Entity>) -> Option<TreeNode> {
     if *budget == 0 || world.get::<EditorOnly>(e).is_some() {
         return None;
@@ -568,7 +586,7 @@ impl EditorBackend for WorldBackend<'_> {
             .filter(|r| r.data::<ReflectComponent>().is_some() && r.data::<bevy::reflect::std_traits::ReflectDefault>().is_some())
             .filter(|r| {
                 let t = r.type_info().type_path_table();
-                !HIDDEN.contains(&t.short_path()) && !(t.path().starts_with("bevy_") && level::RUNTIME_ONLY.contains(&t.short_path()))
+                !HIDDEN.contains(&t.short_path()) && !(t.path().starts_with("bevy_") && level::RUNTIME_ONLY.contains(&t.short_path())) && !is_internal(t.path(), t.short_path())
             })
             .map(|r| (r.type_info().type_path().to_string(), schema::schema_of(&reg, r.type_info())))
             .collect();
