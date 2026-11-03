@@ -130,11 +130,14 @@ fn generated_entities_are_read_only() {
 #[test]
 fn content_browser_navigates_and_places() {
     let mut h = harness();
-    // Open the Content tab content: it is the first tab in its group, so it is already shown.
-    h.get_by_label("library").click();
+    // The folder is in the tree and in the grid: either opens it.
+    h.get_all_by_label("library").next().expect("library").click();
     h.run_steps(3);
-    h.get_by_label("crate.glb");
-    // Place through the button.
+    // No tile carries a Place button.
+    assert_eq!(h.query_all_by_role_and_label(egui::accesskit::Role::Button, "Place").count(), 0);
+    h.get_by_label("crate.glb").click();
+    h.run_steps(3);
+    // The footer offers Place for the selected model.
     h.get_all_by_role_and_label(egui::accesskit::Role::Button, "Place").next().expect("a place button").click();
     h.run_steps(3);
     assert_eq!(h.state().backend.placed.len(), 1);
@@ -143,6 +146,17 @@ fn content_browser_navigates_and_places() {
     let App { ui, backend } = h.state_mut();
     ui.run(&egui::Context::default(), backend, Command::Undo);
     assert_eq!(h.state().backend.len(), n - 1);
+}
+
+#[test]
+fn audio_tiles_have_no_place_action() {
+    let mut h = harness();
+    h.get_all_by_label("library").next().expect("library").click();
+    h.run_steps(3);
+    h.get_by_label("engine.ogg").click();
+    h.run_steps(3);
+    assert_eq!(h.query_all_by_role_and_label(egui::accesskit::Role::Button, "Place").count(), 0, "no Place for a sound");
+    assert!(h.state().backend.placed.is_empty());
 }
 
 #[test]
