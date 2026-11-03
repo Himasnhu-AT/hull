@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::value::Value;
+use crate::value::{Ty, Value};
 
 /// `(node id, pin name)`.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -77,6 +77,10 @@ pub enum NodeKind {
     /// Sends a message (`Message(name)` events receive it).
     Emit(String),
     Log,
+    // Variables (declared in `Graph::vars`, stored per entity).
+    /// Reads variable `name` (its declared default until a `SetVar` ran).
+    GetVar(String),
+    SetVar(String),
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -101,6 +105,35 @@ impl Node {
     }
 }
 
+/// A graph variable: lives on the entity carrying the graph, starts at `default`.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Var {
+    pub name: String,
+    pub ty: Ty,
+    pub default: Value,
+}
+
+/// A note box on the canvas. Ignored by the compiler and the interpreter.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Comment {
+    pub text: String,
+    /// Top-left on the canvas.
+    pub pos: [f32; 2],
+    pub size: [f32; 2],
+    /// Fill colour (rgb).
+    #[serde(default = "Comment::default_color")]
+    pub color: [u8; 3],
+}
+
+impl Comment {
+    fn default_color() -> [u8; 3] {
+        [70, 90, 120]
+    }
+    pub fn new(text: &str, pos: [f32; 2], size: [f32; 2]) -> Comment {
+        Comment { text: text.into(), pos, size, color: Self::default_color() }
+    }
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Graph {
     #[serde(default)]
@@ -112,6 +145,12 @@ pub struct Graph {
     /// Data links.
     #[serde(default)]
     pub data: Vec<Link>,
+    /// Variables (`GetVar` / `SetVar` nodes).
+    #[serde(default)]
+    pub vars: Vec<Var>,
+    /// Canvas notes.
+    #[serde(default)]
+    pub comments: Vec<Comment>,
 }
 
 /// A RON syntax or shape error with its location.
@@ -135,6 +174,30 @@ impl Graph {
 
     pub fn to_ron(&self) -> String {
         ron::ser::to_string_pretty(self, ron::ser::PrettyConfig::default()).unwrap_or_default()
+    }
+
+    pub fn var(&self, name: &str) -> Option<&Var> {
+        self.vars.iter().find(|v| v.name == name)
+    }
+
+    /// The pins of `kind` in this graph: like [`crate::pins`], with variable pins typed by the
+    /// variable's declaration.
+    pub fn pins_of(&self, kind: &NodeKind) -> crate::PinSpec {
+        let mut s = crate::pins(kind);
+        let ty = match kind {
+            NodeKind::GetVar(n) | NodeKind::SetVar(n) => self.var(n).map(|v| v.ty),
+            _ => None,
+        };
+        if let Some(ty) = ty {
+            s.data_out.iter_mut().for_each(|o| o.1 = ty);
+            s.data_in.iter_mut().filter(|i| i.name == "value").for_each(|i| i.ty = ty);
+        }
+        s
+    }
+
+    /// Smallest unused node id above every existing one.
+    pub fn next_id(&self) -> u32 {
+        self.nodes.iter().map(|n| n.id).max().map_or(1, |m| m + 1)
     }
 
     pub fn node(&self, id: u32) -> Option<&Node> {

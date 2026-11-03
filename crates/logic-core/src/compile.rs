@@ -164,6 +164,11 @@ pub fn pins(kind: &NodeKind) -> PinSpec {
             flow(&mut s);
             s.data_in = vec![din("text", Ty::Any)];
         }
+        GetVar(_) => s.data_out = vec![out("value", Ty::Any)],
+        SetVar(_) => {
+            flow(&mut s);
+            s.data_in = vec![din("value", Ty::Any)];
+        }
     }
     s
 }
@@ -255,6 +260,7 @@ pub struct Compiled {
     pub timers: Vec<TimerDef>,
     pub warnings: Vec<GraphError>,
     pub slots: usize,
+    pub vars: Vec<crate::graph::Var>,
 }
 
 impl Compiled {
@@ -292,7 +298,22 @@ impl crate::Graph {
                 errors.push(err(Some(n.id), None, "Sequence needs 1..=16 outputs"));
             }
         }
-        let specs: Vec<PinSpec> = self.nodes.iter().map(|n| pins(&n.kind)).collect();
+        let specs: Vec<PinSpec> = self.nodes.iter().map(|n| self.pins_of(&n.kind)).collect();
+        for (i, v) in self.vars.iter().enumerate() {
+            if self.vars[..i].iter().any(|o| o.name == v.name) {
+                errors.push(err(None, None, format!("variable `{}` is declared twice", v.name)));
+            }
+            if let Err(e) = v.default.coerce(v.ty) {
+                errors.push(err(None, None, format!("variable `{}` default: {e}", v.name)));
+            }
+        }
+        for n in &self.nodes {
+            if let NodeKind::GetVar(name) | NodeKind::SetVar(name) = &n.kind
+                && self.var(name).is_none()
+            {
+                errors.push(err(Some(n.id), None, format!("variable `{name}` is not declared")));
+            }
+        }
 
         // Flow links.
         let mut flow_out: Vec<Vec<u32>> = specs.iter().map(|s| vec![NONE; s.exec_out.len()]).collect();
@@ -417,7 +438,7 @@ impl crate::Graph {
             return Err(errors);
         }
 
-        let mut c = Compiled { name: self.name.clone(), warnings, slots, ..Default::default() };
+        let mut c = Compiled { name: self.name.clone(), warnings, slots, vars: self.vars.clone(), ..Default::default() };
         for (i, node) in self.nodes.iter().enumerate() {
             let spec = &specs[i];
             c.nodes.push(CNode {

@@ -37,6 +37,11 @@ pub trait Host {
     fn log(&mut self, text: &str);
     /// Run the flow after `Delay` node index `node` again in `secs`, with `payload`.
     fn schedule(&mut self, node: u32, secs: f32, payload: &Payload);
+    /// Variable `name` of entity `me`; `None` = never set (the declared default applies).
+    fn var_get(&mut self, _me: u64, _name: &str) -> Option<Value> {
+        None
+    }
+    fn var_set(&mut self, _me: u64, _name: &str, _value: &Value) {}
 }
 
 /// A runtime failure, located at a node id.
@@ -72,6 +77,10 @@ pub struct Runner {
     pub budget: u32,
     /// Nodes executed + data nodes evaluated in the last run.
     pub steps: u32,
+    /// Record the ids of the nodes a run executes into [`Runner::trace`] (editor "Fire").
+    pub tracing: bool,
+    /// Node ids in execution order (event first), of the last run when `tracing`.
+    pub trace: Vec<u32>,
     stack: Vec<Work>,
     cache: Vec<Value>,
     cache_epoch: Vec<u32>,
@@ -83,7 +92,7 @@ pub struct Runner {
 
 impl Default for Runner {
     fn default() -> Self {
-        Runner { budget: 10_000, steps: 0, stack: Vec::new(), cache: Vec::new(), cache_epoch: Vec::new(), persist: Vec::new(), persist_run: Vec::new(), epoch: 1, run_id: 0 }
+        Runner { budget: 10_000, steps: 0, tracing: false, trace: Vec::new(), stack: Vec::new(), cache: Vec::new(), cache_epoch: Vec::new(), persist: Vec::new(), persist_run: Vec::new(), epoch: 1, run_id: 0 }
     }
 }
 
@@ -117,6 +126,7 @@ impl Runner {
         self.run_id = self.run_id.wrapping_add(1).max(1);
         self.epoch = self.epoch.wrapping_add(1).max(1);
         self.steps = 0;
+        self.trace.clear();
         self.stack.clear();
         let node = match entry {
             Entry::Event(n) | Entry::Resume(n) => n,
@@ -125,6 +135,9 @@ impl Runner {
             return Err(RunError { node: 0, message: "no such node".into() });
         }
         let mut cx = Ctx { g, host, payload };
+        if self.tracing {
+            self.trace.push(g.nodes[node as usize].id);
+        }
         self.follow(g, node, 0);
         while let Some(w) = self.stack.pop() {
             match w {
@@ -180,7 +193,20 @@ impl Runner {
         self.tick(cx, ni)?;
         let g = cx.g;
         let node = &g.nodes[ni as usize];
+        if self.tracing {
+            self.trace.push(node.id);
+        }
         match &node.kind {
+            NodeKind::SetVar(name) => {
+                let v = self.input(cx, ni, 0)?;
+                let v = match g.vars.iter().find(|x| x.name == *name) {
+                    Some(d) => v.coerce(d.ty).map_err(|m| RunError { node: node.id, message: format!("variable `{name}`: {m}") })?,
+                    None => v,
+                };
+                cx.host.var_set(cx.payload.me, name, &v);
+                self.effect();
+                self.follow(g, ni, 0);
+            }
             NodeKind::Branch => {
                 let c = self.input(cx, ni, 0)?;
                 self.follow(g, ni, if matches!(c, Value::Bool(true)) { 0 } else { 1 });
@@ -313,6 +339,13 @@ impl Runner {
             NodeKind::Const(v) => self.put(node, 0, v.clone()),
             NodeKind::Find { name } => {
                 let v = cx.host.find(name).map_or(Value::Null, Value::Entity);
+                self.put(node, 0, v);
+            }
+            NodeKind::GetVar(name) => {
+                let v = match cx.host.var_get(cx.payload.me, name) {
+                    Some(v) => v,
+                    None => cx.g.vars.iter().find(|x| x.name == *name).map_or(Value::Null, |d| d.default.clone()),
+                };
                 self.put(node, 0, v);
             }
             NodeKind::Get { path } => {
