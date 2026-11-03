@@ -58,6 +58,13 @@ impl LogicTab {
         std::mem::take(&mut self.applied)
     }
 
+    /// Forget an open document (its host tab was closed).
+    pub fn close_path(&mut self, path: &str) {
+        if let Some(i) = self.docs.iter().position(|d| d.path() == path) {
+            self.close(i);
+        }
+    }
+
     /// Paths of the open documents, in tab order.
     pub fn open_paths(&self) -> Vec<String> {
         self.docs.iter().map(|d| d.path().to_string()).collect()
@@ -218,8 +225,38 @@ fn script_doc(path: &str, text: String, errors: Vec<GraphErrorDoc>, now: f64) ->
     ScriptDoc { path: path.into(), saved: text.clone(), disk_text: text.clone(), text, errors, last_poll: now, changed_on_disk: false, jump_to: None }
 }
 
-/// Draw the Logic tab body.
+/// Draw the Logic tab body with its own document strip (standalone hosts and tests).
 pub fn show(ui: &mut Ui, tab: &mut LogicTab, backend: &mut dyn EditorBackend) {
+    let ctx = ui.ctx().clone();
+    let now = begin(ui, tab, backend);
+    tab.capture_keys(&ctx);
+    tab_strip(ui, tab, backend, now);
+    ui.separator();
+    if tab.docs.is_empty() {
+        welcome(ui, tab, backend, now);
+        status_line(ui, tab, now);
+        return;
+    }
+    body(ui, tab, backend, now);
+}
+
+/// Draw one document (a graph or a script) as the body of a host's own tab: no strip of our own.
+pub fn show_doc(ui: &mut Ui, tab: &mut LogicTab, backend: &mut dyn EditorBackend, path: &str) {
+    let ctx = ui.ctx().clone();
+    let now = begin(ui, tab, backend);
+    if !tab.docs.iter().any(|d| d.path() == path) {
+        tab.open_now(backend, path, now);
+    }
+    if let Some(i) = tab.docs.iter().position(|d| d.path() == path) {
+        tab.active = i;
+        tab.capture_keys(&ctx);
+        body(ui, tab, backend, now);
+    } else {
+        status_line(ui, tab, now);
+    }
+}
+
+fn begin(ui: &mut Ui, tab: &mut LogicTab, backend: &mut dyn EditorBackend) -> f64 {
     let ctx = ui.ctx().clone();
     let now = ctx.input(|i| i.time);
     if ctx.input(|i| i.pointer.any_pressed()) {
@@ -231,14 +268,10 @@ pub fn show(ui: &mut Ui, tab: &mut LogicTab, backend: &mut dyn EditorBackend) {
     for p in std::mem::take(&mut tab.pending_open) {
         tab.open_now(backend, &p, now);
     }
-    tab.capture_keys(&ctx);
-    tab_strip(ui, tab, backend, now);
-    ui.separator();
-    if tab.docs.is_empty() {
-        welcome(ui, tab, backend, now);
-        status_line(ui, tab, now);
-        return;
-    }
+    now
+}
+
+fn body(ui: &mut Ui, tab: &mut LogicTab, backend: &mut dyn EditorBackend, now: f64) {
     let idx = tab.active.min(tab.docs.len() - 1);
     // Take the document out so the tab and the document can both be borrowed.
     let mut doc = tab.docs.remove(idx);

@@ -19,7 +19,12 @@
 //! | `editor.viewport` | `ViewportCmd` JSON | `{ok}` |
 //! | `editor.camera` | `{pos?, look_at?, speed?}` | the camera pose |
 //! | `editor.command` | `{id}` (a UI command: `editor.undo`, `editor.redo`, `editor.save`, ...) | `{ok}` |
-//! | `editor.ui_layout` | `{tab}` (Outliner, Details, Content, Output, Logic) | `{ok}` |
+//! | `editor.popup` | `{name}` (`add`, `logic`, `close`) | `{ok}`: opens that Details popup next frame |
+//! | `editor.tab` | `{tab}` or `{path}` (a document tab). Tabs: (Modes, Outliner, Details, World Settings, Content, Output, Messages, Logic, Level) | `{ok}` |
+//! | `editor.layout` | `{name}` (Default, Landscape, Logic) | `{ok}` |
+//! | `editor.window` | `{name, open?}` (help, about, project settings, preferences, palette) | `{ok}` |
+//! | `editor.drawer` | `{open?, dock?}` open or close the content drawer, dock it into the layout or back | `{open, docked}` |
+//! | `editor.settings` | `{group?, value?}` World / Project settings groups; with `group` and `value`, merge a change | the groups |
 
 use bevy::prelude::*;
 use editor_proto::*;
@@ -102,7 +107,12 @@ pub(super) fn register(app: &mut App) {
             params(&[("action", "string", "action name"), ("points", "array", ""), ("at", "array", "[x,z]")]),
             tool_action,
         )
-        .add_control_command("editor.tab", "Bring a panel tab to the front", params(&[("tab", "string", "Outliner|Details|Content|Output|Logic")]), tab);
+        .add_control_command("editor.tab", "Bring a panel tab to the front (Content, Output and Messages open the drawer)", params(&[("tab", "string", "Modes|Outliner|Details|World Settings|Content|Output|Messages|Logic|Level"), ("path", "string", "open a .logic.ron / .ruspy document tab instead")]), tab)
+        .add_control_command("editor.layout", "Switch to a named panel layout", params(&[("name", "string", "Default|Landscape|Logic")]), layout)
+        .add_control_command("editor.window", "Open or close a window", params(&[("name", "string", "help|about|project settings|preferences|palette"), ("open", "boolean", "default true")]), window)
+        .add_control_command("editor.drawer", "Open / close / dock the content drawer", params(&[("open", "boolean", "open or close"), ("dock", "boolean", "dock into the layout (true) or back to the drawer (false)")]), drawer)
+        .add_control_command("editor.settings", "World and Project settings groups; `group` + `value` merges a change", params(&[("group", "string", "look|terrain|streaming|scatter|hlod|origin"), ("value", "object", "partial value for the group")]), settings)
+        .add_control_command("editor.popup", "Open a Details popup on the next frame", params(&[("name", "string", "add | logic | close")]), popup);
 }
 
 fn parse<T: serde::de::DeserializeOwned>(v: Value) -> Result<T, String> {
@@ -328,10 +338,56 @@ fn command(world: &mut World, p: Value) -> Result<Value, String> {
 }
 
 fn tab(world: &mut World, p: Value) -> Result<Value, String> {
-    let name = p.get("tab").and_then(Value::as_str).ok_or("`tab` is required")?;
     let mut ui = world.get_resource_mut::<EditorUiRes>().ok_or("the editor UI is not up yet")?;
+    // `path` opens a Logic / Script document tab; `tab` brings a panel forward.
+    if let Some(path) = p.get("path").and_then(Value::as_str) {
+        ui.0.open_logic_tab(path);
+        return Ok(json!({"ok": true, "tabs": ui.0.open_tabs()}));
+    }
+    let name = p.get("tab").and_then(Value::as_str).ok_or("`tab` or `path` is required")?;
     ui.0.show_panel(name)?;
     Ok(json!({"ok": true}))
+}
+
+fn popup(world: &mut World, p: Value) -> Result<Value, String> {
+    let name = p.get("name").and_then(Value::as_str).ok_or("`name` is required (add | logic)")?;
+    let mut ui = world.get_resource_mut::<EditorUiRes>().ok_or("the editor UI is not up yet")?;
+    ui.0.open_details_popup(name)?;
+    Ok(json!({"ok": true}))
+}
+
+fn layout(world: &mut World, p: Value) -> Result<Value, String> {
+    let name = p.get("name").and_then(Value::as_str).ok_or("`name` is required")?;
+    let mut ui = world.get_resource_mut::<EditorUiRes>().ok_or("the editor UI is not up yet")?;
+    ui.0.apply_layout_name(name)?;
+    Ok(json!({"ok": true}))
+}
+
+fn window(world: &mut World, p: Value) -> Result<Value, String> {
+    let name = p.get("name").and_then(Value::as_str).ok_or("`name` is required")?;
+    let open = p.get("open").and_then(Value::as_bool).unwrap_or(true);
+    let mut ui = world.get_resource_mut::<EditorUiRes>().ok_or("the editor UI is not up yet")?;
+    ui.0.set_window(name, open)?;
+    Ok(json!({"ok": true}))
+}
+
+fn drawer(world: &mut World, p: Value) -> Result<Value, String> {
+    let mut ui = world.get_resource_mut::<EditorUiRes>().ok_or("the editor UI is not up yet")?;
+    if let Some(dock) = p.get("dock").and_then(Value::as_bool) {
+        ui.0.dock_content_drawer(dock);
+    }
+    if let Some(open) = p.get("open").and_then(Value::as_bool) {
+        ui.0.set_drawer_open(open);
+    }
+    Ok(json!({"open": ui.0.drawer_open(), "docked": ui.0.drawer_docked()}))
+}
+
+fn settings(world: &mut World, p: Value) -> Result<Value, String> {
+    let mut be = WorldBackend::new(world);
+    if let Some(g) = p.get("group").and_then(Value::as_str) {
+        be.set_settings(g, p.get("value").cloned().ok_or("`value` is required with `group`")?)?;
+    }
+    to_value(&be.settings())
 }
 
 fn content(world: &mut World, p: Value) -> Result<Value, String> {

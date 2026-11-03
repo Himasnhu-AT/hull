@@ -348,9 +348,48 @@ with `not_paused` do not run), `PauseAllowed(false)` (no pause menu on focus los
 engine's "gameplay" action context off. A game system that ignores `Paused` and reads raw keys
 still sees them: gate it. The render scale is forced to 1.
 
-**Layout**: toolbar (Play, Save, Open, Undo, Redo, Move, Rotate, Scale, Snap, Commands), Outliner
-left, Details right, viewport in the middle, Content / Output / Logic tabs below, status bar.
-The dock layout is saved to `<data dir>/editor_ui.json`.
+**Layout** (UE5 / Unity style; the plan is `docs/EDITOR_AUDIT.md` section 3):
+
+```
+Menu     File  Edit  Window  Tools  Help
+Toolbar  [Save][Undo][Redo] | Modes: [Select][Landscape][Foliage][Splines][Place] |  [Play][Pause][Stop]  | [Settings v][Commands][?]
+Left     Modes panel        Centre   document tabs: Level (viewport, never closes) | Logic: door | Script: score
+Right    Outliner over Details | World Settings                   (Details is always in front when something is selected)
+Bottom   Content Drawer: a 30 px strip (Content Drawer ^ | Output | Messages); Cmd+Space opens it; Dock turns it into a dock panel
+Status   Mode / Tool | level (* unsaved) | play state | message ........ selection | undo | [Content] [Output]
+```
+
+- **Modes** are what a click in the viewport does: *Select* (default; transform tools Select / Move /
+  Rotate / Scale are the bar inside the viewport, top left), *Landscape* (Sculpt and Paint),
+  *Foliage*, *Splines*, *Place*. A mode is disabled when the game has no tool for it. The Modes
+  panel shows the mode's help, its tool settings (the same property grid as Details) and, in
+  Select and Place mode, the palette: registered types by category, then **every `.glb` under the
+  assets folder** by folder. In Place mode the type is a dropdown, not a text field. Keys 5 to 9
+  still arm the world tools; `Mode` is derived from the active tool, so `editor.tool` and the
+  buttons always agree.
+- **Content Drawer**: closed it is a strip; **Cmd+Space** (or Cmd+J, or the status bar's Content
+  and Output buttons) opens it to about a third of the screen (drag the top edge to resize). *Dock*
+  moves Content / Output / Messages into the dock under the viewport; Window > "Undock the content
+  drawer" (or the command `editor.drawer_dock`) puts them back.
+- **Document area**: `EditorUi::open_logic_tab(path)` (double-clicking a Logic asset, the palette,
+  `editor.tab {path}`) adds a tab; the viewport is not drawn while a document is in front.
+  The tab body is `logic::show` (WP-C).
+- **Window menu**: a checkbox per panel, the drawer, **Layouts** (Default, Landscape, Logic: also
+  `editor.layout {name}`) and Reset layout. A saved layout from before the Modes panel is dropped
+  for the default one. The dock layout is saved to `<data dir>/editor_ui.json`.
+- **Settings**: the toolbar's Settings menu opens *World Settings* (a tab beside Details: sun,
+  sky, ambient, fog and exposure of the `Look`; terrain detail; streaming), *Project Settings*
+  (window: scatter, HLOD and floating-origin budgets) and *Editor Preferences* (window: theme,
+  UI scale, fly speed, snap step, grid, scenery fade, control hint). The first two are backend
+  groups (`EditorBackend::settings / set_settings`, schema + JSON drawn by the Details property
+  grid; engine side `src/editor/settings_backend.rs`, which edits the `Look` and `WorldSettings`
+  resources like `look.set` / `world.settings`; fields that toggle a rendering feature are left
+  out on purpose). Preferences persist to `<data dir>/editor_prefs.json`
+  (`EditorUi::prefs_json / load_prefs`). Script them with `editor.settings {group, value}` and
+  `editor.window {name, open}`.
+- **Command palette** (Cmd+K): every command (including modes, layouts, windows), then entities
+  (select + frame), models (place) and Logic / Script / Level assets (open).
+- **Help** (F1): searchable, scrolls, always shows its scroll bar.
 
 **Viewport controls**. No mouse button has to be held, so a trackpad is enough. They work while
 the pointer is over the viewport and no text field has the keyboard (Cmd / Ctrl held = a shortcut,
@@ -379,18 +418,14 @@ threshold, gizmo priority, typing gate; unit tests). A world tool owns the left 
 keeps right / middle / Alt / Space drags. `editor.camera_drive {wish, seconds, yaw, pitch}` drives
 the camera like the keys do, for scripts.
 
-**The window** (all in `crates/editor-ui`): a menu bar (File with Recent, Edit with Duplicate and
-Select all, View with a checkbox per panel, the ground grid and Reset layout, Tools, Game, Help);
-a toolbar with Play / Stop first (green / red), the transform tools and world tools with the active
-one filled, Undo / Redo, Save, and tooltips that carry the shortcut; a viewport overlay (camera
-speed, Snap with its step, Local / World, an axis gizmo, and a one-line control hint you can
-dismiss); Outliner left with entities in folders by kind (Roads / Splines, Gameplay, Foliage,
-Lights, Cameras, Meshes, Other, and a Generated folder folded by default) with a Type column, an
-eye per row and search matches highlighted; Place next to it (placeable types by category, library
-models by kit); Details right with the name, type and id, a component search and Transform first;
-Tool next to Details; Content, Output, Logic at the bottom (Content is a grid of tiles with
-licence badges); a status bar with the tool, the level (`*` = unsaved), the play state and the last
-message. Help > Controls (F1) lists every shortcut. Type sizes are 14 px body, 12 px small.
+**The window** (all in `crates/editor-ui`): the layout above. The viewport overlay has the
+transform tools (Select, Move, Rotate, Scale), camera speed, Snap with its step, Local / World, an
+axis gizmo and a one-line control hint you can dismiss. Outliner: entities in folders by kind
+(Roads / Splines, Gameplay, Foliage, Lights, Cameras, Meshes, Other, and a Generated folder folded
+by default) with a Type column, an eye per row and search matches highlighted. Details: the name,
+type and id, a component search and Transform first. Content is a grid of tiles with licence
+badges. Tooltips carry the shortcut. Help > Controls (F1) lists every shortcut. Type sizes are
+14 px body, 12 px small.
 
 Select: no gizmo. Move: three arrows and three plane squares (world axes; Local in the overlay or `L`).
 Rotate: three rings. Scale: three handles with boxes (local axes) and a centre box for uniform
@@ -440,6 +475,37 @@ table is in its module docs and in `engine.commands`). Example, with `scripts/pl
 (offscreen by default: cameras and the whole egui window render into the 1920x1080 image
 `screenshot` captures).
 
+**Details panel** (`crates/editor-ui/src/details.rs`, `props.rs`). Header, then `+ Add` /
+`+ Add Logic` and a component search, then sections in this order: Transform, Rendering, Physics,
+Gameplay, **Logic**, Other. A component's section is its `ComponentDoc.category` (a type's
+`#[reflect(@Category("Gameplay"))]`), else a guess from its name. Every field has a label made from
+its name (`snap_to_ground` is `Snap to ground`), hover text, an optional unit after numbers and a
+reset arrow (a circular arrow in front of the label) when it differs from `Default::default()`
+(`ComponentDoc.default`); a section header has the same arrow for the whole component.
+Hints come from reflect attributes (`engine::editor::schema`): `#[reflect(@Tip("..."))]`,
+`@Unit("m")`, `@DisplayName("...")`, `@Hidden`, `@Choose("rows")` (an integer field picked from the
+rows of the sibling list `rows`, shown as a table: the spline tool's point list) and, on the type,
+`@Category`, `@Tip`. They travel as `TypeSchema::Field { meta, inner }`; code that reads a schema
+calls `.inner()`. Engine types get built-in hints (`Transform`, `BrushSettings`).
+`+ Add` lists the registered component types (searchable, sorted, generics stripped).
+`+ Add Logic` offers a new graph from a template (`empty`, `basic`, `trigger_zone`, `door`,
+`pickup`, `timer`, `action_key`, `event_start`; name defaults to `<Entity>_logic`) or an existing
+`.logic.ron`; "Create and attach" calls `logic_create` and sets `Logic { graph }` as one undoable
+`SetComponent`, and the Logic section offers "Open graph". The Logic section lists the attached
+graph with a status dot (green compiles, red has errors), Open (the Logic tab) and Detach (removes
+the component, the file stays). Not offered on generated entities. Gaps: editing several selected
+entities at once shows only the first.
+
+**Output / Messages** (`output.rs`): one log of the editor (refused edits, failed places and saves,
+every toast), logic (`LogicDiagnostics`: graph and ruspy errors with file, line, column),
+build (the Play build's cargo output) and engine (WARN and ERROR from `tracing`, installed through
+`LogPlugin::custom_layer` with feature `editor`). Source toggles (Editor / Logic / Build / Engine),
+a level filter (Errors / Warnings / Info / Debug), search, Clear, and a count of warnings and errors
+on the tab (`Output (3)`). A click selects the line's entity (`Diagnostic.entity`) or opens its
+`.logic.ron` in the Logic tab, else copies `file:line:col`. `editor.popup {name: add | logic | close}`
+opens a Details popup for scripted screenshots. **History** (`undo.rs`): every undo step; click one
+to undo / redo up to it.
+
 **Data shown in Details** (`src/editor/schema.rs`): reflect JSON, with `Handle<A>` as the asset
 path string (`""` for a handle made in code), `Color` / `Srgba` / `LinearRgba` as `[r,g,b,a]`,
 `Option<T>` as `"None"` / `{"Some": v}`; `TypeSchema` from the type info (`#[reflect(@0.0..=1.0)]`
@@ -459,11 +525,11 @@ close the metrics viewer on Stop. Terrain / spline / foliage tools (World tools)
 
 ### World tools
 
-Toolbar buttons after Scale (a tool is only listed when the level can use it): **Spline**,
-**Sculpt**, **Paint**, **Foliage**, **Place**. Picking one switches the transform gizmo off, shows
-the **Tool** tab (right dock, next to Details: the tool's help line, its settings in the same
-property grid as Details, and the Place palette) and gives the tool the left mouse button. Move /
-Rotate / Scale go back to the gizmo. While a tool is active **Delete is the tool's** (a spline
+The toolbar's **Modes** group (a mode is only enabled when the level can use it): **Landscape**
+(Sculpt, Paint), **Foliage**, **Splines**, **Place**. Picking one switches the transform gizmo off,
+shows the **Modes** panel (left dock: the tool's help line, its settings in the same property grid
+as Details, and the Place palette) and gives the tool the left mouse button. **Select** or a
+transform tool in the viewport bar goes back to the gizmo. While a tool is active **Delete is the tool's** (a spline
 point, a tree), not "delete entity". The UI knows tools only as `ToolDoc { id, label, hint,
 settings, schema }` (`EditorBackend::tools / active_tool / set_active_tool / set_tool_settings`);
 `src/editor/tools/` implements them. Every edit is an `Op` the engine hands to the UI's undo stack

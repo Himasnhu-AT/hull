@@ -107,4 +107,15 @@ pub trait EditorBackend {
     fn logic_fire(&mut self, _entity: EntityId, _event: &str) -> Result<LogicTrace, String> {
         Err("logic graphs are not supported by this backend".into())
     }
+
+    // ---- settings (defaults: none) ---------------------------------------------------------
+    /// World and project settings groups (look, terrain, streaming ...) with their values.
+    fn settings(&mut self) -> Vec<SettingsGroup> {
+        Vec::new()
+    }
+    /// Replaces one group's value (the same JSON shape `settings` returned; missing fields keep
+    /// their value). Not undoable.
+    fn set_settings(&mut self, _group: &str, _value: Value) -> Result<(), String> {
+        Err("settings are not supported by this backend".into())
+    }
 }

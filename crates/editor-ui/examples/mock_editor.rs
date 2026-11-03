@@ -81,7 +81,9 @@ fn main() -> eframe::Result {
 fn shot(path: &str, tab: Option<&str>) -> eframe::Result {
     use egui_kittest::Harness;
     use egui_kittest::kittest::Queryable;
-    let mut h = Harness::builder().with_size(egui::vec2(1400.0, 860.0)).with_max_steps(30).wgpu().build_ui_state(
+    // SHOT_SIZE=1280x720 picks the window size.
+    let (w, hgt) = std::env::var("SHOT_SIZE").ok().and_then(|s| s.split_once('x').and_then(|(a, b)| Some((a.parse().ok()?, b.parse().ok()?)))).unwrap_or((1400.0_f32, 860.0_f32));
+    let mut h = Harness::builder().with_size(egui::vec2(w, hgt)).with_max_steps(30).wgpu().build_ui_state(
         |ui, app: &mut App| {
             let ctx = ui.ctx().clone();
             let out = app.ui.show(&ctx, &mut app.backend);
@@ -100,6 +102,19 @@ fn shot(path: &str, tab: Option<&str>) -> eframe::Result {
     for step in tab.into_iter().flat_map(|t| t.split(',')) {
         match step {
             "help" => h.key_press(egui::Key::F1),
+            // layout:logic, win:preferences, panel:output, tab:logic/door.logic.ron, drawer:open|dock
+            s if s.starts_with("layout:") => {
+                let _ = h.state_mut().ui.apply_layout_name(&s[7..]);
+            }
+            s if s.starts_with("win:") => {
+                let _ = h.state_mut().ui.set_window(&s[4..].replace('-', " "), true);
+            }
+            s if s.starts_with("panel:") => {
+                let _ = h.state_mut().ui.show_panel(&s[6..].replace('-', " "));
+            }
+            s if s.starts_with("tab:") => h.state_mut().ui.open_logic_tab(&s[4..]),
+            "drawer:open" => h.state_mut().ui.set_drawer_open(true),
+            "drawer:dock" => h.state_mut().ui.dock_content_drawer(true),
             s if s.starts_with("menu:") => {
                 h.get_by_label(&s[5..]).click();
                 h.run_steps(3);

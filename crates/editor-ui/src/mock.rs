@@ -36,11 +36,19 @@ pub struct MockBackend {
     pub active: Option<String>,
     pub recorded: Vec<RecordedOp>,
     pub placeable_docs: Vec<PlaceableDoc>,
+    /// Logic graph files the mock lists, and the `(name, template)` pairs created.
+    pub logic_files: Vec<LogicFile>,
+    pub logic_created: Vec<(String, String)>,
+    /// `Default::default()` per component type (reset arrows).
+    pub defaults: BTreeMap<String, Value>,
+    /// Settings groups the mock offers (`settings()`); `set_settings` merges into `value`.
+    pub settings_groups: Vec<SettingsGroup>,
 }
 
 pub const TRANSFORM: &str = "bevy_transform::components::transform::Transform";
 pub const LIGHT: &str = "bevy_light::PointLight";
 pub const HEALTH: &str = "game::Health";
+pub const LOGIC: &str = "engine::logic::Logic";
 
 fn transform_schema() -> TypeSchema {
     TypeSchema::Struct {
@@ -112,7 +120,15 @@ impl MockBackend {
                 ],
             },
         );
+        schemas.insert(LOGIC.to_owned(), TypeSchema::Struct { fields: vec![("graph".into(), TypeSchema::String)] });
+        let mut defaults = BTreeMap::new();
+        defaults.insert(TRANSFORM.to_owned(), transform(0.0, 0.0, 0.0));
+        defaults.insert(HEALTH.to_owned(), json!({"max": 10, "label": "", "mesh": "", "mode": "Normal", "tags": []}));
+        defaults.insert(LOGIC.to_owned(), json!({"graph": ""}));
         MockBackend {
+            logic_files: Vec::new(),
+            logic_created: Vec::new(),
+            defaults,
             ents: BTreeMap::new(),
             order: Vec::new(),
             next_id: 1,
@@ -134,6 +150,7 @@ impl MockBackend {
             active: None,
             recorded: Vec::new(),
             placeable_docs: Vec::new(),
+            settings_groups: Vec::new(),
         }
     }
 
@@ -173,6 +190,25 @@ impl MockBackend {
             PlaceableDoc { name: "Start line".into(), icon: "flag".into(), category: "Gameplay".into(), type_path: "game::StartLine".into() },
             PlaceableDoc { name: "Point light".into(), icon: "light".into(), category: "Lights".into(), type_path: "game::PointLight".into() },
         ];
+        let fl = |min: f64, max: f64| TypeSchema::Float { min: Some(min), max: Some(max), step: None };
+        m.settings_groups = vec![
+            SettingsGroup {
+                id: "look".into(),
+                label: "Look".into(),
+                page: SettingsPage::World,
+                hint: "Sun and sky.".into(),
+                schema: TypeSchema::Struct { fields: vec![("sun".into(), TypeSchema::Struct { fields: vec![("elevation_deg".into(), fl(-20.0, 90.0))] })] },
+                value: json!({"sun": {"elevation_deg": 45.0}}),
+            },
+            SettingsGroup {
+                id: "scatter".into(),
+                label: "Foliage and scatter".into(),
+                page: SettingsPage::Project,
+                hint: String::new(),
+                schema: TypeSchema::Struct { fields: vec![("distance_scale".into(), fl(0.0, 8.0))] },
+                value: json!({"distance_scale": 1.0}),
+            },
+        ];
         m.assets = vec![
             (
                 String::new(),
@@ -195,30 +231,9 @@ impl MockBackend {
             ("library/cars".into(), vec![asset("library/cars/sedan.glb", AssetKind::Model, Some("CC0-1.0"))]),
         ];
         m.diag = vec![
-            Diagnostic {
-                level: Level::Info,
-                source: "engine".into(),
-                message: "level loaded".into(),
-                file: None,
-                line: None,
-                col: None,
-            },
-            Diagnostic {
-                level: Level::Warn,
-                source: "assets".into(),
-                message: "missing texture, using fallback".into(),
-                file: Some("assets/props/crate.glb".into()),
-                line: None,
-                col: None,
-            },
-            Diagnostic {
-                level: Level::Error,
-                source: "ruspy".into(),
-                message: "unexpected token ')'".into(),
-                file: Some("scripts/door.ruspy".into()),
-                line: Some(12),
-                col: Some(8),
-            },
+            Diagnostic::new(Level::Info, "engine", "level loaded"),
+            Diagnostic::new(Level::Warn, "assets", "missing texture, using fallback").at("assets/props/crate.glb", None, None),
+            Diagnostic::new(Level::Error, "ruspy", "unexpected token ')'").at("scripts/door.ruspy", Some(12), Some(8)),
         ];
         m
     }
@@ -468,6 +483,21 @@ impl EditorBackend for MockBackend {
         self.placeable_docs.clone()
     }
 
+    fn settings(&mut self) -> Vec<SettingsGroup> {
+        self.settings_groups.clone()
+    }
+    fn set_settings(&mut self, group: &str, value: Value) -> Result<(), String> {
+        let g = self.settings_groups.iter_mut().find(|g| g.id == group).ok_or_else(|| format!("no settings group `{group}`"))?;
+        if let (Value::Object(have), Value::Object(new)) = (&mut g.value, &value) {
+            for (k, v) in new {
+                have.insert(k.clone(), v.clone());
+            }
+        } else {
+            g.value = value;
+        }
+        Ok(())
+    }
+
     fn tree(&mut self, filter: &TreeFilter) -> Vec<TreeNode> {
         self.order
             .iter()
@@ -486,6 +516,9 @@ impl EditorBackend for MockBackend {
                 value: v.clone(),
                 schema: self.schemas.get(ty).cloned().unwrap_or(TypeSchema::Opaque),
                 editable: self.schemas.contains_key(ty),
+                category: String::new(),
+                doc: String::new(),
+                default: self.defaults.get(ty).cloned(),
             })
             .collect())
     }
@@ -577,5 +610,22 @@ impl EditorBackend for MockBackend {
 
     fn viewport(&mut self, cmd: ViewportCmd) {
         self.viewport_cmds.push(cmd);
+    }
+
+    fn logic_list(&mut self) -> Vec<LogicFile> {
+        self.logic_files.clone()
+    }
+
+    fn logic_create(&mut self, name: &str, template: &str) -> Result<String, String> {
+        if name.trim().is_empty() {
+            return Err("a graph needs a name".into());
+        }
+        let path = format!("logic/{name}.logic.ron");
+        if self.logic_files.iter().any(|f| f.path == path) {
+            return Err(format!("{path} already exists"));
+        }
+        self.logic_files.push(LogicFile { path: path.clone(), name: name.to_owned(), errors: Vec::new() });
+        self.logic_created.push((name.to_owned(), template.to_owned()));
+        Ok(path)
     }
 }

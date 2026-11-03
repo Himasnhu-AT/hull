@@ -13,17 +13,22 @@
 mod chrome;
 mod content;
 mod details;
+mod docs;
 pub mod logic;
 mod model;
+mod modes;
 mod outliner;
 mod output;
 mod place;
 mod props;
+mod settings;
 mod tool;
 mod toast;
 mod undo;
 
 pub mod mock;
+
+pub use settings::{Prefs, Theme};
 
 use std::collections::HashSet;
 
@@ -34,16 +39,18 @@ use ashlar_ui::docking::{Action, DockArea, DockStyle, Layout, Node, Permissions}
 use ashlar_ui::layout::{SplitAxis, SplitSize};
 use ashlar_ui::toasts::Toasts;
 use ashlar_ui::tokens::{self, ThemeMode, Tokens};
-use editor_proto::{AssetEntry, ComponentDoc, Diagnostic, EditorBackend, EntityId, Op, PlaceableDoc, PlayState, Tool, ToolDoc, TreeFilter, TreeNode, TypeSchema, ViewInfo, ViewportCmd};
+use editor_proto::{AssetEntry, ComponentDoc, Diagnostic, EditorBackend, EntityId, Op, PlaceableDoc, PlayState, SettingsGroup, Tool, ToolDoc, TreeFilter, TreeNode, TypeSchema, ViewInfo, ViewportCmd};
 use egui::{Context, Key, Ui};
 use serde::{Deserialize, Serialize};
 
-use model::{COMMANDS, Cmd, Nodes, Req};
+use model::{COMMANDS, Cmd, Mode, Nodes, Req};
 use undo::UndoStack;
 
 pub use model::Cmd as Command;
 
-/// The dockable panels. The viewport is the transparent hole the host draws the 3D view into.
+/// The dockable panels. The viewport is the transparent hole the host draws the 3D view into
+/// (the first document tab); Content, Output and Messages normally live in the drawer and are
+/// only panels of the dock while it is docked.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Panel {
     Viewport,
@@ -51,21 +58,19 @@ pub enum Panel {
     Details,
     Content,
     Output,
-    Logic,
-    /// Settings of the active tool and the Place palette.
-    Tool,
-    /// Placeable types and library models.
-    Place,
-    /// Mode palettes (Select, Landscape, Foliage, Splines, Place). Stub until WP-B.
-    Modes,
-    /// Look, terrain, streaming, game mode. Stub until WP-B.
-    WorldSettings,
-    /// Editor, logic and build messages. Stub until WP-D.
+    /// Editor, logic, build and engine messages (the same log as Output).
     Messages,
+    /// Mode palettes (Select, Landscape, Foliage, Splines, Place): tool settings and the Place
+    /// palette.
+    Modes,
+    /// Look, terrain, streaming: a tab beside Details.
+    WorldSettings,
+    /// Undo history: click a step to jump to it.
+    History,
 }
 
 impl Panel {
-    pub const ALL: [Panel; 11] = [Panel::Viewport, Panel::Outliner, Panel::Details, Panel::Content, Panel::Output, Panel::Logic, Panel::Tool, Panel::Place, Panel::Modes, Panel::WorldSettings, Panel::Messages];
+    pub const ALL: [Panel; 9] = [Panel::Viewport, Panel::Outliner, Panel::Details, Panel::Content, Panel::Output, Panel::Messages, Panel::Modes, Panel::WorldSettings, Panel::History];
     pub fn title(self) -> &'static str {
         match self {
             Panel::Viewport => "Viewport",
@@ -73,37 +78,62 @@ impl Panel {
             Panel::Details => "Details",
             Panel::Content => "Content",
             Panel::Output => "Output",
-            Panel::Logic => "Logic",
-            Panel::Tool => "Tool",
-            Panel::Place => "Place",
+            Panel::Messages => "Messages",
             Panel::Modes => "Modes",
             Panel::WorldSettings => "World Settings",
-            Panel::Messages => "Messages",
+            Panel::History => "History",
         }
     }
 }
 
-/// The default arrangement: Outliner left, Details right, Content/Output/Logic tabs under the
-/// viewport.
-pub fn default_layout() -> Layout<Panel> {
-    let tabs = |panels: Vec<Panel>| Node::Tabs { panels, active: 0 };
-    let split = |axis, size, a, b| Node::Split {
-        axis,
-        size,
-        first: Box::new(a),
-        second: Box::new(b),
-    };
-    let centre = split(
-        SplitAxis::Vertical,
-        SplitSize::FixedSecond(230.0),
-        tabs(vec![Panel::Viewport]),
-        tabs(vec![Panel::Content, Panel::Output, Panel::Logic]),
-    );
-    let right = split(SplitAxis::Horizontal, SplitSize::FixedSecond(320.0), centre, tabs(vec![Panel::Details, Panel::Tool]));
-    Layout {
-        root: Some(split(SplitAxis::Horizontal, SplitSize::FixedFirst(250.0), tabs(vec![Panel::Outliner, Panel::Place]), right)),
-        floating: vec![],
+/// A named arrangement of the dock (Window > Layouts).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LayoutPreset {
+    /// Modes left, viewport centre, Outliner over Details / World Settings right, drawer closed.
+    Default,
+    /// A wide Modes panel for sculpting and painting, World Settings in front.
+    Landscape,
+    /// A narrow Outliner, a wide centre for Logic tabs, the drawer open for dragging assets.
+    Logic,
+}
+
+impl LayoutPreset {
+    pub const ALL: [LayoutPreset; 3] = [LayoutPreset::Default, LayoutPreset::Landscape, LayoutPreset::Logic];
+    pub fn label(self) -> &'static str {
+        match self {
+            LayoutPreset::Default => "Default",
+            LayoutPreset::Landscape => "Landscape",
+            LayoutPreset::Logic => "Logic",
+        }
     }
+    pub fn from_name(name: &str) -> Option<LayoutPreset> {
+        LayoutPreset::ALL.into_iter().find(|p| p.label().eq_ignore_ascii_case(name))
+    }
+    pub fn build(self) -> Layout<Panel> {
+        let tabs = |panels: Vec<Panel>, active: usize| Node::Tabs { panels, active };
+        let split = |axis, size, a, b| Node::Split { axis, size, first: Box::new(a), second: Box::new(b) };
+        let view = tabs(vec![Panel::Viewport], 0);
+        let root = match self {
+            LayoutPreset::Default => {
+                let right = split(SplitAxis::Vertical, SplitSize::Ratio(0.42), tabs(vec![Panel::Outliner], 0), tabs(vec![Panel::Details, Panel::WorldSettings], 0));
+                split(SplitAxis::Horizontal, SplitSize::FixedFirst(280.0), tabs(vec![Panel::Modes], 0), split(SplitAxis::Horizontal, SplitSize::FixedSecond(340.0), view, right))
+            }
+            LayoutPreset::Landscape => {
+                let right = split(SplitAxis::Vertical, SplitSize::Ratio(0.25), tabs(vec![Panel::Outliner], 0), tabs(vec![Panel::Details, Panel::WorldSettings], 1));
+                split(SplitAxis::Horizontal, SplitSize::FixedFirst(340.0), tabs(vec![Panel::Modes], 0), split(SplitAxis::Horizontal, SplitSize::FixedSecond(340.0), view, right))
+            }
+            LayoutPreset::Logic => {
+                let right = tabs(vec![Panel::Details, Panel::WorldSettings], 0);
+                split(SplitAxis::Horizontal, SplitSize::FixedFirst(240.0), tabs(vec![Panel::Outliner, Panel::Modes], 0), split(SplitAxis::Horizontal, SplitSize::FixedSecond(340.0), view, right))
+            }
+        };
+        Layout { root: Some(root), floating: vec![] }
+    }
+}
+
+/// The default arrangement (see [`LayoutPreset::Default`]).
+pub fn default_layout() -> Layout<Panel> {
+    LayoutPreset::Default.build()
 }
 
 /// What the host needs after a frame.
@@ -126,19 +156,17 @@ pub struct UiOutput {
 /// What is persisted between sessions (`save_state` / `load_state`).
 #[derive(Serialize, Deserialize)]
 struct Persisted {
+    /// 2 since the Modes / drawer layout; older saves are dropped for the default layout.
+    #[serde(default)]
+    version: u32,
     layout: Layout<Panel>,
     tool: Tool,
     snap: bool,
-    snap_step: f32,
-    #[serde(default = "yes")]
-    hint_open: bool,
     #[serde(default)]
     recent: Vec<String>,
 }
 
-fn yes() -> bool {
-    true
-}
+const STATE_VERSION: u32 = 2;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum DialogKind {
@@ -152,6 +180,12 @@ struct Dialog {
     focus_pending: bool,
 }
 
+/// Most undo/redo steps one History click replays.
+const MAX_JUMP: usize = 600;
+
+/// Most entities the command palette lists.
+const MAX_PALETTE_ENTITIES: usize = 2000;
+
 /// Seconds between polls of the backend (tree, selection, diagnostics) when nothing was edited.
 const POLL_SECS: f64 = 0.25;
 
@@ -162,7 +196,6 @@ pub struct EditorUi {
     palette: CommandPalette,
     toasts: Toasts,
     dedupe: toast::Dedupe,
-    logic_request: Option<String>,
     tool: Tool,
     snap: bool,
     snap_step: f32,
@@ -181,6 +214,7 @@ pub struct EditorUi {
     assets: Vec<AssetEntry>,
     diagnostics: Vec<Diagnostic>,
     diag_cursor: u64,
+    logic_files: Vec<editor_proto::LogicFile>,
     level: editor_proto::LevelInfo,
     play: PlayState,
     view: ViewInfo,
@@ -193,6 +227,18 @@ pub struct EditorUi {
     tools: Vec<ToolDoc>,
     active_tool: Option<String>,
     placeables: Vec<PlaceableDoc>,
+    /// World and project settings groups, refreshed while a settings surface is open.
+    groups: Vec<SettingsGroup>,
+    landscape_tool: String,
+    drawer: chrome::Drawer,
+    docs: docs::Docs,
+    windows: settings::SettingsWindows,
+    prefs: Prefs,
+    /// Prefs were loaded from disk and still have to reach the backend (camera speed, grid).
+    prefs_pending: bool,
+    prefs_changed: Option<settings::PrefsChange>,
+    help_filter: String,
+    themed_for: Option<Theme>,
 
     // Panel state.
     outliner: outliner::OutlinerState,
@@ -209,7 +255,6 @@ pub struct EditorUi {
     dirty_assets: bool,
     last_poll: f64,
     now: f64,
-    themed: bool,
 }
 
 impl Default for EditorUi {
@@ -224,11 +269,10 @@ impl EditorUi {
             layout: default_layout(),
             undo: UndoStack::new(),
             keymap: Keymap::new(Platform::current(), COMMANDS.iter().map(|c| (c.id, c.shortcut))),
-            palette: CommandPalette::new().hint("Type a command"),
+            palette: CommandPalette::new().hint("Type a command, entity or asset"),
             toasts: Toasts::new(),
             dedupe: toast::Dedupe::default(),
-            logic_request: None,
-            tool: Tool::Move,
+            tool: Tool::Select,
             snap: false,
             snap_step: 0.5,
             dialog: None,
@@ -244,6 +288,7 @@ impl EditorUi {
             assets: Vec::new(),
             diagnostics: Vec::new(),
             diag_cursor: 0,
+            logic_files: Vec::new(),
             level: Default::default(),
             play: PlayState::Editing,
             view: ViewInfo::default(),
@@ -256,6 +301,16 @@ impl EditorUi {
             tools: Vec::new(),
             active_tool: None,
             placeables: Vec::new(),
+            groups: Vec::new(),
+            landscape_tool: "sculpt".into(),
+            drawer: Default::default(),
+            docs: Default::default(),
+            windows: Default::default(),
+            prefs: Prefs::default(),
+            prefs_pending: false,
+            prefs_changed: None,
+            help_filter: String::new(),
+            themed_for: None,
             outliner: Default::default(),
             details: Default::default(),
             content: content::ContentState {
@@ -271,43 +326,54 @@ impl EditorUi {
             dirty_assets: true,
             last_poll: f64::NEG_INFINITY,
             now: 0.0,
-            themed: false,
         }
     }
 
     /// Persisted layout and tool settings as JSON.
     pub fn save_state(&self) -> String {
-        serde_json::to_string(&Persisted {
-            layout: self.layout.clone(),
-            tool: self.tool,
-            snap: self.snap,
-            snap_step: self.snap_step,
-            hint_open: self.hint_open,
-            recent: self.recent.clone(),
-        })
-        .unwrap_or_default()
+        serde_json::to_string(&Persisted { version: STATE_VERSION, layout: self.layout.clone(), tool: self.tool, snap: self.snap, recent: self.recent.clone() }).unwrap_or_default()
+    }
+
+    /// Editor preferences (`editor_prefs.json`) as JSON: look and feel and viewport defaults.
+    pub fn prefs_json(&self) -> String {
+        let mut p = self.prefs.clone();
+        p.snap_step = self.snap_step;
+        p.show_hint = self.hint_open;
+        if !self.prefs_pending {
+            p.camera_speed = self.view.camera_speed;
+            p.show_grid = self.view.show_grid;
+            p.show_all_scenery = self.view.show_all_scenery;
+        }
+        serde_json::to_string_pretty(&p).unwrap_or_default()
+    }
+
+    /// Restore `prefs_json` output; values are clamped into range. Camera speed and the grid
+    /// reach the backend on the next frame.
+    pub fn load_prefs(&mut self, json: &str) -> Result<(), String> {
+        let p: Prefs = serde_json::from_str(json).map_err(|e| e.to_string())?;
+        let p = p.sanitized();
+        self.snap_step = p.snap_step;
+        self.hint_open = p.show_hint;
+        self.prefs = p;
+        self.prefs_pending = true;
+        Ok(())
     }
 
     /// Restore `save_state` output. A layout that is invalid or lacks the viewport is rejected
     /// (the current one stays) and the reason returned.
     pub fn load_state(&mut self, json: &str) -> Result<(), String> {
         let p: Persisted = serde_json::from_str(json).map_err(|e| e.to_string())?;
+        if p.version < STATE_VERSION {
+            return Err("saved by an older editor (before the Modes layout); using the default layout".into());
+        }
         p.layout.validate().map_err(|e| e.to_string())?;
         if !p.layout.contains(&Panel::Viewport) {
             return Err("layout has no viewport".into());
         }
         self.layout = p.layout;
-        self.hint_open = p.hint_open;
         self.recent = p.recent;
-        // Layouts saved before the Place tab existed get it next to the Outliner.
-        if !self.layout.contains(&Panel::Place) && self.layout.contains(&Panel::Outliner) {
-            let _ = self.layout.apply(Action::Open { panel: Panel::Place, anchor: Some(Panel::Outliner) });
-        }
         self.tool = p.tool;
         self.snap = p.snap;
-        if p.snap_step.is_finite() && p.snap_step > 0.0 {
-            self.snap_step = p.snap_step;
-        }
         Ok(())
     }
 
@@ -323,42 +389,122 @@ impl EditorUi {
         self.content.selected = select.map(str::to_owned);
     }
 
-    /// Open the Logic editor tab for a `.logic.ron` file. Stub: records the request until the
-    /// Logic editor (WP-C) takes it with [`EditorUi::take_logic_request`].
+    /// Open a Logic (`.logic.ron`) or Script tab in the document area and bring it to the front.
+    /// The tab body is the Logic editor's (`logic::show`).
     pub fn open_logic_tab(&mut self, path: &str) {
-        self.logic_request = Some(path.to_string());
-        let _ = self.show_panel("Logic");
-        // Until the document area exists: the Logic tab floats over the 3D view (a big canvas).
-        if !self.layout.floating.iter().any(|g| g.panels.contains(&Panel::Logic)) {
-            let r = self.last_viewport.unwrap_or(egui::Rect::from_min_size(egui::pos2(80.0, 80.0), egui::vec2(1100.0, 680.0)));
-            let _ = self.layout.apply(Action::Float { panel: Panel::Logic, rect: [r.min.x, r.min.y, r.width(), r.height()] });
-        }
+        self.docs.open(path);
     }
 
     /// Show a fire trace on the open graph's canvas (`editor.logic.fire` calls this).
     pub fn show_logic_trace(&mut self, trace: editor_proto::LogicTrace) {
         self.logic.show_trace(trace);
     }
-    /// The path last passed to `open_logic_tab`, once.
-    pub fn take_logic_request(&mut self) -> Option<String> {
-        self.logic_request.take()
+    /// Open the Details `+ Add` (`"add"`) or `+ Add Logic` (`"logic"`) popup on the next frame
+    /// (scripts and screenshots).
+    pub fn open_details_popup(&mut self, name: &str) -> Result<(), String> {
+        self.details.request_popup(name)
+    }
+
+    /// Paths of the open document tabs (not the Level tab), in tab order.
+    pub fn open_tabs(&self) -> Vec<String> {
+        self.docs.tabs.iter().map(|t| t.path.clone()).collect()
+    }
+
+    /// Brings the Level viewport tab to the front.
+    pub fn show_level_tab(&mut self) {
+        self.docs.active = 0;
     }
 
     pub fn layout(&self) -> &Layout<Panel> {
         &self.layout
     }
     pub fn reset_layout(&mut self) {
-        self.layout = default_layout();
+        self.apply_preset(LayoutPreset::Default);
+    }
+
+    /// Switch to a named layout. The document tabs stay; the drawer opens for Logic.
+    pub fn apply_preset(&mut self, preset: LayoutPreset) {
+        self.layout = preset.build();
+        self.drawer.open = preset == LayoutPreset::Logic;
+        self.drawer.tab = Panel::Content;
+    }
+
+    /// Switch layout by name (`default`, `landscape`, `logic`). For scripts.
+    pub fn apply_layout_name(&mut self, name: &str) -> Result<(), String> {
+        let p = LayoutPreset::from_name(name).ok_or_else(|| format!("no layout `{name}` (have Default, Landscape, Logic)"))?;
+        self.apply_preset(p);
+        Ok(())
+    }
+
+    /// Open or close a window by name: `help`, `about`, `project settings`, `preferences`,
+    /// `palette`. For scripts.
+    pub fn set_window(&mut self, name: &str, open: bool) -> Result<(), String> {
+        match name.to_ascii_lowercase().replace(['_', '-'], " ").as_str() {
+            "help" | "controls" => self.help_open = open,
+            "about" => self.about_open = open,
+            "project settings" | "project" => self.windows.project = open,
+            "preferences" | "editor preferences" | "prefs" => self.windows.prefs = open,
+            "palette" | "commands" => {
+                if open != self.palette.is_open() {
+                    self.palette.toggle();
+                }
+            }
+            other => return Err(format!("no window `{other}` (help, about, project settings, preferences, palette)")),
+        }
+        Ok(())
     }
 
     /// Bring a panel's tab to the front (opening it when closed). `name` is the panel title,
-    /// case-insensitive (`"Logic"`). For scripts and tests.
+    /// case-insensitive (`"Details"`, `"World Settings"`). `Content`, `Output` and `Messages`
+    /// open the drawer (or the docked panel); `Logic` brings the first Logic tab forward. For
+    /// scripts and tests.
     pub fn show_panel(&mut self, name: &str) -> Result<(), String> {
+        let lower = name.to_ascii_lowercase();
+        match lower.as_str() {
+            "logic" => {
+                let i = self.docs.tabs.iter().position(|t| t.kind == docs::DocKind::Logic).ok_or("no Logic tab is open (open a .logic.ron from the Content drawer)")?;
+                self.docs.active = i + 1;
+                return Ok(());
+            }
+            "level" => {
+                self.docs.active = 0;
+                return Ok(());
+            }
+            "tool" | "place" => return self.show_panel("Modes"),
+            "world" => return self.show_panel("World Settings"),
+            _ => {}
+        }
         let panel = Panel::ALL.into_iter().find(|p| p.title().eq_ignore_ascii_case(name)).ok_or_else(|| format!("no panel `{name}`"))?;
+        if chrome::DRAWER_TABS.contains(&panel) && !self.drawer_docked() {
+            self.drawer.open = true;
+            self.drawer.tab = panel;
+            return Ok(());
+        }
         if self.layout.apply(Action::Activate { panel }).is_ok() {
             return Ok(());
         }
-        self.layout.apply(Action::Open { panel, anchor: None }).map_err(|e| format!("{e:?}"))
+        let anchor = Panel::ALL.into_iter().find(|a| *a != panel && self.layout.contains(a));
+        self.layout.apply(Action::Open { panel, anchor }).map_err(|e| format!("{e:?}"))
+    }
+
+    /// Dock the drawer panels into the layout (`true`) or move them back to the drawer.
+    pub fn dock_content_drawer(&mut self, dock: bool) {
+        self.dock_drawer(dock);
+    }
+    /// Open or close the drawer (no effect while docked).
+    pub fn set_drawer_open(&mut self, open: bool) {
+        if !self.drawer_docked() {
+            self.drawer.open = open;
+        }
+    }
+    /// Whether the content drawer is docked into the layout.
+    pub fn drawer_docked(&self) -> bool {
+        chrome::DRAWER_TABS.iter().any(|p| self.layout.contains(p))
+    }
+
+    /// Whether the content drawer is open (always false while docked).
+    pub fn drawer_open(&self) -> bool {
+        self.drawer.open && !self.drawer_docked()
     }
 
     pub fn can_undo(&self) -> bool {
@@ -407,7 +553,7 @@ impl EditorUi {
 
     /// Draw the editor over the whole egui screen. Call once per egui pass.
     pub fn show(&mut self, ctx: &Context, backend: &mut dyn EditorBackend) -> UiOutput {
-        if !self.themed {
+        if self.themed_for != Some(self.prefs.theme) {
             // Readable sizes: the stock scale is 12 px body.
             let big = |mut t: Tokens| {
                 t.type_scale.small = 12.0;
@@ -417,10 +563,15 @@ impl EditorUi {
                 t.control_height = 26.0;
                 t
             };
-            tokens::install(ctx, &big(Tokens::light()), &big(Tokens::dark()), ThemeMode::Dark);
-            self.themed = true;
+            let mode = if self.prefs.theme == Theme::Light { ThemeMode::Light } else { ThemeMode::Dark };
+            tokens::install(ctx, &big(Tokens::light()), &big(Tokens::dark()), mode);
+            self.themed_for = Some(self.prefs.theme);
+        }
+        if (ctx.zoom_factor() - self.prefs.ui_scale).abs() > 0.001 {
+            ctx.set_zoom_factor(self.prefs.ui_scale);
         }
         self.now = ctx.input(|i| i.time);
+        self.apply_prefs(backend);
         self.poll(backend);
 
         let mut reqs: Vec<Req> = Vec::new();
@@ -470,10 +621,12 @@ impl EditorUi {
         self.menu_bar(&mut root, &mut reqs);
         self.toolbar(&mut root, &mut reqs);
         self.status_bar(&mut root);
+        let mut clear_output = false;
+        self.drawer_ui(&mut root, &mut reqs, &mut clear_output);
 
         // The dock: panels fill their own background; the viewport body stays transparent.
         let mut viewport = None;
-        let mut clear_output = false;
+        let badge = output::badge(&self.diagnostics);
         let layout = std::mem::take(&mut self.layout);
         let actions;
         {
@@ -485,14 +638,49 @@ impl EditorUi {
                 ui,
                 &layout,
                 &style,
-                |p| p.title().to_owned(),
+                |p| match (p, badge.as_ref()) {
+                    (Panel::Output | Panel::Messages, Some(n)) => format!("{} ({n})", p.title()),
+                    _ => p.title().to_owned(),
+                },
                 |p| if *p == Panel::Viewport { Permissions::PROTECTED } else { Permissions::default() },
                 |ui, panel| {
                     if *panel != Panel::Viewport {
                         ui.painter().rect_filled(ui.max_rect(), 0.0, panel_fill);
                     }
                     match panel {
-                        Panel::Viewport => viewport = Some(ui.max_rect()),
+                        Panel::Viewport => {
+                            // The document area: a tab strip, then the viewport hole or a document.
+                            let r = ui.max_rect();
+                            let strip = egui::Rect::from_min_size(r.min, egui::vec2(r.width(), docs::STRIP_H));
+                            let body = egui::Rect::from_min_max(egui::pos2(r.left(), strip.bottom()), r.max);
+                            let level_title = match &self.level.path {
+                                Some(p) => format!("Level: {}{}", p.rsplit('/').next().unwrap_or(p).trim_end_matches(".level.ron"), if self.level.dirty { " *" } else { "" }),
+                                None => format!("Level: unsaved{}", if self.level.dirty { " *" } else { "" }),
+                            };
+                            let out = docs::strip(ui, strip, &level_title, &self.docs);
+                            if let Some(i) = out.activate {
+                                self.docs.active = i;
+                            }
+                            if let Some(i) = out.close {
+                                if let Some(t) = self.docs.tabs.get(i.wrapping_sub(1)) {
+                                    self.logic.close_path(&t.path);
+                                }
+                                self.docs.close(i);
+                            }
+                            match self.docs.active_tab().cloned() {
+                                None => viewport = Some(body),
+                                Some(tab) => {
+                                    ui.painter().rect_filled(body, 0.0, panel_fill);
+                                    ui.scope_builder(egui::UiBuilder::new().max_rect(body), |ui| {
+                                        logic::show_doc(ui, &mut self.logic, backend, &tab.path);
+                                        for (label, op) in self.logic.take_applied() {
+                                            self.undo.record(&label, op, None, self.now);
+                                            self.dirty_components = true;
+                                        }
+                                    });
+                                }
+                            }
+                        }
                         Panel::Outliner => {
                             let v = outliner::View {
                                 tree: &self.display,
@@ -510,32 +698,17 @@ impl EditorUi {
                                 extra_selected: self.selection.len().saturating_sub(1),
                                 components: &self.components,
                                 types: &self.types,
+                                logic: &self.logic_files,
                             };
                             details::show(ui, &mut self.details, &v, &mut reqs);
                         }
-                        Panel::Content => content::show(ui, &mut self.content, &self.assets, &mut reqs),
-                        Panel::Output => output::show(ui, &mut self.output, &self.diagnostics, &mut clear_output, &mut reqs),
-                        Panel::Logic => {
-                            if let Some(p) = self.logic_request.take() {
-                                self.logic.open(&p);
-                            }
-                            logic::show(ui, &mut self.logic, backend);
-                            for (label, op) in self.logic.take_applied() {
-                                self.undo.record(&label, op, None, self.now);
-                                self.dirty_components = true;
-                            }
+                        Panel::Content | Panel::Output | Panel::Messages => self.drawer_body(ui, *panel, &mut reqs, &mut clear_output),
+                        Panel::History => undo::show(ui, &self.undo, &mut reqs),
+                        Panel::Modes => {
+                            let v = modes::View { mode: Mode::of_tool(self.active_tool.as_deref()), tools: &self.tools, active_tool: self.active_tool.as_deref(), placeables: &self.placeables, models: &self.models };
+                            modes::show(ui, &mut self.place, &v, &mut reqs);
                         }
-                        Panel::Place => {
-                            let active = self.active_tool.as_ref().filter(|id| id.as_str() == "place").and_then(|id| self.tools.iter().find(|t| &t.id == id)).and_then(|t| t.settings.get("type_path")).and_then(|v| v.as_str());
-                            place::show(ui, &mut self.place, &self.placeables, &self.models, active, &mut reqs);
-                        }
-                        Panel::Modes | Panel::WorldSettings | Panel::Messages => {
-                            ui.weak(format!("{}: not built yet", panel.title()));
-                        }
-                        Panel::Tool => {
-                            let v = tool::View { tool: self.active_tool.as_ref().and_then(|id| self.tools.iter().find(|t| &t.id == id)) };
-                            tool::show(ui, &v, &mut reqs);
-                        }
+                        Panel::WorldSettings => settings::world_tab(ui, &self.groups, &mut reqs),
                     }
                 },
             );
@@ -552,18 +725,27 @@ impl EditorUi {
         }
 
         // Overlays.
-        // LOGIC-FLOAT: no viewport overlays over the floating Logic tab (until the document area).
-        let logic_floats = self.layout.floating.iter().any(|g| g.panels.contains(&Panel::Logic));
-        if let Some(v) = viewport.filter(|_| !logic_floats) {
+        if let Some(v) = viewport {
             self.viewport_overlay(ctx, v, backend, &mut reqs);
         }
-        self.help_windows(ctx);
+        self.help_windows(ctx, &mut reqs);
         let infos = self.palette.is_open().then(|| self.command_infos());
         if let Some(infos) = &infos
-            && let Some(id) = self.palette.show(ctx, infos, 0, Platform::current())
-            && let Some(c) = Cmd::from_id(&id)
+            && let Some(id) = self.palette.show(ctx, infos, self.palette_revision(), Platform::current())
         {
-            reqs.push(Req::Cmd(c));
+            if let Some(c) = Cmd::from_id(&id) {
+                reqs.push(Req::Cmd(c));
+            } else if let Some(path) = id.strip_prefix("place:") {
+                reqs.push(Req::Place(path.to_owned()));
+            } else if let Some(path) = id.strip_prefix("open:") {
+                if path.ends_with(".level.ron") {
+                    reqs.push(Req::OpenPath(path.to_owned()));
+                } else {
+                    self.open_logic_tab(path);
+                }
+            } else if let Some(n) = id.strip_prefix("entity:").and_then(|n| n.parse::<EntityId>().ok()) {
+                reqs.push(Req::RevealEntity(n));
+            }
         }
         self.dialog_ui(ctx, backend);
         self.toasts.show(ctx);
@@ -627,6 +809,10 @@ impl EditorUi {
         if due {
             let sel = backend.selection();
             if sel != self.selection {
+                // A new selection brings Details forward (it may sit behind World Settings).
+                if !sel.is_empty() {
+                    let _ = self.layout.apply(Action::Activate { panel: Panel::Details });
+                }
                 self.selection = sel;
                 self.dirty_components = true;
                 // The backend lists a selected generated entity in the tree: refetch.
@@ -654,9 +840,15 @@ impl EditorUi {
             if self.placeables.is_empty() {
                 self.placeables = backend.placeables();
             }
+            if self.layout.contains(&Panel::WorldSettings) || self.windows.project {
+                self.groups = backend.settings();
+            }
         }
         if due || self.dirty_components {
             let first = self.selection.first().copied();
+            if first.is_some() {
+                self.logic_files = backend.logic_list();
+            }
             if first != self.comp_for || self.dirty_components || due {
                 self.components = match first {
                     Some(id) => backend.components(id),
@@ -684,14 +876,29 @@ impl EditorUi {
 
     // ---- chrome ----------------------------------------------------------------------------
 
+    /// Changes whenever the palette's entries or their enabled state change (the ranking cache
+    /// key; entries are also counted by the palette itself).
+    fn palette_revision(&self) -> u64 {
+        let mut h = self.tree_rev;
+        h = h.wrapping_mul(31).wrapping_add(self.models.len() as u64);
+        h = h.wrapping_mul(31).wrapping_add(self.assets.len() as u64);
+        h = h.wrapping_mul(31).wrapping_add(u64::from(self.undo.can_undo()) + 2 * u64::from(self.undo.can_redo()) + 4 * u64::from(!self.selection.is_empty()));
+        h
+    }
+
+    /// Everything the palette can run: commands, then entities, models, logic graphs and levels.
     fn command_infos(&self) -> Vec<CommandInfo> {
-        COMMANDS
+        let mut out: Vec<CommandInfo> = COMMANDS
             .iter()
             .map(|c| {
                 let (enabled, why) = match c.cmd {
                     Cmd::Undo if !self.undo.can_undo() => (false, Some("nothing to undo")),
                     Cmd::Redo if !self.undo.can_redo() => (false, Some("nothing to redo")),
                     Cmd::Delete | Cmd::Rename | Cmd::Focus if self.selection.is_empty() => (false, Some("nothing selected")),
+                    Cmd::ModeLandscape if !self.mode_available(Mode::Landscape) => (false, Some("this game has no landscape tool")),
+                    Cmd::ModeFoliage if !self.mode_available(Mode::Foliage) => (false, Some("this game has no foliage tool")),
+                    Cmd::ModeSplines if !self.mode_available(Mode::Splines) => (false, Some("this game has no spline tool")),
+                    Cmd::ModePlace if !self.mode_available(Mode::Place) => (false, Some("this game has no place tool")),
                     _ => (true, None),
                 };
                 CommandInfo {
@@ -706,7 +913,62 @@ impl EditorUi {
                     mutates: c.mutates,
                 }
             })
-            .collect()
+            .collect();
+        let entry = |id: String, label: String, menu: &str| CommandInfo { id, label, menu: vec![menu.to_owned()], shortcut: None, params_schema: serde_json::Value::Null, params_text: None, enabled: true, disabled_reason: None, mutates: false };
+        // Entities in the Outliner (folders are not entities), then assets.
+        for id in self.nodes.order.iter().copied().filter(|id| !model::is_folder(*id)).take(MAX_PALETTE_ENTITIES) {
+            if let Some(n) = self.nodes.info.get(&id) {
+                out.push(entry(format!("entity:{id}"), n.name.clone(), "Select"));
+            }
+        }
+        for m in &self.models {
+            out.push(entry(format!("place:{}", m.path), m.name.clone(), "Place model"));
+        }
+        for a in &self.assets {
+            match a.kind {
+                editor_proto::AssetKind::Logic | editor_proto::AssetKind::Script => out.push(entry(format!("open:{}", a.path), a.name.clone(), "Open")),
+                editor_proto::AssetKind::Level => out.push(entry(format!("open:{}", a.path), a.name.clone(), "Open level")),
+                _ => {}
+            }
+        }
+        out
+    }
+
+    /// The drawer / docked body of Content, Output and Messages.
+    fn drawer_body(&mut self, ui: &mut Ui, panel: Panel, reqs: &mut Vec<Req>, clear_output: &mut bool) {
+        match panel {
+            Panel::Content => content::show(ui, &mut self.content, &self.assets, reqs),
+            Panel::History => undo::show(ui, &self.undo, reqs),
+            // Output and Messages are one log (source filters inside).
+            _ => output::show(ui, &mut self.output, &self.diagnostics, clear_output, reqs),
+        }
+    }
+
+    /// Applies loaded preferences to the backend once (camera speed, grid, scenery, snap step),
+    /// and settings-window edits as they happen.
+    fn apply_prefs(&mut self, backend: &mut dyn EditorBackend) {
+        if std::mem::take(&mut self.prefs_pending) {
+            backend.viewport(ViewportCmd::SetCameraSpeed(self.prefs.camera_speed));
+            backend.viewport(ViewportCmd::SetShowGrid(self.prefs.show_grid));
+            backend.viewport(ViewportCmd::SetShowAllScenery(self.prefs.show_all_scenery));
+            backend.viewport(ViewportCmd::SetSnap { enabled: self.snap, step: self.snap_step });
+        }
+        if let Some(ch) = self.prefs_changed.take() {
+            if ch.camera_speed {
+                backend.viewport(ViewportCmd::SetCameraSpeed(self.prefs.camera_speed));
+            }
+            if ch.grid {
+                backend.viewport(ViewportCmd::SetShowGrid(self.prefs.show_grid));
+            }
+            if ch.scenery {
+                backend.viewport(ViewportCmd::SetShowAllScenery(self.prefs.show_all_scenery));
+            }
+            // The window edits the pref copy; the snap step lives in `snap_step`.
+            if ch.snap {
+                self.snap_step = self.prefs.snap_step;
+                backend.viewport(ViewportCmd::SetSnap { enabled: self.snap, step: self.snap_step });
+            }
+        }
     }
 
     fn dialog_ui(&mut self, ctx: &Context, backend: &mut dyn EditorBackend) {
@@ -768,6 +1030,12 @@ impl EditorUi {
     /// Shows a toast; the same message again within two seconds replaces the old one with a count.
     fn toast(&mut self, level: ashlar_ui::toasts::ToastLevel, m: String) {
         let m = self.say(m);
+        let lv = match level {
+            ashlar_ui::toasts::ToastLevel::Error => editor_proto::Level::Error,
+            ashlar_ui::toasts::ToastLevel::Warning => editor_proto::Level::Warn,
+            _ => editor_proto::Level::Info,
+        };
+        output::push(&mut self.diagnostics, Diagnostic::new(lv, "editor", m.clone()));
         let (dismiss, text) = self.dedupe.next(&m, self.now);
         if let Some(id) = dismiss {
             self.toasts.dismiss(id);
@@ -795,9 +1063,28 @@ impl EditorUi {
             match r {
                 Req::Edit { op, label, key, seal } => self.edit(backend, op, &label, key, seal),
                 Req::Select(ids) => {
+                    if !ids.is_empty() {
+                        let _ = self.layout.apply(Action::Activate { panel: Panel::Details });
+                    }
                     self.selection = ids;
                     backend.set_selection(&self.selection);
                     self.dirty_components = true;
+                }
+                Req::Mode(m) => self.set_mode(backend, m),
+                Req::Settings { group, value } => {
+                    if let Err(e) = backend.set_settings(&group, value) {
+                        self.say_error(format!("Settings: {e}"));
+                    }
+                    // Show the applied values next frame.
+                    self.last_poll = f64::NEG_INFINITY;
+                    self.level.dirty = true;
+                }
+                Req::RevealEntity(id) => {
+                    self.selection = vec![id];
+                    backend.set_selection(&self.selection);
+                    self.dirty_components = true;
+                    backend.viewport(ViewportCmd::FocusSelection);
+                    let _ = self.layout.apply(Action::Activate { panel: Panel::Details });
                 }
                 Req::PlaceAt(path, uv) => match backend.place_asset(&path, editor_proto::Placement { screen: Some(uv), ..Default::default() }) {
                     Ok(op) => {
@@ -863,6 +1150,30 @@ impl EditorUi {
                 }
                 Req::TreeFilterChanged => self.dirty_tree = true,
                 Req::Copy(text) => ctx.copy_text(text),
+                Req::OpenLogic(path) => self.open_logic_tab(&path),
+                Req::AddLogic { entity, eref, name, template, logic_type, before } => match backend.logic_create(&name, &template) {
+                    Ok(path) => {
+                        let op = Op::SetComponent { entity: eref, type_path: logic_type, before, after: Some(serde_json::json!({ "graph": path })) };
+                        self.edit(backend, op, &format!("Add Logic {name}"), None, true);
+                        self.details.note_created(entity, path.clone());
+                        self.logic_files = backend.logic_list();
+                        self.say_success(format!("Created {path}"));
+                    }
+                    Err(e) => self.say_error(format!("Add Logic: {e}")),
+                },
+                Req::HistoryJump(target) => {
+                    for _ in 0..=MAX_JUMP {
+                        let now = self.undo.len();
+                        if now == target || (now > target && !self.undo.can_undo()) {
+                            break;
+                        }
+                        let before = now;
+                        self.command(ctx, backend, if now > target { Cmd::Undo } else { Cmd::Redo });
+                        if self.undo.len() == before {
+                            break;
+                        }
+                    }
+                }
             }
         }
     }
@@ -1015,7 +1326,24 @@ impl EditorUi {
                 backend.viewport(ViewportCmd::SetShowAllScenery(self.view.show_all_scenery));
             }
             Cmd::Help => self.help_open = !self.help_open,
-            Cmd::ResetLayout => self.reset_layout(),
+            Cmd::ResetLayout | Cmd::LayoutDefault => self.apply_preset(LayoutPreset::Default),
+            Cmd::LayoutLandscape => self.apply_preset(LayoutPreset::Landscape),
+            Cmd::LayoutLogic => self.apply_preset(LayoutPreset::Logic),
+            Cmd::ToggleDrawer => self.toggle_drawer(),
+            Cmd::DockDrawer => {
+                let dock = !self.drawer_docked();
+                self.dock_drawer(dock);
+            }
+            Cmd::ModeSelect => self.set_mode(backend, Mode::Select),
+            Cmd::ModeLandscape => self.set_mode(backend, Mode::Landscape),
+            Cmd::ModeFoliage => self.set_mode(backend, Mode::Foliage),
+            Cmd::ModeSplines => self.set_mode(backend, Mode::Splines),
+            Cmd::ModePlace => self.set_mode(backend, Mode::Place),
+            Cmd::OpenWorldSettings => {
+                let _ = self.show_panel("World Settings");
+            }
+            Cmd::OpenProjectSettings => self.windows.project = true,
+            Cmd::OpenPreferences => self.windows.prefs = true,
             Cmd::SelectAll => {
                 let ids: Vec<EntityId> = self.nodes.order.iter().copied().filter(|id| self.nodes.info.get(id).is_some_and(|n| !n.generated && !model::is_folder(*id))).collect();
                 self.selection = ids;
@@ -1065,11 +1393,30 @@ impl EditorUi {
     fn activate_tool(&mut self, backend: &mut dyn EditorBackend, id: Option<String>) {
         backend.set_active_tool(id.as_deref());
         self.active_tool = id;
-        if self.active_tool.is_some() {
-            // The settings live in the Tool tab.
-            let _ = self.show_panel("Tool");
+        if let Some(id) = &self.active_tool {
+            if Mode::Landscape.tool_ids().contains(&id.as_str()) {
+                self.landscape_tool = id.clone();
+            }
+            // The settings live in the Modes panel (Details stays where it is).
+            if !self.layout.contains(&Panel::Modes) {
+                self.toggle_panel(Panel::Modes);
+            }
         }
         self.last_poll = f64::NEG_INFINITY;
+    }
+
+    /// Switch mode: Select goes back to the transform tools; the others arm their world tool
+    /// (Landscape remembers Sculpt or Paint).
+    fn set_mode(&mut self, backend: &mut dyn EditorBackend, mode: Mode) {
+        if mode == Mode::Select {
+            self.activate_tool(backend, None);
+            return;
+        }
+        let id = if mode == Mode::Landscape && self.tools.iter().any(|t| t.id == self.landscape_tool) { Some(self.landscape_tool.clone()) } else { mode.tool_ids().iter().find(|id| self.tools.iter().any(|t| t.id == **id)).map(|s| (*s).to_owned()) };
+        match id {
+            Some(id) => self.activate_tool(backend, Some(id)),
+            None => self.say_warning(format!("This game has no {} tool", mode.label())),
+        }
     }
 
     fn set_tool(&mut self, backend: &mut dyn EditorBackend, tool: Tool) {
@@ -1084,5 +1431,56 @@ impl EditorUi {
         self.dirty_tree = true;
         self.dirty_components = true;
         self.level.dirty = true;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::mock::MockBackend;
+
+    fn harness() -> egui_kittest::Harness<'static, (EditorUi, MockBackend)> {
+        let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(1280.0, 800.0)).build_ui_state(
+            |ui, (e, b): &mut (EditorUi, MockBackend)| {
+                let ctx = ui.ctx().clone();
+                e.show(&ctx, b);
+            },
+            (EditorUi::new(), MockBackend::demo()),
+        );
+        h.run_steps(4);
+        h
+    }
+
+    #[test]
+    fn the_palette_lists_commands_entities_models_and_logic() {
+        let h = harness();
+        let infos = h.state().0.command_infos();
+        let ids: Vec<&str> = infos.iter().map(|i| i.id.as_str()).collect();
+        for c in COMMANDS {
+            assert!(ids.contains(&c.id), "{} is listed", c.id);
+        }
+        assert!(infos.iter().any(|i| i.id.starts_with("entity:") && i.label == "Crate"), "entities are listed");
+        assert!(infos.iter().any(|i| i.id.starts_with("place:") && i.label.contains("crate")), "models from every folder are listed");
+        // Not-yet-possible commands say why.
+        let landscape = infos.iter().find(|i| i.id == "editor.mode_landscape").expect("listed");
+        assert!(!landscape.enabled && landscape.disabled_reason.is_some());
+    }
+
+    #[test]
+    fn the_default_layout_validates_and_every_preset_has_a_viewport() {
+        for p in LayoutPreset::ALL {
+            let l = p.build();
+            assert!(l.validate().is_ok(), "{p:?}");
+            assert!(l.contains(&Panel::Viewport) && l.contains(&Panel::Details), "{p:?}");
+        }
+    }
+
+    #[test]
+    fn modes_follow_the_active_tool() {
+        assert_eq!(Mode::of_tool(None), Mode::Select);
+        assert_eq!(Mode::of_tool(Some("paint")), Mode::Landscape);
+        assert_eq!(Mode::of_tool(Some("sculpt")), Mode::Landscape);
+        assert_eq!(Mode::of_tool(Some("spline")), Mode::Splines);
+        assert_eq!(Mode::of_tool(Some("other")), Mode::Select);
     }
 }

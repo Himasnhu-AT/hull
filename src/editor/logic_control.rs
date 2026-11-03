@@ -87,7 +87,7 @@ fn write(world: &mut World, p: Value) -> Result<Value, String> {
 fn open_tab(world: &mut World, path: &str) -> Result<(), String> {
     let mut ui = world.get_resource_mut::<EditorUiRes>().ok_or("the editor UI is not up yet")?;
     ui.0.open_logic_tab(path);
-    ui.0.show_panel("Logic")
+    Ok(())
 }
 
 fn create(world: &mut World, p: Value) -> Result<Value, String> {

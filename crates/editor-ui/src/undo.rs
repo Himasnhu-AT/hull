@@ -121,6 +121,41 @@ impl UndoStack {
         self.undo.clear();
         self.redo.clear();
     }
+
+    /// Labels of every step, oldest first: the applied ones, then the undone ones in the order
+    /// redo would replay them. Also how many are applied.
+    pub fn history(&self) -> (Vec<&str>, usize) {
+        let labels = self.undo.iter().map(|e| e.label.as_str()).chain(self.redo.iter().rev().map(|e| e.label.as_str())).collect();
+        (labels, self.undo.len())
+    }
+}
+
+/// The History panel: every step, the applied ones solid, the undone ones dimmed. Click a row to
+/// jump to the state right after it (`Req::HistoryJump`); the first row is the state before any edit.
+pub(crate) fn show(ui: &mut egui::Ui, stack: &UndoStack, reqs: &mut Vec<crate::model::Req>) {
+    use ashlar_ui::tokens;
+    let t = tokens::current(ui.ctx());
+    let (labels, applied) = stack.history();
+    ui.horizontal(|ui| {
+        ui.label(egui::RichText::new(format!("{} step(s), {} applied", labels.len(), applied)).small().color(t.text.secondary));
+    });
+    egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
+        let w = ui.available_width();
+        let mut row = |ui: &mut egui::Ui, idx: usize, text: String, dim: bool| {
+            let color = if dim { t.text.disabled } else { t.text.primary };
+            let resp = ui.add(egui::Button::selectable(idx == applied, egui::RichText::new(text).color(color)).min_size(egui::vec2(w, 0.0)));
+            if resp.clicked() && idx != applied {
+                reqs.push(crate::model::Req::HistoryJump(idx));
+            }
+        };
+        row(ui, 0, "Start".into(), false);
+        for (i, l) in labels.iter().enumerate() {
+            row(ui, i + 1, format!("{:>3}  {l}", i + 1), i >= applied);
+        }
+        if labels.is_empty() {
+            ui.label(egui::RichText::new("No edits yet.").color(t.text.disabled));
+        }
+    });
 }
 
 #[cfg(test)]
@@ -159,6 +194,19 @@ mod tests {
         assert_eq!(s.len(), 3);
         s.record("c", set(3, 4), Some("other".into()), 10.0); // too late to merge
         assert_eq!(s.len(), 4);
+    }
+
+    #[test]
+    fn history_lists_applied_then_undone() {
+        let mut s = UndoStack::new();
+        s.record("a", set(0, 1), None, 0.0);
+        s.record("b", set(1, 2), None, 1.0);
+        s.record("c", set(2, 3), None, 2.0);
+        s.undo();
+        s.undo();
+        let (labels, applied) = s.history();
+        assert_eq!(labels, vec!["a", "b", "c"]);
+        assert_eq!(applied, 1);
     }
 
     #[test]
