@@ -256,12 +256,14 @@ fn section(ui: &mut Ui, id: EntityId, eref: StableOrId, generated: bool, doc: &C
             if !doc.editable {
                 ui.label(RichText::new("read-only").color(t.text.disabled).small());
             }
-            if editable && props::right_button(ui, "x", "Remove component") {
-                remove = true;
-            }
-            if can_reset && props::right_reset(ui, "Reset the whole component to its defaults") {
-                reset = true;
-            }
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if editable && ui.small_button("x").on_hover_text("Remove component").clicked() {
+                    remove = true;
+                }
+                if can_reset && props::reset_button(ui).on_hover_text("Reset the whole component to its defaults").clicked() {
+                    reset = true;
+                }
+            });
         })
         .body(|ui| {
             let mut working = doc.value.clone();

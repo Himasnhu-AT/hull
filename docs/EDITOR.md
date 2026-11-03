@@ -364,6 +364,37 @@ table is in its module docs and in `engine.commands`). Example, with `scripts/pl
 (offscreen by default: cameras and the whole egui window render into the 1920x1080 image
 `screenshot` captures).
 
+**Details panel** (`crates/editor-ui/src/details.rs`, `props.rs`). Header, then `+ Add` /
+`+ Add Logic` and a component search, then sections in this order: Transform, Rendering, Physics,
+Gameplay, **Logic**, Other. A component's section is its `ComponentDoc.category` (a type's
+`#[reflect(@Category("Gameplay"))]`), else a guess from its name. Every field has a label made from
+its name (`snap_to_ground` is `Snap to ground`), hover text, an optional unit after numbers and a
+reset arrow (a circular arrow in front of the label) when it differs from `Default::default()`
+(`ComponentDoc.default`); a section header has the same arrow for the whole component.
+Hints come from reflect attributes (`engine::editor::schema`): `#[reflect(@Tip("..."))]`,
+`@Unit("m")`, `@DisplayName("...")`, `@Hidden`, `@Choose("rows")` (an integer field picked from the
+rows of the sibling list `rows`, shown as a table: the spline tool's point list) and, on the type,
+`@Category`, `@Tip`. They travel as `TypeSchema::Field { meta, inner }`; code that reads a schema
+calls `.inner()`. Engine types get built-in hints (`Transform`, `BrushSettings`).
+`+ Add` lists the registered component types (searchable, sorted, generics stripped).
+`+ Add Logic` offers a new graph from a template (`empty`, `basic`, `trigger_zone`, `door`,
+`pickup`, `timer`, `action_key`, `event_start`; name defaults to `<Entity>_logic`) or an existing
+`.logic.ron`; "Create and attach" calls `logic_create` and sets `Logic { graph }` as one undoable
+`SetComponent`, and the Logic section offers "Open graph". The Logic section lists the attached
+graph with a status dot (green compiles, red has errors), Open (the Logic tab) and Detach (removes
+the component, the file stays). Not offered on generated entities. Gaps: editing several selected
+entities at once shows only the first.
+
+**Output / Messages** (`output.rs`): one log of the editor (refused edits, failed places and saves,
+every toast), logic (`LogicDiagnostics`: graph and ruspy errors with file, line, column),
+build (the Play build's cargo output) and engine (WARN and ERROR from `tracing`, installed through
+`LogPlugin::custom_layer` with feature `editor`). Source toggles (Editor / Logic / Build / Engine),
+a level filter (Errors / Warnings / Info / Debug), search, Clear, and a count of warnings and errors
+on the tab (`Output (3)`). A click selects the line's entity (`Diagnostic.entity`) or opens its
+`.logic.ron` in the Logic tab, else copies `file:line:col`. `editor.popup {name: add | logic | close}`
+opens a Details popup for scripted screenshots. **History** (`undo.rs`): every undo step; click one
+to undo / redo up to it.
+
 **Data shown in Details** (`src/editor/schema.rs`): reflect JSON, with `Handle<A>` as the asset
 path string (`""` for a handle made in code), `Color` / `Srgba` / `LinearRgba` as `[r,g,b,a]`,
 `Option<T>` as `"None"` / `{"Some": v}`; `TypeSchema` from the type info (`#[reflect(@0.0..=1.0)]`

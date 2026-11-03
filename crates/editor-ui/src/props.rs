@@ -7,7 +7,7 @@ use ashlar_ui::edit::EditPhase;
 use ashlar_ui::tokens;
 use ashlar_ui::value_field::{Decimal, ValueField};
 use editor_proto::{FieldMeta, TypeSchema};
-use egui::{Align, Layout, RichText, Ui};
+use egui::{RichText, Ui};
 use serde_json::{Map, Number, Value, json};
 use std::cell::Cell;
 
@@ -124,16 +124,11 @@ fn fields_ui(ui: &mut Ui, cx: &mut Cx, fields: &[(String, TypeSchema)], value: &
     }
 }
 
-/// `snap_to_ground` becomes `Snap To Ground`.
+/// `snap_to_ground` becomes `Snap to ground`.
 pub(crate) fn nice_name(raw: &str) -> String {
-    raw.split('_')
-        .filter(|w| !w.is_empty())
-        .map(|w| {
-            let mut c = w.chars();
-            c.next().map_or(String::new(), |f| f.to_uppercase().chain(c).collect())
-        })
-        .collect::<Vec<_>>()
-        .join(" ")
+    let words = raw.split('_').filter(|w| !w.is_empty()).collect::<Vec<_>>().join(" ");
+    let mut c = words.chars();
+    c.next().map_or(String::new(), |f| f.to_uppercase().chain(c).collect())
 }
 
 /// How one row looks: label, hover text, unit, and whether it can be reset.
@@ -177,8 +172,19 @@ fn default_at_path<'a>(default: Option<&'a Value>, path: &str) -> Option<&'a Val
     Some(cur)
 }
 
+/// Units are shown inside the number field (`0.60 m`), which wants a `'static` suffix; the set of
+/// distinct units is tiny, so each is leaked once.
+fn static_unit(unit: Option<&str>) -> &'static str {
+    use std::collections::HashMap;
+    use std::sync::{Mutex, OnceLock};
+    static UNITS: OnceLock<Mutex<HashMap<String, &'static str>>> = OnceLock::new();
+    let Some(u) = unit.filter(|u| !u.is_empty() && u.len() <= 8) else { return "" };
+    let Ok(mut map) = UNITS.get_or_init(Default::default).lock() else { return "" };
+    map.entry(format!(" {u}")).or_insert_with_key(|k| Box::leak(k.clone().into_boxed_str()))
+}
+
 /// A small circular arrow, painted (no font dependence).
-fn reset_button(ui: &mut Ui) -> egui::Response {
+pub(crate) fn reset_button(ui: &mut Ui) -> egui::Response {
     let (rect, resp) = ui.allocate_exact_size(egui::vec2(RESET_W - 2.0, RESET_W - 2.0), egui::Sense::click());
     let t = tokens::current(ui.ctx());
     let color = if resp.hovered() { t.accent } else { t.text.secondary };
@@ -219,18 +225,7 @@ fn row(ui: &mut Ui, d: &Deco, content: impl FnOnce(&mut Ui)) {
             }
             ui.label(RichText::new(&d.raw).small().monospace().color(t.text.disabled));
         });
-        match &d.unit {
-            Some(u) => {
-                let unit_w = 10.0 + 7.0 * u.chars().count() as f32;
-                ui.scope(|ui| {
-                    let w = (ui.available_width() - unit_w).max(40.0);
-                    ui.set_max_width(w);
-                    content(ui);
-                });
-                ui.label(RichText::new(u).small().color(t.text.disabled));
-            }
-            None => content(ui),
-        }
+        content(ui);
     });
 }
 
@@ -238,6 +233,7 @@ fn row(ui: &mut Ui, d: &Deco, content: impl FnOnce(&mut Ui)) {
 fn choose_ui(ui: &mut Ui, cx: &mut Cx, d: &Deco, rows: &[Value], value: &mut Value, path: &str) {
     let t = tokens::current(ui.ctx());
     let current = value.as_i64().unwrap_or(-1);
+    ui.add_space(2.0);
     ui.horizontal(|ui| {
         ui.add_space(RESET_W);
         ui.label(RichText::new(format!("{} ({})", d.label, rows.len())).color(t.text.secondary)).on_hover_text(d.tip.clone().unwrap_or_default());
@@ -315,7 +311,7 @@ fn edit(ui: &mut Ui, cx: &mut Cx, raw_name: &str, schema: &TypeSchema, value: &m
             let range = (min.map_or(f64::MIN, |m| m as f64), max.map_or(f64::MAX, |m| m as f64));
             row(ui, name, |ui| {
                 let w = ui.available_width();
-                if number(ui, cx, &format!("{}.{path}", cx.id), &name.label, &mut v, 0, range, 0.2, w, path) {
+                if number(ui, cx, &format!("{}.{path}", cx.id), &name.label, &mut v, 0, range, 0.2, w, path, static_unit(name.unit.as_deref())) {
                     *value = json!(v.round() as i64);
                 }
             });
@@ -326,7 +322,7 @@ fn edit(ui: &mut Ui, cx: &mut Cx, raw_name: &str, schema: &TypeSchema, value: &m
             let speed = step.unwrap_or(if let (Some(a), Some(b)) = (min, max) { (b - a) / 200.0 } else { 0.01 });
             row(ui, name, |ui| {
                 let w = ui.available_width();
-                if number(ui, cx, &format!("{}.{path}", cx.id), &name.label, &mut v, 3, range, speed, w, path)
+                if number(ui, cx, &format!("{}.{path}", cx.id), &name.label, &mut v, 3, range, speed, w, path, static_unit(name.unit.as_deref()))
                     && let Some(n) = Number::from_f64(v)
                 {
                     *value = Value::Number(n);
@@ -400,8 +396,8 @@ fn readonly(ui: &mut Ui, name: &Deco, value: &Value) {
 
 /// One numeric field. Returns true when `v` changed (and records the gesture phase).
 #[allow(clippy::too_many_arguments)]
-fn number(ui: &mut Ui, cx: &mut Cx, id: &str, label: &str, v: &mut f64, decimals: usize, range: (f64, f64), speed: f64, width: f32, path: &str) -> bool {
-    let fmt = Decimal { decimals, suffix: "" };
+fn number(ui: &mut Ui, cx: &mut Cx, id: &str, label: &str, v: &mut f64, decimals: usize, range: (f64, f64), speed: f64, width: f32, path: &str, unit: &'static str) -> bool {
+    let fmt = Decimal { decimals, suffix: unit };
     let mut field = ValueField::new(id, label, v, &fmt).speed(speed).width(width);
     if range.0 < range.1 && (range.0 > f64::MIN || range.1 < f64::MAX) {
         field = field.range(range.0..=range.1);
@@ -433,7 +429,7 @@ fn vec_n(ui: &mut Ui, cx: &mut Cx, name: &Deco, value: &mut Value, path: &str, a
         let w = ((ui.available_width() - gap * (axes.len() as f32 - 1.0)) / axes.len() as f32).max(24.0);
         for (i, axis) in axes.iter().enumerate() {
             let id = format!("{}.{path}.{axis}", cx.id);
-            if number(ui, cx, &id, axis, &mut vals[i], 3, (f64::MIN, f64::MAX), 0.02, w, &join(path, axis)) {
+            if number(ui, cx, &id, axis, &mut vals[i], 3, (f64::MIN, f64::MAX), 0.02, w, &join(path, axis), static_unit(name.unit.as_deref())) {
                 changed = Some(i);
             }
         }
@@ -469,7 +465,7 @@ fn quat(ui: &mut Ui, cx: &mut Cx, name: &Deco, value: &mut Value, path: &str) {
         let w = ((ui.available_width() - gap * 2.0) / 3.0).max(24.0);
         for (i, axis) in ["X", "Y", "Z"].iter().enumerate() {
             let id = format!("{}.{path}.{axis}", cx.id);
-            if number(ui, cx, &id, axis, &mut vals[i], 1, (f64::MIN, f64::MAX), 0.5, w, &join(path, axis)) {
+            if number(ui, cx, &id, axis, &mut vals[i], 1, (f64::MIN, f64::MAX), 0.5, w, &join(path, axis), static_unit(name.unit.as_deref())) {
                 changed = true;
             }
         }
@@ -616,17 +612,6 @@ fn list_edit(ui: &mut Ui, cx: &mut Cx, name: &Deco, item: &TypeSchema, value: &m
     }
 }
 
-/// Right-aligned reset arrow for a section header.
-pub(crate) fn right_reset(ui: &mut Ui, hover: &str) -> bool {
-    ui.with_layout(Layout::right_to_left(Align::Center), |ui| reset_button(ui).on_hover_text(hover).clicked()).inner
-}
-
-/// Right-aligned small button helper used by section headers.
-pub(crate) fn right_button(ui: &mut Ui, text: &str, hover: &str) -> bool {
-    ui.with_layout(Layout::right_to_left(Align::Center), |ui| ui.small_button(text).on_hover_text(hover).clicked())
-        .inner
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -647,7 +632,7 @@ mod tests {
 
     #[test]
     fn field_names_become_labels() {
-        assert_eq!(nice_name("snap_to_ground"), "Snap To Ground");
+        assert_eq!(nice_name("snap_to_ground"), "Snap to ground");
         assert_eq!(nice_name("max"), "Max");
         assert_eq!(nice_name("0"), "0");
         assert_eq!(nice_name("__x__"), "X");
