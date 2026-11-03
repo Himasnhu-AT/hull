@@ -321,6 +321,11 @@ impl EditorUi {
     pub fn open_logic_tab(&mut self, path: &str) {
         self.logic_request = Some(path.to_string());
     }
+    /// Open the Details `+ Add` (`"add"`) or `+ Add Logic` (`"logic"`) popup on the next frame
+    /// (scripts and screenshots).
+    pub fn open_details_popup(&mut self, name: &str) -> Result<(), String> {
+        self.details.request_popup(name)
+    }
     /// The path last passed to `open_logic_tab`, once.
     pub fn take_logic_request(&mut self) -> Option<String> {
         self.logic_request.take()

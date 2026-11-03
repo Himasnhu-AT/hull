@@ -19,6 +19,7 @@
 //! | `editor.viewport` | `ViewportCmd` JSON | `{ok}` |
 //! | `editor.camera` | `{pos?, look_at?, speed?}` | the camera pose |
 //! | `editor.command` | `{id}` (a UI command: `editor.undo`, `editor.redo`, `editor.save`, ...) | `{ok}` |
+//! | `editor.popup` | `{name}` (`add`, `logic`) | `{ok}`: opens that Details popup next frame |
 //! | `editor.ui_layout` | `{tab}` (Outliner, Details, Content, Output, Logic) | `{ok}` |
 
 use bevy::prelude::*;
@@ -94,7 +95,8 @@ pub(super) fn register(app: &mut App) {
             params(&[("action", "string", "action name"), ("points", "array", ""), ("at", "array", "[x,z]")]),
             tool_action,
         )
-        .add_control_command("editor.tab", "Bring a panel tab to the front", params(&[("tab", "string", "Outliner|Details|Content|Output|Logic")]), tab);
+        .add_control_command("editor.tab", "Bring a panel tab to the front", params(&[("tab", "string", "Outliner|Details|Content|Output|Logic")]), tab)
+        .add_control_command("editor.popup", "Open a Details popup on the next frame", params(&[("name", "string", "add | logic")]), popup);
 }
 
 fn parse<T: serde::de::DeserializeOwned>(v: Value) -> Result<T, String> {
@@ -312,6 +314,13 @@ fn tab(world: &mut World, p: Value) -> Result<Value, String> {
     let name = p.get("tab").and_then(Value::as_str).ok_or("`tab` is required")?;
     let mut ui = world.get_resource_mut::<EditorUiRes>().ok_or("the editor UI is not up yet")?;
     ui.0.show_panel(name)?;
+    Ok(json!({"ok": true}))
+}
+
+fn popup(world: &mut World, p: Value) -> Result<Value, String> {
+    let name = p.get("name").and_then(Value::as_str).ok_or("`name` is required (add | logic)")?;
+    let mut ui = world.get_resource_mut::<EditorUiRes>().ok_or("the editor UI is not up yet")?;
+    ui.0.open_details_popup(name)?;
     Ok(json!({"ok": true}))
 }
 
