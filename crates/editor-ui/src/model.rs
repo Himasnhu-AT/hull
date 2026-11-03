@@ -104,6 +104,12 @@ pub(crate) enum Req {
     OpenPath(String),
     ToolSettings { id: String, settings: serde_json::Value },
     Cmd(Cmd),
+    /// Switch mode (Select, Landscape, Foliage, Splines, Place).
+    Mode(Mode),
+    /// Change one settings group (World Settings tab, Project Settings window).
+    Settings { group: String, value: serde_json::Value },
+    /// Select an entity from the command palette and bring it into view.
+    RevealEntity(EntityId),
     /// Refetch the tree (the outliner search text changed).
     TreeFilterChanged,
     Copy(String),
@@ -133,6 +139,69 @@ pub enum Cmd {
     Palette,
     Help,
     ResetLayout,
+    ToggleDrawer,
+    DockDrawer,
+    ModeSelect,
+    ModeLandscape,
+    ModeFoliage,
+    ModeSplines,
+    ModePlace,
+    OpenWorldSettings,
+    OpenProjectSettings,
+    OpenPreferences,
+    LayoutDefault,
+    LayoutLandscape,
+    LayoutLogic,
+}
+
+/// The editor's modes: what a click in the viewport does and which tool settings the left panel
+/// shows. Select is the default; the others each arm one world tool (Landscape has two).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Mode {
+    Select,
+    Landscape,
+    Foliage,
+    Splines,
+    Place,
+}
+
+impl Mode {
+    pub const ALL: [Mode; 5] = [Mode::Select, Mode::Landscape, Mode::Foliage, Mode::Splines, Mode::Place];
+    pub fn label(self) -> &'static str {
+        match self {
+            Mode::Select => "Select",
+            Mode::Landscape => "Landscape",
+            Mode::Foliage => "Foliage",
+            Mode::Splines => "Splines",
+            Mode::Place => "Place",
+        }
+    }
+    /// Ids of the world tools (`ToolDoc::id`) this mode uses; the first is the default.
+    pub fn tool_ids(self) -> &'static [&'static str] {
+        match self {
+            Mode::Select => &[],
+            Mode::Landscape => &["sculpt", "paint"],
+            Mode::Foliage => &["foliage"],
+            Mode::Splines => &["spline"],
+            Mode::Place => &["place"],
+        }
+    }
+    pub fn hint(self) -> &'static str {
+        match self {
+            Mode::Select => "Click an object to select it. Pick a type or model below to place it.",
+            Mode::Landscape => "Sculpt and paint the terrain.",
+            Mode::Foliage => "Paint, erase and move trees, rocks and plants.",
+            Mode::Splines => "Edit roads and other splines. Ctrl+click adds a point.",
+            Mode::Place => "Click in the viewport to drop the chosen type.",
+        }
+    }
+    /// The mode a world tool belongs to (`None`: the transform tools, i.e. Select).
+    pub fn of_tool(id: Option<&str>) -> Mode {
+        match id {
+            None => Mode::Select,
+            Some(t) => Mode::ALL.into_iter().find(|m| m.tool_ids().contains(&t)).unwrap_or(Mode::Select),
+        }
+    }
 }
 
 pub(crate) struct CmdSpec {
@@ -319,9 +388,36 @@ pub(crate) const COMMANDS: &[CmdSpec] = &[
         id: "editor.reset_layout",
         label: "Reset panel layout",
         shortcut: None,
-        menu: "View",
+        menu: "Window",
         mutates: false,
     },
+    CmdSpec {
+        cmd: Cmd::ToggleDrawer,
+        id: "editor.drawer",
+        label: "Content drawer: open / close",
+        shortcut: Some("Mod+Space / Mod+J"),
+        menu: "Window",
+        mutates: false,
+    },
+    CmdSpec {
+        cmd: Cmd::DockDrawer,
+        id: "editor.drawer_dock",
+        label: "Content drawer: dock / undock",
+        shortcut: None,
+        menu: "Window",
+        mutates: false,
+    },
+    CmdSpec { cmd: Cmd::ModeSelect, id: "editor.mode_select", label: "Mode: Select", shortcut: None, menu: "Tools", mutates: false },
+    CmdSpec { cmd: Cmd::ModeLandscape, id: "editor.mode_landscape", label: "Mode: Landscape (sculpt, paint)", shortcut: None, menu: "Tools", mutates: false },
+    CmdSpec { cmd: Cmd::ModeFoliage, id: "editor.mode_foliage", label: "Mode: Foliage", shortcut: None, menu: "Tools", mutates: false },
+    CmdSpec { cmd: Cmd::ModeSplines, id: "editor.mode_splines", label: "Mode: Splines", shortcut: None, menu: "Tools", mutates: false },
+    CmdSpec { cmd: Cmd::ModePlace, id: "editor.mode_place", label: "Mode: Place", shortcut: None, menu: "Tools", mutates: false },
+    CmdSpec { cmd: Cmd::OpenWorldSettings, id: "editor.world_settings", label: "World Settings (look, terrain, streaming)", shortcut: None, menu: "Window", mutates: false },
+    CmdSpec { cmd: Cmd::OpenProjectSettings, id: "editor.project_settings", label: "Project Settings...", shortcut: None, menu: "Edit", mutates: false },
+    CmdSpec { cmd: Cmd::OpenPreferences, id: "editor.preferences", label: "Editor Preferences...", shortcut: None, menu: "Edit", mutates: false },
+    CmdSpec { cmd: Cmd::LayoutDefault, id: "editor.layout_default", label: "Layout: Default", shortcut: None, menu: "Window", mutates: false },
+    CmdSpec { cmd: Cmd::LayoutLandscape, id: "editor.layout_landscape", label: "Layout: Landscape", shortcut: None, menu: "Window", mutates: false },
+    CmdSpec { cmd: Cmd::LayoutLogic, id: "editor.layout_logic", label: "Layout: Logic", shortcut: None, menu: "Window", mutates: false },
 ];
 
 impl Cmd {

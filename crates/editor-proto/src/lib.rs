@@ -8,6 +8,8 @@ use serde_json::Value;
 
 mod backend;
 pub use backend::EditorBackend;
+mod settings;
+pub use settings::{SettingsGroup, SettingsPage};
 
 /// `Entity::to_bits()`. Valid for one session only.
 pub type EntityId = u64;

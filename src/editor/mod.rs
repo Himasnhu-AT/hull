@@ -42,6 +42,7 @@ mod gizmo;
 mod host;
 mod picking;
 mod play;
+mod settings_backend;
 mod fade;
 pub mod tools;
 pub mod schema;
