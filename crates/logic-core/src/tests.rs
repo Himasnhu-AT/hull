@@ -380,7 +380,7 @@ fn trace_lists_executed_nodes_in_order() {
     // The event, then the Delay (which schedules and stops).
     assert_eq!(r.trace, vec![1, 2]);
     r.run(&g, Entry::Resume(1), &Payload { me: 1, ..Default::default() }, &mut host).unwrap();
-    assert_eq!(r.trace, vec![2, 5, 6, 7]);
+    assert_eq!(r.trace, vec![5, 6, 7], "a resume continues after the Delay, which already ran");
     r.tracing = false;
     r.run(&g, Entry::Event(0), &Payload { me: 1, ..Default::default() }, &mut host).unwrap();
     assert!(r.trace.is_empty());
@@ -402,4 +402,30 @@ fn palette_templates_have_docs_pins_and_unique_labels() {
     assert!(all.iter().any(|t| t.category == "Events" && matches!(t.kind, NodeKind::Start)));
     assert_eq!(category(&NodeKind::Command { id: "x".into(), params: serde_json::json!({}) }), "Commands");
     assert_eq!(label(&NodeKind::Script { file: "score.ruspy".into(), function: "on_open".into(), args: vec![] }), "score::on_open");
+}
+
+#[test]
+fn check_finds_missing_script_functions_and_commands() {
+    let g = Graph::from_ron(DOOR).unwrap();
+    let cat = Catalog {
+        scripts: vec![ScriptFn { file: "score.ruspy".into(), function: "on_open".into(), args: vec!["who".into()] }],
+        commands: vec!["time.scale".into()],
+    };
+    assert!(g.check(Some(&cat)).iter().all(|e| e.severity != Severity::Error), "{:?}", g.check(Some(&cat)));
+    let mut bad = g.clone();
+    if let Some(n) = bad.nodes.iter_mut().find(|n| n.id == 6) {
+        n.kind = NodeKind::Script { file: "score.ruspy".into(), function: "on_open2".into(), args: vec!["who".into()] };
+    }
+    let errs = bad.check(Some(&cat));
+    let e = errs.iter().find(|e| e.severity == Severity::Error).unwrap();
+    assert_eq!(e.node, Some(6));
+    assert!(e.message.contains("no function `on_open2`"), "{}", e.message);
+    // Missing file, wrong arity, unknown command.
+    bad.nodes.push(Node::new(9, NodeKind::Script { file: "nope.ruspy".into(), function: "f".into(), args: vec![] }));
+    bad.nodes.push(Node::new(10, NodeKind::Command { id: "sound.nope".into(), params: serde_json::json!({}) }));
+    let errs = bad.check(Some(&cat));
+    assert!(errs.iter().any(|e| e.node == Some(9) && e.message.contains("not found")));
+    assert!(errs.iter().any(|e| e.node == Some(10) && e.message.contains("unknown command")));
+    // Without a catalog only the core checks run.
+    assert!(g.check(None).iter().all(|e| e.severity != Severity::Error));
 }

@@ -40,6 +40,8 @@ mod camera;
 mod control;
 mod gizmo;
 mod host;
+mod logic_backend;
+mod logic_control;
 mod picking;
 mod play;
 mod fade;

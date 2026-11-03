@@ -32,6 +32,7 @@ use super::EditorState;
 use crate::devtools::{AddControlCommand, params};
 
 pub(super) fn register(app: &mut App) {
+    super::logic_control::register(app);
     let ent = [("id", "integer", "entity id (bits)"), ("stable", "integer", "stable id"), ("name", "string", "entity name")];
     app.add_control_command("editor.state", "Editor state: play, level, selection, tool, camera", params(&[]), state)
         .add_control_command(

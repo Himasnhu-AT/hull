@@ -135,7 +135,7 @@ impl Runner {
             return Err(RunError { node: 0, message: "no such node".into() });
         }
         let mut cx = Ctx { g, host, payload };
-        if self.tracing {
+        if self.tracing && matches!(entry, Entry::Event(_)) {
             self.trace.push(g.nodes[node as usize].id);
         }
         self.follow(g, node, 0);

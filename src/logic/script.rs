@@ -311,3 +311,9 @@ pub(super) fn reload_all(world: &mut World) -> usize {
     });
     n
 }
+
+/// Reloads one script from disk now (its errors land in the diagnostics).
+pub(crate) fn reload_script(world: &mut World, key: &str) {
+    let key = key_of(key);
+    let _ = with_host(world, |host, world| load(host, world, &key));
+}

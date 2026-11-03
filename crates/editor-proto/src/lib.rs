@@ -485,6 +485,14 @@ pub struct GraphErrorDoc {
     pub node: Option<u32>,
     pub pin: Option<String>,
     pub message: String,
+    /// A warning (does not stop the graph from running).
+    #[serde(default)]
+    pub warning: bool,
+    /// Source position for script errors (1-based; 0 = none).
+    #[serde(default)]
+    pub line: u32,
+    #[serde(default)]
+    pub col: u32,
 }
 
 /// A pin of a node template.

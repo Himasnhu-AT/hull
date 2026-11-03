@@ -32,6 +32,17 @@ use logic_core::{Compiled, Entry, Host, Payload, Runner, Trigger, Value};
 use crate::pause::not_paused;
 
 pub use script::ScriptHost;
+#[cfg(feature = "devtools")]
+pub(crate) use devtools::fire as fire_event;
+pub(crate) use script::reload_script;
+
+/// Reloads the graph asset at `path` if some entity uses it (a no-op otherwise).
+pub(crate) fn reload_graph(world: &mut World, path: &str) {
+    if world.resource::<LogicGraphs>().slots.contains_key(path) {
+        let server = world.resource::<AssetServer>().clone();
+        server.reload(path.to_string());
+    }
+}
 
 /// Attaches the logic graph at `graph` (an asset path, e.g. `"logic/door.logic.ron"`).
 #[derive(Component, Reflect, Default, Clone, Debug, PartialEq)]
@@ -260,6 +271,14 @@ struct DelayJob {
 #[derive(Resource, Default)]
 struct LogicDelays(Vec<DelayJob>);
 
+/// Graph variables of one entity (`GetVar` / `SetVar`); a missing entry means "declared default".
+#[derive(Component, Default)]
+pub(crate) struct LogicVars(HashMap<String, Value>);
+
+/// While `Some`, runs record the ids of the nodes they execute (the editor's "Fire").
+#[derive(Resource, Default)]
+pub(crate) struct LogicTraceCapture(pub Option<Vec<u32>>);
+
 pub struct LogicPlugin;
 
 impl Plugin for LogicPlugin {
@@ -272,6 +291,7 @@ impl Plugin for LogicPlugin {
             .init_resource::<LogicQueue>()
             .init_resource::<LogicOutbox>()
             .init_resource::<LogicDelays>()
+            .init_resource::<LogicTraceCapture>()
             .init_resource::<LogicDiagnostics>()
             .init_resource::<LogicStats>()
             .insert_resource(LogicCtx { me: Entity::PLACEHOLDER });
@@ -481,6 +501,29 @@ fn run_queue(world: &mut World) {
     // Anything still queued (a 5th round of messages) waits for next frame.
 }
 
+/// Runs `kind` on `entity` and returns the ids of the nodes that ran. Delays are not waited
+/// for: their continuation runs right away, so the trace shows the whole flow.
+pub(crate) fn fire_traced(world: &mut World, entity: Entity, kind: EventKind) -> (usize, Vec<u32>) {
+    world.resource_mut::<LogicTraceCapture>().0 = Some(Vec::new());
+    let ran = run_fire(world, Fire { entity, kind });
+    for _ in 0..16 {
+        let jobs: Vec<DelayJob> = {
+            let mut d = world.resource_mut::<LogicDelays>();
+            let (mine, rest) = std::mem::take(&mut d.0).into_iter().partition(|j| j.entity == entity);
+            d.0 = rest;
+            mine
+        };
+        if jobs.is_empty() {
+            break;
+        }
+        for j in jobs {
+            run_fire(world, Fire { entity, kind: EventKind::Resume(j.node, j.payload) });
+        }
+    }
+    let trace = world.resource_mut::<LogicTraceCapture>().0.take().unwrap_or_default();
+    (ran, trace)
+}
+
 fn entity_value(e: Entity) -> Value {
     Value::Entity(e.to_bits())
 }
@@ -536,6 +579,8 @@ pub(crate) fn run_fire(world: &mut World, fire: Fire) -> usize {
     };
     let resume = matches!(kind, EventKind::Resume(..));
     let mut runner = world.resource_mut::<LogicGraphs>().slots.get_mut(&path).and_then(|s| s.runner.take()).unwrap_or_default();
+    let tracing = world.resource::<LogicTraceCapture>().0.is_some();
+    runner.tracing = tracing;
     let prev = world.resource::<LogicCtx>().clone();
     *world.resource_mut::<LogicCtx>() = LogicCtx { me: entity };
     let started = Instant::now();
@@ -546,6 +591,9 @@ pub(crate) fn run_fire(world: &mut World, fire: Fire) -> usize {
             && !e.message.starts_with(script::REPORTED)
         {
             host.world.resource_mut::<LogicDiagnostics>().error(&path, 0, 0, Some(e.node), e.message.clone());
+        }
+        if tracing && let Some(c) = host.world.resource_mut::<LogicTraceCapture>().0.as_mut() {
+            c.extend(runner.trace.iter().copied());
         }
         let _ = node;
     };
@@ -617,6 +665,17 @@ impl Host for EngineHost<'_> {
     fn log(&mut self, text: &str) {
         info!("[logic] {text}");
         self.world.resource_mut::<LogicDiagnostics>().log(text.to_string());
+    }
+    fn var_get(&mut self, me: u64, name: &str) -> Option<Value> {
+        self.world.get::<LogicVars>(entity_of(me).ok()?)?.0.get(name).cloned()
+    }
+    fn var_set(&mut self, me: u64, name: &str, value: &Value) {
+        let Ok(e) = entity_of(me) else { return };
+        if let Some(mut v) = self.world.get_mut::<LogicVars>(e) {
+            v.0.insert(name.to_string(), value.clone());
+        } else if let Ok(mut ec) = self.world.get_entity_mut(e) {
+            ec.insert(LogicVars(HashMap::from([(name.to_string(), value.clone())])));
+        }
     }
     fn schedule(&mut self, node: u32, secs: f32, payload: &Payload) {
         self.world.resource_mut::<LogicDelays>().0.push(DelayJob { entity: self.me, node, remaining: secs.max(0.0), payload: payload.clone() });
