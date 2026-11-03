@@ -12,6 +12,7 @@
 //! - Components are shown in the UI form of [`super::schema`] (handles as asset paths, colours
 //!   as arrays).
 
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use bevy::asset::AssetServer;
@@ -25,7 +26,7 @@ use serde_json::Value;
 use super::schema;
 use super::{EditorOnly, EditorState};
 use crate::devkit::reflect_json::find_type;
-use crate::level::{self, LevelEntity, Primitive};
+use crate::level::{self, GeneratedBy, LevelEntity, Primitive};
 use crate::paths::AssetsDir;
 
 /// Components the Details panel never shows: edited through other commands (name, parent,
@@ -127,23 +128,56 @@ const INTERNAL_NAMES: &[&str] = &["far detail", "FPS counter", "Perf overlay", "
 /// Streaming cells, terrain chunks and the like.
 const INTERNAL_PREFIXES: &[&str] = &["cell ", "chunk ", "pcg "];
 
-fn build_node(world: &World, e: Entity, budget: &mut usize, under_level: bool) -> Option<TreeNode> {
+/// True for names the engine gives its own entities (never level content, never picked).
+pub(super) fn is_internal_name(n: &str) -> bool {
+    INTERNAL_NAMES.contains(&n) || INTERNAL_PREFIXES.iter().any(|p| n.starts_with(p))
+}
+
+/// Who built a generated entity: its `GeneratedBy`, else the internal prefix (`pcg`), else its
+/// name, else "generated".
+fn origin_of(world: &World, e: Entity, named: Option<&str>) -> String {
+    if let Some(g) = world.get::<GeneratedBy>(e) {
+        return g.0.to_string();
+    }
+    match named {
+        Some(n) => INTERNAL_PREFIXES.iter().find(|p| n.starts_with(**p)).map_or(n, |p| p.trim()).to_string(),
+        None => "generated".to_string(),
+    }
+}
+
+/// The row name of an unnamed entity: its kind and index.
+fn fallback_name(world: &World, e: Entity) -> String {
+    let kind = match node_kind(world, e) {
+        NodeKind::Mesh => "Mesh",
+        NodeKind::Light => "Light",
+        NodeKind::Camera => "Camera",
+        _ => "Entity",
+    };
+    format!("{kind} {}", e.index().index())
+}
+
+fn build_node(world: &World, e: Entity, budget: &mut usize, under_level: bool, selected: &[Entity], keep: &HashSet<Entity>) -> Option<TreeNode> {
     if *budget == 0 || world.get::<EditorOnly>(e).is_some() {
         return None;
     }
     let stable = stable_of(world, e);
-    let named = world.get::<Name>(e).map(|n| n.as_str().to_string());
+    let named = world.get::<Name>(e).map(|n| n.as_str().to_string()).filter(|n| !n.is_empty());
+    // A selected entity is always listed (so the selection is visible), as is anything that
+    // declares itself generated with `GeneratedBy`.
+    let is_selected = selected.contains(&e);
+    let marked = world.get::<GeneratedBy>(e).is_some();
     // What a level entity builds for itself (glTF nodes, LOD children) is not listed.
-    if stable.is_none() && (under_level || named.as_deref().is_some_and(|n| INTERNAL_NAMES.contains(&n) || INTERNAL_PREFIXES.iter().any(|p| n.starts_with(p)))) {
+    let internal = stable.is_none() && (under_level || named.as_deref().is_some_and(is_internal_name)) && !is_selected;
+    if internal && !keep.contains(&e) {
         return None;
     }
-    // Unnamed generated entities (render and UI internals) are not shown; their children attach
-    // to the nearest shown ancestor.
-    let shown = stable.is_some() || named.is_some();
+    // Other unnamed generated entities (render and UI internals) are not shown; their children
+    // attach to the nearest shown ancestor.
+    let shown = !internal && (stable.is_some() || named.is_some() || marked || is_selected);
     let mut kids = Vec::new();
     if let Some(children) = world.get::<Children>(e) {
         for c in children.iter() {
-            if let Some(n) = build_node(world, c, budget, stable.is_some() || under_level) {
+            if let Some(n) = build_node(world, c, budget, stable.is_some() || under_level, selected, keep) {
                 kids.push(n);
             }
         }
@@ -163,11 +197,13 @@ fn build_node(world: &World, e: Entity, budget: &mut usize, under_level: bool) -
     *budget = budget.saturating_sub(1);
     let generated = stable.is_none();
     let hidden = matches!(world.get::<Visibility>(e), Some(Visibility::Hidden));
-    let name = named.unwrap_or_else(|| format!("Entity {}", stable.map_or(e.index().index() as u64, |s| s.0)));
+    let origin = generated.then(|| origin_of(world, e, named.as_deref()));
+    let name = named.unwrap_or_else(|| fallback_name(world, e));
     let mut node = TreeNode::new(e.to_bits(), name);
     node.stable = stable;
     node.generated = generated;
     node.hidden = hidden;
+    node.origin = origin;
     node.icon = match node_kind(world, e) {
         NodeKind::Empty if generated => NodeKind::Generated,
         k => k,
@@ -338,8 +374,27 @@ fn fresh_ids(world: &mut World, snap: &mut EntitySnapshot) {
     let _ = old;
 }
 
+/// The pseudo type path of the "convert to level entity" op (add or remove the identity).
+const LEVEL_ENTITY: &str = "engine::level::LevelEntity";
+
 fn apply_op(world: &mut World, op: &Op) -> Result<(), String> {
     match op {
+        Op::SetComponent { entity, type_path, after, .. } if type_path.ends_with("::LevelEntity") => {
+            let e = resolve(world, *entity)?;
+            match after {
+                Some(v) => {
+                    let id = v.get("id").and_then(Value::as_u64).ok_or("LevelEntity needs a numeric id")?;
+                    if by_stable(world, StableId(id)).is_some_and(|x| x != e) {
+                        return Err(format!("stable id {id} already exists"));
+                    }
+                    world.entity_mut(e).insert(LevelEntity { id: level::StableId(id) });
+                }
+                None => {
+                    world.entity_mut(e).remove::<LevelEntity>();
+                }
+            }
+            Ok(())
+        }
         Op::SetComponent { entity, type_path, after, .. } => {
             let e = editable_target(world, *entity)?;
             set_component(world, e, type_path, after.as_ref())
@@ -411,7 +466,7 @@ fn asset_kind(name: &str, is_dir: bool) -> AssetKind {
         AssetKind::Script
     } else {
         match lower.rsplit('.').next().unwrap_or("") {
-            "glb" | "gltf" | "obj" => AssetKind::Model,
+            "glb" | "gltf" => AssetKind::Model,
             "png" | "jpg" | "jpeg" | "ktx2" | "tga" | "bmp" | "hdr" | "exr" => AssetKind::Texture,
             "ogg" | "wav" | "mp3" | "flac" => AssetKind::Audio,
             "mat" => AssetKind::Material,
@@ -462,8 +517,20 @@ impl EditorBackend for WorldBackend<'_> {
         let roots: Vec<Entity> = world.query_filtered::<Entity, Without<ChildOf>>().iter(world).collect();
         let mut budget = MAX_TREE_NODES;
         let mut nodes = Vec::new();
+        let selected = world.resource::<EditorState>().selection.clone();
+        // The selection and its ancestors: kept in the tree even below an engine-internal node.
+        let mut keep: HashSet<Entity> = HashSet::new();
+        for &s in &selected {
+            let mut cur = Some(s);
+            while let Some(c) = cur {
+                if !keep.insert(c) {
+                    break;
+                }
+                cur = world.get::<ChildOf>(c).map(ChildOf::parent);
+            }
+        }
         for r in roots {
-            if let Some(n) = build_node(world, r, &mut budget, false) {
+            if let Some(n) = build_node(world, r, &mut budget, false, &selected, &keep) {
                 nodes.push(n);
             }
         }
@@ -539,7 +606,11 @@ impl EditorBackend for WorldBackend<'_> {
             return Err(format!("`{rel}` is not a model (glb/gltf)"));
         }
         let name = Path::new(&rel).file_stem().map_or_else(|| "Model".to_string(), |s| s.to_string_lossy().to_string());
-        let pos = if at.position == [0.0, 0.0, 0.0] { super::picking::view_centre_hit(self.world) } else { Vec3::from(at.position) };
+        let pos = match at.screen {
+            Some([u, v]) if u.is_finite() && v.is_finite() => super::picking::view_hit(self.world, Vec2::new(u, v)),
+            _ if at.position == [0.0, 0.0, 0.0] => super::picking::view_centre_hit(self.world),
+            _ => Vec3::from(at.position),
+        };
         let server = self.world.get_resource::<AssetServer>().cloned().ok_or("no AssetServer")?;
         let id = level::new_stable_id(self.world);
         let handle = server.load(format!("{rel}#Scene0"));
@@ -623,6 +694,46 @@ impl EditorBackend for WorldBackend<'_> {
             self.world.resource_mut::<EditorState>().selection = vec![first];
         }
         Ok(if ops.len() == 1 { ops.remove(0) } else { Op::Batch(ops) })
+    }
+
+    fn reveal_asset(&mut self, path: &str) -> Result<(), String> {
+        let root = self.world.get_resource::<AssetsDir>().ok_or("no assets folder")?.0.clone();
+        let rel = safe_rel(path).ok_or("bad asset path")?;
+        let full = root.join(rel);
+        if !full.exists() {
+            return Err(format!("`{path}` does not exist"));
+        }
+        let mut cmd = if cfg!(target_os = "macos") {
+            let mut c = std::process::Command::new("open");
+            c.arg("-R").arg(&full);
+            c
+        } else if cfg!(target_os = "windows") {
+            let mut c = std::process::Command::new("explorer");
+            c.arg(format!("/select,{}", full.display()));
+            c
+        } else {
+            let mut c = std::process::Command::new("xdg-open");
+            c.arg(full.parent().unwrap_or(&root));
+            c
+        };
+        cmd.spawn().map(|_| ()).map_err(|e| format!("could not open the file manager: {e}"))
+    }
+
+    fn convert_to_level(&mut self, id: EntityId) -> Result<Op, String> {
+        let e = resolve(self.world, StableOrId::Id(id))?;
+        if self.world.get::<LevelEntity>(e).is_some() {
+            return Err("already a level entity".into());
+        }
+        let stable = level::new_stable_id(self.world);
+        let name = self.world.get::<Name>(e).map(|n| n.as_str().to_string()).filter(|n| !n.is_empty()).unwrap_or_else(|| fallback_name(self.world, e));
+        let before_name = self.world.get::<Name>(e).map(|n| n.as_str().to_string()).unwrap_or_default();
+        let ops = Op::Batch(vec![
+            Op::SetComponent { entity: StableOrId::Id(id), type_path: LEVEL_ENTITY.into(), before: None, after: Some(serde_json::json!({ "id": stable.0 })) },
+            Op::Rename { entity: StableOrId::Id(id), before: before_name, after: name },
+        ]);
+        apply_op(self.world, &ops)?;
+        self.world.resource_mut::<level::LevelState>().next_id = stable.0;
+        Ok(ops)
     }
 
     fn view_info(&mut self) -> ViewInfo {
@@ -768,6 +879,68 @@ mod tests {
         assert!(tree.iter().any(|n| n.name == "Code-built" && n.generated));
         let tree = WorldBackend::new(w).tree(&TreeFilter { include_generated: false, ..default() });
         assert!(tree.iter().all(|n| n.name != "Code-built"));
+    }
+
+    fn find(nodes: &[TreeNode], id: Entity) -> Option<&TreeNode> {
+        nodes.iter().find_map(|n| if n.id == id.to_bits() { Some(n) } else { find(&n.children, id) })
+    }
+
+    #[test]
+    fn selected_unnamed_generated_entity_is_listed_with_its_origin() {
+        let mut app = app();
+        let w = app.world_mut();
+        let plain = w.spawn(Transform::default()).id();
+        let marked = w.spawn((GeneratedBy("town::spawn"), Transform::default())).id();
+        let tree = WorldBackend::new(w).tree(&TreeFilter::default());
+        assert!(find(&tree, plain).is_none(), "an unnamed, unselected entity stays out of the tree");
+        let n = find(&tree, marked).expect("GeneratedBy lists it");
+        assert!(n.generated);
+        assert_eq!(n.origin.as_deref(), Some("town::spawn"));
+        // Selecting the unnamed one adds it, with the "generated" fallback origin.
+        WorldBackend::new(w).set_selection(&[plain.to_bits()]);
+        let tree = WorldBackend::new(w).tree(&TreeFilter::default());
+        let n = find(&tree, plain).expect("selected entity is listed");
+        assert_eq!(n.origin.as_deref(), Some("generated"));
+        assert!(n.name.starts_with("Entity ") || n.name.starts_with("Mesh "), "{}", n.name);
+        // And it survives a selection poll.
+        assert_eq!(WorldBackend::new(w).selection(), vec![plain.to_bits()]);
+    }
+
+    #[test]
+    fn selected_entity_below_an_internal_cell_is_listed() {
+        let mut app = app();
+        let w = app.world_mut();
+        let cell = w.spawn((Name::new("pcg cell 1,2"), Transform::default())).id();
+        let inst = w.spawn((Name::new("pcg tree"), Transform::default(), ChildOf(cell))).id();
+        let tree = WorldBackend::new(w).tree(&TreeFilter::default());
+        assert!(find(&tree, inst).is_none() && find(&tree, cell).is_none());
+        WorldBackend::new(w).set_selection(&[inst.to_bits()]);
+        let tree = WorldBackend::new(w).tree(&TreeFilter::default());
+        let n = find(&tree, inst).expect("listed");
+        assert_eq!(n.origin.as_deref(), Some("pcg"));
+        assert!(find(&tree, cell).is_none(), "the internal cell itself stays hidden");
+    }
+
+    #[test]
+    fn convert_to_level_is_undoable() {
+        let mut app = app();
+        let w = app.world_mut();
+        let g = w.spawn(Transform::from_xyz(1.0, 2.0, 3.0)).id();
+        let mut be = WorldBackend::new(w);
+        let op = be.convert_to_level(g.to_bits()).unwrap();
+        assert!(be.world.get::<LevelEntity>(g).is_some());
+        assert!(be.world.get::<Name>(g).is_some_and(|n| !n.is_empty()));
+        assert!(be.convert_to_level(g.to_bits()).is_err(), "already converted");
+        be.apply(&op.inverse()).unwrap();
+        assert!(be.world.get::<LevelEntity>(g).is_none(), "undo makes it generated again");
+        be.apply(&op).unwrap();
+        assert!(be.world.get::<LevelEntity>(g).is_some(), "redo");
+    }
+
+    #[test]
+    fn obj_is_not_a_model() {
+        assert_eq!(asset_kind("a.obj", false), AssetKind::Other);
+        assert_eq!(asset_kind("a.glb", false), AssetKind::Model);
     }
 
     #[test]

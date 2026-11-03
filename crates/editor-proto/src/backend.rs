@@ -65,6 +65,17 @@ pub trait EditorBackend {
         Vec::new()
     }
 
+    /// Makes a generated (code-built) entity a level entity in place: a stable id and a name, so
+    /// it is saved, editable and selectable by id. Returns the op for the undo stack.
+    fn convert_to_level(&mut self, _id: EntityId) -> Result<Op, String> {
+        Err("convert is not supported by this backend".into())
+    }
+
+    /// Shows an asset in the system file manager.
+    fn reveal_asset(&mut self, _path: &str) -> Result<(), String> {
+        Err("not supported by this backend".into())
+    }
+
     // ---- logic graphs (defaults: not supported) ------------------------------------------
     fn logic_list(&mut self) -> Vec<LogicFile> {
         Vec::new()

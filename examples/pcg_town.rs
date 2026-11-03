@@ -48,7 +48,7 @@ fn setup(
     let mut blocks = Vec::new();
     for (c, h) in houses() {
         blocks.push(Rect::new(c, h));
-        commands.spawn((Mesh3d(meshes.add(Cuboid::new(h.x * 2.0, 6.0, h.y * 2.0))), MeshMaterial3d(block_mat.clone()), Transform::from_xyz(c.x, 3.0, c.y), Scenery));
+        commands.spawn((Mesh3d(meshes.add(Cuboid::new(h.x * 2.0, 6.0, h.y * 2.0))), MeshMaterial3d(block_mat.clone()), Transform::from_xyz(c.x, 3.0, c.y), Scenery, Name::new("House"), engine::level::GeneratedBy("pcg_town::houses")));
     }
     inputs = inputs.rects("blocks", blocks);
     // The street itself, so lamps line something.
