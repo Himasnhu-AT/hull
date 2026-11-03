@@ -552,7 +552,9 @@ impl EditorUi {
         }
 
         // Overlays.
-        if let Some(v) = viewport {
+        // LOGIC-FLOAT: no viewport overlays over the floating Logic tab (until the document area).
+        let logic_floats = self.layout.floating.iter().any(|g| g.panels.contains(&Panel::Logic));
+        if let Some(v) = viewport.filter(|_| !logic_floats) {
             self.viewport_overlay(ctx, v, backend, &mut reqs);
         }
         self.help_windows(ctx);

@@ -153,7 +153,7 @@ impl SnarlViewer<SNode> for Viewer<'_> {
 
     fn show_header(&mut self, node: NodeId, _: &[InPin], _: &[OutPin], ui: &mut Ui, snarl: &mut Snarl<SNode>) {
         let sn = &snarl[node];
-        ui.label(egui::RichText::new(logic_core::label(&sn.kind)).strong().color(Color32::WHITE));
+        ui.label(egui::RichText::new(logic_core::label(&sn.kind)).strong().size(14.0).color(Color32::WHITE));
         if let Some(errs) = self.env.errors.get(&sn.id) {
             let bad = errs.iter().any(|e| e.severity == Severity::Error);
             let text = errs.iter().map(|e| e.message.as_str()).collect::<Vec<_>>().join("\n");
@@ -169,7 +169,7 @@ impl SnarlViewer<SNode> for Viewer<'_> {
         let id = sn.id;
         let error = self.pin_has_error(id, &def.name);
         let row = ui.horizontal(|ui| {
-            let label = if def.ty == PinTy::Flow { "".to_string() } else { def.name.clone() };
+            let label = if def.ty == PinTy::Flow || self.transform.scaling < 0.5 { "".to_string() } else { def.name.clone() };
             ui.label(egui::RichText::new(label).color(def.ty.color().gamma_multiply(0.9))).on_hover_text(format!("{} ({})", def.name, def.ty.name()));
             if let PinTy::Data(t) = def.ty
                 && pin.remotes.is_empty()
@@ -196,7 +196,8 @@ impl SnarlViewer<SNode> for Viewer<'_> {
         let def = layout.outs[pin.id.output].clone();
         let id = sn.id;
         let error = self.pin_has_error(id, &def.name);
-        let r = ui.label(egui::RichText::new(&def.name).color(def.ty.color().gamma_multiply(0.9))).on_hover_text(format!("{} ({})", def.name, def.ty.name()));
+        let name = if self.transform.scaling < 0.5 { "" } else { def.name.as_str() };
+        let r = ui.label(egui::RichText::new(name).color(def.ty.color().gamma_multiply(0.9))).on_hover_text(format!("{} ({})", def.name, def.ty.name()));
         self.pin_y.insert((id, true, pin.id.output), r.rect.center().y);
         let mut info = pin_info(def.ty, error);
         // A wire between two nodes the trace ran lights up.
@@ -360,7 +361,7 @@ pub fn bounds(doc: &GraphDoc) -> Option<Rect> {
 /// Transform that frames `target` (graph space) in `canvas` (screen space).
 pub fn frame_rect(target: Rect, canvas: Rect, max_scale: f32) -> TSTransform {
     let target = target.expand(40.0);
-    let scale = (canvas.width() / target.width().max(1.0)).min(canvas.height() / target.height().max(1.0)).clamp(0.25, max_scale);
+    let scale = (canvas.width() / target.width().max(1.0)).min(canvas.height() / target.height().max(1.0)).clamp(0.7, max_scale);
     TSTransform::new(canvas.center().to_vec2() - target.center().to_vec2() * scale, scale)
 }
 
@@ -415,7 +416,16 @@ pub fn show(ui: &mut Ui, doc: &mut GraphDoc, entries: &[Entry], now: f64, keys: 
         new_comment: None,
         search: ctx.data(|d| d.get_temp::<String>(egui::Id::new("logic.palette.search"))).unwrap_or_default(),
     };
-    SnarlWidget::new().id(doc.widget_id).style(style()).show(&mut doc.snarl, &mut viewer, ui);
+    ui.scope(|ui| {
+        // Readable at zoom 1: titles 14, labels and fields 13.
+        let st = ui.style_mut();
+        for (ts, size) in [(egui::TextStyle::Body, 13.0), (egui::TextStyle::Button, 13.0), (egui::TextStyle::Small, 12.0), (egui::TextStyle::Monospace, 13.0)] {
+            if let Some(f) = st.text_styles.get_mut(&ts) {
+                f.size = size;
+            }
+        }
+        SnarlWidget::new().id(doc.widget_id).style(style()).show(&mut doc.snarl, &mut viewer, ui);
+    });
     ctx.data_mut(|d| d.insert_temp(egui::Id::new("logic.palette.search"), std::mem::take(&mut viewer.search)));
 
     doc.node_rects = std::mem::take(&mut viewer.rects);
