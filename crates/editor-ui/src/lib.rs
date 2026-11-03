@@ -55,10 +55,16 @@ pub enum Panel {
     Tool,
     /// Placeable types and library models.
     Place,
+    /// Mode palettes (Select, Landscape, Foliage, Splines, Place). Stub until WP-B.
+    Modes,
+    /// Look, terrain, streaming, game mode. Stub until WP-B.
+    WorldSettings,
+    /// Editor, logic and build messages. Stub until WP-D.
+    Messages,
 }
 
 impl Panel {
-    pub const ALL: [Panel; 8] = [Panel::Viewport, Panel::Outliner, Panel::Details, Panel::Content, Panel::Output, Panel::Logic, Panel::Tool, Panel::Place];
+    pub const ALL: [Panel; 11] = [Panel::Viewport, Panel::Outliner, Panel::Details, Panel::Content, Panel::Output, Panel::Logic, Panel::Tool, Panel::Place, Panel::Modes, Panel::WorldSettings, Panel::Messages];
     pub fn title(self) -> &'static str {
         match self {
             Panel::Viewport => "Viewport",
@@ -69,6 +75,9 @@ impl Panel {
             Panel::Logic => "Logic",
             Panel::Tool => "Tool",
             Panel::Place => "Place",
+            Panel::Modes => "Modes",
+            Panel::WorldSettings => "World Settings",
+            Panel::Messages => "Messages",
         }
     }
 }
@@ -151,6 +160,7 @@ pub struct EditorUi {
     keymap: Keymap,
     palette: CommandPalette,
     toasts: Toasts,
+    logic_request: Option<String>,
     tool: Tool,
     snap: bool,
     snap_step: f32,
@@ -214,6 +224,7 @@ impl EditorUi {
             keymap: Keymap::new(Platform::current(), COMMANDS.iter().map(|c| (c.id, c.shortcut))),
             palette: CommandPalette::new().hint("Type a command"),
             toasts: Toasts::new(),
+            logic_request: None,
             tool: Tool::Move,
             snap: false,
             snap_step: 0.5,
@@ -295,6 +306,16 @@ impl EditorUi {
             self.snap_step = p.snap_step;
         }
         Ok(())
+    }
+
+    /// Open the Logic editor tab for a `.logic.ron` file. Stub: records the request until the
+    /// Logic editor (WP-C) takes it with [`EditorUi::take_logic_request`].
+    pub fn open_logic_tab(&mut self, path: &str) {
+        self.logic_request = Some(path.to_string());
+    }
+    /// The path last passed to `open_logic_tab`, once.
+    pub fn take_logic_request(&mut self) -> Option<String> {
+        self.logic_request.take()
     }
 
     pub fn layout(&self) -> &Layout<Panel> {
@@ -470,6 +491,9 @@ impl EditorUi {
                         Panel::Place => {
                             let active = self.active_tool.as_ref().filter(|id| id.as_str() == "place").and_then(|id| self.tools.iter().find(|t| &t.id == id)).and_then(|t| t.settings.get("type_path")).and_then(|v| v.as_str());
                             place::show(ui, &mut self.place, &self.placeables, &self.models, active, &mut reqs);
+                        }
+                        Panel::Modes | Panel::WorldSettings | Panel::Messages => {
+                            ui.weak(format!("{}: not built yet", panel.title()));
                         }
                         Panel::Tool => {
                             let v = tool::View { tool: self.active_tool.as_ref().and_then(|id| self.tools.iter().find(|t| &t.id == id)) };

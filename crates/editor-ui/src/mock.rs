@@ -298,6 +298,8 @@ impl MockBackend {
             children,
             generated: e.generated,
             hidden: false,
+            origin: e.generated.then(|| "mock".to_string()),
+            pickable: true,
         })
     }
 

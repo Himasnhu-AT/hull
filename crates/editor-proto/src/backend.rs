@@ -64,4 +64,27 @@ pub trait EditorBackend {
     fn placeables(&mut self) -> Vec<PlaceableDoc> {
         Vec::new()
     }
+
+    // ---- logic graphs (defaults: not supported) ------------------------------------------
+    fn logic_list(&mut self) -> Vec<LogicFile> {
+        Vec::new()
+    }
+    /// The RON text of a `.logic.ron` file.
+    fn logic_read(&mut self, _path: &str) -> Result<String, String> {
+        Err("logic graphs are not supported by this backend".into())
+    }
+    /// Validates and writes the RON; returns the graph errors found (empty = valid).
+    fn logic_write(&mut self, _path: &str, _ron: &str) -> Result<Vec<GraphErrorDoc>, String> {
+        Err("logic graphs are not supported by this backend".into())
+    }
+    /// Creates a new graph file from a template; returns its path.
+    fn logic_create(&mut self, _name: &str, _template: &str) -> Result<String, String> {
+        Err("logic graphs are not supported by this backend".into())
+    }
+    fn logic_palette(&mut self) -> LogicPalette {
+        LogicPalette::default()
+    }
+    fn logic_fire(&mut self, _entity: EntityId, _event: &str) -> Result<LogicTrace, String> {
+        Err("logic graphs are not supported by this backend".into())
+    }
 }

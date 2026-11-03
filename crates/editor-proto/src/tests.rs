@@ -251,3 +251,10 @@ fn terrain_patch_swaps_blobs_and_survives_json() {
     let back: Op = serde_json::from_str(&serde_json::to_string(&op).unwrap()).unwrap();
     assert_eq!(back, op);
 }
+
+#[test]
+fn asset_actions_per_kind() {
+    assert_eq!(AssetKind::Model.actions(), &[AssetAction::Place]);
+    assert!(AssetKind::Audio.actions().iter().all(|a| *a != AssetAction::Place));
+    assert!(AssetKind::Other.actions().is_empty());
+}

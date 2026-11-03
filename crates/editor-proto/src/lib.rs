@@ -59,6 +59,16 @@ pub struct TreeNode {
     /// Built by code, read-only in the editor.
     pub generated: bool,
     pub hidden: bool,
+    /// Who built a generated node (`GeneratedBy`, else its name, else "generated").
+    #[serde(default)]
+    pub origin: Option<String>,
+    /// False for rows that are shown but cannot be picked in the viewport.
+    #[serde(default = "yes")]
+    pub pickable: bool,
+}
+
+fn yes() -> bool {
+    true
 }
 
 impl TreeNode {
@@ -71,6 +81,8 @@ impl TreeNode {
             children: Vec::new(),
             generated: false,
             hidden: false,
+            origin: None,
+            pickable: true,
         }
     }
     /// The entity reference an `Op` should use for this node.
@@ -288,6 +300,46 @@ pub enum AssetKind {
     Other,
 }
 
+/// What a content tile can do. The first action of [`AssetKind::actions`] is the primary one.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum AssetAction {
+    /// Spawn at the view / drop point.
+    Place,
+    /// Open in the editor (level, script, logic tab) or enter a folder.
+    Open,
+    Preview,
+    /// Assign to the selection (material).
+    Assign,
+    /// Attach to the selection (logic graph).
+    Attach,
+}
+
+impl AssetAction {
+    pub fn label(self) -> &'static str {
+        match self {
+            AssetAction::Place => "Place",
+            AssetAction::Open => "Open",
+            AssetAction::Preview => "Preview",
+            AssetAction::Assign => "Assign",
+            AssetAction::Attach => "Attach",
+        }
+    }
+}
+
+impl AssetKind {
+    /// The actions a tile of this kind offers; empty = none (no button).
+    pub fn actions(self) -> &'static [AssetAction] {
+        match self {
+            AssetKind::Model => &[AssetAction::Place],
+            AssetKind::Level | AssetKind::Script | AssetKind::Folder => &[AssetAction::Open],
+            AssetKind::Logic => &[AssetAction::Open, AssetAction::Attach],
+            AssetKind::Audio | AssetKind::Texture => &[AssetAction::Preview],
+            AssetKind::Material => &[AssetAction::Assign],
+            AssetKind::Other => &[],
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct AssetEntry {
     /// Path relative to the asset root.
@@ -417,6 +469,67 @@ impl Default for ViewInfo {
     fn default() -> Self {
         ViewInfo { camera_speed: 8.0, local_space: false, show_grid: true, show_all_scenery: false, camera_rotation: [0.0, 0.0, 0.0, 1.0] }
     }
+}
+
+/// One `.logic.ron` file the Logic editor can open.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct LogicFile {
+    pub path: String,
+    pub name: String,
+    pub errors: Vec<GraphErrorDoc>,
+}
+
+/// A graph validation error, pointing at a node and pin when it can.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct GraphErrorDoc {
+    pub node: Option<u32>,
+    pub pin: Option<String>,
+    pub message: String,
+}
+
+/// A pin of a node template.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct PinDoc {
+    pub name: String,
+    /// `flow`, `bool`, `float`, `string`, ...
+    pub ty: String,
+    pub input: bool,
+}
+
+/// A node the Logic palette can add.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct NodeTemplate {
+    pub kind_label: String,
+    pub category: String,
+    /// The node kind as `logic-core` serialises it.
+    pub kind_json: Value,
+    pub pins: Vec<PinDoc>,
+    #[serde(default)]
+    pub doc: String,
+}
+
+/// A command a `Command` node can run.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct CommandDoc {
+    pub name: String,
+    pub doc: String,
+    pub schema: Option<TypeSchema>,
+}
+
+/// Everything the Logic palette lists.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct LogicPalette {
+    pub nodes: Vec<NodeTemplate>,
+    pub commands: Vec<CommandDoc>,
+    /// Script functions (`file::fn`).
+    pub functions: Vec<String>,
+}
+
+/// What firing an event on an entity ran.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct LogicTrace {
+    pub nodes: Vec<u32>,
+    pub log: Vec<String>,
 }
 
 #[cfg(test)]
