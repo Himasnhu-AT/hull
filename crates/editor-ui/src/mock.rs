@@ -36,6 +36,8 @@ pub struct MockBackend {
     pub active: Option<String>,
     pub recorded: Vec<RecordedOp>,
     pub placeable_docs: Vec<PlaceableDoc>,
+    /// Settings groups the mock offers (`settings()`); `set_settings` merges into `value`.
+    pub settings_groups: Vec<SettingsGroup>,
 }
 
 pub const TRANSFORM: &str = "bevy_transform::components::transform::Transform";
@@ -134,6 +136,7 @@ impl MockBackend {
             active: None,
             recorded: Vec::new(),
             placeable_docs: Vec::new(),
+            settings_groups: Vec::new(),
         }
     }
 
@@ -172,6 +175,25 @@ impl MockBackend {
             PlaceableDoc { name: "Event marker".into(), icon: "flag".into(), category: "Gameplay".into(), type_path: "game::EventMarker".into() },
             PlaceableDoc { name: "Start line".into(), icon: "flag".into(), category: "Gameplay".into(), type_path: "game::StartLine".into() },
             PlaceableDoc { name: "Point light".into(), icon: "light".into(), category: "Lights".into(), type_path: "game::PointLight".into() },
+        ];
+        let fl = |min: f64, max: f64| TypeSchema::Float { min: Some(min), max: Some(max), step: None };
+        m.settings_groups = vec![
+            SettingsGroup {
+                id: "look".into(),
+                label: "Look".into(),
+                page: SettingsPage::World,
+                hint: "Sun and sky.".into(),
+                schema: TypeSchema::Struct { fields: vec![("sun".into(), TypeSchema::Struct { fields: vec![("elevation_deg".into(), fl(-20.0, 90.0))] })] },
+                value: json!({"sun": {"elevation_deg": 45.0}}),
+            },
+            SettingsGroup {
+                id: "scatter".into(),
+                label: "Foliage and scatter".into(),
+                page: SettingsPage::Project,
+                hint: String::new(),
+                schema: TypeSchema::Struct { fields: vec![("distance_scale".into(), fl(0.0, 8.0))] },
+                value: json!({"distance_scale": 1.0}),
+            },
         ];
         m.assets = vec![
             (
@@ -465,6 +487,21 @@ impl EditorBackend for MockBackend {
     }
     fn placeables(&mut self) -> Vec<PlaceableDoc> {
         self.placeable_docs.clone()
+    }
+
+    fn settings(&mut self) -> Vec<SettingsGroup> {
+        self.settings_groups.clone()
+    }
+    fn set_settings(&mut self, group: &str, value: Value) -> Result<(), String> {
+        let g = self.settings_groups.iter_mut().find(|g| g.id == group).ok_or_else(|| format!("no settings group `{group}`"))?;
+        if let (Value::Object(have), Value::Object(new)) = (&mut g.value, &value) {
+            for (k, v) in new {
+                have.insert(k.clone(), v.clone());
+            }
+        } else {
+            g.value = value;
+        }
+        Ok(())
     }
 
     fn tree(&mut self, filter: &TreeFilter) -> Vec<TreeNode> {
