@@ -19,6 +19,7 @@
 //! | `editor.viewport` | `ViewportCmd` JSON | `{ok}` |
 //! | `editor.camera` | `{pos?, look_at?, speed?}` | the camera pose |
 //! | `editor.command` | `{id}` (a UI command: `editor.undo`, `editor.redo`, `editor.save`, ...) | `{ok}` |
+//! | `editor.popup` | `{name}` (`add`, `logic`, `close`) | `{ok}`: opens that Details popup next frame |
 //! | `editor.tab` | `{tab}` or `{path}` (a document tab). Tabs: (Modes, Outliner, Details, World Settings, Content, Output, Messages, Logic, Level) | `{ok}` |
 //! | `editor.layout` | `{name}` (Default, Landscape, Logic) | `{ok}` |
 //! | `editor.window` | `{name, open?}` (help, about, project settings, preferences, palette) | `{ok}` |
@@ -109,7 +110,8 @@ pub(super) fn register(app: &mut App) {
         .add_control_command("editor.layout", "Switch to a named panel layout", params(&[("name", "string", "Default|Landscape|Logic")]), layout)
         .add_control_command("editor.window", "Open or close a window", params(&[("name", "string", "help|about|project settings|preferences|palette"), ("open", "boolean", "default true")]), window)
         .add_control_command("editor.drawer", "Open / close / dock the content drawer", params(&[("open", "boolean", "open or close"), ("dock", "boolean", "dock into the layout (true) or back to the drawer (false)")]), drawer)
-        .add_control_command("editor.settings", "World and Project settings groups; `group` + `value` merges a change", params(&[("group", "string", "look|terrain|streaming|scatter|hlod|origin"), ("value", "object", "partial value for the group")]), settings);
+        .add_control_command("editor.settings", "World and Project settings groups; `group` + `value` merges a change", params(&[("group", "string", "look|terrain|streaming|scatter|hlod|origin"), ("value", "object", "partial value for the group")]), settings)
+        .add_control_command("editor.popup", "Open a Details popup on the next frame", params(&[("name", "string", "add | logic | close")]), popup);
 }
 
 fn parse<T: serde::de::DeserializeOwned>(v: Value) -> Result<T, String> {
@@ -343,6 +345,13 @@ fn tab(world: &mut World, p: Value) -> Result<Value, String> {
     }
     let name = p.get("tab").and_then(Value::as_str).ok_or("`tab` or `path` is required")?;
     ui.0.show_panel(name)?;
+    Ok(json!({"ok": true}))
+}
+
+fn popup(world: &mut World, p: Value) -> Result<Value, String> {
+    let name = p.get("name").and_then(Value::as_str).ok_or("`name` is required (add | logic)")?;
+    let mut ui = world.get_resource_mut::<EditorUiRes>().ok_or("the editor UI is not up yet")?;
+    ui.0.open_details_popup(name)?;
     Ok(json!({"ok": true}))
 }
 

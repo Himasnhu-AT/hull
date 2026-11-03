@@ -20,9 +20,96 @@ use bevy::reflect::serde::{TypedReflectDeserializer, TypedReflectSerializer};
 use bevy::reflect::attributes::CustomAttributes;
 use bevy::reflect::{PartialReflect, Type, TypeInfo, TypeRegistration, TypeRegistry};
 use bevy::reflect::enums::VariantInfo;
-use editor_proto::TypeSchema;
+use bevy::reflect::Reflect;
+use editor_proto::{FieldMeta, TypeSchema};
 use serde::de::DeserializeSeed;
 use serde_json::{Map, Value, json};
+
+// ---------------------------------------------------------------------------------------------
+// Display hints: `#[reflect(@Tip("..."))]` and friends on fields (and `Category` / `Tip` on a
+// component type) become the label, hover text and unit the Details panel shows.
+
+/// Hover text of a field or component.
+#[derive(Reflect, Clone, Copy, Debug)]
+pub struct Tip(pub &'static str);
+/// Unit shown after a number (`m`, `s`, `deg`, `m/s` ...).
+#[derive(Reflect, Clone, Copy, Debug)]
+pub struct Unit(pub &'static str);
+/// Label that replaces the one made from the field name.
+#[derive(Reflect, Clone, Copy, Debug)]
+pub struct DisplayName(pub &'static str);
+/// The field is not shown (its value stays available to siblings).
+#[derive(Reflect, Clone, Copy, Debug)]
+pub struct Hidden;
+/// An integer field picked from the rows of the named sibling list (`@Choose("points")`).
+#[derive(Reflect, Clone, Copy, Debug)]
+pub struct Choose(pub &'static str);
+/// Details section of a component type: `Rendering`, `Physics`, `Gameplay`, `Logic`, `Other`.
+#[derive(Reflect, Clone, Copy, Debug)]
+pub struct Category(pub &'static str);
+
+/// Display hints from a field's attributes plus the built-in ones for engine types.
+fn field_meta(attrs: &CustomAttributes, owner: &str, field: &str) -> Option<FieldMeta> {
+    let mut m = FieldMeta {
+        label: attrs.get::<DisplayName>().map(|l| l.0.to_owned()),
+        tip: attrs.get::<Tip>().map(|t| t.0.to_owned()),
+        unit: attrs.get::<Unit>().map(|u| u.0.to_owned()),
+        hidden: attrs.get::<Hidden>().is_some(),
+        choose: attrs.get::<Choose>().map(|c| c.0.to_owned()),
+    };
+    if owner.ends_with("::Transform") {
+        match field {
+            "translation" => {
+                m.unit.get_or_insert_with(|| "m".into());
+                m.tip.get_or_insert_with(|| "Position relative to the parent, in metres".into());
+            }
+            "rotation" => {
+                m.tip.get_or_insert_with(|| "Rotation as angles in degrees (X pitch, Y yaw, Z roll)".into());
+            }
+            "scale" => {
+                m.tip.get_or_insert_with(|| "Size factor per axis; 1 is the original size".into());
+            }
+            _ => {}
+        }
+    }
+    if owner.ends_with("::BrushSettings") {
+        let (unit, tip) = match field {
+            "radius" => (Some("m"), Some("Brush radius")),
+            "strength" => (None, Some("How hard each dab pushes; stroke speed scales with it")),
+            "target" => (Some("m"), Some("Flatten: the height to reach. Ramp: the height at the far end")),
+            "pick_target" => (None, Some("Take the target height from the terrain under the first dab")),
+            "noise_scale" => (Some("m"), Some("Size of the noise features")),
+            "ramp_end" => (Some("m"), Some("Ramp (single dab): XZ of the far end")),
+            _ => (None, None),
+        };
+        if let Some(u) = unit {
+            m.unit.get_or_insert_with(|| u.into());
+        }
+        if let Some(t) = tip {
+            m.tip.get_or_insert_with(|| t.into());
+        }
+    }
+    (m != FieldMeta::default()).then_some(m)
+}
+
+/// `(category, tip)` set on a component type with `#[reflect(@Category("Gameplay"), @Tip("..."))]`.
+pub fn type_hints(info: &'static TypeInfo) -> (Option<&'static str>, Option<&'static str>) {
+    let attrs = match info {
+        TypeInfo::Struct(s) => s.custom_attributes(),
+        TypeInfo::TupleStruct(t) => t.custom_attributes(),
+        TypeInfo::Enum(e) => e.custom_attributes(),
+        _ => return (None, None),
+    };
+    (attrs.get::<Category>().map(|c| c.0), attrs.get::<Tip>().map(|t| t.0))
+}
+
+/// Replaces the schema under a field's display hints (the hints stay).
+pub fn set_inner(slot: &mut TypeSchema, new: TypeSchema) {
+    match slot {
+        TypeSchema::Field { inner, .. } => **inner = new,
+        other => *other = new,
+    }
+}
 
 /// Deepest nesting the schema builder follows (recursive types stop here as `Opaque`).
 const MAX_DEPTH: usize = 8;
@@ -147,8 +234,12 @@ fn schema_inner(reg: &TypeRegistry, info: &'static TypeInfo, depth: usize) -> Ty
             fields: s
                 .iter()
                 .map(|f| {
-                    let base = sub(f.ty(), f.type_info());
-                    (f.name().to_string(), field_range(f.custom_attributes(), base))
+                    let base = field_range(f.custom_attributes(), sub(f.ty(), f.type_info()));
+                    let schema = match field_meta(f.custom_attributes(), info.type_path(), f.name()) {
+                        Some(meta) => TypeSchema::Field { meta, inner: Box::new(base) },
+                        None => base,
+                    };
+                    (f.name().to_string(), schema)
                 })
                 .collect(),
         },
@@ -434,5 +525,44 @@ mod tests {
         let ui = to_ui(&r, info, raw);
         assert_eq!(ui["mesh"], json!("a/b.glb#Mesh0"));
         assert_eq!(from_ui(&r, info, ui)["mesh"], json!({"Path": "a/b.glb#Mesh0"}));
+    }
+
+    #[derive(Component, Reflect, Default)]
+    #[reflect(Component, Default, @Category("Gameplay"), @Tip("A thing with hints"))]
+    struct Hinted {
+        #[reflect(@Unit("m/s"), @Tip("How fast"), @DisplayName("Top speed"))]
+        speed: f32,
+        #[reflect(@Hidden)]
+        secret: u8,
+        #[reflect(@Choose("rows"))]
+        pick: i32,
+        rows: Vec<String>,
+    }
+
+    #[test]
+    fn attributes_become_field_hints() {
+        let mut r = reg();
+        r.register::<Hinted>();
+        let info = r.get(TypeId::of::<Hinted>()).unwrap().type_info();
+        let TypeSchema::Struct { fields } = schema_of(&r, info) else { panic!("struct") };
+        let get = |n: &str| fields.iter().find(|(k, _)| k == n).unwrap().1.clone();
+        let m = get("speed").meta().cloned().expect("speed has hints");
+        assert_eq!((m.unit.as_deref(), m.tip.as_deref(), m.label.as_deref()), (Some("m/s"), Some("How fast"), Some("Top speed")));
+        assert_eq!(get("speed").inner(), &TypeSchema::Float { min: None, max: None, step: None });
+        assert!(get("secret").meta().is_some_and(|m| m.hidden));
+        assert_eq!(get("pick").meta().and_then(|m| m.choose.clone()).as_deref(), Some("rows"));
+        assert!(get("rows").meta().is_none(), "no attributes, no wrapper");
+        assert_eq!(type_hints(info), (Some("Gameplay"), Some("A thing with hints")));
+    }
+
+    #[test]
+    fn set_inner_keeps_the_hints() {
+        let mut s = TypeSchema::Field { meta: FieldMeta { tip: Some("t".into()), ..Default::default() }, inner: Box::new(TypeSchema::String) };
+        set_inner(&mut s, TypeSchema::Bool);
+        assert_eq!(s.inner(), &TypeSchema::Bool);
+        assert!(s.meta().is_some());
+        let mut plain = TypeSchema::String;
+        set_inner(&mut plain, TypeSchema::Bool);
+        assert_eq!(plain, TypeSchema::Bool);
     }
 }

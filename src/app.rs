@@ -162,8 +162,7 @@ pub fn app_with(info: GameInfo, mut options: EngineOptions) -> App {
             bevy::input::InputPlugin,
         ));
     } else {
-        app.add_plugins(
-            DefaultPlugins
+        let defaults = DefaultPlugins
                 .set(WindowPlugin {
                     primary_window: Some(Window {
                         title: info.title.into(),
@@ -182,8 +181,11 @@ pub fn app_with(info: GameInfo, mut options: EngineOptions) -> App {
                 })
                 .set(asset_plugin)
                 .set(render_plugin())
-                .set(task_pools(options.worker_threads)),
-        );
+                .set(task_pools(options.worker_threads));
+        // The editor's Output panel lists engine warnings and errors.
+        #[cfg(feature = "editor")]
+        let defaults = defaults.set(bevy::log::LogPlugin { custom_layer: crate::editor::engine_log_layer, ..default() });
+        app.add_plugins(defaults);
     }
     #[cfg(feature = "physics")]
     app.add_plugins(avian3d::prelude::PhysicsPlugins::default());

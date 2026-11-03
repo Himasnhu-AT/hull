@@ -36,9 +36,10 @@ pub enum FoliageMode {
 pub struct FoliageSettings {
     pub mode: FoliageMode,
     /// Paint: area radius in metres.
+    #[reflect(@crate::editor::schema::Unit("m"))]
     pub radius: f32,
     /// Paint: share of the generated items kept in the area (0 = clear it).
-    #[reflect(@0.0f32..=1.0f32)]
+    #[reflect(@0.0f32..=1.0f32, @crate::editor::schema::Tip("Share of the generated items kept in the painted area; 0 clears it"))]
     pub density: f32,
     /// Place: the catalog item.
     pub item: String,

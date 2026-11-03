@@ -26,8 +26,10 @@ pub struct PaintSettings {
     #[reflect(@0u8..=3u8)]
     pub layer: u8,
     /// Metres.
+    #[reflect(@super::super::schema::Unit("m"), @super::super::schema::Tip("Brush radius"))]
     pub radius: f32,
     /// 0..1 blend toward the layer per dab.
+    #[reflect(@super::super::schema::Tip("How far each dab blends toward the layer (0 to 1)"))]
     pub strength: f32,
     pub falloff: Falloff,
 }

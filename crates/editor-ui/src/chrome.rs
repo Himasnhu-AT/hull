@@ -92,6 +92,14 @@ const STRIP_H: f32 = 30.0;
 impl EditorUi {
     // ---- panels ----------------------------------------------------------------------------
 
+    /// Tab title with the Output / Messages count of warnings and errors.
+    pub(crate) fn tab_title(&self, p: Panel) -> String {
+        match (p, crate::output::badge(&self.diagnostics)) {
+            (Panel::Output | Panel::Messages, Some(n)) => format!("{} ({n})", p.title()),
+            _ => p.title().to_owned(),
+        }
+    }
+
     fn panel_open(&self, p: Panel) -> bool {
         self.layout.contains(&p)
     }
@@ -165,7 +173,7 @@ impl EditorUi {
                 ui.horizontal_centered(|ui| {
                     ui.spacing_mut().item_spacing.x = t.space.sm;
                     for tab in DRAWER_TABS {
-                        let label = if tab == Panel::Content { "Content Drawer  ^".to_owned() } else { tab.title().to_owned() };
+                        let label = if tab == Panel::Content { "Content Drawer  ^".to_owned() } else { self.tab_title(tab) };
                         if ui.button(label).on_hover_text(format!("Open the drawer ({})", shortcut_text(Cmd::ToggleDrawer).unwrap_or_default())).clicked() {
                             self.drawer.open = true;
                             self.drawer.tab = tab;
@@ -181,7 +189,7 @@ impl EditorUi {
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = t.space.sm;
                 for tab in DRAWER_TABS {
-                    if ui.selectable_label(self.drawer.tab == tab, tab.title()).clicked() {
+                    if ui.selectable_label(self.drawer.tab == tab, self.tab_title(tab)).clicked() {
                         self.drawer.tab = tab;
                     }
                 }
@@ -250,6 +258,10 @@ impl EditorUi {
                         if ui.checkbox(&mut on, p.title()).changed() {
                             self.toggle_panel(p);
                         }
+                    }
+                    let mut on = self.panel_open(Panel::History);
+                    if ui.checkbox(&mut on, Panel::History.title()).changed() {
+                        self.toggle_panel(Panel::History);
                     }
                     let docked = self.drawer_docked();
                     item(ui, reqs, if docked { "Undock the content drawer" } else { "Dock the content drawer" }, Cmd::DockDrawer, true);

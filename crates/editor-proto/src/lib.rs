@@ -149,6 +149,46 @@ pub enum TypeSchema {
     Entity,
     /// Not editable; shown as text.
     Opaque,
+    /// A field with display hints (label, tooltip, unit ...) around the real schema. Only ever
+    /// wraps a struct field; everything that reads a schema looks through it ([`TypeSchema::inner`]).
+    Field {
+        meta: FieldMeta,
+        inner: Box<TypeSchema>,
+    },
+}
+
+/// Display hints for one field, from `#[reflect(@...)]` custom attributes on the engine side.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct FieldMeta {
+    /// Replaces the label made from the field name.
+    pub label: Option<String>,
+    /// Hover text.
+    pub tip: Option<String>,
+    /// Shown after numbers: `m`, `deg`, `s` ...
+    pub unit: Option<String>,
+    /// Not shown (the value stays available to sibling fields).
+    pub hidden: bool,
+    /// An integer field that is picked from the rows of this sibling list field instead of typed.
+    pub choose: Option<String>,
+}
+
+impl TypeSchema {
+    /// The schema without display hints.
+    pub fn inner(&self) -> &TypeSchema {
+        let mut s = self;
+        while let TypeSchema::Field { inner, .. } = s {
+            s = inner;
+        }
+        s
+    }
+    /// The display hints, if any.
+    pub fn meta(&self) -> Option<&FieldMeta> {
+        match self {
+            TypeSchema::Field { meta, .. } => Some(meta),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -160,6 +200,16 @@ pub struct ComponentDoc {
     pub schema: TypeSchema,
     /// False when the component is not Reflect-deserializable.
     pub editable: bool,
+    /// Details section: `Transform`, `Rendering`, `Physics`, `Gameplay`, `Logic`, `Other`.
+    /// Empty = the UI guesses from the name.
+    #[serde(default)]
+    pub category: String,
+    /// One line about the component (hover text of its header).
+    #[serde(default)]
+    pub doc: String,
+    /// `Default::default()` of the component in the same JSON form, for the reset arrows.
+    #[serde(default)]
+    pub default: Option<Value>,
 }
 
 /// An entity with its components and subtree: enough to spawn it again.
@@ -428,6 +478,25 @@ pub struct Diagnostic {
     pub file: Option<String>,
     pub line: Option<u32>,
     pub col: Option<u32>,
+    /// The entity the message is about (click selects it).
+    #[serde(default)]
+    pub entity: Option<EntityId>,
+}
+
+impl Diagnostic {
+    pub fn new(level: Level, source: impl Into<String>, message: impl Into<String>) -> Self {
+        Diagnostic { level, source: source.into(), message: message.into(), file: None, line: None, col: None, entity: None }
+    }
+    pub fn at(mut self, file: impl Into<String>, line: Option<u32>, col: Option<u32>) -> Self {
+        self.file = Some(file.into());
+        self.line = line;
+        self.col = col;
+        self
+    }
+    pub fn about(mut self, entity: EntityId) -> Self {
+        self.entity = Some(entity);
+        self
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]

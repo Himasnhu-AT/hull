@@ -58,17 +58,19 @@ pub enum Panel {
     Details,
     Content,
     Output,
-    /// Editor, logic and build messages. Stub until WP-D.
+    /// Editor, logic, build and engine messages (the same log as Output).
     Messages,
     /// Mode palettes (Select, Landscape, Foliage, Splines, Place): tool settings and the Place
     /// palette.
     Modes,
     /// Look, terrain, streaming: a tab beside Details.
     WorldSettings,
+    /// Undo history: click a step to jump to it.
+    History,
 }
 
 impl Panel {
-    pub const ALL: [Panel; 8] = [Panel::Viewport, Panel::Outliner, Panel::Details, Panel::Content, Panel::Output, Panel::Messages, Panel::Modes, Panel::WorldSettings];
+    pub const ALL: [Panel; 9] = [Panel::Viewport, Panel::Outliner, Panel::Details, Panel::Content, Panel::Output, Panel::Messages, Panel::Modes, Panel::WorldSettings, Panel::History];
     pub fn title(self) -> &'static str {
         match self {
             Panel::Viewport => "Viewport",
@@ -79,6 +81,7 @@ impl Panel {
             Panel::Messages => "Messages",
             Panel::Modes => "Modes",
             Panel::WorldSettings => "World Settings",
+            Panel::History => "History",
         }
     }
 }
@@ -177,6 +180,9 @@ struct Dialog {
     focus_pending: bool,
 }
 
+/// Most undo/redo steps one History click replays.
+const MAX_JUMP: usize = 600;
+
 /// Most entities the command palette lists.
 const MAX_PALETTE_ENTITIES: usize = 2000;
 
@@ -208,6 +214,7 @@ pub struct EditorUi {
     assets: Vec<AssetEntry>,
     diagnostics: Vec<Diagnostic>,
     diag_cursor: u64,
+    logic_files: Vec<editor_proto::LogicFile>,
     level: editor_proto::LevelInfo,
     play: PlayState,
     view: ViewInfo,
@@ -281,6 +288,7 @@ impl EditorUi {
             assets: Vec::new(),
             diagnostics: Vec::new(),
             diag_cursor: 0,
+            logic_files: Vec::new(),
             level: Default::default(),
             play: PlayState::Editing,
             view: ViewInfo::default(),
@@ -386,6 +394,11 @@ impl EditorUi {
     pub fn open_logic_tab(&mut self, path: &str) {
         self.docs.open(path);
     }
+    /// Open the Details `+ Add` (`"add"`) or `+ Add Logic` (`"logic"`) popup on the next frame
+    /// (scripts and screenshots).
+    pub fn open_details_popup(&mut self, name: &str) -> Result<(), String> {
+        self.details.request_popup(name)
+    }
 
     /// Paths of the open document tabs (not the Level tab), in tab order.
     pub fn open_tabs(&self) -> Vec<String> {
@@ -465,7 +478,8 @@ impl EditorUi {
         if self.layout.apply(Action::Activate { panel }).is_ok() {
             return Ok(());
         }
-        self.layout.apply(Action::Open { panel, anchor: None }).map_err(|e| format!("{e:?}"))
+        let anchor = Panel::ALL.into_iter().find(|a| *a != panel && self.layout.contains(a));
+        self.layout.apply(Action::Open { panel, anchor }).map_err(|e| format!("{e:?}"))
     }
 
     /// Dock the drawer panels into the layout (`true`) or move them back to the drawer.
@@ -605,6 +619,7 @@ impl EditorUi {
 
         // The dock: panels fill their own background; the viewport body stays transparent.
         let mut viewport = None;
+        let badge = output::badge(&self.diagnostics);
         let layout = std::mem::take(&mut self.layout);
         let actions;
         {
@@ -616,7 +631,10 @@ impl EditorUi {
                 ui,
                 &layout,
                 &style,
-                |p| p.title().to_owned(),
+                |p| match (p, badge.as_ref()) {
+                    (Panel::Output | Panel::Messages, Some(n)) => format!("{} ({n})", p.title()),
+                    _ => p.title().to_owned(),
+                },
                 |p| if *p == Panel::Viewport { Permissions::PROTECTED } else { Permissions::default() },
                 |ui, panel| {
                     if *panel != Panel::Viewport {
@@ -667,10 +685,12 @@ impl EditorUi {
                                 extra_selected: self.selection.len().saturating_sub(1),
                                 components: &self.components,
                                 types: &self.types,
+                                logic: &self.logic_files,
                             };
                             details::show(ui, &mut self.details, &v, &mut reqs);
                         }
                         Panel::Content | Panel::Output | Panel::Messages => self.drawer_body(ui, *panel, &mut reqs, &mut clear_output),
+                        Panel::History => undo::show(ui, &self.undo, &mut reqs),
                         Panel::Modes => {
                             let v = modes::View { mode: Mode::of_tool(self.active_tool.as_deref()), tools: &self.tools, active_tool: self.active_tool.as_deref(), placeables: &self.placeables, models: &self.models };
                             modes::show(ui, &mut self.place, &v, &mut reqs);
@@ -813,6 +833,9 @@ impl EditorUi {
         }
         if due || self.dirty_components {
             let first = self.selection.first().copied();
+            if first.is_some() {
+                self.logic_files = backend.logic_list();
+            }
             if first != self.comp_for || self.dirty_components || due {
                 self.components = match first {
                     Some(id) => backend.components(id),
@@ -902,10 +925,9 @@ impl EditorUi {
     fn drawer_body(&mut self, ui: &mut Ui, panel: Panel, reqs: &mut Vec<Req>, clear_output: &mut bool) {
         match panel {
             Panel::Content => content::show(ui, &mut self.content, &self.assets, reqs),
-            Panel::Output => output::show(ui, &mut self.output, &self.diagnostics, clear_output, reqs),
-            _ => {
-                ui.weak("Messages: coming with the message log");
-            }
+            Panel::History => undo::show(ui, &self.undo, reqs),
+            // Output and Messages are one log (source filters inside).
+            _ => output::show(ui, &mut self.output, &self.diagnostics, clear_output, reqs),
         }
     }
 
@@ -995,6 +1017,12 @@ impl EditorUi {
     /// Shows a toast; the same message again within two seconds replaces the old one with a count.
     fn toast(&mut self, level: ashlar_ui::toasts::ToastLevel, m: String) {
         let m = self.say(m);
+        let lv = match level {
+            ashlar_ui::toasts::ToastLevel::Error => editor_proto::Level::Error,
+            ashlar_ui::toasts::ToastLevel::Warning => editor_proto::Level::Warn,
+            _ => editor_proto::Level::Info,
+        };
+        output::push(&mut self.diagnostics, Diagnostic::new(lv, "editor", m.clone()));
         let (dismiss, text) = self.dedupe.next(&m, self.now);
         if let Some(id) = dismiss {
             self.toasts.dismiss(id);
@@ -1109,6 +1137,30 @@ impl EditorUi {
                 }
                 Req::TreeFilterChanged => self.dirty_tree = true,
                 Req::Copy(text) => ctx.copy_text(text),
+                Req::OpenLogic(path) => self.open_logic_tab(&path),
+                Req::AddLogic { entity, eref, name, template, logic_type, before } => match backend.logic_create(&name, &template) {
+                    Ok(path) => {
+                        let op = Op::SetComponent { entity: eref, type_path: logic_type, before, after: Some(serde_json::json!({ "graph": path })) };
+                        self.edit(backend, op, &format!("Add Logic {name}"), None, true);
+                        self.details.note_created(entity, path.clone());
+                        self.logic_files = backend.logic_list();
+                        self.say_success(format!("Created {path}"));
+                    }
+                    Err(e) => self.say_error(format!("Add Logic: {e}")),
+                },
+                Req::HistoryJump(target) => {
+                    for _ in 0..=MAX_JUMP {
+                        let now = self.undo.len();
+                        if now == target || (now > target && !self.undo.can_undo()) {
+                            break;
+                        }
+                        let before = now;
+                        self.command(ctx, backend, if now > target { Cmd::Undo } else { Cmd::Redo });
+                        if self.undo.len() == before {
+                            break;
+                        }
+                    }
+                }
             }
         }
     }

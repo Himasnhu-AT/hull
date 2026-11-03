@@ -213,7 +213,7 @@ fn parse_line(line: &str, last: Level) -> Diagnostic {
     } else {
         Level::Info
     };
-    let mut d = Diagnostic { level, source: "cargo".into(), message: line.trim_end().to_string(), file: None, line: None, col: None };
+    let mut d = Diagnostic { level, source: "cargo".into(), message: line.trim_end().to_string(), file: None, line: None, col: None, entity: None };
     if let Some(loc) = t.strip_prefix("--> ") {
         let mut parts = loc.rsplitn(3, ':');
         if let (Some(c), Some(l), Some(f)) = (parts.next(), parts.next(), parts.next())

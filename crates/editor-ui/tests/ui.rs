@@ -1,7 +1,7 @@
 //! Headless UI tests: the whole editor over the in-memory backend, driven with egui_kittest.
 
 use editor_proto::*;
-use editor_ui::mock::{HEALTH, MockBackend, TRANSFORM};
+use editor_ui::mock::{HEALTH, LIGHT, LOGIC, MockBackend, TRANSFORM};
 use editor_ui::{Command, EditorUi, Panel};
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable;
@@ -52,7 +52,7 @@ fn value_field_edit_reaches_the_backend_and_undo_restores_it() {
     assert_eq!(before["max"], json!(100));
 
     // Arrow up on a focused field is a one-shot edit.
-    let field = h.get_by_role_and_label(egui::accesskit::Role::Slider, "max");
+    let field = h.get_by_role_and_label(egui::accesskit::Role::Slider, "Max");
     field.focus();
     h.run_steps(2);
     h.key_press(egui::Key::ArrowUp);
@@ -212,7 +212,7 @@ fn tool_buttons_activate_a_tool_and_show_its_settings() {
     assert_eq!(h.state().backend.active.as_deref(), Some("sculpt"));
     // The Modes panel shows the tool's help and its settings; Details stays where it was.
     h.get_by_label("LMB drag paints");
-    h.get_by_role_and_label(egui::accesskit::Role::Slider, "radius");
+    h.get_by_role_and_label(egui::accesskit::Role::Slider, "Radius");
     // A transform tool deactivates it.
     h.get_by_label("Move").click();
     h.run_steps(3);
@@ -310,6 +310,173 @@ fn duplicate_goes_through_the_backend_and_is_undoable() {
     assert!(h.state().ui.can_undo());
 }
 
+// ---- WP-D: Details, Add Logic, Output, History ----------------------------------------------
+
+fn select(h: &mut Harness<'static, App>, name: &str) {
+    h.get_by_label(name).click();
+    h.run_steps(3);
+}
+
+#[test]
+fn fields_have_readable_labels_and_a_reset_arrow_when_changed() {
+    let mut h = harness();
+    select(&mut h, "Crate");
+    // `max` is shown as `Max`; Health's default max (10) differs from 100, so it can be reset.
+    h.get_by_role_and_label(egui::accesskit::Role::Slider, "Max");
+    let crate_id = id(&h, "Crate");
+    // The first arrow is Transform's translation (2, 0.5, -1 differs from the default 0, 0, 0).
+    h.get_all_by_role_and_label(egui::accesskit::Role::Button, "Reset to default").next().expect("a reset arrow").click();
+    h.run_steps(4);
+    let t = h.state().backend.component(crate_id, TRANSFORM).cloned().expect("transform");
+    assert_eq!(t["translation"], json!([0.0, 0.0, 0.0]));
+    assert_eq!(t["scale"], json!([1.0, 1.0, 1.0]));
+    assert!(h.state().ui.can_undo());
+}
+
+#[test]
+fn plus_add_lists_types_and_adds_one() {
+    let mut h = harness();
+    select(&mut h, "Crate");
+    h.get_by_label("+ Add").click();
+    h.run_steps(3);
+    // Types already on the entity are not offered.
+    assert!(h.query_by_label("Health").is_none() || h.query_all_by_label("Health").count() == 1);
+    h.get_by_label("PointLight").click();
+    h.run_steps(4);
+    let crate_id = id(&h, "Crate");
+    assert!(h.state().backend.component(crate_id, LIGHT).is_some(), "component added");
+    match h.state().backend.applied.last() {
+        Some(Op::SetComponent { type_path, before: None, after: Some(_), .. }) => assert_eq!(type_path, LIGHT),
+        other => panic!("unexpected op {other:?}"),
+    }
+    assert!(h.state().ui.can_undo());
+}
+
+#[test]
+fn add_logic_creates_a_graph_attaches_it_and_offers_to_open() {
+    let mut h = harness();
+    select(&mut h, "Crate");
+    h.get_by_label("+ Add Logic").click();
+    h.run_steps(3);
+    h.get_by_label("Door").click();
+    h.run_steps(2);
+    h.get_by_label("Create and attach").click();
+    h.run_steps(5);
+    let crate_id = id(&h, "Crate");
+    assert_eq!(h.state().backend.logic_created, vec![("Crate_logic".to_owned(), "door".to_owned())]);
+    assert_eq!(h.state().backend.component(crate_id, LOGIC), Some(&json!({"graph": "logic/Crate_logic.logic.ron"})));
+    // The Logic section lists it, with Open and Detach; the banner offers to open the new graph.
+    h.get_by_label("Crate_logic");
+    h.get_by_label("Open graph").click();
+    h.run_steps(2);
+    assert_eq!(h.state().ui.open_tabs(), vec!["logic/Crate_logic.logic.ron".to_owned()]);
+    // One undo removes the component again.
+    let App { ui, backend } = h.state_mut();
+    ui.run(&egui::Context::default(), backend, Command::Undo);
+    assert!(h.state().backend.component(crate_id, LOGIC).is_none() || h.state().backend.component(crate_id, LOGIC) == Some(&json!(null)));
+}
+
+#[test]
+fn logic_section_opens_and_detaches_an_attached_graph() {
+    let mut h = harness();
+    let crate_id = id(&h, "Crate");
+    h.state_mut().backend.logic_files.push(LogicFile { path: "logic/door.logic.ron".into(), name: "door".into(), errors: vec![] });
+    h.state_mut()
+        .backend
+        .apply(&Op::SetComponent { entity: StableOrId::Id(crate_id), type_path: LOGIC.into(), before: None, after: Some(json!({"graph": "logic/door.logic.ron"})) })
+        .expect("attach");
+    select(&mut h, "Crate");
+    h.get_by_label("door");
+    h.get_by_label("Open").click();
+    h.run_steps(2);
+    assert_eq!(h.state().ui.open_tabs(), vec!["logic/door.logic.ron".to_owned()]);
+    h.get_by_label("Detach").click();
+    h.run_steps(4);
+    assert!(h.state().backend.component(crate_id, LOGIC).is_none());
+    h.get_by_label("No logic. Add a behaviour with graphs.");
+}
+
+fn output_harness() -> Harness<'static, App> {
+    let mut h = harness();
+    h.state_mut().ui.show_panel("Output").expect("panel");
+    h.run_steps(3);
+    h
+}
+
+#[test]
+fn output_filters_by_source_level_and_search() {
+    let mut h = output_harness();
+    h.get_by_label("[ruspy] unexpected token ')'");
+    h.get_by_label("[assets] missing texture, using fallback");
+    // Level: warnings and up hides the info line (the Info filter is on by default).
+    h.get_by_label("Warnings").click();
+    h.run_steps(2);
+    assert!(h.query_by_label("[engine] level loaded").is_none());
+    h.get_by_label("[assets] missing texture, using fallback");
+    // Source: hide Logic (ruspy).
+    h.get_by_label("Logic (1)").click();
+    h.run_steps(2);
+    assert!(h.query_by_label("[ruspy] unexpected token ')'").is_none());
+    h.get_by_label("Logic (1)").click();
+    h.run_steps(2);
+    h.get_by_label("[ruspy] unexpected token ')'");
+}
+
+#[test]
+fn clicking_an_output_line_with_an_entity_selects_it() {
+    let mut h = harness();
+    let crate_id = id(&h, "Crate");
+    h.state_mut().backend.diag.push(Diagnostic::new(Level::Error, "logic", "node 3 has no input").about(crate_id));
+    h.state_mut().ui.show_panel("Output").expect("panel");
+    h.run_steps(8);
+    assert!(h.state_mut().backend.selection().is_empty());
+    h.get_by_label("[logic] node 3 has no input").click();
+    h.run_steps(3);
+    assert_eq!(h.state_mut().backend.selection(), vec![crate_id]);
+}
+
+#[test]
+fn refused_edits_land_in_the_output_log() {
+    let mut h = harness();
+    let crate_id = id(&h, "Crate");
+    // A recorded step whose result the backend no longer has: undo is refused.
+    let op = Op::SetComponent { entity: StableOrId::Id(crate_id), type_path: HEALTH.into(), before: Some(json!({"max": 1})), after: Some(json!({"max": 2})) };
+    h.state_mut().ui.record_applied("Edit Health", op, None);
+    let App { ui, backend } = h.state_mut();
+    ui.run(&egui::Context::default(), backend, Command::Undo);
+    assert!(
+        h.state().ui.diagnostics().iter().any(|d| d.source == "editor" && d.level == Level::Error && d.message.contains("Undo failed")),
+        "{:?}",
+        h.state().ui.diagnostics()
+    );
+}
+
+#[test]
+fn history_panel_jumps_back_and_forward() {
+    let mut h = harness();
+    select(&mut h, "Crate");
+    let crate_id = id(&h, "Crate");
+    for name in ["A", "B", "C"] {
+        let eref = StableOrId::Id(crate_id);
+        let before = h.state().backend.name_of(crate_id).expect("name").to_owned();
+        h.state_mut().ui.record_applied("Rename", Op::Rename { entity: eref, before: before.clone(), after: name.into() }, None);
+        h.state_mut().backend.apply(&Op::Rename { entity: eref, before, after: name.into() }).expect("rename");
+        h.state_mut().ui.seal_undo();
+    }
+    assert_eq!(h.state().ui.undo_depth(), 3);
+    h.state_mut().ui.show_panel("History").expect("panel");
+    h.run_steps(4);
+    // Jump to the state after the first step: two undos.
+    h.get_by_label_contains("1  Rename").click();
+    h.run_steps(4);
+    assert_eq!(h.state().ui.undo_depth(), 1);
+    assert_eq!(h.state().backend.name_of(crate_id), Some("A"));
+    // And forward again to the last step.
+    h.get_by_label_contains("3  Rename").click();
+    h.run_steps(4);
+    assert_eq!(h.state().backend.name_of(crate_id), Some("C"));
+}
+
 // ---- WP-B: layout, modes, drawer, document tabs, settings ---------------------------------
 
 /// Types `text` into each text field in turn until `done` holds (the fields' order in the
@@ -375,8 +542,8 @@ fn modes_switch_tools_and_place_has_a_type_dropdown() {
         id: "place".into(),
         label: "Place".into(),
         hint: "Click to drop".into(),
-        settings: json!({"type_path": "game::Start", "snap_to_ground": true}),
-        schema: TypeSchema::Struct { fields: vec![("type_path".into(), TypeSchema::String), ("snap_to_ground".into(), TypeSchema::Bool)] },
+        settings: json!({"type_path": "game::Start", "Snap to ground": true}),
+        schema: TypeSchema::Struct { fields: vec![("type_path".into(), TypeSchema::String), ("Snap to ground".into(), TypeSchema::Bool)] },
     });
     h.state_mut().ui.refresh();
     h.run_steps(4);
@@ -388,7 +555,7 @@ fn modes_switch_tools_and_place_has_a_type_dropdown() {
     // The type is a dropdown showing the chosen type's name, and the raw path field is hidden.
     h.get_by_label_contains("Start");
     assert!(h.query_by_label("type_path").is_none(), "the type path is not a raw text field");
-    h.get_by_label("snap_to_ground");
+    h.get_by_label("Snap to ground");
     // Back to Select mode.
     h.get_all_by_label("Select").next().expect("the Select mode").click();
     h.run_steps(3);
@@ -461,13 +628,13 @@ fn world_settings_edit_through_the_backend() {
     h.get_by_label("World Settings").click();
     h.run_steps(4);
     h.get_by_label("Look");
-    let field = h.get_by_role_and_label(egui::accesskit::Role::Slider, "elevation_deg");
+    let field = h.get_by_role_and_label(egui::accesskit::Role::Slider, "Elevation deg");
     field.focus();
     h.run_steps(2);
     h.key_press(egui::Key::ArrowUp);
     h.run_steps(4);
     let v = h.state().backend.settings_groups[0].value.clone();
-    assert_ne!(v["sun"]["elevation_deg"], json!(45.0), "{v}");
+    assert_ne!(v["sun"]["Elevation deg"], json!(45.0), "{v}");
 }
 
 #[test]

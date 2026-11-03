@@ -6,11 +6,14 @@
 use ashlar_ui::edit::EditPhase;
 use ashlar_ui::tokens;
 use ashlar_ui::value_field::{Decimal, ValueField};
-use editor_proto::TypeSchema;
-use egui::{Align, Layout, RichText, Ui};
+use editor_proto::{FieldMeta, TypeSchema};
+use egui::{RichText, Ui};
 use serde_json::{Map, Number, Value, json};
+use std::cell::Cell;
 
-const LABEL_W: f32 = 110.0;
+const LABEL_W: f32 = 92.0;
+/// Room for the reset arrow in front of every label, so labels line up.
+const RESET_W: f32 = 16.0;
 const MAX_DEPTH: usize = 8;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -37,11 +40,18 @@ pub(crate) struct Cx {
     pub id: String,
     pub change: Option<Change>,
     pub read_only: bool,
+    /// `Default::default()` of the value being edited (same JSON form): fields that differ get a
+    /// reset arrow.
+    pub default: Option<Value>,
 }
 
 impl Cx {
     pub fn new(id: String, read_only: bool) -> Self {
-        Cx { id, change: None, read_only }
+        Cx { id, change: None, read_only, default: None }
+    }
+    pub fn with_default(mut self, default: Option<Value>) -> Self {
+        self.default = default;
+        self
     }
     fn set(&mut self, path: &str, phase: Phase) {
         self.change = Some(Change { path: path.to_owned(), phase });
@@ -58,6 +68,7 @@ fn default_at(schema: &TypeSchema, depth: usize) -> Value {
         return Value::Null;
     }
     match schema {
+        TypeSchema::Field { inner, .. } => default_at(inner, depth),
         TypeSchema::Bool => json!(false),
         TypeSchema::Int { min, .. } => json!(min.unwrap_or(0).max(0)),
         TypeSchema::Float { min, .. } => json!(min.unwrap_or(0.0).max(0.0)),
@@ -87,34 +98,192 @@ fn default_at(schema: &TypeSchema, depth: usize) -> Value {
 /// Draw the editor for a component value. Fields of a struct are rows; nested structs and lists
 /// collapse.
 pub(crate) fn component_body(ui: &mut Ui, cx: &mut Cx, schema: &TypeSchema, value: &mut Value) {
-    match (schema, &*value) {
-        (TypeSchema::Struct { fields }, Value::Object(_)) => {
-            for (name, s) in fields {
-                if let Value::Object(m) = value
-                    && let Some(v) = m.get_mut(name)
-                {
-                    edit(ui, cx, name, s, v, name, 0);
-                }
-            }
-        }
+    match (schema.inner(), &*value) {
+        (TypeSchema::Struct { fields }, Value::Object(_)) => fields_ui(ui, cx, fields, value, "", 0),
         _ => edit(ui, cx, "value", schema, value, "", 0),
     }
 }
 
-fn row(ui: &mut Ui, name: &str, content: impl FnOnce(&mut Ui)) {
+/// The rows of a struct. A field that `choose`s from a sibling list shows that list as a table.
+fn fields_ui(ui: &mut Ui, cx: &mut Cx, fields: &[(String, TypeSchema)], value: &mut Value, path: &str, depth: usize) {
+    for (fname, s) in fields {
+        let fpath = join(path, fname);
+        if let Some(list) = s.meta().and_then(|m| m.choose.as_deref()) {
+            let rows = value.get(list).and_then(Value::as_array).cloned().unwrap_or_default();
+            if let Value::Object(m) = value
+                && let Some(v) = m.get_mut(fname)
+            {
+                let d = Deco::new(cx, fname, s.meta(), v, &fpath);
+                choose_ui(ui, cx, &d, &rows, v, &fpath);
+            }
+        } else if let Value::Object(m) = value
+            && let Some(v) = m.get_mut(fname)
+        {
+            edit(ui, cx, fname, s, v, &fpath, depth);
+        }
+    }
+}
+
+/// `snap_to_ground` becomes `Snap to ground`.
+pub(crate) fn nice_name(raw: &str) -> String {
+    let words = raw.split('_').filter(|w| !w.is_empty()).collect::<Vec<_>>().join(" ");
+    let mut c = words.chars();
+    c.next().map_or(String::new(), |f| f.to_uppercase().chain(c).collect())
+}
+
+/// How one row looks: label, hover text, unit, and whether it can be reset.
+pub(crate) struct Deco {
+    label: String,
+    raw: String,
+    tip: Option<String>,
+    unit: Option<String>,
+    /// The value differs from its default: show the arrow.
+    resettable: bool,
+    reset_clicked: Cell<bool>,
+}
+
+impl Deco {
+    fn new(cx: &Cx, name: &str, meta: Option<&FieldMeta>, value: &Value, path: &str) -> Deco {
+        let resettable = !cx.read_only && default_at_path(cx.default.as_ref(), path).is_some_and(|d| d != value);
+        Deco {
+            label: meta.and_then(|m| m.label.clone()).unwrap_or_else(|| nice_name(name)),
+            raw: name.to_owned(),
+            tip: meta.and_then(|m| m.tip.clone()),
+            unit: meta.and_then(|m| m.unit.clone()),
+            resettable,
+            reset_clicked: Cell::new(false),
+        }
+    }
+}
+
+/// The part of `default` at a `a.b.0` path.
+fn default_at_path<'a>(default: Option<&'a Value>, path: &str) -> Option<&'a Value> {
+    let mut cur = default?;
+    if path.is_empty() {
+        return Some(cur);
+    }
+    for part in path.split('.') {
+        cur = match cur {
+            Value::Object(m) => m.get(part)?,
+            Value::Array(a) => a.get(part.parse::<usize>().ok()?)?,
+            _ => return None,
+        };
+    }
+    Some(cur)
+}
+
+/// Units are shown inside the number field (`0.60 m`), which wants a `'static` suffix; the set of
+/// distinct units is tiny, so each is leaked once.
+fn static_unit(unit: Option<&str>) -> &'static str {
+    use std::collections::HashMap;
+    use std::sync::{Mutex, OnceLock};
+    static UNITS: OnceLock<Mutex<HashMap<String, &'static str>>> = OnceLock::new();
+    let Some(u) = unit.filter(|u| !u.is_empty() && u.len() <= 8) else { return "" };
+    let Ok(mut map) = UNITS.get_or_init(Default::default).lock() else { return "" };
+    map.entry(format!(" {u}")).or_insert_with_key(|k| Box::leak(k.clone().into_boxed_str()))
+}
+
+/// A small circular arrow, painted (no font dependence).
+pub(crate) fn reset_button(ui: &mut Ui) -> egui::Response {
+    let (rect, resp) = ui.allocate_exact_size(egui::vec2(RESET_W - 2.0, RESET_W - 2.0), egui::Sense::click());
+    let t = tokens::current(ui.ctx());
+    let color = if resp.hovered() { t.accent } else { t.text.secondary };
+    let c = rect.center();
+    let r = 4.5;
+    let pts: Vec<egui::Pos2> = (0..=18)
+        .map(|i| {
+            let a = (40.0 + 290.0 * i as f32 / 18.0).to_radians();
+            c + egui::vec2(a.cos(), -a.sin()) * r
+        })
+        .collect();
+    let end = pts[pts.len() - 1];
+    let p = ui.painter();
+    p.add(egui::Shape::line(pts, egui::Stroke::new(1.4, color)));
+    p.add(egui::Shape::convex_polygon(vec![end + egui::vec2(-3.0, -3.0), end + egui::vec2(3.0, -2.0), end + egui::vec2(-0.5, 3.0)], color, egui::Stroke::NONE));
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, "Reset to default"));
+    resp.on_hover_text("Reset to default")
+}
+
+fn row(ui: &mut Ui, d: &Deco, content: impl FnOnce(&mut Ui)) {
     let t = tokens::current(ui.ctx());
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = t.space.sm;
-        ui.add_sized([LABEL_W, t.control_height], egui::Label::new(RichText::new(name).color(t.text.secondary)).truncate());
+        if d.resettable {
+            if reset_button(ui).clicked() {
+                d.reset_clicked.set(true);
+            }
+        } else {
+            ui.add_space(RESET_W);
+        }
+        let label = ui.add_sized([LABEL_W, t.control_height], egui::Label::new(RichText::new(&d.label).color(t.text.secondary)).truncate().sense(egui::Sense::hover()));
+        label.on_hover_ui(|ui| {
+            if let Some(tip) = &d.tip {
+                ui.label(tip);
+            }
+            if let Some(u) = &d.unit {
+                ui.label(RichText::new(format!("Unit: {u}")).small().color(t.text.secondary));
+            }
+            ui.label(RichText::new(&d.raw).small().monospace().color(t.text.disabled));
+        });
         content(ui);
     });
+}
+
+/// A list shown as a table whose rows pick an index (`value`, -1 = none).
+fn choose_ui(ui: &mut Ui, cx: &mut Cx, d: &Deco, rows: &[Value], value: &mut Value, path: &str) {
+    let t = tokens::current(ui.ctx());
+    let current = value.as_i64().unwrap_or(-1);
+    ui.add_space(2.0);
+    ui.horizontal(|ui| {
+        ui.add_space(RESET_W);
+        ui.label(RichText::new(format!("{} ({})", d.label, rows.len())).color(t.text.secondary)).on_hover_text(d.tip.clone().unwrap_or_default());
+    });
+    let cell = |v: &Value| -> String {
+        match v {
+            Value::Number(n) => n.as_f64().map_or_else(|| n.to_string(), |f| if f.fract() == 0.0 { format!("{f:.0}") } else { format!("{f:.2}") }),
+            Value::Array(a) => a.iter().map(|x| x.as_f64().map_or_else(|| x.to_string(), |f| format!("{f:.1}"))).collect::<Vec<_>>().join(", "),
+            Value::String(s) => s.clone(),
+            other => other.to_string(),
+        }
+    };
+    let mut picked = None;
+    egui::ScrollArea::vertical().id_salt((&cx.id, path, "choose")).max_height(170.0).auto_shrink([false, true]).show(ui, |ui| {
+        if rows.is_empty() {
+            ui.label(RichText::new("Nothing to pick yet").color(t.text.disabled));
+        }
+        for (i, r) in rows.iter().enumerate() {
+            let text = match r {
+                Value::Object(m) => m.iter().map(|(k, v)| format!("{} {}", nice_name(k).to_lowercase(), cell(v))).collect::<Vec<_>>().join("   "),
+                other => cell(other),
+            };
+            let sel = i as i64 == current;
+            let resp = ui.add_enabled(!cx.read_only, egui::Button::selectable(sel, RichText::new(format!("{i:>2}   {text}")).monospace()).min_size(egui::vec2(ui.available_width(), 0.0)));
+            if resp.clicked() {
+                picked = Some(if sel { -1 } else { i as i64 });
+            }
+        }
+    });
+    if let Some(p) = picked {
+        *value = json!(p);
+        cx.set(path, Phase::Commit);
+    }
 }
 
 fn join(path: &str, part: &str) -> String {
     if path.is_empty() { part.to_owned() } else { format!("{path}.{part}") }
 }
 
-fn edit(ui: &mut Ui, cx: &mut Cx, name: &str, schema: &TypeSchema, value: &mut Value, path: &str, depth: usize) {
+fn edit(ui: &mut Ui, cx: &mut Cx, raw_name: &str, schema: &TypeSchema, value: &mut Value, path: &str, depth: usize) {
+    let meta = schema.meta();
+    if meta.is_some_and(|m| m.hidden) {
+        return;
+    }
+    let schema = schema.inner();
+    let mut d = Deco::new(cx, raw_name, meta, value, path);
+    if matches!(schema, TypeSchema::Quat) && d.unit.is_none() {
+        d.unit = Some("deg".into());
+    }
+    let name = &d;
     if depth > MAX_DEPTH {
         row(ui, name, |ui| {
             ui.weak("(too deep)");
@@ -142,7 +311,7 @@ fn edit(ui: &mut Ui, cx: &mut Cx, name: &str, schema: &TypeSchema, value: &mut V
             let range = (min.map_or(f64::MIN, |m| m as f64), max.map_or(f64::MAX, |m| m as f64));
             row(ui, name, |ui| {
                 let w = ui.available_width();
-                if number(ui, cx, &format!("{}.{path}", cx.id), name, &mut v, 0, range, 0.2, w, path) {
+                if number(ui, cx, &format!("{}.{path}", cx.id), &name.label, &mut v, 0, range, 0.2, w, path, static_unit(name.unit.as_deref())) {
                     *value = json!(v.round() as i64);
                 }
             });
@@ -153,7 +322,7 @@ fn edit(ui: &mut Ui, cx: &mut Cx, name: &str, schema: &TypeSchema, value: &mut V
             let speed = step.unwrap_or(if let (Some(a), Some(b)) = (min, max) { (b - a) / 200.0 } else { 0.01 });
             row(ui, name, |ui| {
                 let w = ui.available_width();
-                if number(ui, cx, &format!("{}.{path}", cx.id), name, &mut v, 3, range, speed, w, path)
+                if number(ui, cx, &format!("{}.{path}", cx.id), &name.label, &mut v, 3, range, speed, w, path, static_unit(name.unit.as_deref()))
                     && let Some(n) = Number::from_f64(v)
                 {
                     *value = Value::Number(n);
@@ -197,22 +366,23 @@ fn edit(ui: &mut Ui, cx: &mut Cx, name: &str, schema: &TypeSchema, value: &mut V
         TypeSchema::Enum { variants } => enum_edit(ui, cx, name, variants, value, path, depth),
         TypeSchema::Struct { fields } => {
             let Value::Object(_) = value else { return readonly(ui, name, value) };
-            egui::CollapsingHeader::new(name).id_salt((&cx.id, path)).default_open(true).show(ui, |ui| {
-                for (fname, s) in fields {
-                    if let Value::Object(m) = value
-                        && let Some(v) = m.get_mut(fname)
-                    {
-                        edit(ui, cx, fname, s, v, &join(path, fname), depth + 1);
-                    }
-                }
+            egui::CollapsingHeader::new(&name.label).id_salt((&cx.id, path)).default_open(true).show(ui, |ui| {
+                fields_ui(ui, cx, fields, value, path, depth + 1);
             });
         }
         TypeSchema::List(item) => list_edit(ui, cx, name, item, value, path, depth),
         TypeSchema::Map(_) | TypeSchema::Entity | TypeSchema::Opaque => readonly(ui, name, value),
+        TypeSchema::Field { .. } => {}
+    }
+    if d.reset_clicked.get()
+        && let Some(def) = default_at_path(cx.default.as_ref(), path)
+    {
+        *value = def.clone();
+        cx.set(path, Phase::Commit);
     }
 }
 
-fn readonly(ui: &mut Ui, name: &str, value: &Value) {
+fn readonly(ui: &mut Ui, name: &Deco, value: &Value) {
     let t = tokens::current(ui.ctx());
     let text = match value {
         Value::String(s) => s.clone(),
@@ -226,8 +396,8 @@ fn readonly(ui: &mut Ui, name: &str, value: &Value) {
 
 /// One numeric field. Returns true when `v` changed (and records the gesture phase).
 #[allow(clippy::too_many_arguments)]
-fn number(ui: &mut Ui, cx: &mut Cx, id: &str, label: &str, v: &mut f64, decimals: usize, range: (f64, f64), speed: f64, width: f32, path: &str) -> bool {
-    let fmt = Decimal { decimals, suffix: "" };
+fn number(ui: &mut Ui, cx: &mut Cx, id: &str, label: &str, v: &mut f64, decimals: usize, range: (f64, f64), speed: f64, width: f32, path: &str, unit: &'static str) -> bool {
+    let fmt = Decimal { decimals, suffix: unit };
     let mut field = ValueField::new(id, label, v, &fmt).speed(speed).width(width);
     if range.0 < range.1 && (range.0 > f64::MIN || range.1 < f64::MAX) {
         field = field.range(range.0..=range.1);
@@ -248,7 +418,7 @@ fn number(ui: &mut Ui, cx: &mut Cx, id: &str, label: &str, v: &mut f64, decimals
     }
 }
 
-fn vec_n(ui: &mut Ui, cx: &mut Cx, name: &str, value: &mut Value, path: &str, axes: &[&str]) {
+fn vec_n(ui: &mut Ui, cx: &mut Cx, name: &Deco, value: &mut Value, path: &str, axes: &[&str]) {
     let Some(arr) = value.as_array().filter(|a| a.len() == axes.len()) else {
         return readonly(ui, name, value);
     };
@@ -259,7 +429,7 @@ fn vec_n(ui: &mut Ui, cx: &mut Cx, name: &str, value: &mut Value, path: &str, ax
         let w = ((ui.available_width() - gap * (axes.len() as f32 - 1.0)) / axes.len() as f32).max(24.0);
         for (i, axis) in axes.iter().enumerate() {
             let id = format!("{}.{path}.{axis}", cx.id);
-            if number(ui, cx, &id, axis, &mut vals[i], 3, (f64::MIN, f64::MAX), 0.02, w, &join(path, axis)) {
+            if number(ui, cx, &id, axis, &mut vals[i], 3, (f64::MIN, f64::MAX), 0.02, w, &join(path, axis), static_unit(name.unit.as_deref())) {
                 changed = Some(i);
             }
         }
@@ -275,7 +445,7 @@ fn vec_n(ui: &mut Ui, cx: &mut Cx, name: &str, value: &mut Value, path: &str, ax
     }
 }
 
-fn quat(ui: &mut Ui, cx: &mut Cx, name: &str, value: &mut Value, path: &str) {
+fn quat(ui: &mut Ui, cx: &mut Cx, name: &Deco, value: &mut Value, path: &str) {
     let Some(arr) = value.as_array().filter(|a| a.len() == 4) else {
         return readonly(ui, name, value);
     };
@@ -295,7 +465,7 @@ fn quat(ui: &mut Ui, cx: &mut Cx, name: &str, value: &mut Value, path: &str) {
         let w = ((ui.available_width() - gap * 2.0) / 3.0).max(24.0);
         for (i, axis) in ["X", "Y", "Z"].iter().enumerate() {
             let id = format!("{}.{path}.{axis}", cx.id);
-            if number(ui, cx, &id, axis, &mut vals[i], 1, (f64::MIN, f64::MAX), 0.5, w, &join(path, axis)) {
+            if number(ui, cx, &id, axis, &mut vals[i], 1, (f64::MIN, f64::MAX), 0.5, w, &join(path, axis), static_unit(name.unit.as_deref())) {
                 changed = true;
             }
         }
@@ -346,7 +516,7 @@ fn qmul(a: [f32; 4], b: [f32; 4]) -> [f32; 4] {
     ]
 }
 
-fn color(ui: &mut Ui, cx: &mut Cx, name: &str, value: &mut Value, path: &str) {
+fn color(ui: &mut Ui, cx: &mut Cx, name: &Deco, value: &mut Value, path: &str) {
     let Some(arr) = value.as_array().filter(|a| a.len() == 3 || a.len() == 4) else {
         return readonly(ui, name, value);
     };
@@ -369,7 +539,7 @@ fn color(ui: &mut Ui, cx: &mut Cx, name: &str, value: &mut Value, path: &str) {
     }
 }
 
-fn enum_edit(ui: &mut Ui, cx: &mut Cx, name: &str, variants: &[(String, Option<TypeSchema>)], value: &mut Value, path: &str, depth: usize) {
+fn enum_edit(ui: &mut Ui, cx: &mut Cx, name: &Deco, variants: &[(String, Option<TypeSchema>)], value: &mut Value, path: &str, depth: usize) {
     let current = match &*value {
         Value::String(s) => Some(s.clone()),
         Value::Object(m) if m.len() == 1 => m.keys().next().cloned(),
@@ -412,12 +582,12 @@ fn enum_edit(ui: &mut Ui, cx: &mut Cx, name: &str, variants: &[(String, Option<T
     }
 }
 
-fn list_edit(ui: &mut Ui, cx: &mut Cx, name: &str, item: &TypeSchema, value: &mut Value, path: &str, depth: usize) {
+fn list_edit(ui: &mut Ui, cx: &mut Cx, name: &Deco, item: &TypeSchema, value: &mut Value, path: &str, depth: usize) {
     let Value::Array(items) = value else { return readonly(ui, name, value) };
     let len = items.len();
     let mut remove = None;
     let mut add = false;
-    egui::CollapsingHeader::new(format!("{name} ({len})"))
+    egui::CollapsingHeader::new(format!("{} ({len})", name.label))
         .id_salt((&cx.id, path))
         .default_open(len <= 8)
         .show(ui, |ui| {
@@ -442,12 +612,6 @@ fn list_edit(ui: &mut Ui, cx: &mut Cx, name: &str, item: &TypeSchema, value: &mu
     }
 }
 
-/// Right-aligned small button helper used by section headers.
-pub(crate) fn right_button(ui: &mut Ui, text: &str, hover: &str) -> bool {
-    ui.with_layout(Layout::right_to_left(Align::Center), |ui| ui.small_button(text).on_hover_text(hover).clicked())
-        .inner
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -464,6 +628,30 @@ mod tests {
         }
         let q = euler_deg_to_quat([0.0, 90.0, 0.0]);
         assert!((q[1] - 0.70710677).abs() < 1e-5 && (q[3] - 0.70710677).abs() < 1e-5);
+    }
+
+    #[test]
+    fn field_names_become_labels() {
+        assert_eq!(nice_name("snap_to_ground"), "Snap to ground");
+        assert_eq!(nice_name("max"), "Max");
+        assert_eq!(nice_name("0"), "0");
+        assert_eq!(nice_name("__x__"), "X");
+    }
+
+    #[test]
+    fn default_lookup_follows_the_path() {
+        let d = json!({"a": {"b": [1, 2, 3]}, "c": 5});
+        assert_eq!(default_at_path(Some(&d), "a.b.1"), Some(&json!(2)));
+        assert_eq!(default_at_path(Some(&d), "c"), Some(&json!(5)));
+        assert_eq!(default_at_path(Some(&d), "a.x"), None);
+        assert_eq!(default_at_path(Some(&d), ""), Some(&d));
+        assert_eq!(default_at_path(None, "c"), None);
+    }
+
+    #[test]
+    fn field_wrapper_is_transparent_to_defaults() {
+        let s = TypeSchema::Field { meta: FieldMeta::default(), inner: Box::new(TypeSchema::Vec3) };
+        assert_eq!(default_value(&s), json!([0.0, 0.0, 0.0]));
     }
 
     #[test]
