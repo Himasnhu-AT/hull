@@ -3147,6 +3147,7 @@ dependencies = [
  "egui-snarl",
  "egui_kittest",
  "image",
+ "logic-core",
  "serde",
  "serde_json",
 ]
