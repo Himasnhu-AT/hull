@@ -60,9 +60,16 @@ pub(super) fn register(app: &mut App) {
         .add_control_command(
             "editor.place",
             "Place a model from the assets folder",
-            params(&[("path", "string", "asset path"), ("position", "array", "[x,y,z]; omit for the viewport centre")]),
+            params(&[("path", "string", "asset path"), ("position", "array", "[x,y,z]; omit for the viewport centre"), ("screen", "array", "[u,v] 0..1 of the viewport: place at the ray hit (a drop)")]),
             place,
         )
+        .add_control_command(
+            "editor.content",
+            "Content Browser view: folder, grid or list, type filter, search",
+            params(&[("dir", "string", "folder under the assets root"), ("view", "string", "grid | list"), ("kinds", "array", "AssetKind names, e.g. [\"Audio\"]; empty = all"), ("search", "string", "name filter"), ("select", "string", "path of the tile to select")]),
+            content,
+        )
+        .add_control_command("editor.convert", "Make a generated entity a level entity (undoable)", params(&[("id", "integer", "session entity id")]), convert)
         .add_control_command("editor.save", "Save the level", params(&[("path", "string", "default: the open level")]), save)
         .add_control_command("editor.open", "Open a level", params(&[("path", "string", "level file")]), open)
         .add_control_command("editor.play", "Save, build and run the game", params(&[]), play)
@@ -221,9 +228,20 @@ fn place(world: &mut World, p: Value) -> Result<Value, String> {
         [f(0), f(1), f(2)]
     });
     let parent = p.get("parent").and_then(Value::as_u64).map(StableId);
-    let op = WorldBackend::new(world).place_asset(&path, Placement { position: position.unwrap_or([0.0; 3]), parent })?;
+    let screen = p.get("screen").and_then(Value::as_array).and_then(|a| Some([a.first()?.as_f64()? as f32, a.get(1)?.as_f64()? as f32]));
+    let op = WorldBackend::new(world).place_asset(&path, Placement { position: position.unwrap_or([0.0; 3]), parent, screen })?;
     if let Some(mut ui) = world.get_resource_mut::<EditorUiRes>() {
         ui.0.record_applied("Place", op.clone(), None);
+        ui.0.seal_undo();
+    }
+    to_value(&op)
+}
+
+fn convert(world: &mut World, p: Value) -> Result<Value, String> {
+    let id = p.get("id").and_then(Value::as_u64).ok_or("`id` is required")?;
+    let op = WorldBackend::new(world).convert_to_level(id)?;
+    if let Some(mut ui) = world.get_resource_mut::<EditorUiRes>() {
+        ui.0.record_applied("Convert to level entity", op.clone(), None);
         ui.0.seal_undo();
     }
     to_value(&op)
@@ -321,6 +339,19 @@ fn popup(world: &mut World, p: Value) -> Result<Value, String> {
     let name = p.get("name").and_then(Value::as_str).ok_or("`name` is required (add | logic)")?;
     let mut ui = world.get_resource_mut::<EditorUiRes>().ok_or("the editor UI is not up yet")?;
     ui.0.open_details_popup(name)?;
+    Ok(json!({"ok": true}))
+}
+
+fn content(world: &mut World, p: Value) -> Result<Value, String> {
+    let dir = p.get("dir").and_then(Value::as_str).unwrap_or("");
+    let list = p.get("view").and_then(Value::as_str).map(|v| v == "list");
+    let kinds: Vec<AssetKind> = match p.get("kinds") {
+        Some(v) => serde_json::from_value(v.clone()).map_err(|e| format!("`kinds`: {e}"))?,
+        None => Vec::new(),
+    };
+    let search = p.get("search").and_then(Value::as_str).unwrap_or("");
+    let mut ui = world.get_resource_mut::<EditorUiRes>().ok_or("the editor UI is not up yet")?;
+    ui.0.content_show(dir, list, &kinds, search, p.get("select").and_then(Value::as_str));
     Ok(json!({"ok": true}))
 }
 

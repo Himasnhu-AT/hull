@@ -53,6 +53,13 @@ pub struct LevelEntity {
     pub id: StableId,
 }
 
+/// Marks an entity built by code (not a level file) and says by what, e.g.
+/// `GeneratedBy("pacenote::town")`. The editor lists it in the Outliner's Generated folder, makes
+/// it selectable (picking a part of it selects the marked root) and shows the origin in Details.
+/// Without the marker the editor falls back to the entity's `Name`, else "generated".
+#[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
+pub struct GeneratedBy(pub &'static str);
+
 /// A fresh [`StableId`]: above every id in the world and every id handed out so far.
 pub fn new_stable_id(world: &mut World) -> StableId {
     let max = world.query::<&LevelEntity>().iter(world).map(|l| l.id.0).max().unwrap_or(0);
