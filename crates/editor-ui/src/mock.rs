@@ -187,6 +187,7 @@ impl MockBackend {
                 vec![
                     asset("library/cars", AssetKind::Folder, None),
                     asset("library/crate.glb", AssetKind::Model, Some("CC0-1.0")),
+                    asset("library/engine.ogg", AssetKind::Audio, None),
                     asset("library/rock.glb", AssetKind::Model, Some("CC-BY-4.0")),
                     asset("library/ue_tree.glb", AssetKind::Model, Some("ue-only")),
                 ],
