@@ -11,9 +11,9 @@ use egui::{Align, Layout, RichText, Ui};
 use serde_json::{Map, Number, Value, json};
 use std::cell::Cell;
 
-const LABEL_W: f32 = 110.0;
+const LABEL_W: f32 = 92.0;
 /// Room for the reset arrow in front of every label, so labels line up.
-const RESET_W: f32 = 18.0;
+const RESET_W: f32 = 16.0;
 const MAX_DEPTH: usize = 8;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

@@ -55,10 +55,7 @@ impl<S: Subscriber> Layer<S> for EngineLog {
             return;
         }
         let target = meta.target().rsplit("::").next().unwrap_or(meta.target());
-        let mut d = Diagnostic::new(level, "engine", format!("{target}: {}", m.0));
-        if let (Some(f), Some(l)) = (meta.file(), meta.line()) {
-            d = d.at(f, Some(l), None);
-        }
+        let d = Diagnostic::new(level, "engine", format!("{target}: {}", m.0));
         if let Ok(mut q) = QUEUE.lock() {
             if q.len() >= MAX_QUEUED {
                 q.pop_front();
