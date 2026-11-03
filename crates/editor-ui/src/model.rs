@@ -101,6 +101,20 @@ pub(crate) enum Req {
     /// Refetch the tree (the outliner search text changed).
     TreeFilterChanged,
     Copy(String),
+    /// Create a logic graph from a template and attach it to the entity (`Logic` component).
+    AddLogic {
+        entity: EntityId,
+        eref: StableOrId,
+        name: String,
+        template: String,
+        logic_type: String,
+        /// The entity's current `Logic` value, for the undo step.
+        before: Option<serde_json::Value>,
+    },
+    /// Open a `.logic.ron` in the Logic tab.
+    OpenLogic(String),
+    /// Undo or redo until this many steps are applied (History panel).
+    HistoryJump(usize),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

@@ -189,6 +189,13 @@ fn json_round_trip_of_every_type() {
         value: json!({"x": [1, 2]}),
         schema,
         editable: true,
+        category: "Gameplay".into(),
+        doc: String::new(),
+        default: Some(json!({"x": [0, 0]})),
+    });
+    rt(TypeSchema::Field {
+        meta: FieldMeta { label: Some("Speed".into()), tip: Some("t".into()), unit: Some("m/s".into()), hidden: false, choose: None },
+        inner: Box::new(TypeSchema::Bool),
     });
     rt(snap());
     for k in [
@@ -230,6 +237,7 @@ fn json_round_trip_of_every_type() {
             file: Some("a.ruspy".into()),
             line: Some(3),
             col: None,
+            entity: Some(4),
         });
     }
     for t in [Tool::Move, Tool::Rotate, Tool::Scale] {

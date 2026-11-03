@@ -179,7 +179,7 @@ pub fn log(world: &mut World, level: Level, source: &str, message: String) {
         _ => info!("[{source}] {message}"),
     }
     if let Some(mut st) = world.get_resource_mut::<EditorState>() {
-        st.push_diag(Diagnostic { level, source: source.to_string(), message, file: None, line: None, col: None });
+        st.push_diag(Diagnostic::new(level, source, message));
     }
 }
 

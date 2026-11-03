@@ -59,12 +59,14 @@ pub enum Panel {
     Modes,
     /// Look, terrain, streaming, game mode. Stub until WP-B.
     WorldSettings,
-    /// Editor, logic and build messages. Stub until WP-D.
+    /// Editor, logic, build and engine messages (the same log as Output).
     Messages,
+    /// Undo history: click a step to jump to it.
+    History,
 }
 
 impl Panel {
-    pub const ALL: [Panel; 11] = [Panel::Viewport, Panel::Outliner, Panel::Details, Panel::Content, Panel::Output, Panel::Logic, Panel::Tool, Panel::Place, Panel::Modes, Panel::WorldSettings, Panel::Messages];
+    pub const ALL: [Panel; 12] = [Panel::Viewport, Panel::Outliner, Panel::Details, Panel::Content, Panel::Output, Panel::Logic, Panel::Tool, Panel::Place, Panel::Modes, Panel::WorldSettings, Panel::Messages, Panel::History];
     pub fn title(self) -> &'static str {
         match self {
             Panel::Viewport => "Viewport",
@@ -78,6 +80,7 @@ impl Panel {
             Panel::Modes => "Modes",
             Panel::WorldSettings => "World Settings",
             Panel::Messages => "Messages",
+            Panel::History => "History",
         }
     }
 }
@@ -151,6 +154,9 @@ struct Dialog {
     focus_pending: bool,
 }
 
+/// Most undo/redo steps one History click replays.
+const MAX_JUMP: usize = 600;
+
 /// Seconds between polls of the backend (tree, selection, diagnostics) when nothing was edited.
 const POLL_SECS: f64 = 0.25;
 
@@ -179,6 +185,7 @@ pub struct EditorUi {
     assets: Vec<AssetEntry>,
     diagnostics: Vec<Diagnostic>,
     diag_cursor: u64,
+    logic_files: Vec<editor_proto::LogicFile>,
     level: editor_proto::LevelInfo,
     play: PlayState,
     view: ViewInfo,
@@ -241,6 +248,7 @@ impl EditorUi {
             assets: Vec::new(),
             diagnostics: Vec::new(),
             diag_cursor: 0,
+            logic_files: Vec::new(),
             level: Default::default(),
             play: PlayState::Editing,
             view: ViewInfo::default(),
@@ -332,7 +340,8 @@ impl EditorUi {
         if self.layout.apply(Action::Activate { panel }).is_ok() {
             return Ok(());
         }
-        self.layout.apply(Action::Open { panel, anchor: None }).map_err(|e| format!("{e:?}"))
+        let anchor = Panel::ALL.into_iter().find(|a| *a != panel && self.layout.contains(a));
+        self.layout.apply(Action::Open { panel, anchor }).map_err(|e| format!("{e:?}"))
     }
 
     pub fn can_undo(&self) -> bool {
@@ -457,7 +466,10 @@ impl EditorUi {
                 ui,
                 &layout,
                 &style,
-                |p| p.title().to_owned(),
+                |p| match (p, output::badge(&self.diagnostics)) {
+                    (Panel::Output | Panel::Messages, Some(n)) => format!("{} ({n})", p.title()),
+                    _ => p.title().to_owned(),
+                },
                 |p| if *p == Panel::Viewport { Permissions::PROTECTED } else { Permissions::default() },
                 |ui, panel| {
                     if *panel != Panel::Viewport {
@@ -482,17 +494,19 @@ impl EditorUi {
                                 extra_selected: self.selection.len().saturating_sub(1),
                                 components: &self.components,
                                 types: &self.types,
+                                logic: &self.logic_files,
                             };
                             details::show(ui, &mut self.details, &v, &mut reqs);
                         }
                         Panel::Content => content::show(ui, &mut self.content, &self.assets, &mut reqs),
-                        Panel::Output => output::show(ui, &mut self.output, &self.diagnostics, &mut clear_output, &mut reqs),
+                        Panel::Output | Panel::Messages => output::show(ui, &mut self.output, &self.diagnostics, &mut clear_output, &mut reqs),
                         Panel::Logic => logic::show(ui, &mut self.logic),
                         Panel::Place => {
                             let active = self.active_tool.as_ref().filter(|id| id.as_str() == "place").and_then(|id| self.tools.iter().find(|t| &t.id == id)).and_then(|t| t.settings.get("type_path")).and_then(|v| v.as_str());
                             place::show(ui, &mut self.place, &self.placeables, &self.models, active, &mut reqs);
                         }
-                        Panel::Modes | Panel::WorldSettings | Panel::Messages => {
+                        Panel::History => undo::show(ui, &self.undo, &mut reqs),
+                        Panel::Modes | Panel::WorldSettings => {
                             ui.weak(format!("{}: not built yet", panel.title()));
                         }
                         Panel::Tool => {
@@ -623,6 +637,9 @@ impl EditorUi {
         }
         if due || self.dirty_components {
             let first = self.selection.first().copied();
+            if first.is_some() {
+                self.logic_files = backend.logic_list();
+            }
             if first != self.comp_for || self.dirty_components || due {
                 self.components = match first {
                     Some(id) => backend.components(id),
@@ -730,18 +747,22 @@ impl EditorUi {
     }
     fn say_success(&mut self, m: impl Into<String>) {
         let m = self.say(m.into());
+        output::push(&mut self.diagnostics, Diagnostic::new(editor_proto::Level::Info, "editor", m.clone()));
         self.toasts.success(m);
     }
     fn say_error(&mut self, m: impl Into<String>) {
         let m = self.say(m.into());
+        output::push(&mut self.diagnostics, Diagnostic::new(editor_proto::Level::Error, "editor", m.clone()));
         self.toasts.error(m);
     }
     fn say_info(&mut self, m: impl Into<String>) {
         let m = self.say(m.into());
+        output::push(&mut self.diagnostics, Diagnostic::new(editor_proto::Level::Info, "editor", m.clone()));
         self.toasts.info(m);
     }
     fn say_warning(&mut self, m: impl Into<String>) {
         let m = self.say(m.into());
+        output::push(&mut self.diagnostics, Diagnostic::new(editor_proto::Level::Warn, "editor", m.clone()));
         self.toasts.warning(m);
     }
 
@@ -786,6 +807,30 @@ impl EditorUi {
                 }
                 Req::TreeFilterChanged => self.dirty_tree = true,
                 Req::Copy(text) => ctx.copy_text(text),
+                Req::OpenLogic(path) => self.open_logic_tab(&path),
+                Req::AddLogic { entity, eref, name, template, logic_type, before } => match backend.logic_create(&name, &template) {
+                    Ok(path) => {
+                        let op = Op::SetComponent { entity: eref, type_path: logic_type, before, after: Some(serde_json::json!({ "graph": path })) };
+                        self.edit(backend, op, &format!("Add Logic {name}"), None, true);
+                        self.details.note_created(entity, path.clone());
+                        self.logic_files = backend.logic_list();
+                        self.say_success(format!("Created {path}"));
+                    }
+                    Err(e) => self.say_error(format!("Add Logic: {e}")),
+                },
+                Req::HistoryJump(target) => {
+                    for _ in 0..=MAX_JUMP {
+                        let now = self.undo.len();
+                        if now == target || (now > target && !self.undo.can_undo()) {
+                            break;
+                        }
+                        let before = now;
+                        self.command(ctx, backend, if now > target { Cmd::Undo } else { Cmd::Redo });
+                        if self.undo.len() == before {
+                            break;
+                        }
+                    }
+                }
             }
         }
     }

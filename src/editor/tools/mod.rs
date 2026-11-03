@@ -194,10 +194,10 @@ pub fn settings_of(world: &World, ts: &ToolState, id: &str) -> Option<(Value, Ty
                 if let Some(items) = items.filter(|i| !i.is_empty())
                     && let Some(f) = fields.iter_mut().find(|(n, _)| n == "item")
                 {
-                    f.1 = TypeSchema::Enum { variants: items.into_iter().map(|i| (i, None)).collect() };
+                    schema::set_inner(&mut f.1, TypeSchema::Enum { variants: items.into_iter().map(|i| (i, None)).collect() });
                 }
                 if let Some(f) = fields.iter_mut().find(|(n, _)| n == "volume") {
-                    f.1 = TypeSchema::Enum { variants: foliage::volume_names_ro(world).into_iter().map(|i| (i, None)).collect() };
+                    schema::set_inner(&mut f.1, TypeSchema::Enum { variants: foliage::volume_names_ro(world).into_iter().map(|i| (i, None)).collect() });
                 }
             }
             (v, s)
@@ -208,7 +208,7 @@ pub fn settings_of(world: &World, ts: &ToolState, id: &str) -> Option<(Value, Ty
                 && let TypeSchema::Struct { fields } = &mut s
                 && let Some(f) = fields.iter_mut().find(|(n, _)| n == "type_path")
             {
-                f.1 = TypeSchema::Enum { variants: list.0.iter().map(|p| (p.type_path.to_string(), None)).collect() };
+                schema::set_inner(&mut f.1, TypeSchema::Enum { variants: list.0.iter().map(|p| (p.type_path.to_string(), None)).collect() });
             }
             (v, s)
         }

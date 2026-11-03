@@ -36,11 +36,17 @@ pub struct MockBackend {
     pub active: Option<String>,
     pub recorded: Vec<RecordedOp>,
     pub placeable_docs: Vec<PlaceableDoc>,
+    /// Logic graph files the mock lists, and the `(name, template)` pairs created.
+    pub logic_files: Vec<LogicFile>,
+    pub logic_created: Vec<(String, String)>,
+    /// `Default::default()` per component type (reset arrows).
+    pub defaults: BTreeMap<String, Value>,
 }
 
 pub const TRANSFORM: &str = "bevy_transform::components::transform::Transform";
 pub const LIGHT: &str = "bevy_light::PointLight";
 pub const HEALTH: &str = "game::Health";
+pub const LOGIC: &str = "engine::logic::Logic";
 
 fn transform_schema() -> TypeSchema {
     TypeSchema::Struct {
@@ -112,7 +118,15 @@ impl MockBackend {
                 ],
             },
         );
+        schemas.insert(LOGIC.to_owned(), TypeSchema::Struct { fields: vec![("graph".into(), TypeSchema::String)] });
+        let mut defaults = BTreeMap::new();
+        defaults.insert(TRANSFORM.to_owned(), transform(0.0, 0.0, 0.0));
+        defaults.insert(HEALTH.to_owned(), json!({"max": 10, "label": "", "mesh": "", "mode": "Normal", "tags": []}));
+        defaults.insert(LOGIC.to_owned(), json!({"graph": ""}));
         MockBackend {
+            logic_files: Vec::new(),
+            logic_created: Vec::new(),
+            defaults,
             ents: BTreeMap::new(),
             order: Vec::new(),
             next_id: 1,
@@ -194,30 +208,9 @@ impl MockBackend {
             ("library/cars".into(), vec![asset("library/cars/sedan.glb", AssetKind::Model, Some("CC0-1.0"))]),
         ];
         m.diag = vec![
-            Diagnostic {
-                level: Level::Info,
-                source: "engine".into(),
-                message: "level loaded".into(),
-                file: None,
-                line: None,
-                col: None,
-            },
-            Diagnostic {
-                level: Level::Warn,
-                source: "assets".into(),
-                message: "missing texture, using fallback".into(),
-                file: Some("assets/props/crate.glb".into()),
-                line: None,
-                col: None,
-            },
-            Diagnostic {
-                level: Level::Error,
-                source: "ruspy".into(),
-                message: "unexpected token ')'".into(),
-                file: Some("scripts/door.ruspy".into()),
-                line: Some(12),
-                col: Some(8),
-            },
+            Diagnostic::new(Level::Info, "engine", "level loaded"),
+            Diagnostic::new(Level::Warn, "assets", "missing texture, using fallback").at("assets/props/crate.glb", None, None),
+            Diagnostic::new(Level::Error, "ruspy", "unexpected token ')'").at("scripts/door.ruspy", Some(12), Some(8)),
         ];
         m
     }
@@ -485,6 +478,9 @@ impl EditorBackend for MockBackend {
                 value: v.clone(),
                 schema: self.schemas.get(ty).cloned().unwrap_or(TypeSchema::Opaque),
                 editable: self.schemas.contains_key(ty),
+                category: String::new(),
+                doc: String::new(),
+                default: self.defaults.get(ty).cloned(),
             })
             .collect())
     }
@@ -576,5 +572,22 @@ impl EditorBackend for MockBackend {
 
     fn viewport(&mut self, cmd: ViewportCmd) {
         self.viewport_cmds.push(cmd);
+    }
+
+    fn logic_list(&mut self) -> Vec<LogicFile> {
+        self.logic_files.clone()
+    }
+
+    fn logic_create(&mut self, name: &str, template: &str) -> Result<String, String> {
+        if name.trim().is_empty() {
+            return Err("a graph needs a name".into());
+        }
+        let path = format!("logic/{name}.logic.ron");
+        if self.logic_files.iter().any(|f| f.path == path) {
+            return Err(format!("{path} already exists"));
+        }
+        self.logic_files.push(LogicFile { path: path.clone(), name: name.to_owned(), errors: Vec::new() });
+        self.logic_created.push((name.to_owned(), template.to_owned()));
+        Ok(path)
     }
 }

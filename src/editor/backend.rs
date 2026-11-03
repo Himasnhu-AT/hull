@@ -222,12 +222,21 @@ pub fn component_docs(world: &World, e: Entity) -> Result<Vec<ComponentDoc>, Str
             Ok(v) => (schema::to_ui(&reg, t, v), !matches!(schema, TypeSchema::Opaque)),
             Err(e) => (Value::String(format!("not serialisable: {e}")), false),
         };
+        let (category, tip) = schema::type_hints(t);
+        // `Default::default()` in the same form, for the reset arrows.
+        let default = r.data::<bevy::reflect::std_traits::ReflectDefault>().and_then(|rd| {
+            let d = rd.default();
+            schema::serialize(&reg, d.as_partial_reflect()).ok().map(|v| schema::to_ui(&reg, t, v))
+        });
         docs.push(ComponentDoc {
             type_path: t.type_path().to_string(),
             short_name: t.type_path_table().short_path().to_string(),
             value: json,
             schema,
             editable,
+            category: category.unwrap_or_default().to_owned(),
+            doc: tip.unwrap_or_default().to_owned(),
+            default,
         });
     }
     docs.sort_by(|a, b| {
@@ -872,7 +881,7 @@ mod tests {
     fn diagnostics_cursor_advances() {
         let mut st = EditorState::default();
         for i in 0..3 {
-            st.push_diag(Diagnostic { level: Level::Info, source: "t".into(), message: i.to_string(), file: None, line: None, col: None });
+            st.push_diag(Diagnostic { level: Level::Info, source: "t".into(), message: i.to_string(), file: None, line: None, col: None, entity: None });
         }
         let (c, items) = st.diagnostics_since(0);
         assert_eq!((c, items.len()), (3, 3));

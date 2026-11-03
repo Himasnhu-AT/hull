@@ -20,9 +20,79 @@ use bevy::reflect::serde::{TypedReflectDeserializer, TypedReflectSerializer};
 use bevy::reflect::attributes::CustomAttributes;
 use bevy::reflect::{PartialReflect, Type, TypeInfo, TypeRegistration, TypeRegistry};
 use bevy::reflect::enums::VariantInfo;
-use editor_proto::TypeSchema;
+use bevy::reflect::Reflect;
+use editor_proto::{FieldMeta, TypeSchema};
 use serde::de::DeserializeSeed;
 use serde_json::{Map, Value, json};
+
+// ---------------------------------------------------------------------------------------------
+// Display hints: `#[reflect(@Tip("..."))]` and friends on fields (and `Category` / `Tip` on a
+// component type) become the label, hover text and unit the Details panel shows.
+
+/// Hover text of a field or component.
+#[derive(Reflect, Clone, Copy, Debug)]
+pub struct Tip(pub &'static str);
+/// Unit shown after a number (`m`, `s`, `deg`, `m/s` ...).
+#[derive(Reflect, Clone, Copy, Debug)]
+pub struct Unit(pub &'static str);
+/// Label that replaces the one made from the field name.
+#[derive(Reflect, Clone, Copy, Debug)]
+pub struct Label(pub &'static str);
+/// The field is not shown (its value stays available to siblings).
+#[derive(Reflect, Clone, Copy, Debug)]
+pub struct Hidden;
+/// An integer field picked from the rows of the named sibling list (`@Choose("points")`).
+#[derive(Reflect, Clone, Copy, Debug)]
+pub struct Choose(pub &'static str);
+/// Details section of a component type: `Rendering`, `Physics`, `Gameplay`, `Logic`, `Other`.
+#[derive(Reflect, Clone, Copy, Debug)]
+pub struct Category(pub &'static str);
+
+/// Display hints from a field's attributes plus the built-in ones for engine types.
+fn field_meta(attrs: &CustomAttributes, owner: &str, field: &str) -> Option<FieldMeta> {
+    let mut m = FieldMeta {
+        label: attrs.get::<Label>().map(|l| l.0.to_owned()),
+        tip: attrs.get::<Tip>().map(|t| t.0.to_owned()),
+        unit: attrs.get::<Unit>().map(|u| u.0.to_owned()),
+        hidden: attrs.get::<Hidden>().is_some(),
+        choose: attrs.get::<Choose>().map(|c| c.0.to_owned()),
+    };
+    if owner.ends_with("::Transform") {
+        match field {
+            "translation" => {
+                m.unit.get_or_insert_with(|| "m".into());
+                m.tip.get_or_insert_with(|| "Position relative to the parent, in metres".into());
+            }
+            "rotation" => {
+                m.tip.get_or_insert_with(|| "Rotation as angles in degrees (X pitch, Y yaw, Z roll)".into());
+            }
+            "scale" => {
+                m.tip.get_or_insert_with(|| "Size factor per axis; 1 is the original size".into());
+            }
+            _ => {}
+        }
+    }
+    (m != FieldMeta::default()).then_some(m)
+}
+
+/// `(category, tip)` set on a component type with `#[reflect(@Category("Gameplay"), @Tip("..."))]`.
+pub fn type_hints(info: &'static TypeInfo) -> (Option<&'static str>, Option<&'static str>) {
+    let attrs = match info {
+        TypeInfo::Struct(s) => s.custom_attributes(),
+        TypeInfo::TupleStruct(t) => t.custom_attributes(),
+        TypeInfo::Enum(e) => e.custom_attributes(),
+        _ => return (None, None),
+    };
+    (attrs.get::<Category>().map(|c| c.0), attrs.get::<Tip>().map(|t| t.0))
+}
+
+/// Replaces the schema under a field's display hints (the hints stay).
+pub fn set_inner(slot: &mut TypeSchema, new: TypeSchema) {
+    match slot {
+        TypeSchema::Field { inner, .. } => **inner = new,
+        other => *other = new,
+    }
+}
 
 /// Deepest nesting the schema builder follows (recursive types stop here as `Opaque`).
 const MAX_DEPTH: usize = 8;
@@ -147,8 +217,12 @@ fn schema_inner(reg: &TypeRegistry, info: &'static TypeInfo, depth: usize) -> Ty
             fields: s
                 .iter()
                 .map(|f| {
-                    let base = sub(f.ty(), f.type_info());
-                    (f.name().to_string(), field_range(f.custom_attributes(), base))
+                    let base = field_range(f.custom_attributes(), sub(f.ty(), f.type_info()));
+                    let schema = match field_meta(f.custom_attributes(), info.type_path(), f.name()) {
+                        Some(meta) => TypeSchema::Field { meta, inner: Box::new(base) },
+                        None => base,
+                    };
+                    (f.name().to_string(), schema)
                 })
                 .collect(),
         },
