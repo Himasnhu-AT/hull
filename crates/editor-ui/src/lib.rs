@@ -260,7 +260,7 @@ impl EditorUi {
             layout: default_layout(),
             undo: UndoStack::new(),
             keymap: Keymap::new(Platform::current(), COMMANDS.iter().map(|c| (c.id, c.shortcut))),
-            palette: CommandPalette::new().hint("Type a command"),
+            palette: CommandPalette::new().hint("Type a command, entity or asset"),
             toasts: Toasts::new(),
             tool: Tool::Select,
             snap: false,

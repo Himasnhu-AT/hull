@@ -177,7 +177,7 @@ impl EditorUi {
             return;
         }
         let max_h = (screen_h * 0.5).max(160.0);
-        egui::Panel::bottom("editor_drawer").resizable(true).default_size(300.0_f32.min(max_h)).size_range(120.0..=max_h).show_separator_line(true).frame(frame).show(root, |ui| {
+        egui::Panel::bottom("editor_drawer").resizable(true).default_size((screen_h * 0.34).clamp(180.0, 300.0).min(max_h)).size_range(120.0..=max_h).show_separator_line(true).frame(frame).show(root, |ui| {
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = t.space.sm;
                 for tab in DRAWER_TABS {
@@ -411,7 +411,7 @@ impl EditorUi {
         StatusBar::new("editor.status").show(
             root,
             |ui| {
-                ashlar_ui::status_bar::text(ui, "status.tool", &format!("{mode}  |  {tool}"));
+                ashlar_ui::status_bar::text(ui, "status.tool", &format!("Mode: {mode}  |  Tool: {tool}"));
                 ashlar_ui::status_bar::text(ui, "status.level", &level);
                 ashlar_ui::status_bar::text(ui, "status.play", play);
                 if !msg.is_empty() {
@@ -482,7 +482,7 @@ impl EditorUi {
             });
         });
         // Axis gizmo, top right.
-        let c = pos2(rect.right() - 46.0, rect.top() + 54.0);
+        let c = pos2(rect.right() - 46.0, rect.top() + 94.0);
         let p = ctx.layer_painter(egui::LayerId::new(egui::Order::Middle, egui::Id::new("editor.vp.axes")));
         p.circle_filled(c, 40.0, Color32::from_black_alpha(70));
         let mut axes: Vec<(f32, [f32; 2], &str, Color32)> = [("X", [1.0, 0.0, 0.0], Color32::from_rgb(230, 70, 70)), ("Y", [0.0, 1.0, 0.0], Color32::from_rgb(90, 210, 90)), ("Z", [0.0, 0.0, 1.0], Color32::from_rgb(80, 130, 245))]

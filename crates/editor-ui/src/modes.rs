@@ -19,6 +19,10 @@ pub(crate) struct View<'a> {
 }
 
 pub(crate) fn show(ui: &mut Ui, st: &mut PlaceState, v: &View<'_>, reqs: &mut Vec<Req>) {
+    egui::Frame::new().inner_margin(egui::Margin::symmetric(8, 4)).show(ui, |ui| body(ui, st, v, reqs));
+}
+
+fn body(ui: &mut Ui, st: &mut PlaceState, v: &View<'_>, reqs: &mut Vec<Req>) {
     let t = tokens::current(ui.ctx());
     ui.add_space(t.space.xs);
     ui.label(RichText::new(v.mode.label()).heading());

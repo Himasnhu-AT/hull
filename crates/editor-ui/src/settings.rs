@@ -63,6 +63,12 @@ pub(crate) struct SettingsWindows {
 pub(crate) fn world_tab(ui: &mut Ui, groups: &[SettingsGroup], reqs: &mut Vec<Req>) {
     let t = tokens::current(ui.ctx());
     egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
+        egui::Frame::new().inner_margin(egui::Margin::symmetric(8, 4)).show(ui, |ui| world_body(ui, groups, reqs, &t));
+    });
+}
+
+fn world_body(ui: &mut Ui, groups: &[SettingsGroup], reqs: &mut Vec<Req>, t: &tokens::Tokens) {
+    {
         let mut any = false;
         for (i, g) in groups.iter().filter(|g| g.page == SettingsPage::World).enumerate() {
             any = true;
@@ -73,7 +79,7 @@ pub(crate) fn world_tab(ui: &mut Ui, groups: &[SettingsGroup], reqs: &mut Vec<Re
             ui.label(RichText::new("No world settings in this game").color(t.text.disabled));
             ui.label(RichText::new("Sun, sky and fog need the `look` feature; terrain needs a spawned world.").color(t.text.secondary).small());
         }
-    });
+    }
 }
 
 fn section(ui: &mut Ui, g: &SettingsGroup, open: bool, reqs: &mut Vec<Req>) {
