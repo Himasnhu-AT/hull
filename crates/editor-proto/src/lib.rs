@@ -358,6 +358,10 @@ pub struct AssetEntry {
 pub struct Placement {
     pub position: [f32; 3],
     pub parent: Option<StableId>,
+    /// A point of the viewport as a fraction (`0..1`, y down), e.g. where an asset was dropped:
+    /// the backend casts a ray through it and places at the hit. Wins over `position`.
+    #[serde(default)]
+    pub screen: Option<[f32; 2]>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]

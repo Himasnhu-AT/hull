@@ -12,7 +12,6 @@ pub(crate) struct NodeInfo {
     pub generated: bool,
     pub hidden: bool,
     pub origin: Option<String>,
-    pub pickable: bool,
     pub kind: NodeKind,
     pub parent: Option<EntityId>,
     pub child_count: usize,
@@ -46,7 +45,6 @@ impl Nodes {
                     generated,
                     hidden: node.hidden,
                     origin: node.origin.clone(),
-                    pickable: node.pickable,
                     kind: node.icon,
                     parent,
                     child_count: node.children.len(),
@@ -92,6 +90,14 @@ pub(crate) enum Req {
     },
     Select(Vec<EntityId>),
     Place(String),
+    /// Place a model at a viewport point (a drop): path and `[u, v]` fractions of the viewport.
+    PlaceAt(String, [f32; 2]),
+    /// Open an asset by kind (level, logic tab, folder).
+    OpenAsset(String, editor_proto::AssetKind),
+    /// Show the asset in the file manager.
+    Reveal(String),
+    /// Make a generated entity a level entity.
+    Convert(EntityId),
     /// Activate a tool by id (`None`: back to the transform gizmo tools).
     Tool(Option<String>),
     /// Open a level by path (File > Recent).
@@ -103,7 +109,7 @@ pub(crate) enum Req {
     /// Change one settings group (World Settings tab, Project Settings window).
     Settings { group: String, value: serde_json::Value },
     /// Select an entity from the command palette and bring it into view.
-    Reveal(EntityId),
+    RevealEntity(EntityId),
     /// Refetch the tree (the outliner search text changed).
     TreeFilterChanged,
     Copy(String),

@@ -214,6 +214,7 @@ fn json_round_trip_of_every_type() {
     rt(Placement {
         position: [1.0, 2.0, 3.0],
         parent: Some(StableId(2)),
+        screen: Some([0.25, 0.75]),
     });
     rt(LevelInfo {
         path: Some("a.level.ron".into()),

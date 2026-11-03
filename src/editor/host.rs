@@ -123,6 +123,10 @@ pub struct ViewportImage {
     /// A size that differs from `size`, and for how many frames it has been wanted.
     pending: UVec2,
     stable: u32,
+    /// The camera the image is attached to. The editor can switch cameras (its fallback gives
+    /// way to the game's camera when that spawns late); the new one must get the image too, or
+    /// the viewport freezes on the old camera's last frame.
+    camera: Option<Entity>,
 }
 
 /// Keeps the image the size of the viewport hole (reallocated once the size has held for a few
@@ -151,6 +155,16 @@ pub fn sync_viewport(
     }
     let s = st.ui.pixels_per_point.max(0.1);
     let want = UVec2::new((((r[2] - r[0]) * s).round() as u32).clamp(16, 8192), (((r[3] - r[1]) * s).round() as u32).clamp(16, 8192));
+    // A different camera than the one holding the image: hand it the current image.
+    if vp.camera != Some(e)
+        && let Some(handle) = vp.handle.clone()
+    {
+        commands.entity(e).insert(RenderTarget::Image(ImageRenderTarget { handle, scale_factor: s }));
+        if let Ok(mut p) = projections.get_mut(e) {
+            p.set_changed();
+        }
+        vp.camera = Some(e);
+    }
     if vp.handle.is_some() && want == vp.size {
         vp.stable = 0;
         return;
@@ -170,6 +184,7 @@ pub fn sync_viewport(
     let handle = images.add(image);
     let tex = textures.add_image(EguiTextureHandle::Strong(handle.clone()));
     commands.entity(e).insert(RenderTarget::Image(ImageRenderTarget { handle: handle.clone(), scale_factor: s }));
+    vp.camera = Some(e);
     // Bevy 0.20 recomputes a camera's target size on a projection change, not a target change.
     if let Ok(mut p) = projections.get_mut(e) {
         p.set_changed();

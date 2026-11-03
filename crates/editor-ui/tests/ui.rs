@@ -133,25 +133,35 @@ fn content_browser_navigates_and_places() {
     // Content lives in the drawer.
     h.state_mut().ui.set_drawer_open(true);
     h.run_steps(3);
-    h.get_by_label("library").click();
+    // The folder is in the tree and in the grid: either opens it.
+    h.get_all_by_label("library").next().expect("library").click();
     h.run_steps(3);
-    h.get_by_label("crate.glb");
-    // Place through the button.
-    // (the toolbar's Place mode is also a "Place" button, and disabled here: try each)
-    let n = h.get_all_by_role_and_label(egui::accesskit::Role::Button, "Place").count();
-    for i in 0..n {
-        h.get_all_by_role_and_label(egui::accesskit::Role::Button, "Place").nth(i).expect("a button").click();
-        h.run_steps(3);
-        if !h.state().backend.placed.is_empty() {
-            break;
-        }
-    }
+    // No tile carries a Place button (the toolbar's Place mode is the one "Place" button).
+    assert_eq!(h.query_all_by_role_and_label(egui::accesskit::Role::Button, "Place").count(), 1);
+    h.get_by_label("crate.glb").click();
+    h.run_steps(3);
+    // The footer offers Place for the selected model.
+    h.get_all_by_role_and_label(egui::accesskit::Role::Button, "Place").last().expect("a place button").click();
+    h.run_steps(3);
     assert_eq!(h.state().backend.placed.len(), 1);
     assert!(h.state().ui.can_undo(), "the returned Spawn op is on the undo stack");
     let n = h.state().backend.len();
     let App { ui, backend } = h.state_mut();
     ui.run(&egui::Context::default(), backend, Command::Undo);
     assert_eq!(h.state().backend.len(), n - 1);
+}
+
+#[test]
+fn audio_tiles_have_no_place_action() {
+    let mut h = harness();
+    h.state_mut().ui.set_drawer_open(true);
+    h.run_steps(3);
+    h.get_all_by_label("library").next().expect("library").click();
+    h.run_steps(3);
+    h.get_by_label("engine.ogg").click();
+    h.run_steps(3);
+    assert_eq!(h.query_all_by_role_and_label(egui::accesskit::Role::Button, "Place").count(), 1, "no Place for a sound (only the toolbar mode)");
+    assert!(h.state().backend.placed.is_empty());
 }
 
 #[test]
@@ -400,7 +410,7 @@ fn the_drawer_opens_with_cmd_space_and_docks() {
     h.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::Space);
     h.run_steps(4);
     assert!(h.state().ui.drawer_open(), "Cmd+Space opens the drawer");
-    h.get_by_label("library"); // the Content tab body
+    h.get_all_by_label("library").next().expect("the Content tab body");
     run_cmd(&mut h, Command::DockDrawer);
     assert!(h.state().ui.drawer_docked());
     assert!(!h.state().ui.drawer_open());

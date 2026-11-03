@@ -23,6 +23,7 @@ mod place;
 mod props;
 mod settings;
 mod tool;
+mod toast;
 mod undo;
 
 pub mod mock;
@@ -188,6 +189,7 @@ pub struct EditorUi {
     keymap: Keymap,
     palette: CommandPalette,
     toasts: Toasts,
+    dedupe: toast::Dedupe,
     tool: Tool,
     snap: bool,
     snap_step: f32,
@@ -262,6 +264,7 @@ impl EditorUi {
             keymap: Keymap::new(Platform::current(), COMMANDS.iter().map(|c| (c.id, c.shortcut))),
             palette: CommandPalette::new().hint("Type a command, entity or asset"),
             toasts: Toasts::new(),
+            dedupe: toast::Dedupe::default(),
             tool: Tool::Select,
             snap: false,
             snap_step: 0.5,
@@ -364,6 +367,18 @@ impl EditorUi {
         self.tool = p.tool;
         self.snap = p.snap;
         Ok(())
+    }
+
+    /// Set the Content Browser view: folder, grid or list (`None` keeps it), type filter (empty =
+    /// all types), search text and the selected tile's path. For scripts and tests.
+    pub fn content_show(&mut self, dir: &str, list: Option<bool>, kinds: &[editor_proto::AssetKind], search: &str, select: Option<&str>) {
+        self.content.set_dir(dir);
+        if let Some(l) = list {
+            self.content.list = l;
+        }
+        self.content.kinds = kinds.iter().copied().collect();
+        self.content.search = search.to_owned();
+        self.content.selected = select.map(str::to_owned);
     }
 
     /// Open a Logic (`.logic.ron`) or Script tab in the document area and bring it to the front.
@@ -671,6 +686,7 @@ impl EditorUi {
             let _ = self.layout.apply(a);
         }
         self.last_viewport = viewport;
+        content::handle_drop(ctx, viewport, &mut reqs);
         if clear_output {
             self.diagnostics.clear();
         }
@@ -695,7 +711,7 @@ impl EditorUi {
                     self.open_logic_tab(path);
                 }
             } else if let Some(n) = id.strip_prefix("entity:").and_then(|n| n.parse::<EntityId>().ok()) {
-                reqs.push(Req::Reveal(n));
+                reqs.push(Req::RevealEntity(n));
             }
         }
         self.dialog_ui(ctx, backend);
@@ -766,6 +782,8 @@ impl EditorUi {
                 }
                 self.selection = sel;
                 self.dirty_components = true;
+                // The backend lists a selected generated entity in the tree: refetch.
+                self.dirty_tree = true;
             }
             self.level = backend.level();
             if let Some(p) = self.level.path.clone()
@@ -793,14 +811,6 @@ impl EditorUi {
                 self.groups = backend.settings();
             }
         }
-        // Drop selected ids that no longer exist (undo of a spawn, a reload).
-        let before = self.selection.len();
-        let nodes = &self.nodes;
-        self.selection.retain(|id| nodes.info.contains_key(id));
-        if self.selection.len() != before {
-            backend.set_selection(&self.selection);
-            self.dirty_components = true;
-        }
         if due || self.dirty_components {
             let first = self.selection.first().copied();
             if first != self.comp_for || self.dirty_components || due {
@@ -816,6 +826,9 @@ impl EditorUi {
             self.models = place::scan_models(backend);
         }
         if due || self.dirty_assets || self.content.dir_changed {
+            if self.content.tree_dirty || self.dirty_assets || self.content.subdirs.is_empty() {
+                content::refresh_tree(&mut self.content, backend);
+            }
             self.assets = backend.assets(&self.content.dir);
             self.dirty_assets = false;
             self.content.dir_changed = false;
@@ -979,21 +992,27 @@ impl EditorUi {
         self.last_msg = Some(msg.clone());
         msg
     }
+    /// Shows a toast; the same message again within two seconds replaces the old one with a count.
+    fn toast(&mut self, level: ashlar_ui::toasts::ToastLevel, m: String) {
+        let m = self.say(m);
+        let (dismiss, text) = self.dedupe.next(&m, self.now);
+        if let Some(id) = dismiss {
+            self.toasts.dismiss(id);
+        }
+        let id = self.toasts.push(ashlar_ui::toasts::Toast::new(level, text));
+        self.dedupe.shown(id);
+    }
     fn say_success(&mut self, m: impl Into<String>) {
-        let m = self.say(m.into());
-        self.toasts.success(m);
+        self.toast(ashlar_ui::toasts::ToastLevel::Success, m.into());
     }
     fn say_error(&mut self, m: impl Into<String>) {
-        let m = self.say(m.into());
-        self.toasts.error(m);
+        self.toast(ashlar_ui::toasts::ToastLevel::Error, m.into());
     }
     fn say_info(&mut self, m: impl Into<String>) {
-        let m = self.say(m.into());
-        self.toasts.info(m);
+        self.toast(ashlar_ui::toasts::ToastLevel::Info, m.into());
     }
     fn say_warning(&mut self, m: impl Into<String>) {
-        let m = self.say(m.into());
-        self.toasts.warning(m);
+        self.toast(ashlar_ui::toasts::ToastLevel::Warning, m.into());
     }
 
     // ---- requests --------------------------------------------------------------------------
@@ -1019,13 +1038,47 @@ impl EditorUi {
                     self.last_poll = f64::NEG_INFINITY;
                     self.level.dirty = true;
                 }
-                Req::Reveal(id) => {
+                Req::RevealEntity(id) => {
                     self.selection = vec![id];
                     backend.set_selection(&self.selection);
                     self.dirty_components = true;
                     backend.viewport(ViewportCmd::FocusSelection);
                     let _ = self.layout.apply(Action::Activate { panel: Panel::Details });
                 }
+                Req::PlaceAt(path, uv) => match backend.place_asset(&path, editor_proto::Placement { screen: Some(uv), ..Default::default() }) {
+                    Ok(op) => {
+                        self.undo.record("Place asset", op, None, self.now);
+                        self.dirty_tree = true;
+                        self.say_info(format!("Placed {path}"));
+                    }
+                    Err(e) => self.say_error(format!("Place failed: {e}")),
+                },
+                Req::OpenAsset(path, kind) => match kind {
+                    editor_proto::AssetKind::Level => self.process(ctx, backend, vec![Req::OpenPath(path)]),
+                    editor_proto::AssetKind::Logic => {
+                        self.open_logic_tab(&path);
+                        self.say_info(format!("Opening {path} in the Logic editor"));
+                    }
+                    _ => {
+                        ctx.copy_text(path.clone());
+                        self.say_info(format!("No editor for {path} yet; the path is copied"));
+                    }
+                },
+                Req::Reveal(path) => {
+                    if let Err(e) = backend.reveal_asset(&path) {
+                        self.say_error(format!("Show in Finder: {e}"));
+                    }
+                }
+                Req::Convert(id) => match backend.convert_to_level(id) {
+                    Ok(op) => {
+                        self.undo.record("Convert to level entity", op, None, self.now);
+                        self.dirty_tree = true;
+                        self.dirty_components = true;
+                        self.level.dirty = true;
+                        self.say_success("Converted to a level entity");
+                    }
+                    Err(e) => self.say_error(format!("Convert failed: {e}")),
+                },
                 Req::Place(path) => match backend.place_asset(&path, editor_proto::Placement::default()) {
                     Ok(op) => {
                         self.undo.record("Place asset", op, None, self.now);

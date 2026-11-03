@@ -21,6 +21,7 @@ pub(crate) struct OutlinerState {
     anchor: Option<EntityId>,
     scroll_to: Option<EntityId>,
     folders_init: bool,
+    sel_generated: bool,
 }
 
 pub(crate) struct Renaming {
@@ -182,6 +183,16 @@ pub(crate) fn show(ui: &mut Ui, st: &mut OutlinerState, v: &View<'_>, reqs: &mut
             reqs.push(Req::TreeFilterChanged);
         }
     });
+    // Selecting a generated entity opens the Generated folder so the row is visible.
+    if !st.folders_init {
+        st.collapsed.insert(GENERATED_FOLDER);
+        st.folders_init = true;
+    }
+    let sel_generated = v.selection.iter().any(|id| v.nodes.info.get(id).is_some_and(|n| n.generated));
+    if sel_generated && !st.sel_generated && st.collapsed.remove(&GENERATED_FOLDER) {
+        st.collapsed_gen += 1;
+    }
+    st.sel_generated = sel_generated;
     st.rebuild(v.tree, v.tree_rev);
     let st_filter = st.filter.clone();
 
@@ -344,7 +355,10 @@ pub(crate) fn show(ui: &mut Ui, st: &mut OutlinerState, v: &View<'_>, reqs: &mut
             // Name (matches highlighted), then the Type column and the eye.
             let eye_rect = Rect::from_center_size(pos2(row.rect.right() - 16.0, row.rect.center().y), vec2(20.0, 18.0));
             let type_right = eye_rect.left() - 6.0;
-            let label = kind_label(info.kind, info.generated);
+            let label = match (&info.origin, info.generated) {
+                (Some(o), true) => o.as_str(),
+                _ => kind_label(info.kind, info.generated),
+            };
             let tg = ui.painter().layout_no_wrap(label.to_owned(), Tokens::font(t.type_scale.small), if row.selected { t.selection_text } else { t.text.secondary });
             let tw = tg.size().x;
             ui.painter().galley(pos2(type_right - tw, row.rect.center().y - tg.size().y / 2.0), tg, t.text.secondary);
