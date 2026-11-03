@@ -27,6 +27,11 @@ fn layout_path(data: &DataDir) -> std::path::PathBuf {
     data.0.join("editor_ui.json")
 }
 
+/// Editor preferences (theme, UI scale, fly speed, grid ...), see `EditorUi::prefs_json`.
+fn prefs_path(data: &DataDir) -> std::path::PathBuf {
+    data.0.join("editor_prefs.json")
+}
+
 pub fn setup(mut commands: Commands, mut egui: ResMut<EguiGlobalSettings>, data: Option<Res<DataDir>>) {
     egui.auto_create_primary_context = false;
     commands.spawn((
@@ -43,11 +48,17 @@ pub fn setup(mut commands: Commands, mut egui: ResMut<EguiGlobalSettings>, data:
         },
     ));
     let mut ui = EditorUi::new();
-    if let Some(d) = data
-        && let Ok(text) = std::fs::read_to_string(layout_path(&d))
-        && let Err(e) = ui.load_state(&text)
-    {
-        warn!("editor layout ignored: {e}");
+    if let Some(d) = data {
+        if let Ok(text) = std::fs::read_to_string(layout_path(&d))
+            && let Err(e) = ui.load_state(&text)
+        {
+            warn!("editor layout ignored: {e}");
+        }
+        if let Ok(text) = std::fs::read_to_string(prefs_path(&d))
+            && let Err(e) = ui.load_prefs(&text)
+        {
+            warn!("editor preferences ignored: {e}");
+        }
     }
     commands.insert_resource(EditorUiRes(ui));
 }
@@ -187,8 +198,8 @@ pub fn sync_viewport(
     vp.stable = 0;
 }
 
-/// Saves the dock layout a moment after it changes.
-pub fn persist_layout(ui: Option<Res<EditorUiRes>>, data: Option<Res<DataDir>>, time: Res<Time<Real>>, mut last: Local<String>, mut since: Local<f32>) {
+/// Saves the dock layout and the editor preferences a moment after they change.
+pub fn persist_layout(ui: Option<Res<EditorUiRes>>, data: Option<Res<DataDir>>, time: Res<Time<Real>>, mut last: Local<(String, String)>, mut since: Local<f32>) {
     *since += time.delta_secs();
     if *since < 3.0 {
         return;
@@ -196,11 +207,21 @@ pub fn persist_layout(ui: Option<Res<EditorUiRes>>, data: Option<Res<DataDir>>, 
     *since = 0.0;
     let (Some(ui), Some(data)) = (ui, data) else { return };
     let now = ui.0.save_state();
-    if now != *last {
+    if now != last.0 {
         if let Err(e) = std::fs::write(layout_path(&data), &now) {
             warn!("editor layout not saved: {e}");
         }
-        *last = now;
+        last.0 = now;
+    }
+    let prefs = ui.0.prefs_json();
+    if prefs != last.1 {
+        // The first run only records the starting values: no file until the user changes one.
+        if !last.1.is_empty()
+            && let Err(e) = std::fs::write(prefs_path(&data), &prefs)
+        {
+            warn!("editor preferences not saved: {e}");
+        }
+        last.1 = prefs;
     }
 }
 

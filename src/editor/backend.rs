@@ -799,6 +799,14 @@ impl EditorBackend for WorldBackend<'_> {
             .unwrap_or_default()
     }
 
+    fn settings(&mut self) -> Vec<SettingsGroup> {
+        super::settings_backend::groups(self.world)
+    }
+
+    fn set_settings(&mut self, group: &str, value: serde_json::Value) -> Result<(), String> {
+        super::settings_backend::set(self.world, group, &value)
+    }
+
     fn viewport(&mut self, cmd: ViewportCmd) {
         match cmd {
             ViewportCmd::FocusSelection => super::camera::focus_selection(self.world),
