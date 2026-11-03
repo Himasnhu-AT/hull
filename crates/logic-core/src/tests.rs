@@ -11,6 +11,7 @@ struct Mock {
     emitted: Vec<(String, Value)>,
     logs: Vec<String>,
     scheduled: Vec<(u32, f32)>,
+    vars: HashMap<(u64, String), Value>,
 }
 
 impl Host for Mock {
@@ -40,6 +41,12 @@ impl Host for Mock {
     }
     fn schedule(&mut self, node: u32, secs: f32, _: &Payload) {
         self.scheduled.push((node, secs));
+    }
+    fn var_get(&mut self, me: u64, name: &str) -> Option<Value> {
+        self.vars.get(&(me, name.to_string())).cloned()
+    }
+    fn var_set(&mut self, me: u64, name: &str, v: &Value) {
+        self.vars.insert((me, name.to_string()), v.clone());
     }
 }
 
@@ -279,4 +286,146 @@ fn find_node_feeds_entity_pins() {
     let e = Runner::new().run(&g, Entry::Event(0), &Payload { me: 1, ..Default::default() }, &mut host).unwrap_err();
     assert_eq!(e.node, 5); // second Find found nobody: Set says so
     assert_eq!(host.world[&(77, "T.y".to_string())], Value::Num(2.0));
+}
+
+const VARS: &str = r#"
+Graph(
+    vars: [(name: "opens", ty: Number, default: Num(2.0)), (name: "open", ty: Bool, default: Bool(false))],
+    comments: [(text: "open sequence", pos: (0.0, -40.0), size: (300.0, 120.0))],
+    nodes: [
+        (id: 1, kind: Start),
+        (id: 2, kind: GetVar("opens")),
+        (id: 3, kind: Math(Add), defaults: [("b", Num(1.0))]),
+        (id: 4, kind: SetVar("opens")),
+        (id: 5, kind: SetVar("open"), defaults: [("value", Bool(true))]),
+        (id: 6, kind: Log),
+    ],
+    flow: [
+        (from: (1, "then"), to: (4, "in")),
+        (from: (4, "then"), to: (5, "in")),
+        (from: (5, "then"), to: (6, "in")),
+    ],
+    data: [
+        (from: (2, "value"), to: (3, "a")),
+        (from: (3, "result"), to: (4, "value")),
+        (from: (2, "value"), to: (6, "text")),
+    ],
+)
+"#;
+
+#[test]
+fn variables_start_at_their_default_and_persist_per_entity() {
+    let g = compile(VARS);
+    assert_eq!(g.vars.len(), 2);
+    let mut host = Mock::default();
+    let mut r = Runner::new();
+    let p = Payload { me: 5, ..Default::default() };
+    r.run(&g, Entry::Event(0), &p, &mut host).unwrap();
+    assert_eq!(host.vars[&(5, "opens".to_string())], Value::Num(3.0));
+    assert_eq!(host.vars[&(5, "open".to_string())], Value::Bool(true));
+    assert_eq!(host.logs, vec!["3"]); // Log reads after SetVar ran
+    r.run(&g, Entry::Event(0), &p, &mut host).unwrap();
+    assert_eq!(host.vars[&(5, "opens".to_string())], Value::Num(4.0));
+    // Another entity starts from the default again.
+    r.run(&g, Entry::Event(0), &Payload { me: 6, ..Default::default() }, &mut host).unwrap();
+    assert_eq!(host.vars[&(6, "opens".to_string())], Value::Num(3.0));
+}
+
+#[test]
+fn variables_and_comments_survive_ron_and_old_files_still_load() {
+    let g = Graph::from_ron(VARS).unwrap();
+    assert_eq!(g.comments.len(), 1);
+    assert_eq!(g.comments[0].color, [70, 90, 120]);
+    let back = Graph::from_ron(&g.to_ron()).unwrap();
+    assert_eq!(back, g);
+    let old = Graph::from_ron("Graph(nodes: [(id: 1, kind: Start)])").unwrap();
+    assert!(old.vars.is_empty() && old.comments.is_empty());
+}
+
+#[test]
+fn undeclared_and_mistyped_variables_are_errors() {
+    let g = Graph::from_ron("Graph(nodes: [(id: 1, kind: Start), (id: 2, kind: SetVar(\"x\"))], flow: [(from: (1, \"then\"), to: (2, \"in\"))])").unwrap();
+    let errs = g.compile().unwrap_err();
+    assert!(errs.iter().any(|e| e.node == Some(2) && e.message.contains("not declared")), "{errs:?}");
+    // A string output can't feed a Number variable.
+    let g = Graph::from_ron(
+        r#"Graph(vars: [(name: "n", ty: Number, default: Num(0.0))],
+            nodes: [(id: 1, kind: Start), (id: 2, kind: SetVar("n")), (id: 3, kind: Const(Str("a")))],
+            flow: [(from: (1, "then"), to: (2, "in"))], data: [(from: (3, "value"), to: (2, "value"))])"#,
+    )
+    .unwrap();
+    let errs = g.compile().unwrap_err();
+    assert!(errs.iter().any(|e| e.message.contains("type mismatch")), "{errs:?}");
+    let dup = Graph { vars: vec![Var { name: "a".into(), ty: Ty::Bool, default: Value::Bool(false) }; 2], ..Default::default() };
+    assert!(dup.compile().unwrap_err().iter().any(|e| e.message.contains("declared twice")));
+}
+
+#[test]
+fn pins_of_types_variable_pins_by_declaration() {
+    let g = Graph::from_ron(VARS).unwrap();
+    let spec = g.pins_of(&NodeKind::GetVar("opens".into()));
+    assert_eq!(spec.data_out[0].1, Ty::Number);
+    assert_eq!(g.pins_of(&NodeKind::SetVar("open".into())).data_in[0].ty, Ty::Bool);
+    assert_eq!(pins(&NodeKind::GetVar("opens".into())).data_out[0].1, Ty::Any);
+}
+
+#[test]
+fn trace_lists_executed_nodes_in_order() {
+    let g = compile(DOOR);
+    let mut host = Mock::default();
+    let mut r = Runner::new();
+    r.tracing = true;
+    host.world.insert((1, "Transform.translation.y".into()), Value::Num(0.0));
+    r.run(&g, Entry::Event(0), &Payload { me: 1, ..Default::default() }, &mut host).unwrap();
+    // The event, then the Delay (which schedules and stops).
+    assert_eq!(r.trace, vec![1, 2]);
+    r.run(&g, Entry::Resume(1), &Payload { me: 1, ..Default::default() }, &mut host).unwrap();
+    assert_eq!(r.trace, vec![5, 6, 7], "a resume continues after the Delay, which already ran");
+    r.tracing = false;
+    r.run(&g, Entry::Event(0), &Payload { me: 1, ..Default::default() }, &mut host).unwrap();
+    assert!(r.trace.is_empty());
+}
+
+#[test]
+fn palette_templates_have_docs_pins_and_unique_labels() {
+    let all = templates();
+    assert!(all.len() > 30);
+    let mut seen = std::collections::HashSet::new();
+    for t in &all {
+        assert!(!docs(&t.kind).is_empty(), "{:?}", t.kind);
+        assert!(!t.label.is_empty());
+        assert!(seen.insert(t.label.clone()), "duplicate label {}", t.label);
+        assert!(["Events", "Flow", "World", "Math", "Vec3", "Effects"].contains(&t.category), "{}", t.category);
+        let spec = pins(&t.kind);
+        assert!(spec.exec_in || !spec.exec_out.is_empty() || !spec.data_out.is_empty() || !spec.data_in.is_empty());
+    }
+    assert!(all.iter().any(|t| t.category == "Events" && matches!(t.kind, NodeKind::Start)));
+    assert_eq!(category(&NodeKind::Command { id: "x".into(), params: serde_json::json!({}) }), "Commands");
+    assert_eq!(label(&NodeKind::Script { file: "score.ruspy".into(), function: "on_open".into(), args: vec![] }), "score::on_open");
+}
+
+#[test]
+fn check_finds_missing_script_functions_and_commands() {
+    let g = Graph::from_ron(DOOR).unwrap();
+    let cat = Catalog {
+        scripts: vec![ScriptFn { file: "score.ruspy".into(), function: "on_open".into(), args: vec!["who".into()] }],
+        commands: vec!["time.scale".into()],
+    };
+    assert!(g.check(Some(&cat)).iter().all(|e| e.severity != Severity::Error), "{:?}", g.check(Some(&cat)));
+    let mut bad = g.clone();
+    if let Some(n) = bad.nodes.iter_mut().find(|n| n.id == 6) {
+        n.kind = NodeKind::Script { file: "score.ruspy".into(), function: "on_open2".into(), args: vec!["who".into()] };
+    }
+    let errs = bad.check(Some(&cat));
+    let e = errs.iter().find(|e| e.severity == Severity::Error).unwrap();
+    assert_eq!(e.node, Some(6));
+    assert!(e.message.contains("no function `on_open2`"), "{}", e.message);
+    // Missing file, wrong arity, unknown command.
+    bad.nodes.push(Node::new(9, NodeKind::Script { file: "nope.ruspy".into(), function: "f".into(), args: vec![] }));
+    bad.nodes.push(Node::new(10, NodeKind::Command { id: "sound.nope".into(), params: serde_json::json!({}) }));
+    let errs = bad.check(Some(&cat));
+    assert!(errs.iter().any(|e| e.node == Some(9) && e.message.contains("not found")));
+    assert!(errs.iter().any(|e| e.node == Some(10) && e.message.contains("unknown command")));
+    // Without a catalog only the core checks run.
+    assert!(g.check(None).iter().all(|e| e.severity != Severity::Error));
 }

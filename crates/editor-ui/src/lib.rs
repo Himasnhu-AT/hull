@@ -14,7 +14,7 @@ mod chrome;
 mod content;
 mod details;
 mod docs;
-mod logic;
+pub mod logic;
 mod model;
 mod modes;
 mod outliner;
@@ -245,7 +245,7 @@ pub struct EditorUi {
     details: details::DetailsState,
     content: content::ContentState,
     output: output::OutputState,
-    logic: logic::LogicState,
+    logic: logic::LogicTab,
     place: place::PlaceState,
 
     // Refresh bookkeeping.
@@ -393,6 +393,11 @@ impl EditorUi {
     /// The tab body is the Logic editor's (`logic::show`).
     pub fn open_logic_tab(&mut self, path: &str) {
         self.docs.open(path);
+    }
+
+    /// Show a fire trace on the open graph's canvas (`editor.logic.fire` calls this).
+    pub fn show_logic_trace(&mut self, trace: editor_proto::LogicTrace) {
+        self.logic.show_trace(trace);
     }
     /// Open the Details `+ Add` (`"add"`) or `+ Add Logic` (`"logic"`) popup on the next frame
     /// (scripts and screenshots).
@@ -581,6 +586,8 @@ impl EditorUi {
                 }
             }
         }
+        // The Logic canvas takes Undo / Delete / Save while the pointer is over it.
+        self.logic.capture_keys(ctx);
         for _ in 0..4 {
             match dispatch(ctx, &self.keymap).as_deref().and_then(Cmd::from_id) {
                 Some(c) => reqs.push(Req::Cmd(c)),
@@ -655,6 +662,9 @@ impl EditorUi {
                                 self.docs.active = i;
                             }
                             if let Some(i) = out.close {
+                                if let Some(t) = self.docs.tabs.get(i.wrapping_sub(1)) {
+                                    self.logic.close_path(&t.path);
+                                }
                                 self.docs.close(i);
                             }
                             match self.docs.active_tab().cloned() {
@@ -662,8 +672,11 @@ impl EditorUi {
                                 Some(tab) => {
                                     ui.painter().rect_filled(body, 0.0, panel_fill);
                                     ui.scope_builder(egui::UiBuilder::new().max_rect(body), |ui| {
-                                        ui.label(egui::RichText::new(&tab.path).weak().small());
-                                        logic::show(ui, &mut self.logic);
+                                        logic::show_doc(ui, &mut self.logic, backend, &tab.path);
+                                        for (label, op) in self.logic.take_applied() {
+                                            self.undo.record(&label, op, None, self.now);
+                                            self.dirty_components = true;
+                                        }
                                     });
                                 }
                             }

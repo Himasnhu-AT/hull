@@ -41,6 +41,8 @@ mod control;
 mod engine_log;
 mod gizmo;
 mod host;
+mod logic_backend;
+mod logic_control;
 mod picking;
 mod play;
 mod settings_backend;

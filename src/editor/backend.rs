@@ -792,6 +792,31 @@ impl EditorBackend for WorldBackend<'_> {
         self.world.get_resource_mut::<EditorState>().map(|mut s| s.take_recorded()).unwrap_or_default()
     }
 
+    fn logic_list(&mut self) -> Vec<LogicFile> {
+        self.logic_list_impl()
+    }
+    fn logic_read(&mut self, path: &str) -> Result<String, String> {
+        self.logic_read_impl(path)
+    }
+    fn logic_write(&mut self, path: &str, ron: &str) -> Result<Vec<GraphErrorDoc>, String> {
+        self.logic_write_impl(path, ron)
+    }
+    fn logic_create(&mut self, name: &str, template: &str) -> Result<String, String> {
+        self.logic_create_impl(name, template)
+    }
+    fn logic_palette(&mut self) -> LogicPalette {
+        self.logic_palette_impl()
+    }
+    fn logic_users(&mut self, path: &str) -> Vec<EntityId> {
+        self.logic_users_impl(path)
+    }
+    fn logic_attach(&mut self, entity: EntityId, path: &str) -> Result<Op, String> {
+        self.logic_attach_impl(entity, path)
+    }
+    fn logic_fire(&mut self, entity: EntityId, event: &str) -> Result<LogicTrace, String> {
+        self.logic_fire_impl(entity, event)
+    }
+
     fn placeables(&mut self) -> Vec<PlaceableDoc> {
         self.world
             .get_resource::<crate::level::Placeables>()

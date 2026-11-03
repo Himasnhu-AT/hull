@@ -95,6 +95,15 @@ pub trait EditorBackend {
     fn logic_palette(&mut self) -> LogicPalette {
         LogicPalette::default()
     }
+    /// Entities carrying the graph at `path` (the Test button fires on one of them).
+    fn logic_users(&mut self, _path: &str) -> Vec<EntityId> {
+        Vec::new()
+    }
+    /// Attaches the graph at `path` to `entity` (a `Logic` component). Returns the op the
+    /// backend applied, so the UI can record it for undo.
+    fn logic_attach(&mut self, _entity: EntityId, _path: &str) -> Result<Op, String> {
+        Err("logic graphs are not supported by this backend".into())
+    }
     fn logic_fire(&mut self, _entity: EntityId, _event: &str) -> Result<LogicTrace, String> {
         Err("logic graphs are not supported by this backend".into())
     }

@@ -17,6 +17,7 @@ pub(super) fn register(app: &mut App) {
                 ("other", "string", "other entity for overlap events"),
                 ("value", "any", "value for action/message events"),
                 ("dt", "number", "dt for tick (default 1/60)"),
+                ("trace", "boolean", "also return the ids of the nodes that ran (delays are followed at once) and the new log lines"),
             ]),
             fire,
         )
@@ -50,7 +51,7 @@ fn list(world: &mut World, _: Json) -> Result<Json, String> {
     }))
 }
 
-fn fire(world: &mut World, p: Json) -> Result<Json, String> {
+pub(crate) fn fire(world: &mut World, p: Json) -> Result<Json, String> {
     let entity = parse_entity(p.get("entity").ok_or("`entity` is required")?)?;
     let ev = p.get("event").and_then(Json::as_str).ok_or("`event` is required")?;
     let other = || -> Result<Entity, String> {
@@ -76,14 +77,21 @@ fn fire(world: &mut World, p: Json) -> Result<Json, String> {
         return Err("entity has no loaded logic graph".into());
     }
     let before = world.resource::<LogicDiagnostics>().items.len();
-    let ran = run_fire(world, Fire { entity, kind });
+    let log_before = world.resource::<LogicDiagnostics>().log.len();
+    let trace = p.get("trace").and_then(Json::as_bool).unwrap_or(false);
+    let (ran, nodes) = if trace { fire_traced(world, entity, kind) } else { (run_fire(world, Fire { entity, kind }), Vec::new()) };
     // Messages the run emitted are delivered like any other.
     let out = std::mem::take(&mut world.resource_mut::<LogicOutbox>().0);
     for (name, value) in out {
         world.write_message(LogicMessage { name, value });
     }
     let d = world.resource::<LogicDiagnostics>();
-    Ok(json!({"ran": ran, "new_errors": d.items.iter().skip(before).map(|x| x.to_string()).collect::<Vec<_>>()}))
+    let mut out = json!({"ran": ran, "new_errors": d.items.iter().skip(before).map(|x| x.to_string()).collect::<Vec<_>>()});
+    if trace {
+        out["trace"] = json!(nodes);
+        out["log"] = json!(d.log.iter().skip(log_before.min(d.log.len())).collect::<Vec<_>>());
+    }
+    Ok(out)
 }
 
 fn diagnostics(world: &mut World, p: Json) -> Result<Json, String> {
