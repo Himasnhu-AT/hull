@@ -179,7 +179,7 @@ pub struct GraphDoc {
     /// Row centre (graph space) of each pin: `(node id, is output, pin index)`.
     pub pin_y: HashMap<(u32, bool, usize), f32>,
     pub to_global: egui::emath::TSTransform,
-    pub message: Option<(String, f64)>,
+    pub message: Option<(String, f64, bool)>,
 }
 
 impl GraphDoc {
@@ -398,7 +398,12 @@ impl GraphDoc {
     }
 
     pub fn say(&mut self, msg: impl Into<String>, now: f64) {
-        self.message = Some((msg.into(), now));
+        self.message = Some((msg.into(), now, false));
+    }
+
+    /// A refused edit (shown in red).
+    pub fn refuse(&mut self, msg: impl Into<String>, now: f64) {
+        self.message = Some((msg.into(), now, true));
     }
 }
 

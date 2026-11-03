@@ -206,11 +206,11 @@ impl SnarlViewer<SNode> for Viewer<'_> {
         info
     }
 
-    fn has_body(&mut self, node: &SNode) -> bool {
+    fn has_footer(&mut self, node: &SNode) -> bool {
         kind_params(&node.kind)
     }
 
-    fn show_body(&mut self, node: NodeId, _: &[InPin], _: &[OutPin], ui: &mut Ui, snarl: &mut Snarl<SNode>) {
+    fn show_footer(&mut self, node: NodeId, _: &[InPin], _: &[OutPin], ui: &mut Ui, snarl: &mut Snarl<SNode>) {
         let before = self.layout(&snarl[node]);
         let sn = &mut snarl[node];
         if super::inspector::edit_kind(ui, &mut sn.kind, true) {
@@ -427,7 +427,7 @@ pub fn show(ui: &mut Ui, doc: &mut GraphDoc, entries: &[Entry], now: f64, keys: 
         doc.relayout(n, &old);
     }
     if let Some(m) = refused {
-        doc.say(m, now);
+        doc.refuse(m, now);
     }
     if let Some(p) = new_comment {
         doc.comments.push(Comment::new("Comment", [p.x, p.y], [300.0, 180.0]));
@@ -448,6 +448,9 @@ pub fn show(ui: &mut Ui, doc: &mut GraphDoc, entries: &[Entry], now: f64, keys: 
         doc.snarl_sel_prev = sel_now.clone();
     }
 
+    if doc.snarl.nodes().next().is_none() && doc.comments.is_empty() {
+        ui.painter().text(canvas.center(), egui::Align2::CENTER_CENTER, "Right-click to add a node", egui::FontId::proportional(18.0), Color32::from_white_alpha(70));
+    }
     comment_handles(ui, doc, canvas);
     minimap(ui, doc, canvas);
     refusal_toast(ui, doc, canvas, now);
@@ -576,7 +579,7 @@ fn minimap(ui: &mut Ui, doc: &mut GraphDoc, canvas: Rect) {
 }
 
 fn refusal_toast(ui: &mut Ui, doc: &mut GraphDoc, canvas: Rect, now: f64) {
-    let Some((msg, t0)) = doc.message.clone() else { return };
+    let Some((msg, t0, bad)) = doc.message.clone() else { return };
     if now - t0 > 3.0 {
         doc.message = None;
         return;
@@ -584,7 +587,7 @@ fn refusal_toast(ui: &mut Ui, doc: &mut GraphDoc, canvas: Rect, now: f64) {
     ui.ctx().request_repaint_after(std::time::Duration::from_millis(200));
     egui::Area::new(egui::Id::new(("logic.toast", doc.widget_id))).order(egui::Order::Tooltip).fixed_pos(canvas.left_bottom() + vec2(12.0, -40.0)).show(ui.ctx(), |ui| {
         egui::Frame::popup(ui.style()).show(ui, |ui| {
-            ui.label(egui::RichText::new(msg).color(Color32::from_rgb(255, 130, 120)));
+            ui.label(egui::RichText::new(msg).color(if bad { Color32::from_rgb(255, 130, 120) } else { Color32::from_gray(210) }));
         });
     });
 }

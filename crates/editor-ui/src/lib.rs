@@ -313,6 +313,16 @@ impl EditorUi {
     pub fn open_logic_tab(&mut self, path: &str) {
         self.logic_request = Some(path.to_string());
         let _ = self.show_panel("Logic");
+        // Until the document area exists: the Logic tab floats over the 3D view (a big canvas).
+        if !self.layout.floating.iter().any(|g| g.panels.contains(&Panel::Logic)) {
+            let r = self.last_viewport.unwrap_or(egui::Rect::from_min_size(egui::pos2(80.0, 80.0), egui::vec2(1100.0, 680.0)));
+            let _ = self.layout.apply(Action::Float { panel: Panel::Logic, rect: [r.min.x, r.min.y, r.width(), r.height()] });
+        }
+    }
+
+    /// Show a fire trace on the open graph's canvas (`editor.logic.fire` calls this).
+    pub fn show_logic_trace(&mut self, trace: editor_proto::LogicTrace) {
+        self.logic.show_trace(trace);
     }
     /// The path last passed to `open_logic_tab`, once.
     pub fn take_logic_request(&mut self) -> Option<String> {

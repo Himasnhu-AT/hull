@@ -17,11 +17,11 @@ fn harness_with(files: &[(&str, &str)], open: &str) -> Harness<'static, App> {
     for (p, t) in files {
         backend.files.insert((*p).to_string(), (*t).to_string());
     }
-    backend.palette.commands = vec![CommandDoc { name: "time.scale".into(), doc: "Scale time".into(), schema: Some(TypeSchema::Struct { fields: vec![("scale".into(), TypeSchema::Float { min: None, max: None, step: None })] }) }];
+    backend.palette.commands = vec![CommandDoc { name: "time.scale".into(), doc: "Scale time".into(), schema: Some(TypeSchema::Struct { fields: vec![("factor".into(), TypeSchema::Float { min: None, max: None, step: None })] }) }];
     backend.palette.nodes = vec![NodeTemplate {
         kind_label: "Command time.scale".into(),
         category: "Commands".into(),
-        kind_json: serde_json::json!({"Command": {"id": "time.scale", "params": {"scale": "$scale"}}}),
+        kind_json: serde_json::json!({"Command": {"id": "time.scale", "params": {"factor": "$factor"}}}),
         pins: vec![],
         doc: "Scale time".into(),
     }];

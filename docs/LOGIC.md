@@ -39,7 +39,7 @@ Graph(
 
 ## Graph format
 
-`Graph(name, nodes, flow, data)`:
+`Graph(name, vars, comments, nodes, flow, data)` (`vars` and `comments` are optional):
 
 - `nodes`: `(id: u32, kind: <NodeKind>, defaults: [(pin, Value)], pos: (x, y))`. Ids are yours
   (stable, referenced by links and by diagnostics); `pos` is the editor canvas position.
@@ -86,6 +86,8 @@ in data links; data chains deeper than 64. Unreached exec nodes are warnings.
 | `Script(file, function, args)` | in / `then` | one per name in `args` | `result` |
 | `Emit("name")` | in / `then` | `value` (optional) | |
 | `Log` | in / `then` | `text` | |
+| `GetVar("name")` | | | `value` (the variable's type) |
+| `SetVar("name")` | in / `then` | `value` | |
 
 - **Events**: the node's `then` starts a flow. `self` is the entity carrying `Logic`.
 - **Get/Set paths**: `Component.field.sub` through reflection, e.g. `Transform.translation.y`,
@@ -99,6 +101,32 @@ in data links; data chains deeper than 64. Unreached exec nodes are warnings.
   can be read by later nodes of the same event but not after a `Delay` (it starts a new run).
 - **Delay** uses game time (pauses with the game). The pending flow keeps the event's
   `self`/`other`/`value`/`dt`.
+
+### Variables and comments
+
+`vars: [(name: "opens", ty: Number, default: Num(0.0))]` declares variables. They live on the
+entity that carries the graph (a `LogicVars` component, created on the first `SetVar`) and
+start at their default. `GetVar` / `SetVar` take their pin type from the declaration; a
+`SetVar` converts the value to the declared type. `Graph::compile` reports undeclared and
+duplicate names and defaults that don't fit the type. The `Host` trait has two methods for
+them (`var_get`, `var_set`, default: none), so older hosts keep compiling.
+
+`comments: [(text: "open sequence", pos: (300.0, -70.0), size: (1160.0, 420.0), color: (70, 100, 150))]`
+are note boxes on the editor canvas; the compiler and the interpreter ignore them. The editor
+rewrites the file and keeps a header comment but not other comments.
+
+### Checks, docs and traces (for tools)
+
+- `Graph::check(Some(&Catalog { scripts, commands }))`: `compile()` plus "script file not
+  found", "file has no function `f`", argument-count warnings and "unknown command". The editor
+  builds the catalog from `scripts/*.ruspy` and the control-command registry and runs `check` on
+  every edit.
+- `logic_core::{templates, docs, category, label}`: the node list with default parameters,
+  one-line documentation, palette group and title of each kind. The editor palette and node
+  inspector are built from them, so they can't drift from the validator.
+- `Graph::pins_of(kind)` / `pins_in(vars, kind)`: pin table with variable pins typed.
+- `Runner { tracing, trace }`: with `tracing` on, a run records the ids of the nodes it
+  executed (event first, then exec nodes in order; a `Delay` resume continues after the delay).
 
 ### Interpreter limits
 
@@ -161,7 +189,7 @@ running while the error is listed.
 | Command | |
 |---|---|
 | `logic.list` | entities with `Logic`: graph, loaded, event nodes, `started`; plus timing stats |
-| `logic.fire {entity, event, other?, value?, dt?}` | run an event now: `start`, `tick`, `overlap_enter`, `overlap_exit`, `action:<name>`, `message:<name>`, `timer:<node id>` |
+| `logic.fire {entity, event, other?, value?, dt?, trace?}` | run an event now: `start`, `tick`, `overlap_enter`, `overlap_exit`, `action:<name>`, `message:<name>`, `timer:<node id>`. With `trace: true` delays are followed at once and the result lists `trace` (node ids that ran) and the new `log` lines |
 | `logic.diagnostics {clear?}` | `{errors: [...], log: [...]}` |
 | `logic.reload` | reload every graph and script from disk |
 
@@ -185,6 +213,13 @@ Measured on an M-series Mac (dev profile: engine opt-level 1, deps 3), `LogicSta
 
 For per-frame logic on hundreds of entities prefer Rust systems; graphs are for sparse,
 designer-driven behaviour (triggers, doors, quests, scripted sequences).
+
+## Editing graphs
+
+The level editor has a Logic tab (a Blueprint-style node canvas, script text editor, compile
+results, fire-and-trace): see `docs/EDITOR.md`, "Logic". Graphs load, swap and report errors
+also while the game is paused (the editor's world is paused); events fire only while the
+game runs, so the editor tests a graph with `logic.fire` / the tab's Fire button.
 
 ## Known limits
 

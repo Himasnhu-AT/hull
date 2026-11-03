@@ -44,6 +44,7 @@ pub struct LogicTab {
     applied: Vec<(String, Op)>,
     status: Option<(String, f64, bool)>,
     keys: Keys,
+    pending_trace: Option<editor_proto::LogicTrace>,
 }
 
 impl LogicTab {
@@ -122,6 +123,11 @@ impl LogicTab {
             Some(Doc::Graph(g)) => ctx.input(|i| i.pointer.latest_pos()).is_some_and(|p| g.canvas.contains(p)),
             _ => false,
         }
+    }
+
+    /// Show a fire trace on the front graph (pulses the path) when the next frame is drawn.
+    pub fn show_trace(&mut self, trace: editor_proto::LogicTrace) {
+        self.pending_trace = Some(trace);
     }
 
     /// Take the editing shortcuts (Undo, Redo, Save, Delete, Duplicate, F) from the egui input
@@ -406,6 +412,9 @@ fn graph_ui(ui: &mut Ui, tab: &mut LogicTab, doc: &mut GraphDoc, backend: &mut d
         tab.users_polled = now;
     }
 
+    if let Some(tr) = tab.pending_trace.take() {
+        doc.trace = Some(TraceViz { nodes: tr.nodes, log: tr.log, started: now, error: None });
+    }
     let mut act = ToolbarAct::default();
     let keys = std::mem::take(&mut tab.keys);
     act.undo |= keys.undo;

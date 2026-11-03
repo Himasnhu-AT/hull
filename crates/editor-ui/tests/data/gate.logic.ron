@@ -13,7 +13,7 @@ Graph(
         (id: 6, kind: Branch, pos: (700.0, 20.0)),
         (id: 7, kind: Set(path: "Door.open"), defaults: [("value", Bool(true))], pos: (950.0, 20.0)),
         (id: 8, kind: Script(file: "score.ruspy", function: "on_open", args: ["who"]), pos: (1250.0, 20.0)),
-        (id: 9, kind: Command(id: "time.scale", params: {"scale": "$scale"}), defaults: [("scale", Num(1.0))], pos: (950.0, 230.0)),
+        (id: 9, kind: Command(id: "time.scale", params: {"factor": "$factor"}), defaults: [("factor", Num(1.0))], pos: (950.0, 230.0)),
         (id: 10, kind: SetVar("opens"), pos: (1250.0, 260.0)),
         (id: 11, kind: GetVar("opens"), pos: (950.0, 420.0)),
         (id: 12, kind: Math(Add), defaults: [("b", Num(1.0))], pos: (1250.0, 420.0)),

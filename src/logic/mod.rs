@@ -297,7 +297,10 @@ impl Plugin for LogicPlugin {
             .insert_resource(LogicCtx { me: Entity::PLACEHOLDER });
         app.world_mut().insert_non_send(ScriptHost::new());
         app.add_systems(Update, script::poll_scripts)
-            .add_systems(Update, (attach, sync_graphs, gather, run_queue).chain().run_if(not_paused));
+            // Loading and swapping graphs also runs while paused (the editor edits and tests graphs in
+            // a paused world); events only fire while the game runs.
+            .add_systems(Update, (attach, sync_graphs).chain())
+            .add_systems(Update, (gather, run_queue).chain().after(sync_graphs).run_if(not_paused));
         #[cfg(feature = "devtools")]
         devtools::register(app);
     }

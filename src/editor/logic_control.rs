@@ -126,5 +126,10 @@ fn palette(world: &mut World, _: Value) -> Result<Value, String> {
 fn fire(world: &mut World, p: Value) -> Result<Value, String> {
     let e = entity_param(world, &p)?;
     let event = p.get("event").and_then(Value::as_str).ok_or("`event` is required")?;
-    to_value(&WorldBackend::new(world).logic_fire(e.to_bits(), event)?)
+    let trace = WorldBackend::new(world).logic_fire(e.to_bits(), event)?;
+    // The open graph tab pulses the path, as if its Fire button had been pressed.
+    if let Some(mut ui) = world.get_resource_mut::<EditorUiRes>() {
+        ui.0.show_logic_trace(trace.clone());
+    }
+    to_value(&trace)
 }

@@ -145,6 +145,81 @@ protocol.
 - Exec pins (flow) + data pins (typed: bool, number, string, vec3, entity, json).
 - Interpreter: per event, fixed step budget, no allocation per tick; errors → diagnostics.
 
+## Logic (the Blueprint tab)
+
+`crates/editor-ui/src/logic/` (UI, Bevy-free; depends on `logic-core`), `src/editor/logic_backend.rs`
+and `logic_control.rs` (engine side). Opened by `EditorUi::open_logic_tab(path)`, by `editor.logic.create` / `editor.logic.open`
+(and by whatever host UI calls it, e.g. the Content drawer's Open on a `.logic.ron`). Until the
+document area of the layout work exists the tab floats over the 3D view when opened.
+
+**Workflow**: create a graph (`+` > New graph, or `editor.logic.create`), build it on the canvas,
+check the Compiler Results strip, Save, select an entity and press Attach to selection (an undoable
+`SetComponent` of `Logic { graph }`), pick an event in Test and press Fire: the executed path pulses
+orange on the canvas and the log lines list below. Saving swaps the graph in the running world
+(`reload_graph`), so the attached entity runs the new version.
+
+- **Tab**: document tabs (graphs and `.ruspy` scripts), toolbar (Compile, Save, Revert, Undo, Redo,
+  Find, Fit, Comment, Test event + Fire, Attach to selection, Results), "My Logic" on the left
+  (Events, Variables with `+`, Scripts with their functions, Messages, Graphs), node inspector on the
+  right, Compiler Results at the bottom. A file changed on disk reloads when the tab has no
+  unsaved edits, otherwise a banner offers Reload / Keep mine.
+- **Canvas** (egui-snarl): trackpad scroll pans, pinch zooms, middle-drag or Space+drag pans, left drag
+  on empty space box-selects, `F` frames the selection (or everything), `Delete`, `Cmd+D`, `Cmd+Z`,
+  `Cmd+Shift+Z` / `Cmd+Y`, `Cmd+S` while the pointer is over the canvas and no field is being
+  edited (`LogicTab::capture_keys` takes them before the host's own shortcuts). Minimap bottom-right
+  (click or drag to move the view). Comments: a title bar to drag, a corner to resize; text, colour
+  and size in the inspector.
+- **Pins**: exec white triangles, bool red, number green, string magenta, vec3 yellow, entity cyan,
+  json blue-grey, any grey; a wire takes its source's colour. A connection `Ty::feeds` refuses
+  (e.g. String into Bool) is not made and a red note says "String cannot feed Bool". A data input
+  takes one wire, an exec output leads to one place. Unconnected scalar inputs show an inline
+  default editor; the inspector edits every default.
+- **Palette**: right-click the canvas, or release a wire on empty space (then only nodes with a
+  pin the dragged type can connect to are listed, and the wire is connected to it). Searchable,
+  grouped Events / Flow / World / Variables / Math / Vec3 / Effects / Commands / Scripts. Kinds come
+  from `logic_core::templates()`; Commands from the engine's instant control commands (`editor.*`
+  hidden), each becoming a `Command { id, params }` with a `"$name"` pin per schema field;
+  Scripts from `fn name(args)` lines of `scripts/*.ruspy`.
+- **Compile**: `Graph::check` with the catalog runs after every edit. Errors outline the node red
+  with an `!` badge and a red ring on the pin, and list in Compiler Results with `Go to`; warnings
+  (unreached node, argument count) are yellow. Chip in the toolbar: `Compile: OK`, `Compile: 2 errors`.
+- **Undo**: an in-tab stack of whole-`Graph` snapshots per document (not `Op::GraphEdit` in the
+  level's journal): a graph is a file saved on its own, so its history shouldn't interleave with
+  level edits. Consecutive changes of one drag or one text field merge. Attach is the exception:
+  it is a level edit, applied as `SetComponent` and recorded on the level's undo stack.
+- **Scripts**: line numbers, colouring (keywords, strings, numbers, comments), a function list,
+  engine errors marked on their line and listed with `line:col`, `Cmd+S` saves; the game reloads
+  the script by itself.
+
+`EditorBackend` (defaults say "not supported"): `logic_list`, `logic_read`, `logic_write`,
+`logic_create`, `logic_palette`, `logic_users`, `logic_attach`, `logic_fire`. Types in `editor-proto`:
+`LogicFile`, `GraphErrorDoc { node, pin, message, warning, line, col }`, `LogicPalette`,
+`NodeTemplate`, `CommandDoc`, `LogicTrace { nodes, log }`. Paths are assets-relative and confined to
+`logic/*.logic.ron` and `scripts/*.ruspy`. `logic_write` writes graphs only if the RON parses (and
+returns the check results either way) and prepends a header comment.
+
+| Command | Params | Result |
+|---|---|---|
+| `editor.logic.list` | none | `[LogicFile]` |
+| `editor.logic.read` | `{path}` | `{ron}` |
+| `editor.logic.validate` | `{ron}` | `{errors}` |
+| `editor.logic.write` | `{path, ron}` | `{errors}` |
+| `editor.logic.create` | `{name, template?: empty\|basic, open?}` | `{path}` |
+| `editor.logic.open` | `{path}` | `{ok}` |
+| `editor.logic.attach` | `{path, id\|stable\|name}` | the `SetComponent` op (undoable) |
+| `editor.logic.users` | `{path}` | `{entities}` |
+| `editor.logic.palette` | none | `LogicPalette` |
+| `editor.logic.fire` | `{event, id\|stable\|name}` | `LogicTrace`; also pulses the open tab |
+
+Tests: `crates/editor-ui/tests/logic.rs` (kittest: connect, type refusal, undo, palette search,
+errors, save, variables, fire, reload, script tab), `crates/logic-core` unit tests,
+`tests/editor_logic.rs` (headless engine: create, write, attach, hot reload, trace, undo).
+Preview a graph offscreen: `LOGIC_SHOT=out.png cargo test -p editor-ui --test logic preview -- --ignored`.
+
+Known gaps: the tab's lines are not yet in the Output panel; no breakpoints or live "running"
+highlight while the game plays; no auto-layout; `ForEach` item types are `Any`; Fire runs the saved
+graph (save first to test edits); Space / double-click on empty canvas do not open the palette.
+
 ## ruspy scripts
 
 `scripts/<name>.ruspy`, called from graphs or bound to events directly. Host API (exact
