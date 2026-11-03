@@ -559,6 +559,11 @@ const MINI: Vec2 = vec2(180.0, 120.0);
 /// Bottom-right overview: nodes as dots, the view as a frame; click or drag moves the view.
 fn minimap(ui: &mut Ui, doc: &mut GraphDoc, canvas: Rect) {
     let Some(world) = bounds(doc) else { return };
+    // Only worth showing when part of the graph is out of view.
+    let view_now = Rect::from_two_pos(doc.to_global.inverse() * canvas.min, doc.to_global.inverse() * canvas.max);
+    if view_now.contains_rect(world.expand(20.0)) {
+        return;
+    }
     let world = world.expand(60.0);
     let pos = canvas.right_bottom() - MINI - vec2(12.0, 12.0);
     let mut jump: Option<Pos2> = None;

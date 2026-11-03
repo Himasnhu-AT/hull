@@ -197,6 +197,23 @@ struct ListCache {
     files: Vec<LogicFile>,
 }
 
+/// Puts check results in the Output panel (source `Logic`, file = the graph, so a click opens its tab).
+fn report(world: &mut World, rel: &str, errs: &[GraphErrorDoc]) {
+    for e in errs {
+        let level = if e.warning { Level::Warn } else { Level::Error };
+        let msg = match (e.node, &e.pin) {
+            (Some(n), Some(p)) => format!("node {n} pin {p}: {}", e.message),
+            (Some(n), None) => format!("node {n}: {}", e.message),
+            _ => e.message.clone(),
+        };
+        let line = (e.line > 0).then_some(e.line);
+        let col = (e.col > 0).then_some(e.col);
+        if let Some(mut st) = world.get_resource_mut::<super::EditorState>() {
+            st.push_diag(Diagnostic::new(level, "Logic", msg).at(rel, line, col));
+        }
+    }
+}
+
 const HEADER: &str = "// Edited with the Logic editor (comments in this file are not kept).\n";
 
 impl WorldBackend<'_> {
@@ -257,12 +274,16 @@ impl WorldBackend<'_> {
         if rel.ends_with(".ruspy") {
             write_atomic(&full, text)?;
             crate::logic::reload_script(self.world, &rel);
-            return Ok(script_errors(self.world, &rel));
+            let errs = script_errors(self.world, &rel);
+            report(self.world, &rel, &errs);
+            return Ok(errs);
         }
         let g = lc::Graph::from_ron(text).map_err(|e| format!("{rel}:{e}"))?;
         write_atomic(&full, &format!("{HEADER}{text}"))?;
         crate::logic::reload_graph(self.world, &rel);
-        Ok(g.check(Some(&catalog(self.world))).iter().map(doc_of).collect())
+        let errs: Vec<GraphErrorDoc> = g.check(Some(&catalog(self.world))).iter().map(doc_of).collect();
+        report(self.world, &rel, &errs);
+        Ok(errs)
     }
 
     pub(super) fn logic_create_impl(&mut self, name: &str, template: &str) -> Result<String, String> {

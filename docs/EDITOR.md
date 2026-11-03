@@ -149,8 +149,7 @@ protocol.
 
 `crates/editor-ui/src/logic/` (UI, Bevy-free; depends on `logic-core`), `src/editor/logic_backend.rs`
 and `logic_control.rs` (engine side). Opened by `EditorUi::open_logic_tab(path)`, by `editor.logic.create` / `editor.logic.open`
-(and by whatever host UI calls it, e.g. the Content drawer's Open on a `.logic.ron`). Until the
-document area of the layout work exists the tab floats over the 3D view when opened.
+(and by whatever host UI calls it, e.g. the Content drawer's Open on a `.logic.ron`). It opens as a document tab in the centre next to the Level tab, with the Logic editor as its body (`logic::show_doc`); closing the tab forgets the document. Check results also go to the Output panel (source `Logic`, file = the graph, so a click opens the tab).
 
 **Workflow**: create a graph (`+` > New graph, or `editor.logic.create`), build it on the canvas,
 check the Compiler Results strip, Save, select an entity and press Attach to selection (an undoable
