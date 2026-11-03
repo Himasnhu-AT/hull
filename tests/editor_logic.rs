@@ -57,6 +57,12 @@ fn saved_graph_reloads_and_the_running_entity_reacts() {
     // Create + save through the backend.
     let path = WorldBackend::new(s.world_mut()).logic_create("door", "empty").unwrap();
     assert_eq!(path, "logic/door.logic.ron");
+    for tpl in ["basic", "trigger_zone", "door", "pickup", "timer", "action_key", "event_start"] {
+        let p = WorldBackend::new(s.world_mut()).logic_create(&format!("t_{tpl}"), tpl).unwrap();
+        let g = engine::logic::logic_core::Graph::from_ron(&WorldBackend::new(s.world_mut()).logic_read(&p).unwrap()).unwrap();
+        assert!(!g.nodes.is_empty() && g.compile().is_ok(), "{tpl}: {:?}", g.compile().err());
+    }
+    assert!(WorldBackend::new(s.world_mut()).logic_create("t_bogus", "nope").is_err());
     assert!(WorldBackend::new(s.world_mut()).logic_create("door", "empty").is_err(), "no overwrite");
     let errs = WorldBackend::new(s.world_mut()).logic_write(&path, V1).unwrap();
     assert!(errs.iter().all(|e| e.warning), "{errs:?}");

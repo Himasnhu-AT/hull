@@ -164,17 +164,60 @@ fn write_atomic(path: &Path, text: &str) -> Result<(), String> {
     std::fs::rename(&tmp, path).map_err(|e| e.to_string())
 }
 
+/// Starter nodes of a template, laid out left to right.
+fn template_nodes(template: &str) -> Option<Vec<lc::Node>> {
+    use lc::NodeKind as K;
+    let n = |id: u32, kind: K| {
+        let mut x = lc::Node::new(id, kind);
+        x.pos = [(id as f32 - 1.0) * 280.0, 0.0];
+        x
+    };
+    let log = |id: u32, text: &str| n(id, K::Log).with("text", lc::Value::text(text));
+    Some(match template {
+        "" | "empty" => vec![],
+        "basic" | "event_start" => vec![n(1, K::Start), log(2, "hello")],
+        "trigger_zone" => vec![n(1, K::OverlapEnter), log(2, "entered")],
+        "door" => vec![n(1, K::OverlapEnter), n(2, K::Delay { secs: 0.5 }), n(3, K::Set { path: "Transform.translation.y".into() }).with("value", lc::Value::Num(3.0))],
+        "pickup" => vec![n(1, K::OverlapEnter), n(2, K::Emit("picked_up".into())), log(3, "picked up")],
+        "timer" => vec![n(1, K::Timer { secs: 1.0, repeat: true }), log(2, "tick")],
+        "action_key" => vec![n(1, K::Action("interact".into())), log(2, "interact pressed")],
+        _ => return None,
+    })
+}
+
+/// Templates whose nodes run one after another.
+fn template_chain(template: &str) -> bool {
+    !matches!(template, "" | "empty")
+}
+
+/// The last `logic_list` answer and what it was computed from.
+#[derive(Resource)]
+struct ListCache {
+    stamp: (Vec<(PathBuf, Option<std::time::SystemTime>, u64)>, usize),
+    files: Vec<LogicFile>,
+}
+
 const HEADER: &str = "// Edited with the Logic editor (comments in this file are not kept).\n";
 
 impl WorldBackend<'_> {
     pub(super) fn logic_list_impl(&mut self) -> Vec<LogicFile> {
         let Ok(root) = root(self.world) else { return Vec::new() };
-        let cat = catalog(self.world);
         let mut files = Vec::new();
         walk(&root.join("logic"), ".logic.ron", &mut files);
         walk(&root.join("scripts"), ".ruspy", &mut files);
         files.sort();
-        files
+        // Callers poll this a few times a second: reuse the answer while no file changed
+        // (diagnostics of scripts can change without a file change, so they are part of the stamp).
+        let diag_stamp = self.world.resource::<crate::logic::LogicDiagnostics>().items.len();
+        let stamp: Vec<(PathBuf, Option<std::time::SystemTime>, u64)> = files.iter().map(|f| std::fs::metadata(f).map_or((f.clone(), None, 0), |m| (f.clone(), m.modified().ok(), m.len()))).collect();
+        let stamp = (stamp, diag_stamp);
+        if let Some(c) = self.world.get_resource::<ListCache>()
+            && c.stamp == stamp
+        {
+            return c.files.clone();
+        }
+        let cat = catalog(self.world);
+        let out: Vec<LogicFile> = files
             .into_iter()
             .filter_map(|f| {
                 let rel = f.strip_prefix(&root).ok()?.to_string_lossy().replace('\\', "/");
@@ -192,7 +235,9 @@ impl WorldBackend<'_> {
                 };
                 Some(LogicFile { path: rel, name, errors })
             })
-            .collect()
+            .collect();
+        self.world.insert_resource(ListCache { stamp, files: out.clone() });
+        out
     }
 
     pub(super) fn logic_read_impl(&mut self, path: &str) -> Result<String, String> {
@@ -231,17 +276,12 @@ impl WorldBackend<'_> {
             return Err(format!("{rel} already exists"));
         }
         let mut g = lc::Graph { name: stem.clone(), ..Default::default() };
-        match template {
-            "" | "empty" => {}
-            "basic" => {
-                let mut start = lc::Node::new(1, lc::NodeKind::Start);
-                start.pos = [0.0, 0.0];
-                let mut log = lc::Node::new(2, lc::NodeKind::Log).with("text", lc::Value::text("hello"));
-                log.pos = [260.0, 0.0];
-                g.nodes = vec![start, log];
-                g.flow_link((1, "then"), 2);
+        g.nodes = template_nodes(template).ok_or_else(|| format!("unknown template `{template}`"))?;
+        for i in 1..g.nodes.len() {
+            let (from, to) = (g.nodes[i - 1].id, g.nodes[i].id);
+            if template_chain(template) {
+                g.flow_link((from, "then"), to);
             }
-            other => return Err(format!("unknown template `{other}` (empty | basic)")),
         }
         write_atomic(&full, &format!("{HEADER}{}", g.to_ron()))?;
         Ok(rel)
