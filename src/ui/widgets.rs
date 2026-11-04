@@ -100,13 +100,16 @@ pub struct Focusable {
 #[derive(Resource, Default, Debug)]
 pub struct Focus(pub Option<Entity>);
 
+/// Requires `Button` + `Hovered`: clicks (`Pressed`) and the hover look work for any game button.
 #[derive(Component, Clone, Copy, Debug)]
+#[require(Button, Hovered)]
 pub struct ActionButton(pub UiAction);
 
 /// Colours for idle / hot (hovered or focused) / on (selected) states.
 /// `bg`/`border` apply to the entity itself; `text` to text in its subtree (not crossing
 /// another `Look`).
 #[derive(Component, Clone, Copy, Debug)]
+#[require(Hovered)]
 pub struct Look {
     pub bg: [Color; 3],
     pub border: [Color; 3],
@@ -269,6 +272,7 @@ pub struct FieldRow(pub &'static str);
 
 /// One option of a choice-like field (segment, card or swatch); clicking selects it.
 #[derive(Component, Clone, Copy, Debug)]
+#[require(Button, Hovered)]
 pub struct Segment {
     pub key: &'static str,
     pub index: usize,
@@ -276,12 +280,14 @@ pub struct Segment {
 
 /// Toggle switch (clickable).
 #[derive(Component, Clone, Copy, Debug)]
+#[require(Button, Hovered)]
 pub struct ToggleSwitch(pub &'static str);
 #[derive(Component)]
 struct ToggleKnob;
 
 /// Slider track (click/drag), its fill and knob, and the value label.
 #[derive(Component, Clone, Copy, Debug)]
+#[require(Button, Hovered)]
 pub struct SliderTrack(pub &'static str);
 #[derive(Component)]
 struct SliderFill;

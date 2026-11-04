@@ -6,6 +6,9 @@ rust-version = "1.97.1"
 license = "MIT OR Apache-2.0"
 description = "Reusable game shell on Bevy: app bootstrap, settings, menus, pause, UI kit, rendering presets, audio, input, devtools."
 
+[workspace]
+members = [".", "crates/pcg-core", "crates/editor-proto", "crates/editor-ui"]
+
 [dependencies]
 bevy = { version = "=0.20.1", features = ["jpeg"] }
 avian3d = { version = "=0.8.0", optional = true }
@@ -29,9 +32,16 @@ image = { version = "0.25", default-features = false, features = ["png"], option
 # world: RON world descriptions and 16-bit PNG heightmaps (both already in Bevy's tree; no new features).
 ron = { version = "0.12", default-features = false, optional = true }
 pcg-core = { path = "crates/pcg-core", optional = true }
+logic-core = { path = "crates/logic-core", optional = true }
+# ruspy (the user's language), branch `embed` pinned by rev; bump when ruspy changes.
+ruspy = { git = "https://github.com/Himasnhu-AT/ruspy", rev = "982b759423b5984e0112c891a1c6f3868f8d3de1", default-features = false, optional = true }
 png = { version = "0.18", default-features = false, optional = true }
 # net: compact serde wire format for replicated components / messages (pulls only cobs + serde).
 postcard = { version = "1", default-features = false, features = ["alloc"], optional = true }
+# editor: egui inside the Bevy window (bevy_egui) hosting the Bevy-free editor UI (src/editor, docs/EDITOR.md).
+bevy_egui = { version = "0.43", default-features = false, features = ["render", "default_fonts", "manage_clipboard"], optional = true }
+editor-proto = { path = "crates/editor-proto", optional = true }
+editor-ui = { path = "crates/editor-ui", optional = true, features = ["snarl"] }
 
 [features]
 # Dev defaults. Games depend with `default-features = false` and turn `devtools`/`trace` on
@@ -51,6 +61,9 @@ default = [
     "actions",
     "l10n",
     "props",
+    "level",
+    "spline",
+    "logic",
 ]
 # AI-friendly dev loop: ECS inspector commands, scenario test kit, perf assertions, scope
 # profiling, JSON hot reload, save slots, asset checks (docs/DEVKIT.md).
@@ -95,8 +108,17 @@ actions = []
 l10n = []
 # Breakable / bendable props: toppling posts, debris, plants that sway (src/props, docs/PROPS.md).
 props = []
+# Level files: LevelEntity + `levels/*.level.ron` through Bevy's reflected world format, hot reload, `--level` (src/level, docs/LEVELS.md).
+level = ["dep:ron"]
+# Splines: points with width/bank/tags, Catmull-Rom, nearest queries, road ribbon, gizmos (src/spline, docs/SPLINES.md).
+spline = []
+# Game logic as node graphs (assets/logic/*.logic.ron) and ruspy scripts (assets/scripts/*.ruspy): src/logic, docs/LOGIC.md.
+logic = ["dep:logic-core", "dep:ruspy"]
 # Multiplayer: transports, channels, replication, prediction (not in default: many games are single-player).
 net = ["dep:postcard"]
+# The level editor: `--editor` opens the game's own binary as an Unreal-style editor (src/editor, docs/EDITOR.md).
+# Off by default; default and ship builds do not pull bevy_egui or editor-ui.
+editor = ["devtools", "devkit", "level", "world", "pcg", "spline", "logic", "dep:bevy_egui", "dep:editor-proto", "dep:editor-ui"]
 
 [dev-dependencies]
 ashlar-control = { git = "https://github.com/Himasnhu-AT/ashlar", rev = "561745aaf96e07a0efe2ed61f37b0a365f46a530" }
@@ -108,6 +130,10 @@ debug = "line-tables-only"
 [profile.dev.package."*"]
 opt-level = 3
 debug = false
+
+[[example]]
+name = "spline_road"
+required-features = ["spline"]
 
 [[example]]
 name = "devtools_probe"
@@ -158,5 +184,25 @@ name = "open_world"
 required-features = ["world"]
 
 [[example]]
+name = "terrain_edit"
+required-features = ["world", "devtools"]
+
+[[example]]
+name = "logic_demo"
+required-features = ["logic", "devtools", "physics"]
+
+[[example]]
 name = "net_demo"
 required-features = ["net"]
+
+[[example]]
+name = "level_demo"
+required-features = ["level"]
+
+[[example]]
+name = "editor_demo"
+required-features = ["editor"]
+
+[[example]]
+name = "world_editor_demo"
+required-features = ["editor"]

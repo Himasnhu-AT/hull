@@ -101,6 +101,23 @@ to gate what a `Look` asks for. Defaults (Low / Medium / High / Ultra):
 | `volumetric_fog` / `volumetric_steps` | – / 16 | – / 24 | ✓ / 32 | ✓ / 64 | look |
 | `probe_refresh` | 0 (bake) | 0 (bake) | 4 | 1 | look: frames per probe face update |
 | `soft_shadows` | – | – | – | – | look: PCSS, only with cargo feature `look_pcss` (≈ +4 ms at 1080p); opt in per game |
+| `max_texture_size` | 1024 | 2048 | 4096 | 0 (no cap) | gfx: largest texture side kept at load (top mips dropped), below |
+| `cap_material_images` | ✓ | ✓ | ✓ | ✓ | gfx: one flag for all tiers; also cap mip-less material textures (glTF / PNG / JPEG) |
+
+**Texture size cap (`max_texture_size`).** An image larger than the tier's cap loses its top mip
+levels at load, before it is uploaded: GPU and CPU memory both shrink. BC7 2048² with mips is
+5.6 MB → 1.4 MB at 1024² (BC5 the same; RGBA8 22.4 → 5.6 MB). It applies to 2D images that
+arrive with a mip chain (cooked KTX2 through `load_pbr` or any other load; arrays and cubemaps
+too), to `load_pbr`'s JPEG sets after their CPU mips, and, with `cap_material_images`, to mip-less
+RGBA8 images in a `StandardMaterial` slot (base colour, normal, metallic-roughness, occlusion,
+emissive): those get CPU mips, then the cap. Images outside material slots (UI, fonts, sprites)
+and images without CPU data (render targets) keep their size. It runs in `PostUpdate` on the
+frame's `AssetEvent::Added`, before extraction takes GPU-only images' data. **A quality change
+applies to textures loaded after it**: already-loaded textures stay as they are until restart
+or reload (nothing is reloaded during play). `perf.stats` → `textures` reports `capped` and
+`mb_saved` (`gfx::TextureCapStats`). Limits: a compressed texture whose capped base level would
+not be whole blocks (e.g. 2048×8 BC7) keeps its top levels; 3D textures are skipped; building
+mips for a mip-less material texture runs on the main thread at load (measured, dev profile: 2048² 84 ms, 4096² 320 ms): cook big glTF textures to KTX2 to avoid the hitch.
 
 **Shadow texture churn (Bevy 0.19, known limit).** The sun's shadow texture has one layer per
 cascade plus one per *visible* shadowed spot light, and Bevy's texture cache keys on the exact

@@ -1,0 +1,65 @@
+// A door: its leaf (found by name) slides up when something walks into the trigger zone or the player presses E, closes
+// after it leaves. Node ids are free-form; links name pins.
+Graph(
+    name: "door",
+    nodes: [
+        // Events
+        (id: 1, kind: OverlapEnter, pos: (0.0, 0.0)),
+        (id: 2, kind: Action("open_door"), pos: (0.0, 120.0)),
+        (id: 3, kind: OverlapExit, pos: (0.0, 240.0)),
+        (id: 4, kind: Tick, pos: (0.0, 400.0)),
+        (id: 5, kind: Timer(secs: 1.0, repeat: false), pos: (0.0, 600.0)),
+        // Open: wait, set the flag, count it in the script
+        (id: 10, kind: Delay(secs: 0.5), pos: (260.0, 0.0)),
+        (id: 11, kind: Set(path: "Door.open"), defaults: [("value", Bool(true))], pos: (480.0, 0.0)),
+        (id: 12, kind: Script(file: "score.ruspy", function: "on_open", args: ["who"]), pos: (700.0, 0.0)),
+        (id: 13, kind: Log, pos: (920.0, 0.0)),
+        // Close
+        (id: 20, kind: Delay(secs: 1.0), pos: (260.0, 240.0)),
+        (id: 21, kind: Set(path: "Door.open"), defaults: [("value", Bool(false))], pos: (480.0, 240.0)),
+        // Slide every frame toward the open or closed height
+        (id: 30, kind: Get(path: "Door.open"), pos: (260.0, 400.0)),
+        (id: 31, kind: Branch, pos: (480.0, 400.0)),
+        (id: 50, kind: Find(name: "DoorLeaf"), pos: (40.0, 520.0)),
+        (id: 32, kind: Get(path: "Transform.translation.y"), pos: (260.0, 520.0)),
+        (id: 33, kind: Math(Mul), defaults: [("b", Num(4.0))], pos: (260.0, 640.0)),
+        (id: 34, kind: Math(Add), pos: (480.0, 520.0)),
+        (id: 35, kind: Math(Min), defaults: [("b", Num(4.6))], pos: (700.0, 520.0)),
+        (id: 36, kind: Set(path: "Transform.translation.y"), pos: (920.0, 400.0)),
+        (id: 37, kind: Math(Sub), pos: (480.0, 640.0)),
+        (id: 38, kind: Math(Max), defaults: [("b", Num(1.5))], pos: (700.0, 640.0)),
+        (id: 39, kind: Set(path: "Transform.translation.y"), pos: (920.0, 560.0)),
+        // Timer: says hello once
+        (id: 40, kind: Log, defaults: [("text", Str("door armed"))], pos: (260.0, 600.0)),
+    ],
+    flow: [
+        (from: (1, "then"), to: (10, "in")),
+        (from: (2, "then"), to: (10, "in")),
+        (from: (10, "then"), to: (11, "in")),
+        (from: (11, "then"), to: (12, "in")),
+        (from: (12, "then"), to: (13, "in")),
+        (from: (3, "then"), to: (20, "in")),
+        (from: (20, "then"), to: (21, "in")),
+        (from: (4, "then"), to: (31, "in")),
+        (from: (31, "true"), to: (36, "in")),
+        (from: (31, "false"), to: (39, "in")),
+        (from: (5, "then"), to: (40, "in")),
+    ],
+    data: [
+        (from: (1, "other"), to: (12, "who")),
+        (from: (12, "result"), to: (13, "text")),
+        (from: (30, "value"), to: (31, "cond")),
+        (from: (50, "entity"), to: (32, "entity")),
+        (from: (50, "entity"), to: (36, "entity")),
+        (from: (50, "entity"), to: (39, "entity")),
+        (from: (4, "dt"), to: (33, "a")),
+        (from: (32, "value"), to: (34, "a")),
+        (from: (33, "result"), to: (34, "b")),
+        (from: (34, "result"), to: (35, "a")),
+        (from: (35, "result"), to: (36, "value")),
+        (from: (32, "value"), to: (37, "a")),
+        (from: (33, "result"), to: (37, "b")),
+        (from: (37, "result"), to: (38, "a")),
+        (from: (38, "result"), to: (39, "value")),
+    ],
+)

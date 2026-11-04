@@ -59,6 +59,12 @@ struct Val {
 
 /// Runs `g` over `area` (`None`: everywhere). Output points lie inside `area`.
 pub fn evaluate(g: &Graph, inputs: &Inputs, area: Option<Area>) -> Result<Output, PcgError> {
+    evaluate_on(g, inputs, area, inputs.surface.as_ref())
+}
+
+/// [`evaluate`] with the ground given separately (`Inputs::surface` is ignored): lets a caller
+/// hand each cell a small crop of a live terrain instead of cloning the inputs.
+pub fn evaluate_on(g: &Graph, inputs: &Inputs, area: Option<Area>, surface: Option<&crate::Surface>) -> Result<Output, PcgError> {
     let order = g.order()?;
     let clip = area.unwrap_or(Area::ALL);
     let work = if clip.is_finite() { clip.expand(g.halo(inputs)) } else { Area::ALL };
@@ -134,7 +140,7 @@ pub fn evaluate(g: &Graph, inputs: &Inputs, area: Option<Area>) -> Result<Output
                 p
             }
             Op::Project { offset, align } => {
-                let surf = inputs.surface.as_ref().ok_or_else(|| e("Project needs Inputs::surface"))?;
+                let surf = surface.ok_or_else(|| e("Project needs Inputs::surface"))?;
                 let mut p = pts().cloned().unwrap_or_default();
                 for k in 0..p.len() {
                     let q = xz(p.pos[k]);

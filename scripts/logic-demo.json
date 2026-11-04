@@ -1,0 +1,106 @@
+[
+ {
+  "cmd": "logic.list",
+  "expect": {
+   "result.entities.0.loaded": true,
+   "result.entities.0.started": true
+  }
+ },
+ {
+  "cmd": "logic.diagnostics",
+  "expect": {
+   "result.errors": []
+  }
+ },
+ {
+  "shot": "door-closed"
+ },
+ {
+  "cmd": "input.key",
+  "params": {
+   "key": "w",
+   "action": "down"
+  }
+ },
+ {
+  "sleep": 1.9
+ },
+ {
+  "cmd": "input.key",
+  "params": {
+   "key": "w",
+   "action": "up"
+  }
+ },
+ {
+  "sleep": 2.0
+ },
+ {
+  "cmd": "ecs.query",
+  "params": {
+   "components": [
+    "Door",
+    "Transform"
+   ]
+  },
+  "expect": {
+   "result.entities.0.components.Door.open": true
+  }
+ },
+ {
+  "shot": "door-open"
+ },
+ {
+  "cmd": "ecs.query",
+  "params": {
+   "components": [
+    "Door"
+   ]
+  }
+ },
+ {
+  "cmd": "logic.diagnostics"
+ },
+ {
+  "cmd": "input.key",
+  "params": {
+   "key": "s",
+   "action": "down"
+  }
+ },
+ {
+  "sleep": 1.9
+ },
+ {
+  "cmd": "input.key",
+  "params": {
+   "key": "s",
+   "action": "up"
+  }
+ },
+ {
+  "sleep": 2.5
+ },
+ {
+  "shot": "door-closed-again"
+ },
+ {
+  "cmd": "input.key",
+  "params": {
+   "key": "e",
+   "action": "tap"
+  }
+ },
+ {
+  "sleep": 2.0
+ },
+ {
+  "shot": "door-open-by-key"
+ },
+ {
+  "cmd": "logic.diagnostics"
+ },
+ {
+  "cmd": "logic.list"
+ }
+]

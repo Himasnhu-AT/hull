@@ -160,7 +160,8 @@ pub fn splat_image(bytes: Vec<u8>, res: u32) -> Image {
         TextureDimension::D2,
         bytes,
         TextureFormat::Rgba8Unorm,
-        RenderAssetUsages::RENDER_WORLD,
+        // Keeps the CPU copy so the splat brush can paint into it.
+        RenderAssetUsages::default(),
     );
     img.sampler = ImageSampler::Descriptor(ImageSamplerDescriptor::linear());
     img

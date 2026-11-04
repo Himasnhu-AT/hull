@@ -1,0 +1,86 @@
+{
+  "buildings/kenney-city-kit-commercial": {
+    "source": "kenney",
+    "url": "https://kenney.nl/assets/city-kit-commercial",
+    "author": "Kenney",
+    "license": "CC0-1.0",
+    "fetched": "2026-11-02"
+  },
+  "buildings/kenney-city-kit-suburban": {
+    "source": "kenney",
+    "url": "https://kenney.nl/assets/city-kit-suburban",
+    "author": "Kenney",
+    "license": "CC0-1.0",
+    "fetched": "2026-11-02"
+  },
+  "cars/kenney-car-kit": {
+    "source": "kenney",
+    "url": "https://kenney.nl/assets/car-kit",
+    "author": "Kenney",
+    "license": "CC0-1.0",
+    "fetched": "2026-11-02"
+  },
+  "hdris/polyhaven-kloofendal_48d_partly_cloudy_puresky": {
+    "source": "polyhaven",
+    "url": "https://polyhaven.com/a/kloofendal_48d_partly_cloudy_puresky",
+    "author": "Greg Zaal, Jarod Guest",
+    "license": "CC0-1.0",
+    "fetched": "2026-11-02"
+  },
+  "roads/kenney-city-kit-roads": {
+    "source": "kenney",
+    "url": "https://kenney.nl/assets/city-kit-roads",
+    "author": "Kenney",
+    "license": "CC0-1.0",
+    "fetched": "2026-11-02"
+  },
+  "roads/kenney-racing-kit": {
+    "source": "kenney",
+    "url": "https://kenney.nl/assets/racing-kit",
+    "author": "Kenney",
+    "license": "CC0-1.0",
+    "fetched": "2026-11-02"
+  },
+  "textures/ambientcg-asphalt004": {
+    "source": "ambientcg",
+    "url": "https://ambientcg.com/a/Asphalt004",
+    "author": "ambientCG (Lennart Demes)",
+    "license": "CC0-1.0",
+    "fetched": "2026-11-02"
+  },
+  "textures/ambientcg-concrete034": {
+    "source": "ambientcg",
+    "url": "https://ambientcg.com/a/Concrete034",
+    "author": "ambientCG (Lennart Demes)",
+    "license": "CC0-1.0",
+    "fetched": "2026-11-02"
+  },
+  "textures/polyhaven-asphalt_01": {
+    "source": "polyhaven",
+    "url": "https://polyhaven.com/a/asphalt_01",
+    "author": "Dario Barresi, Charlotte Baglioni",
+    "license": "CC0-1.0",
+    "fetched": "2026-11-02"
+  },
+  "textures/polyhaven-asphalt_02": {
+    "source": "polyhaven",
+    "url": "https://polyhaven.com/a/asphalt_02",
+    "author": "Rob Tuytel",
+    "license": "CC0-1.0",
+    "fetched": "2026-11-02"
+  },
+  "textures/polyhaven-concrete_floor_02": {
+    "source": "polyhaven",
+    "url": "https://polyhaven.com/a/concrete_floor_02",
+    "author": "Rob Tuytel",
+    "license": "CC0-1.0",
+    "fetched": "2026-11-02"
+  },
+  "textures/polyhaven-red_brick": {
+    "source": "polyhaven",
+    "url": "https://polyhaven.com/a/red_brick",
+    "author": "Rob Tuytel",
+    "license": "CC0-1.0",
+    "fetched": "2026-11-02"
+  }
+}

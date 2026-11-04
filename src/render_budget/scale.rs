@@ -14,6 +14,12 @@
 //! with DLSS). Under `--offscreen` the upscale camera is redirected into the offscreen image
 //! like any window camera, so screenshots show the scaled result.
 //!
+//! Per-tier ceiling: on a high-DPI window `QualityPreset::hidpi_render_scale` caps the scale
+//! for the current quality (default Low 0.7, Medium 0.85), whatever `scale` (the governor's or
+//! the game's) asks for. It applies once the main camera has its quality settings
+//! (`AppliedQuality`, which sets `Msaa::Off`): scaling a camera that still had MSAA during
+//! warm-up failed GPU validation.
+//!
 //! Limits: `Camera::world_to_viewport` / `viewport_to_world` on the main camera work in the
 //! scaled image's pixels while scaled (multiply by [`RenderScale::applied`] to get window
 //! physical pixels). Game UI that targets the main camera explicitly (`UiTargetCamera`) renders
@@ -49,11 +55,14 @@ pub struct RenderScale {
     pub applied: f32,
     /// Size of the image the main camera draws into while scaled (physical px). Read-only.
     pub size: UVec2,
+    /// The tier ceiling in force (`QualityPreset::hidpi_render_scale` on a high-DPI window,
+    /// else 1). Read-only.
+    pub ceiling: f32,
 }
 
 impl Default for RenderScale {
     fn default() -> Self {
-        RenderScale { scale: 1.0, sharpen: 0.35, applied: 1.0, size: UVec2::ZERO }
+        RenderScale { scale: 1.0, sharpen: 0.35, applied: 1.0, size: UVec2::ZERO, ceiling: 1.0 }
     }
 }
 
@@ -114,13 +123,34 @@ fn apply_render_scale(
     >,
     mut sprites: Query<&mut Sprite>,
     outputs: Query<&Camera, Without<MainCamera>>,
+    mut projections: Query<&mut Projection, (With<MainCamera>, With<Camera3d>)>,
+    tier: (Option<Res<crate::gfx::QualityPreset>>, Option<Res<crate::settings::CoreSettings>>),
+    configured: Query<(), (With<MainCamera>, With<crate::gfx::AppliedQuality>)>,
 ) {
+    // Bevy 0.20 recomputes a camera's target size (`computed.target_info`) on window/image
+    // events or a projection change, not when its `RenderTarget` changes. After a retarget the
+    // camera kept the old target's size and scale factor, so UI laid out on it (results
+    // screen after scale went back to 1) sat in the wrong place and ignored the mouse.
+    let mut retarget = |e: Entity| {
+        if let Ok(mut p) = projections.get_mut(e) {
+            p.set_changed();
+        }
+    };
     let Ok(window) = window.single() else { return };
     // What the upscale camera draws to (the window, or the offscreen image), once known.
     let out = scaled.as_ref().and_then(|s| outputs.get(s.camera).ok()).and_then(|c| c.physical_target_size().zip(c.logical_target_size()));
     let (physical, logical) = out.unwrap_or((window.physical_size(), window.size()));
-    let want = RenderScale::quantize(rs.scale);
     let main = mains.iter().next().map(|(e, ..)| e);
+    let ceiling = match tier {
+        (Some(preset), Some(settings)) if window.scale_factor() >= preset.hidpi_scale_factor && main.is_some_and(|m| configured.contains(m)) => {
+            preset.hidpi_render_scale[settings.quality.index()].clamp(MIN_SCALE, 1.0)
+        }
+        _ => 1.0,
+    };
+    if rs.ceiling != ceiling {
+        rs.ceiling = ceiling;
+    }
+    let want = RenderScale::quantize(rs.scale.min(ceiling));
 
     // Turn off: no main camera any more, scale back to 1, or a degenerate window.
     let off = want >= 1.0 || main.is_none() || physical.x == 0 || physical.y == 0;
@@ -128,6 +158,7 @@ fn apply_render_scale(
         if let Some(s) = scaled {
             if let Ok((_, mut target, _, _, taa, _)) = mains.get_mut(s.main) {
                 *target = RenderTarget::Window(WindowRef::Primary);
+                retarget(s.main);
                 if let Some(mut taa) = taa {
                     taa.reset = true;
                 }
@@ -179,6 +210,7 @@ fn apply_render_scale(
                 && target.as_image() != Some(&s.image)
             {
                 *target = RenderTarget::from(s.image.clone());
+                retarget(main);
             }
             s.main = main;
         }
@@ -194,6 +226,7 @@ fn apply_render_scale(
             let handle = images.add(image);
             let Ok((_, mut target, cam, was_ui, taa, own_cas)) = mains.get_mut(main) else { return };
             *target = RenderTarget::from(handle.clone());
+            retarget(main);
             if let Some(mut taa) = taa {
                 taa.reset = true;
             }
@@ -234,6 +267,13 @@ fn apply_render_scale(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn hidpi_ceiling_defaults() {
+        let p = crate::gfx::QualityPreset::default();
+        assert_eq!(p.hidpi_render_scale.map(RenderScale::quantize), [0.7, 0.85, 1.0, 1.0]);
+        assert!(p.hidpi_scale_factor > 1.0 && p.hidpi_scale_factor <= 2.0);
+    }
 
     #[test]
     fn scales_quantize_and_sizes_round() {

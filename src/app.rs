@@ -137,6 +137,11 @@ pub fn app(info: GameInfo) -> App {
 
 /// [`app`] with explicit options.
 pub fn app_with(info: GameInfo, mut options: EngineOptions) -> App {
+    // `--metrics-viewer`: this process is the metrics viewer, not the game (dev builds).
+    #[cfg(feature = "devtools")]
+    if crate::cli::dev_flag("metrics-viewer") {
+        crate::devtools::metrics_viewer::run(info);
+    }
     let assets = options.assets_dir.clone().unwrap_or_else(|| crate::paths::assets_dir(&info));
     options.assets_dir = Some(assets.clone());
     let asset_plugin = AssetPlugin { file_path: assets.to_string_lossy().into_owned(), ..default() };
@@ -157,8 +162,7 @@ pub fn app_with(info: GameInfo, mut options: EngineOptions) -> App {
             bevy::input::InputPlugin,
         ));
     } else {
-        app.add_plugins(
-            DefaultPlugins
+        let defaults = DefaultPlugins
                 .set(WindowPlugin {
                     primary_window: Some(Window {
                         title: info.title.into(),
@@ -177,12 +181,23 @@ pub fn app_with(info: GameInfo, mut options: EngineOptions) -> App {
                 })
                 .set(asset_plugin)
                 .set(render_plugin())
-                .set(task_pools(options.worker_threads)),
-        );
+                .set(task_pools(options.worker_threads));
+        // The editor's Output panel lists engine warnings and errors.
+        #[cfg(feature = "editor")]
+        let defaults = defaults.set(bevy::log::LogPlugin { custom_layer: crate::editor::engine_log_layer, ..default() });
+        app.add_plugins(defaults);
     }
     #[cfg(feature = "physics")]
     app.add_plugins(avian3d::prelude::PhysicsPlugins::default());
+    #[cfg(feature = "editor")]
+    let editor = !options.headless && dev_flag("editor");
     app.add_plugins(EnginePlugin { info, options });
+    // `--editor`: this process is the level editor (docs/EDITOR.md). After the engine, before the
+    // game's own plugins, so it overrides the menu flow.
+    #[cfg(feature = "editor")]
+    if editor {
+        app.add_plugins(crate::editor::EditorPlugin);
+    }
     app
 }
 
@@ -285,12 +300,18 @@ impl Plugin for EnginePlugin {
         app.add_plugins(crate::vfx::VfxPlugin);
         #[cfg(feature = "pcg")]
         app.add_plugins(crate::pcg::PcgPlugin);
+        #[cfg(feature = "logic")]
+        app.add_plugins(crate::logic::LogicPlugin);
         #[cfg(feature = "ai")]
         app.add_plugins(crate::ai::AiPlugin);
         #[cfg(feature = "sound")]
         app.add_plugins(crate::sound::SoundPlugin);
         #[cfg(feature = "world")]
         app.add_plugins(crate::world::WorldPlugin);
+        #[cfg(feature = "spline")]
+        app.add_plugins(crate::spline::SplinePlugin);
+        #[cfg(feature = "level")]
+        app.add_plugins(crate::level::LevelPlugin);
         #[cfg(feature = "actions")]
         app.add_plugins(crate::actions::ActionsPlugin);
         #[cfg(feature = "l10n")]

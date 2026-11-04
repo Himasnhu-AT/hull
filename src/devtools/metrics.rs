@@ -83,7 +83,7 @@ impl Summary {
     }
 }
 
-fn sig4(x: f64) -> f64 {
+pub(crate) fn sig4(x: f64) -> f64 {
     if x == 0.0 || !x.is_finite() {
         return x;
     }
@@ -211,8 +211,8 @@ struct Series {
 }
 
 impl Series {
-    fn commit(&mut self, t: f64, v: f64, warmup: f64) {
-        while self.recent.len() >= WINDOW_CAP || self.recent.front().is_some_and(|&(t0, _)| t0 < t as f32 - WINDOW_SECS) {
+    fn commit(&mut self, t: f64, v: f64, warmup: f64, window: f32, cap: usize) {
+        while self.recent.len() >= cap || self.recent.front().is_some_and(|&(t0, _)| t0 < t as f32 - window) {
             self.recent.pop_front();
         }
         self.recent.push_back((t as f32, v as f32));
@@ -256,6 +256,10 @@ pub struct Metrics {
     pub warmup: f64,
     labels: BTreeMap<String, String>,
     thresholds: HashMap<String, Threshold>,
+    /// Seconds of timed samples kept per key ([`WINDOW_SECS`]; the metrics viewer keeps a
+    /// whole run) and the most kept.
+    pub window: f32,
+    pub window_cap: usize,
 }
 
 impl Default for Metrics {
@@ -269,6 +273,8 @@ impl Default for Metrics {
             warmup: WARMUP_SECS,
             labels: BTreeMap::new(),
             thresholds: HashMap::new(),
+            window: WINDOW_SECS,
+            window_cap: WINDOW_CAP,
         }
     }
 }
@@ -279,7 +285,7 @@ impl Metrics {
         if !value.is_finite() {
             return;
         }
-        let (frame, now, warmup) = (self.frame, self.now, self.warmup);
+        let (frame, now, warmup, window, cap) = (self.frame, self.now, self.warmup, self.window, self.window_cap);
         let s = self.series.entry(key).or_default();
         if frame != 0 && s.frame == frame {
             s.ring.set_last(value);
@@ -290,7 +296,7 @@ impl Metrics {
         s.frame = frame;
         if frame == 0 {
             // Not driven by the plugin (unit tests, bare registries): every call is a sample.
-            s.commit(now, value, warmup);
+            s.commit(now, value, warmup, window, cap);
         } else {
             s.pending = Some(value);
         }
@@ -374,10 +380,10 @@ impl Metrics {
     /// Ends the current frame (commits its samples) and starts the next at `now` seconds.
     /// The plugin calls this in `First`; tests may call it directly.
     pub fn next_frame(&mut self, now: f64) {
-        let (t, warmup) = (self.now, self.warmup);
+        let (t, warmup, window, cap) = (self.now, self.warmup, self.window, self.window_cap);
         for s in self.series.values_mut() {
             if let Some(v) = s.pending.take() {
-                s.commit(t, v, warmup);
+                s.commit(t, v, warmup, window, cap);
             }
         }
         self.frame += 1;
@@ -443,6 +449,7 @@ impl Plugin for MetricsPlugin {
     fn finish(&self, app: &mut App) {
         super::metrics_history::finish(app);
         super::metrics_window::finish(app);
+        super::metrics_viewer::game_build(app);
     }
 }
 
