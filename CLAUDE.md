@@ -42,3 +42,7 @@ The rules that matter most, so you don't skip them:
 | docs/PCG.md | Procedural content: node graphs, cells, catalog, scalability |
 | docs/LOGIC.md | Logic graphs (events, flow, commands) and ruspy scripts |
 | docs/NET.md | Multiplayer (feature `net`) |
+
+## Shared build cache
+- `engine/target` is the one Cargo target dir for the engine and every game (shroud, pacenote, courier, worktrees): each repo's `.cargo/config.toml` points here, so Bevy compiles once. Don't set another `CARGO_TARGET_DIR`.
+- Cargo never deletes stale artifacts. Prune with `scripts/sweep-target.sh` (cargo-sweep, keeps the most recently used 80 GB; `--dry` to preview) when it grows.

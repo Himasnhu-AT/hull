@@ -19,3 +19,7 @@ bench/results/
 
 # level file backups
 *.level.ron.bak
+
+# Agent worktrees and machine-local agent settings
+.claude/worktrees/
+.claude/settings.local.json
