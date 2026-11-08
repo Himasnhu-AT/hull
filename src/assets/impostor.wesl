@@ -5,8 +5,10 @@
 import bevy_pbr::render::{
     mesh_functions,
     mesh_view_bindings::view,
-    forward_io::{Vertex, VertexOutput, decompress_vertex},
+    forward_io::{Vertex, VertexOutput, FragmentOutput, decompress_vertex},
     view_transformations::position_world_to_clip,
+    pbr_fragment::pbr_input_from_standard_material,
+    pbr_functions::{alpha_discard, apply_pbr_lighting, main_pass_post_lighting_processing, visibility_range_dither},
 };
 
 struct Impostor {
@@ -52,11 +54,29 @@ fn vertex(v_in: Vertex) -> VertexOutput {
 
     out.world_position = vec4<f32>(wp, 1.0);
     out.position = position_world_to_clip(wp);
-    // Soft normal: towards the camera, a little up.
-    out.world_normal = normalize(vec3<f32>(f.x, 0.3, f.y));
+    // Soft normal: towards the camera, nearly level (the average of a crown seen from the side).
+    out.world_normal = normalize(vec3<f32>(f.x, 0.05, f.y));
 @if(VERTEX_OUTPUT_INSTANCE_INDEX)
     out.instance_index = v_in.instance_index;
 @if(VISIBILITY_RANGE_DITHER)
     out.visibility_range_dither = mesh_functions::get_visibility_range_dither_level(v_in.instance_index, m[3]);
+    return out;
+}
+
+@fragment
+fn fragment(vertex_output: VertexOutput, @builtin(front_facing) is_front: bool) -> FragmentOutput {
+    var in = vertex_output;
+@if(VISIBILITY_RANGE_DITHER)
+    visibility_range_dither(in.position, in.visibility_range_dither);
+    var pbr_input = pbr_input_from_standard_material(in, is_front);
+    pbr_input.material.base_color = alpha_discard(pbr_input.material.flags, pbr_input.material.alpha_cutoff, pbr_input.material.base_color);
+    // No prepass for the impostor: use the quad's own normal, not the one the prepass left behind
+    // this pixel (the ground's), which made impostors brighter than the model.
+    pbr_input.N = normalize(pbr_input.world_normal);
+    pbr_input.diffuse_occlusion = vec3<f32>(1.0);
+    pbr_input.specular_occlusion = 1.0;
+    var out: FragmentOutput;
+    out.color = apply_pbr_lighting(pbr_input);
+    out.color = main_pass_post_lighting_processing(pbr_input, out.color);
     return out;
 }

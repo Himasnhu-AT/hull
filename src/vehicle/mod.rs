@@ -24,7 +24,7 @@ pub mod tyre;
 #[cfg(feature = "level")]
 mod visual;
 #[cfg(feature = "level")]
-pub use visual::{WheelVisual, spawn_wheel_visuals};
+pub use visual::{NoRopeVisual, RopeLine, RopeVisualAssets, WheelVisual, spawn_wheel_visuals};
 
 #[cfg(feature = "devtools")]
 mod devtools;
@@ -57,7 +57,8 @@ impl Plugin for VehiclePlugin {
             .register_type::<SurfaceTag>()
             .add_systems(FixedUpdate, (vehicle_step, rope::rope_step).chain().in_set(VehicleSet));
         #[cfg(feature = "level")]
-        app.add_systems(PostUpdate, visual::sync_wheels.before(TransformSystems::Propagate));
+        app.add_systems(Update, visual::spawn_rope_lines)
+            .add_systems(PostUpdate, (visual::sync_wheels, visual::sync_rope_lines).before(TransformSystems::Propagate));
         #[cfg(feature = "devtools")]
         devtools::register(app);
     }

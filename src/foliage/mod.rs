@@ -511,7 +511,9 @@ pub fn impostor_material(atlas: &ImpostorAtlas, cfg: &FoliageConfig) -> Impostor
             alpha_mode: AlphaMode::Mask(p.cutoff),
             perceptual_roughness: 0.95,
             reflectance: 0.1,
-            double_sided: true,
+            // Both faces draw (no culling) but never flip the normal: the quad is turned in the shader, so
+            // its winding says nothing about which side faces the camera.
+            double_sided: false,
             cull_mode: None,
             ..default()
         },
