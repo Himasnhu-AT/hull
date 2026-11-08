@@ -9,15 +9,15 @@ fn _ready() {
 }
 
 fn _physics_process(dt) {
-    if get_var(game, "state") != "playing" {
+    if game.state != "playing" {
         return;
     }
     v = get_vector("lk_left", "lk_right", "lk_up", "lk_down");
-    if v[0] == 0 && v[1] == 0 {
+    if v.x == 0 && v.y == 0 {
         return;
     }
-    p = get_position();
-    x = clampf(p[0] + v[0] * speed * dt, -limit, limit);
-    z = clampf(p[2] + v[1] * speed * dt, -limit, limit);
-    set_position([x, p[1], z]);
+    p = self.position + vec3(v.x, 0, v.y) * (speed * dt);
+    p.x = clampf(p.x, -limit, limit);
+    p.z = clampf(p.z, -limit, limit);
+    self.position = p;
 }

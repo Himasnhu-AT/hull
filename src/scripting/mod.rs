@@ -606,7 +606,10 @@ fn instantiate(world: &mut World, e: Entity, script: &Script, keep: Option<Vec<(
     } else if let Some(props) = world.get::<ScriptProps>(e).cloned() {
         for p in props.values {
             match serde_json::from_str::<serde_json::Value>(&p.value) {
-                Ok(j) if engine.global(module, &p.name).is_some() => engine.set_global(module, &p.name, rv_of_json_exact(&j)),
+                Ok(j) if engine.global(module, &p.name).is_some() => {
+                    let cur = engine.global(module, &p.name);
+                    engine.set_global(module, &p.name, coerce_like(cur.as_ref(), rv_of_json_exact(&j)));
+                }
                 Ok(_) => diag(world, &key, 0, 0, format!("prop `{}` on {e}: the script has no member `{}`", p.name, p.name)),
                 Err(err) => diag(world, &key, 0, 0, format!("prop `{}` on {e}: bad JSON: {err}", p.name)),
             }
@@ -895,6 +898,26 @@ pub(crate) fn is_busy(world: &World, e: Entity) -> bool {
 pub(crate) fn defer(world: &mut World, e: Entity, method: String, args: Vec<RV>) {
     if let Some(mut rt) = world.get_non_send_mut::<ScriptRuntime>() {
         rt.deferred.push((e, method, args));
+    }
+}
+
+/// A saved prop value shaped like the member's default: JSON arrays become `vec2` / `vec3` /
+/// `Color` when the member is one, and whole numbers stay floats for float members.
+pub(crate) fn coerce_like(cur: Option<&RV>, v: RV) -> RV {
+    let nums = |v: &RV| -> Option<Vec<f64>> {
+        let RV::Array(a) = v else { return None };
+        a.borrow().iter().map(|x| match x { RV::Int(i) => Some(*i as f64), RV::Float(f) => Some(*f), _ => None }).collect()
+    };
+    match (cur, &v) {
+        (Some(RV::Vec2(_)), _) => match nums(&v).as_deref() { Some([x, y]) => RV::Vec2([*x, *y]), _ => v },
+        (Some(RV::Vec3(_)), _) => match nums(&v).as_deref() { Some([x, y, z]) => RV::Vec3([*x, *y, *z]), _ => v },
+        (Some(RV::Color(_)), _) => match nums(&v).as_deref() {
+            Some([r, g, b]) => RV::Color([*r, *g, *b, 1.0]),
+            Some([r, g, b, a]) => RV::Color([*r, *g, *b, *a]),
+            _ => v,
+        },
+        (Some(RV::Float(_)), RV::Int(i)) => RV::Float(*i as f64),
+        _ => v,
     }
 }
 

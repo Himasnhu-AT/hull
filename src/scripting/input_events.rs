@@ -70,7 +70,7 @@ pub(super) fn plugin(app: &mut App) {
 }
 
 fn rv2(x: f32, y: f32) -> RV {
-    RV::array(vec![RV::Float(x as f64), RV::Float(y as f64)])
+    RV::Vec2([x as f64, y as f64])
 }
 
 /// An event dictionary: `type` plus the fields of that type.

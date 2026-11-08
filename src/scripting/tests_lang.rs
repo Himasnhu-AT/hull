@@ -130,3 +130,47 @@ fn dictionaries_round_trip_through_json() {
     assert_eq!(call(app.world_mut(), e, "keys", &[]).unwrap().to_json(), serde_json::json!(["b", "sub"]));
     assert!(errors(&app).is_empty(), "{:?}", errors(&app));
 }
+
+#[test]
+fn vectors_work_with_the_host_api() {
+    let src = "pos = vec3(0, 0, 0);\n\
+        fn go() {\n\
+            p = get_position();\n\
+            p.x = 2; p += vec3(0, 1, 0);\n\
+            set_position(p * 2);\n\
+            set_scale([3, 3, 3]);\n\
+            self.position = vec3(1, 1, 1) + self.position;\n\
+            pos = self.position;\n\
+            return [get_position().length() > 0, self.position.y, get_position()[0]];\n\
+        }\n\
+        fn ret() { return vec2(1.5, 2); }\n\
+        fn takes(v, c) { return [v.x + v.z, c[1]]; }\n";
+    let mut app = app("vecs", &[("v.ruspy", src)]);
+    let e = app.world_mut().spawn((Script::new("v.ruspy"), Transform::default())).id();
+    app.update();
+    let r = call(app.world_mut(), e, "go", &[]).unwrap();
+    assert!(errors(&app).is_empty(), "{:?}", errors(&app));
+    assert_eq!(app.world().get::<Transform>(e).unwrap().translation, Vec3::new(5.0, 3.0, 1.0));
+    assert_eq!(r.to_json(), serde_json::json!([true, 3.0, 5.0]));
+    assert_eq!(get_member(app.world(), e, "pos"), Some(Value::Vec3([5.0, 3.0, 1.0])));
+    assert_eq!(call(app.world_mut(), e, "ret", &[]).unwrap().to_json(), serde_json::json!([1.5, 2.0]));
+    // JSON arrays and Vec3 values coming in are usable as vectors / colors via indexing.
+    let r = call(app.world_mut(), e, "takes", &[Value::Vec3([1.0, 2.0, 3.0]), Value::Json(std::sync::Arc::new(serde_json::json!([0.1, 0.5, 0.9])))]).unwrap();
+    assert!(r.to_json().to_string().starts_with("[4"), "{r:?} {:?}", errors(&app));
+}
+
+#[test]
+fn strings_const_enum_match_in_scripts() {
+    let src = "const MAX = 3;\nenum Mode { A, B }\nmode = 0;\nlast = \"\";\n\
+        fn go(x) {\n\
+            match x { Mode.A => { mode = 1; } Mode.B | 5 => { mode = 2; } _ => { mode = 9; } }\n\
+            last = fmt(\"{}:{}\", \"a b c\".split(\" \").len(), \"Hi\".upper());\n\
+            return mode + MAX;\n\
+        }\n";
+    let mut app = app("lang2", &[("l.ruspy", src)]);
+    let e = app.world_mut().spawn(Script::new("l.ruspy")).id();
+    app.update();
+    assert_eq!(call(app.world_mut(), e, "go", &[Value::Num(5.0)]).unwrap(), Value::Num(5.0), "{:?}", errors(&app));
+    assert_eq!(get_member(app.world(), e, "last"), Some(Value::text("3:HI")));
+    assert_eq!(call(app.world_mut(), e, "go", &[Value::Num(0.0)]).unwrap(), Value::Num(4.0));
+}

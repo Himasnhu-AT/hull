@@ -69,6 +69,8 @@ fn tf_mut(w: &mut World, e: Entity) -> Result<Mut<'_, Transform>, String> {
 }
 
 fn color_of(v: &RV) -> Result<Color, String> {
+    let norm = super::api::arr_of(v);
+    let v = norm.as_ref().unwrap_or(v);
     if let RV::Array(a) = v {
         let a = a.borrow();
         if a.len() == 3 || a.len() == 4 {

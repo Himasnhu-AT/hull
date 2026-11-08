@@ -98,7 +98,7 @@ fn input(e: &mut Engine) {
             }
             _ => return Err("usage: get_vector(action2d) or get_vector(neg_x, pos_x, neg_y, pos_y)".into()),
         };
-        Ok(RV::array(vec![RV::Float(v.x as f64), RV::Float(v.y as f64)]))
+        Ok(RV::Vec2([v.x as f64, v.y as f64]))
     });
     e.register("is_key_pressed", |c, a| {
         let n = s(a.first().ok_or("usage: is_key_pressed(\"KeyW\")")?, "key")?;
@@ -118,7 +118,7 @@ fn input(e: &mut Engine) {
         let w = world(c)?;
         let mut q = w.query_filtered::<&Window, With<bevy::window::PrimaryWindow>>();
         Ok(match q.iter(w).next().and_then(|win| win.cursor_position()) {
-            Some(p) => RV::array(vec![RV::Float(p.x as f64), RV::Float(p.y as f64)]),
+            Some(p) => RV::Vec2([p.x as f64, p.y as f64]),
             None => RV::Null,
         })
     });
@@ -338,7 +338,7 @@ fn math(e: &mut Engine) {
             return Err("usage: lerp(a, b, t)".into());
         }
         let t = f(&a[2], "t")?;
-        if matches!(a[0], RV::Array(_)) {
+        if matches!(a[0], RV::Array(_) | RV::Vec3(_)) {
             Ok(rv3(v3(&a[0], "a")?.lerp(v3(&a[1], "b")?, t)))
         } else {
             let (x, y) = (f(&a[0], "a")?, f(&a[1], "b")?);
