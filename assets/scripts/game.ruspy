@@ -14,7 +14,7 @@ fn start() {
     score = 0;
     time_left = round_len;
     state = "playing";
-    set_position(get_node("/Player"), [0.0, 0.3, 0.0]);
+    set_position(get_node("/Player"), [0.0, 0.5, 0.0]);
     call_group("lanterns", "reset");
     call(get_node("/Spawner"), "begin");
     emit_signal("score_changed", score);

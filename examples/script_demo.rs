@@ -47,7 +47,13 @@ fn main() {
 
 fn camera(mut commands: Commands, headless: Res<Headless>) {
     if !headless.0 {
-        commands.spawn((MainCamera, Camera3d::default(), Transform::from_xyz(0.0, 17.0, 11.0).looking_at(Vec3::new(0.0, 0.0, 0.5), Vec3::Y)));
+        // `camera.ruspy` follows the player (gentle lerp); this is only the starting pose.
+        commands.spawn((
+            MainCamera,
+            Camera3d::default(),
+            Script::new("camera.ruspy"),
+            Transform::from_xyz(0.0, 7.0, 10.0).looking_at(Vec3::new(0.0, 0.0, 0.0), Vec3::Y),
+        ));
     }
 }
 
@@ -89,48 +95,60 @@ fn bake_levels(world: &mut World, mut frame: Local<u32>) {
     if *frame != 3 {
         return;
     }
-    spawn_at(world, 1, "Ground", (prim(PrimitiveShape::Plane, Vec3::new(30.0, 0.0, 30.0), Color::srgb(0.16, 0.2, 0.17)), Scenery, Transform::IDENTITY));
+    let mut id = 100;
+    let mut next = || {
+        id += 1;
+        id
+    };
+    spawn_at(world, 1, "Ground", (prim(PrimitiveShape::Plane, Vec3::new(160.0, 0.0, 160.0), Color::srgb(0.16, 0.25, 0.17)), Scenery, Transform::IDENTITY));
+    // The moon: the look owns the real sun, this one only keeps old tooling happy and stays dim.
     spawn_at(
         world,
         2,
         "Sun",
         (
-            DirectionalLight { illuminance: 2_500.0, color: Color::srgb(0.7, 0.75, 1.0), shadow_maps_enabled: true, ..default() },
+            DirectionalLight { illuminance: 1.0, color: Color::srgb(0.6, 0.7, 1.0), shadow_maps_enabled: false, ..default() },
             Transform::from_xyz(4.0, 9.0, 3.0).looking_at(Vec3::ZERO, Vec3::Y),
         ),
     );
+    // The keeper: a cream capsule holding a small lamp.
     let player = spawn_at(
         world,
         3,
         "Player",
         (
-            prim(PrimitiveShape::Cuboid, Vec3::splat(0.6), Color::srgb(1.0, 0.9, 0.6)),
+            prim(PrimitiveShape::Capsule, Vec3::new(0.5, 1.0, 0.5), Color::srgb(0.7, 0.55, 0.38)),
             Actor,
             Script::new("player.ruspy"),
-            PhysicsBox { size: Vec3::splat(0.6), sensor: false },
-            Transform::from_xyz(0.0, 0.3, 0.0),
+            PhysicsBox { size: Vec3::new(0.6, 1.0, 0.6), sensor: false },
+            Transform::from_xyz(0.0, 0.5, 0.0),
         ),
     );
-    let glow = spawn_at(world, 4, "Glow", (PointLight { intensity: 300_000.0, range: 9.0, color: Color::srgb(1.0, 0.8, 0.5), ..default() }, Transform::from_xyz(0.0, 1.2, 0.0)));
+    let lamp = spawn_at(world, 7, "Lamp", (prim(PrimitiveShape::Sphere, Vec3::splat(0.22), Color::srgb(2.5, 1.5, 0.5)), Actor, Transform::from_xyz(0.34, 0.15, 0.2)));
+    world.entity_mut(lamp).insert(ChildOf(player));
+    let glow = spawn_at(world, 4, "Glow", (PointLight { intensity: 28_000.0, range: 7.0, color: Color::srgb(1.0, 0.78, 0.5), ..default() }, Transform::from_xyz(0.0, 1.8, 0.0)));
     world.entity_mut(glow).insert(ChildOf(player));
     spawn_at(world, 5, "HUD", Script::new("hud.ruspy"));
     spawn_at(
         world,
         6,
         "Spawner",
-        (Script::new("spawner.ruspy"), ScriptTimer { wait_time: 1.6, autostart: false, ..default() }, Connections::default().to("timeout", ".", "_on_timeout")),
+        (Transform::IDENTITY, Script::new("spawner.ruspy"), ScriptTimer { wait_time: 1.6, autostart: false, ..default() }, Connections::default().to("timeout", ".", "_on_timeout")),
     );
-    world.resource_mut::<LevelState>().header.look = Some(LookRef::Preset("dusk".into()));
+    scatter_scenery(world, &mut next);
+    world.resource_mut::<LevelState>().header.look = Some(LookRef::Inline(Box::new(night_look())));
     report(save_level(world, LEVEL), LEVEL);
     despawn_level(world);
 
     // Lantern ids start high so a clone never collides with the ids of the open level.
+    // Post (root, carries the script and sensor) + stone base + lamp housing + flame +
+    // a weak always-on ember light and a strong "Light" that lantern.ruspy shows when lit.
     let post = spawn_at(
         world,
         1001,
         "Lantern",
         (
-            prim(PrimitiveShape::Cuboid, Vec3::new(0.25, 0.9, 0.25), Color::srgb(0.2, 0.2, 0.24)),
+            prim(PrimitiveShape::Cuboid, Vec3::new(0.18, 1.0, 0.18), Color::srgb(0.3, 0.2, 0.13)),
             Actor,
             Script::new("lantern.ruspy"),
             PhysicsBox { size: Vec3::new(1.2, 1.4, 1.2), sensor: true },
@@ -138,10 +156,90 @@ fn bake_levels(world: &mut World, mut frame: Local<u32>) {
             Transform::from_xyz(0.0, 0.5, 0.0),
         ),
     );
-    let flame = spawn_at(world, 1002, "Flame", (prim(PrimitiveShape::Sphere, Vec3::splat(0.45), Color::srgb(0.35, 0.3, 0.2)), Actor, Transform::from_xyz(0.0, 0.65, 0.0)));
-    world.entity_mut(flame).insert(ChildOf(post));
+    let child = |world: &mut World, id: u64, name: &str, p: Primitive, at: Vec3| {
+        let e = spawn_at(world, id, name, (p, Actor, Transform::from_translation(at)));
+        world.entity_mut(e).insert(ChildOf(post));
+    };
+    child(world, 1003, "Base", prim(PrimitiveShape::Cylinder, Vec3::new(0.95, 0.16, 0.0), Color::srgb(0.42, 0.42, 0.47)), Vec3::new(0.0, -0.42, 0.0));
+    child(world, 1007, "Cradle", prim(PrimitiveShape::Cuboid, Vec3::new(0.5, 0.14, 0.5), Color::srgb(0.38, 0.25, 0.14)), Vec3::new(0.0, 0.5, 0.0));
+    child(world, 1002, "Flame", prim(PrimitiveShape::Sphere, Vec3::splat(0.5), Color::srgb(0.8, 0.42, 0.15)), Vec3::new(0.0, 0.82, 0.0));
+    let ember = spawn_at(world, 1005, "Ember", (PointLight { intensity: 14_000.0, range: 4.5, color: Color::srgb(1.0, 0.6, 0.3), ..default() }, Transform::from_xyz(0.0, 0.9, 0.0)));
+    world.entity_mut(ember).insert(ChildOf(post));
+    let light = spawn_at(
+        world,
+        1006,
+        "Light",
+        (PointLight { intensity: 170_000.0, range: 11.0, color: Color::srgb(1.0, 0.7, 0.35), ..default() }, Visibility::Hidden, Transform::from_xyz(0.0, 1.0, 0.0)),
+    );
+    world.entity_mut(light).insert(ChildOf(post));
     report(save_level(world, LANTERN), LANTERN);
     world.write_message(AppExit::Success);
+}
+
+/// Moonlit night: `Look::night()` with a readable gradient sky, a pale horizon glow and an
+/// exposure that lets lantern light (lumens) beat the moon (lux) without blowing out.
+fn night_look() -> engine::look::Look {
+    use engine::look::{Look, Rgb};
+    let n = Look::night();
+    Look {
+        name: "lantern_night".into(),
+        sun: engine::look::SunLook { azimuth_deg: 215.0, elevation_deg: 42.0, illuminance: 90.0, color: Rgb([0.55, 0.68, 1.0]), shadows: false, ..n.sun },
+        sky: engine::look::SkyLook {
+            zenith: Rgb([0.02, 0.04, 0.16]),
+            horizon: Rgb([0.22, 0.28, 0.5]),
+            ground: Rgb([0.03, 0.04, 0.07]),
+            brightness: 55.0,
+            ..n.sky
+        },
+        ambient: engine::look::AmbientLook { color: Rgb([0.5, 0.6, 1.0]), brightness: 6.0, env_intensity: 1.0 },
+        fog: engine::look::FogLook { color: Rgb([0.14, 0.19, 0.36]), visibility: 110.0, ..n.fog },
+        exposure: engine::look::ExposureLook { ev100: 4.0, ..n.exposure },
+        bloom: engine::look::BloomLook { intensity: 0.4, ..n.bloom },
+        ..n
+    }
+}
+
+/// Trees ring the field; rocks, flat moss patches and a few stones sit inside it. Shared
+/// meshes and materials (identical primitives hit the primitive cache), all `Scenery`.
+fn scatter_scenery(world: &mut World, next: &mut impl FnMut() -> u64) {
+    let mut seed = 0x2545_F491_u32;
+    let mut rnd = move || {
+        seed = seed.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+        (seed >> 8) as f32 / 16_777_216.0
+    };
+    let trunk = Color::srgb(0.3, 0.2, 0.14);
+    let leaves = [Color::srgb(0.1, 0.3, 0.2), Color::srgb(0.14, 0.36, 0.2)];
+    let mut tree = |world: &mut World, x: f32, z: f32, k: usize, s: f32| {
+        let t = spawn_at(world, next(), "Trunk", (prim(PrimitiveShape::Cylinder, Vec3::new(0.4, 2.2, 0.0), trunk), Scenery, Transform::from_xyz(x, 1.1 * s, z).with_scale(Vec3::splat(s))));
+        let _ = t;
+        spawn_at(world, next(), "Crown", (prim(PrimitiveShape::Sphere, Vec3::splat(1.9), leaves[k]), Scenery, Transform::from_xyz(x, 2.7 * s, z).with_scale(Vec3::new(s, s * 1.15, s))));
+    };
+    for i in 0..44 {
+        let a = i as f32 / 44.0 * std::f32::consts::TAU + rnd() * 0.12;
+        let r = 15.5 + rnd() * 9.0;
+        tree(world, a.cos() * r, a.sin() * r, (rnd() * 2.0) as usize % 2, 0.8 + rnd() * 0.7);
+    }
+    let rock = Color::srgb(0.22, 0.23, 0.27);
+    for _ in 0..16 {
+        let (x, z) = (rnd() * 26.0 - 13.0, rnd() * 26.0 - 13.0);
+        if x * x + z * z < 6.0 {
+            continue;
+        }
+        let s = 0.4 + rnd() * 0.6;
+        spawn_at(world, next(), "Rock", (prim(PrimitiveShape::Sphere, Vec3::splat(1.0), rock), Scenery, Transform::from_xyz(x, 0.12 * s, z).with_scale(Vec3::new(s * 1.3, s * 0.6, s))));
+    }
+    let moss = [Color::srgb(0.2, 0.33, 0.2), Color::srgb(0.27, 0.32, 0.17)];
+    for i in 0..14 {
+        let (x, z) = (rnd() * 28.0 - 14.0, rnd() * 28.0 - 14.0);
+        let w = 3.0 + rnd() * 3.0;
+        spawn_at(world, next(), "Moss", (prim(PrimitiveShape::Cylinder, Vec3::new(1.0, 0.02, 0.0), moss[i % 2]), Scenery, Transform::from_xyz(x, 0.012 + i as f32 * 0.001, z).with_scale(Vec3::new(w, 1.0, w * 0.7))));
+    }
+    // Stepping stones across the field.
+    for i in 0..9 {
+        let x = -12.0 + i as f32 * 3.0;
+        let z = (i as f32 * 0.9).sin() * 1.5;
+        spawn_at(world, next(), "Stone", (prim(PrimitiveShape::Cylinder, Vec3::new(0.9, 0.05, 0.0), Color::srgb(0.34, 0.3, 0.26)), Scenery, Transform::from_xyz(x, 0.025, z)));
+    }
 }
 
 fn report(r: Result<engine::level::SaveReport, engine::level::LevelError>, path: &str) {
