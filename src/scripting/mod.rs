@@ -186,6 +186,8 @@ pub struct ScriptRuntime {
     next_seq: u64,
     last_poll: Option<Instant>,
     scratch: Vec<Entity>,
+    /// `call_deferred`, deferred connections and busy signal targets (ruspy values kept).
+    deferred: Vec<(Entity, String, Vec<RV>)>,
 }
 
 impl Default for ScriptRuntime {
@@ -204,6 +206,7 @@ impl Default for ScriptRuntime {
             next_seq: 0,
             last_poll: None,
             scratch: vec![],
+            deferred: vec![],
         }
     }
 }
@@ -367,13 +370,16 @@ fn instantiate(world: &mut World, e: Entity, script: &Script, keep: Option<Vec<(
     let mut engine = rt.base.fork();
     let seq = rt.next_seq;
     rt.next_seq += 1;
-    // The instance's top level may call host functions (it is not in the map yet).
+    // The top level may call host functions (on reload the old instance is still in the map).
     world.insert_non_send(rt);
     let Some(src) = src else {
         diag(world, &key, 0, 0, format!("can't read {key}"));
         fail(world, e, &key);
         return false;
     };
+    if let Some(mut d) = world.get_resource_mut::<DeclaredSignals>() {
+        d.0.remove(&e);
+    }
     world.resource_mut::<ScriptCtx>().stack.push(e);
     let mut tried_interp = interp;
     engine.backend = if interp { Backend::Interpreter } else { Backend::Vm };
@@ -407,7 +413,7 @@ fn instantiate(world: &mut World, e: Entity, script: &Script, keep: Option<Vec<(
     } else if let Some(props) = world.get::<ScriptProps>(e).cloned() {
         for p in props.values {
             match serde_json::from_str::<serde_json::Value>(&p.value) {
-                Ok(j) if engine.global(module, &p.name).is_some() => engine.set_global(module, &p.name, rv_of(&Value::from_json(&j))),
+                Ok(j) if engine.global(module, &p.name).is_some() => engine.set_global(module, &p.name, rv_of_json_exact(&j)),
                 Ok(_) => diag(world, &key, 0, 0, format!("prop `{}` on {e}: the script has no member `{}`", p.name, p.name)),
                 Err(err) => diag(world, &key, 0, 0, format!("prop `{}` on {e}: bad JSON: {err}", p.name)),
             }
@@ -421,14 +427,15 @@ fn instantiate(world: &mut World, e: Entity, script: &Script, keep: Option<Vec<(
         unhandled: engine.has_fn(module, "_unhandled_input"),
         exit: engine.has_fn(module, "_exit_tree"),
     };
-    let signals = world.get_resource_mut::<DeclaredSignals>().map(|mut d| std::mem::take(&mut d.0)).unwrap_or_default();
+    let signals = world.get_resource_mut::<DeclaredSignals>().and_then(|mut d| d.0.remove(&e)).unwrap_or_default();
     let mut rt = world.non_send_mut::<ScriptRuntime>();
     if tried_interp && let Some(s) = rt.sources.get_mut(&key) {
         s.interp = true;
     }
     rt.failed.remove(&e);
-    let was_ready = rt.instances.get(&e).is_some_and(|i| i.borrow().ready);
-    let inst = Instance { engine, module, key, hooks, priority: script.priority, seq, signals, ready: was_ready };
+    let (was_ready, old_seq) = rt.instances.get(&e).and_then(|i| i.try_borrow().ok().map(|i| (i.ready, i.seq))).unwrap_or((false, seq));
+    // A reloaded instance keeps its place in the process order.
+    let inst = Instance { engine, module, key, hooks, priority: script.priority, seq: old_seq, signals, ready: was_ready };
     rt.instances.insert(e, Rc::new(RefCell::new(inst)));
     rt.order_dirty = true;
     if !was_ready {
@@ -439,7 +446,7 @@ fn instantiate(world: &mut World, e: Entity, script: &Script, keep: Option<Vec<(
 
 /// `signal("name")` calls during a top-level run land here, then move to the instance.
 #[derive(Resource, Default)]
-pub(crate) struct DeclaredSignals(pub Vec<String>);
+pub(crate) struct DeclaredSignals(pub HashMap<Entity, Vec<String>>);
 
 fn fail(world: &mut World, e: Entity, key: &str) {
     let mut rt = world.non_send_mut::<ScriptRuntime>();
@@ -516,7 +523,7 @@ pub fn get_member(world: &World, e: Entity, name: &str) -> Option<Value> {
 
 pub(crate) fn get_member_rv(world: &World, e: Entity, name: &str) -> Result<RV, String> {
     let inst = world.get_non_send::<ScriptRuntime>().and_then(|rt| rt.instances.get(&e).cloned()).ok_or_else(|| format!("entity {e} has no script"))?;
-    let i = inst.try_borrow().map_err(|_| format!("entity {e}'s script is running; read its member after the call"))?;
+    let i = inst.try_borrow().map_err(|_| format!("entity {e}'s script is running (for your own members use the variable directly)"))?;
     i.engine.global(i.module, name).ok_or_else(|| format!("{} has no member `{name}`", i.key))
 }
 
@@ -558,13 +565,21 @@ pub fn outline(world: &mut World, path: &str) -> Result<Outline, String> {
     Ok(rt.sources[&key].outline.clone())
 }
 
-/// Signals `e`'s script declared with `signal("name")`.
+/// Signals `e`'s script declared with `signal("name")` (at top level or later).
 pub fn declared_signals(world: &World, e: Entity) -> Vec<String> {
-    world
+    let mut v = world
         .get_non_send::<ScriptRuntime>()
         .and_then(|rt| rt.instances.get(&e).cloned())
         .and_then(|i| i.try_borrow().ok().map(|i| i.signals.clone()))
-        .unwrap_or_default()
+        .unwrap_or_default();
+    if let Some(more) = world.get_resource::<DeclaredSignals>().and_then(|d| d.0.get(&e)) {
+        for s in more {
+            if !v.contains(s) {
+                v.push(s.clone());
+            }
+        }
+    }
+    v
 }
 
 // ---------------------------------------------------------------- signals
@@ -572,6 +587,11 @@ pub fn declared_signals(world: &World, e: Entity) -> Vec<String> {
 /// Emits `signal` from `src`: calls every connected method now (deferred ones at the end of
 /// the frame). Returns how many connections fired. Errors in handlers go to the diagnostics.
 pub fn emit_signal(world: &mut World, src: Entity, signal: &str, args: &[Value]) -> usize {
+    emit_signal_rv(world, src, signal, args.iter().map(rv_of).collect())
+}
+
+/// [`emit_signal`] with ruspy values (script to script keeps ints and floats apart).
+pub(crate) fn emit_signal_rv(world: &mut World, src: Entity, signal: &str, args: Vec<RV>) -> usize {
     let Some(conns) = world.get::<Connections>(src) else { return 0 };
     if !conns.0.iter().any(|c| c.signal == signal) {
         return 0;
@@ -582,7 +602,9 @@ pub fn emit_signal(world: &mut World, src: Entity, signal: &str, args: &[Value])
     {
         c.0.retain(|c| !(c.signal == signal && c.one_shot));
     }
-    world.resource_mut::<ScriptStats>().signals += 1;
+    if let Some(mut st) = world.get_resource_mut::<ScriptStats>() {
+        st.signals += 1;
+    }
     let mut n = 0;
     for c in fire {
         let Some(target) = resolve_path(world, src, &c.target) else {
@@ -590,20 +612,45 @@ pub fn emit_signal(world: &mut World, src: Entity, signal: &str, args: &[Value])
             diag(world, "signals", 0, 0, msg);
             continue;
         };
-        let mut a = args.to_vec();
+        let mut a = args.clone();
         for b in &c.binds {
-            a.push(serde_json::from_str::<serde_json::Value>(b).map(|j| Value::from_json(&j)).unwrap_or_else(|_| Value::text(b)));
+            a.push(serde_json::from_str::<serde_json::Value>(b).map(|j| rv_of_json_exact(&j)).unwrap_or_else(|_| RV::Str(b.clone())));
         }
         n += 1;
-        if c.deferred {
-            world.resource_mut::<ScriptQueue>().calls.push((target, c.method.clone(), a));
-        } else if let Err(e) = call(world, target, &c.method, &a)
+        // A target that is running right now (it called into this chain) can't be entered
+        // again synchronously: run its handler at the end of the frame instead.
+        if c.deferred || is_busy(world, target) {
+            defer(world, target, c.method.clone(), a);
+        } else if let Err(e) = call_rv(world, target, &c.method, a)
             && !e.contains(".ruspy:")
         {
             diag(world, "signals", 0, 0, format!("signal `{signal}` of {src} → {target}.{}: {e}", c.method));
         }
     }
     n
+}
+
+/// Is `e`'s script on the call stack right now?
+pub(crate) fn is_busy(world: &World, e: Entity) -> bool {
+    world.get_non_send::<ScriptRuntime>().and_then(|rt| rt.instances.get(&e).cloned()).is_some_and(|i| i.try_borrow_mut().is_err())
+}
+
+/// Queues `method(args)` on `e` for the end of the frame.
+pub(crate) fn defer(world: &mut World, e: Entity, method: String, args: Vec<RV>) {
+    if let Some(mut rt) = world.get_non_send_mut::<ScriptRuntime>() {
+        rt.deferred.push((e, method, args));
+    }
+}
+
+/// JSON → ruspy, keeping `5.0` a float and `5` an int.
+pub(crate) fn rv_of_json_exact(j: &serde_json::Value) -> RV {
+    use serde_json::Value as J;
+    match j {
+        J::Number(n) if n.is_f64() => RV::Float(n.as_f64().unwrap_or(0.0)),
+        J::Number(n) => n.as_i64().map_or_else(|| RV::Float(n.as_f64().unwrap_or(0.0)), RV::Int),
+        J::Array(a) => RV::array(a.iter().map(rv_of_json_exact).collect()),
+        other => rv_of(&Value::from_json(other)),
+    }
 }
 
 /// Adds a connection (no duplicate of the same signal/target/method).
@@ -616,7 +663,9 @@ pub fn connect(world: &mut World, src: Entity, signal: &str, target: &str, metho
             }
         }
         None => {
-            world.entity_mut(src).insert(Connections(vec![c]));
+            if let Ok(mut em) = world.get_entity_mut(src) {
+                em.insert(Connections(vec![c]));
+            }
         }
     }
 }
@@ -667,14 +716,12 @@ pub(crate) fn reload_key(world: &mut World, key: &str) -> usize {
     let mut n = 0;
     for (e, keep) in live {
         let Some(s) = world.get::<Script>(e).cloned() else { continue };
-        // A failed reload keeps the old instance running.
-        let old = world.non_send_mut::<ScriptRuntime>().instances.remove(&e);
+        // The old instance stays in the map until the new one replaces it: a failed reload
+        // keeps it running, and a good one inherits its ready state (no second `_ready`).
         if instantiate(world, e, &s, Some(keep)) {
             n += 1;
-        } else if let Some(old) = old {
-            let mut rt = world.non_send_mut::<ScriptRuntime>();
-            rt.instances.insert(e, old);
-            rt.failed.remove(&e);
+        } else {
+            world.non_send_mut::<ScriptRuntime>().failed.remove(&e);
         }
     }
     for e in failed {
@@ -703,21 +750,30 @@ pub fn reload_all(world: &mut World) -> usize {
 }
 
 /// New or changed [`Script`]s → instances; removed ones → `_exit_tree`.
-fn attach(world: &mut World, added: &mut QueryState<(Entity, &Script), Changed<Script>>) {
+/// Instances of entities that lost their `Script` or were despawned outside `queue_free`:
+/// `_exit_tree` (the entity may be gone already, so tree calls in it can fail) and drop.
+fn drain_removed(world: &mut World) {
     let removed = std::mem::take(&mut world.resource_mut::<ScriptQueue>().removed);
     for e in removed {
-        // `Changed` below re-attaches if the Script came back (replaced) this frame.
         drop_instance(world, e, true);
     }
+}
+
+fn attach(world: &mut World, added: &mut QueryState<(Entity, &Script), Changed<Script>>) {
+    // `Changed` below re-attaches if the Script came back (replaced) this frame.
+    drain_removed(world);
     let new: Vec<(Entity, Script)> = added.iter(world).map(|(e, s)| (e, s.clone())).collect();
     for (e, s) in new {
-        let same = world
-            .non_send::<ScriptRuntime>()
-            .instances
-            .get(&e)
-            .and_then(|i| i.try_borrow().ok().map(|i| i.key == key_of(&s.path) && i.priority == s.priority))
-            .unwrap_or(false);
-        if same {
+        let existing = world.non_send::<ScriptRuntime>().instances.get(&e).cloned();
+        if let Some(inst) = existing
+            && let Ok(mut i) = inst.try_borrow_mut()
+            && i.key == key_of(&s.path)
+        {
+            // Same file: only the priority can have changed; keep the instance and its state.
+            if i.priority != s.priority {
+                i.priority = s.priority;
+                world.non_send_mut::<ScriptRuntime>().order_dirty = true;
+            }
             continue;
         }
         drop_instance(world, e, true);
@@ -802,6 +858,8 @@ fn take_list(world: &mut World, pick: impl Fn(&Hooks) -> bool) -> Vec<Entity> {
             out.push(*e);
         }
     }
+    drop(rt);
+    out.retain(|e| world.get_entity(*e).is_ok());
     out
 }
 
@@ -831,6 +889,7 @@ fn process(world: &mut World) {
 }
 
 fn physics_process(world: &mut World) {
+    drain_removed(world);
     let dt = world.resource::<Time>().delta_secs();
     world.resource_mut::<ScriptCtx>().physics_delta = dt;
     let list = take_list(world, |h| h.physics);
@@ -929,11 +988,17 @@ fn timers(world: &mut World, q: &mut QueryState<(Entity, &mut ScriptTimer)>) {
             if t.left <= 0.0 {
                 due.push((t.entity, t.method.clone()));
                 if t.repeat {
-                    t.left += t.interval.max(0.001);
+                    // One call per frame at most; a long frame doesn't stop the timer.
+                    let i = t.interval.max(0.001);
+                    t.left = (t.left + i).max(t.left.rem_euclid(i)).max(0.0001);
                 }
             }
         }
         q.timers.retain(|t| t.left > 0.0);
+        let mut alive = std::mem::take(&mut q.timers);
+        drop(q);
+        alive.retain(|t| world.get_entity(t.entity).is_ok());
+        world.resource_mut::<ScriptQueue>().timers = alive;
     }
     for (e, m) in due {
         let _ = call_rv(world, e, &m, vec![]);
@@ -945,10 +1010,13 @@ fn timers(world: &mut World, q: &mut QueryState<(Entity, &mut ScriptTimer)>) {
 fn ui_signals(
     world: &mut World,
     pressed: &mut QueryState<Entity, Added<bevy::ui::Pressed>>,
-    hovered: &mut QueryState<(Entity, &bevy::picking::hover::Hovered), Changed<bevy::picking::hover::Hovered>>,
+    hovered: &mut QueryState<(Entity, Ref<bevy::picking::hover::Hovered>), Changed<bevy::picking::hover::Hovered>>,
 ) {
     let mut out: Vec<(Entity, &'static str)> = vec![];
     for (e, h) in hovered.iter(world) {
+        if h.is_added() && !h.0 {
+            continue;
+        }
         out.push((e, if h.0 { "mouse_entered" } else { "mouse_exited" }));
     }
     for e in pressed.iter(world) {
@@ -997,9 +1065,18 @@ struct PhysicsCursor {
 /// then a requested scene change.
 fn flush(world: &mut World) {
     for _ in 0..8 {
+        let rv_calls = std::mem::take(&mut world.non_send_mut::<ScriptRuntime>().deferred);
         let calls = std::mem::take(&mut world.resource_mut::<ScriptQueue>().calls);
-        if calls.is_empty() {
+        if calls.is_empty() && rv_calls.is_empty() {
             break;
+        }
+        for (e, m, a) in rv_calls {
+            if world.get_entity(e).is_ok()
+                && let Err(err) = call_rv(world, e, &m, a)
+                && !err.contains(".ruspy:")
+            {
+                diag(world, "call_deferred", 0, 0, format!("{e}.{m}: {err}"));
+            }
         }
         for (e, m, a) in calls {
             if world.get_entity(e).is_ok()

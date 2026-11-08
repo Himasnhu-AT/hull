@@ -151,3 +151,33 @@ fn timers_emit_timeout() {
     };
     assert!(n >= 2.0, "{n}");
 }
+
+#[test]
+fn reload_does_not_rerun_ready_and_priority_change_keeps_state() {
+    let mut app = app("reload_ready", &[("r.ruspy", "hp = 0;\nfn _ready() { hp = 10; log(\"ready\"); }\nfn hurt() { hp = hp - 3; }\n")]);
+    let e = app.world_mut().spawn(Script::new("r.ruspy")).id();
+    app.update();
+    call(app.world_mut(), e, "hurt", &[]).unwrap();
+    let dir = app.world().resource::<AssetsDir>().0.clone();
+    std::fs::write(dir.join("scripts/r.ruspy"), "hp = 0;\nfn _ready() { hp = 10; log(\"ready\"); }\nfn hurt() { hp = hp - 1; }\n").unwrap();
+    reload_all(app.world_mut());
+    app.update();
+    assert_eq!(get_member(app.world(), e, "hp"), Some(Value::Num(7.0)));
+    app.world_mut().get_mut::<Script>(e).unwrap().priority = 5;
+    app.update();
+    assert_eq!(get_member(app.world(), e, "hp"), Some(Value::Num(7.0)));
+    assert_eq!(logs(&app), vec!["ready".to_string()]);
+}
+
+#[test]
+fn signal_back_into_running_script_is_deferred_and_floats_stay_floats() {
+    let parent = "got = 0;\nfn _process(dt) { if got == 0 { call(get_node(\"Kid\"), \"hit\"); } }\nfn _on_died(d) { got = d / 4; }\n";
+    let kid = "signal(\"died\");\nfn hit() { emit_signal(\"died\", 2.0); }\n";
+    let mut app = app("busy", &[("p.ruspy", parent), ("k.ruspy", kid)]);
+    let p = app.world_mut().spawn((Name::new("P"), Script::new("p.ruspy"))).id();
+    app.world_mut().spawn((Name::new("Kid"), Script::new("k.ruspy"), ChildOf(p), Connections::default().to("died", "..", "_on_died")));
+    app.update();
+    assert!(errors(&app).is_empty(), "{:?}", errors(&app));
+    // Handled at the end of the same frame, with 2.0 still a float (2.0 / 4 = 0.5, not 0).
+    assert_eq!(get_member(app.world(), p, "got"), Some(Value::Num(0.5)));
+}

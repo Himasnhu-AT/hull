@@ -179,15 +179,19 @@ fn core(e: &mut Engine) {
     e.register("signal", |c, a| {
         let w = world(c)?;
         let name = s(a.first().ok_or("signal(name)")?, "name")?.to_string();
-        w.get_resource_or_insert_with(DeclaredSignals::default).0.push(name);
+        let e = me(w)?;
+        let mut d = w.get_resource_or_insert_with(DeclaredSignals::default);
+        let v = d.0.entry(e).or_default();
+        if !v.contains(&name) {
+            v.push(name);
+        }
         Ok(RV::Void)
     });
     e.register("emit_signal", |c, a| {
         let w = world(c)?;
         let name = s(a.first().ok_or("emit_signal(name, args...)")?, "name")?.to_string();
-        let args = vals(&a[1..])?;
         let src = me(w)?;
-        Ok(RV::Int(super::emit_signal(w, src, &name, &args) as i64))
+        Ok(RV::Int(super::emit_signal_rv(w, src, &name, a[1..].to_vec()) as i64))
     });
     // connect(signal, target, method) on self, or connect(source, signal, target, method).
     // `target` is an entity or a node path from the source.
@@ -237,8 +241,7 @@ fn core(e: &mut Engine) {
             _ => (me(w)?, a),
         };
         let m = s(rest.first().ok_or("usage: call_deferred([node,] method, args...)")?, "method")?.to_string();
-        let args = vals(&rest[1..])?;
-        w.resource_mut::<ScriptQueue>().calls.push((t, m, args));
+        super::defer(w, t, m, rest[1..].to_vec());
         Ok(RV::Void)
     });
     // get_var(node, name) / set_var(node, name, v): another script's member.
