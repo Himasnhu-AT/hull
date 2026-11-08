@@ -34,6 +34,17 @@ Ranked: **fixed** items have a commit on `physics`; the rest are open.
    functions. `queue_free` now falls back to the host function (only that one; see open item 3).
 5. Physics catalogue rows duplicated after merging two branches (test caught it).
 
+## Round 7 status
+
+- #1 fixed: `get_slide_collision_count` / `get_slide_collision(i)` (`[collider, point, normal]`); the
+  platformer's layer workaround is gone (player stomps / gets hurt from its slide collisions, enemies
+  hurt the player they walk into). Static sensors against kinematic bodies already worked (test).
+- #4 fixed: `NodeProcessMode` component; `set_process_mode` works on any node.
+- #5 fixed: `SceneOwned` on nodes created by scene scripts; `change_scene` frees them, autoload
+  children stay.
+- #9 fixed: vfx entities are `SceneOwned`; sounds a scene started are stopped on `change_scene`
+  (the unknown-preset message still does not list the names).
+
 ## Open, ranked
 
 1. **Collision layers are mandatory knowledge for a kinematic player vs kinematic enemy.** With

@@ -20,8 +20,6 @@ fn _ready() {
     home = self.position[0];
     look();
     add_body("kinematic", "box", size);
-    set_collision_layer(2);
-    set_collision_mask(1);
 }
 
 fn _physics_process(dt) {
@@ -45,17 +43,16 @@ fn _physics_process(dt) {
     contact();
 }
 
+// An enemy that walks into the player hurts it (the player's own slide handles stomps).
 fn contact() {
-    for b in get_overlapping_bodies() {
-        if b.is_in_group("player") {
-            if b.vy < -1.0 && b.position[1] > self.position[1] + 0.5 {
-                die();
-                b.bounce();
-                get_node("/Game").on_stomp();
-            } else {
-                b.take_hit(self.position[0]);
-            }
+    n = get_slide_collision_count();
+    i = 0;
+    while i < n {
+        c = get_slide_collision(i);
+        if c[0].is_in_group("player") {
+            c[0].take_hit(self.position[0]);
         }
+        i += 1;
     }
 }
 

@@ -14,6 +14,7 @@
 //! | `set_collision_layer([n,] mask)`, `set_collision_mask([n,] mask)`, `get_collision_layer([n])`, `get_collision_mask([n])` | `CollisionLayers` |
 //! | `add_body([n,] kind, shape, size)` | collider + body from script: kind `static kinematic dynamic sensor`, shape `box sphere capsule cylinder`, `size` = full extents like `Primitive` |
 //! | `move_and_slide([n,] velocity)` | slide a [`CharacterBody`] by `velocity * physics_delta`; returns the new velocity |
+//! | `get_slide_collision_count([n])`, `get_slide_collision([n,] i)` | contacts of the last `move_and_slide`: `[collider, point, normal]` (normal points toward the mover) |
 //! | `is_on_floor([n])`, `is_on_wall([n])`, `is_on_ceiling([n])`, `get_floor_normal([n])` | state after the last `move_and_slide` |
 
 use avian3d::prelude::*;
@@ -47,6 +48,10 @@ impl Default for CharacterBody {
         CharacterBody { up: Vec3::Y, floor_max_angle: std::f32::consts::FRAC_PI_4, snap: 0.1, on_floor: false, on_wall: false, on_ceiling: false, floor_normal: Vec3::ZERO }
     }
 }
+
+/// Contacts of the last `move_and_slide` (Godot `get_slide_collision`): body, point, normal.
+#[derive(Component, Default, Clone, Debug)]
+pub struct SlideCollisions(pub Vec<(Entity, Vec3, Vec3)>);
 
 const SKIN: f32 = 0.02;
 
@@ -138,6 +143,7 @@ fn slide(w: &mut World, e: Entity, vel: Vec3, dt: f32) -> Result<Vec3, String> {
     let mut vel = vel;
     let (mut floor, mut wall, mut ceil) = (false, false, false);
     cb.floor_normal = Vec3::ZERO;
+    let mut hits: Vec<(Entity, Vec3, Vec3)> = vec![];
     let mut st = SystemState::<SpatialQuery>::new(w);
     let q = st.get(w).map_err(|e| e.to_string())?;
     let mut remaining = vel * dt;
@@ -161,6 +167,7 @@ fn slide(w: &mut World, e: Entity, vel: Vec3, dt: f32) -> Result<Vec3, String> {
         if hit.distance <= 0.0 {
             pos += n * SKIN;
         }
+        hits.push((hit.entity, hit.point1, n));
         match classify(n, &cb) {
             Kind::Floor => {
                 floor = true;
@@ -186,6 +193,7 @@ fn slide(w: &mut World, e: Entity, vel: Vec3, dt: f32) -> Result<Vec3, String> {
         if let Some(hit) = q.cast_shape(&shape, pos, rot, -Dir3::new(cb.up).unwrap_or(Dir3::Y), &cfg, &filter) {
             let n = hit.normal1.normalize_or_zero();
             if matches!(classify(n, &cb), Kind::Floor) {
+                hits.push((hit.entity, hit.point1, n));
                 floor = true;
                 cb.floor_normal = n;
                 // Only pull down when we were on the floor before (not mid-air landing).
@@ -198,7 +206,8 @@ fn slide(w: &mut World, e: Entity, vel: Vec3, dt: f32) -> Result<Vec3, String> {
     cb.on_floor = floor;
     cb.on_wall = wall;
     cb.on_ceiling = ceil;
-    w.entity_mut(e).insert(cb);
+    let hits: Vec<_> = hits.into_iter().map(|(c, p, n)| (body_of(w, c), p, n)).collect();
+    w.entity_mut(e).insert((cb, SlideCollisions(hits)));
     w.get_mut::<Transform>(e).unwrap().translation = pos;
     Ok(vel)
 }
@@ -330,6 +339,18 @@ pub(super) fn register(e: &mut Engine) {
             dt = w.resource::<Time<Fixed>>().delta_secs();
         }
         Ok(rv3(slide(w, t, v, dt)?))
+    });
+    e.register("get_slide_collision_count", |c, a| {
+        let w = world(c)?;
+        let (t, _) = split(w, a, 0, "get_slide_collision_count([n])")?;
+        Ok(RV::Int(w.get::<SlideCollisions>(t).map_or(0, |s| s.0.len()) as i64))
+    });
+    e.register("get_slide_collision", |c, a| {
+        let w = world(c)?;
+        let (t, r) = split(w, a, 1, "get_slide_collision([n,] i)")?;
+        let i = f(&r[0], "i")? as usize;
+        let (col, p, n) = w.get::<SlideCollisions>(t).and_then(|s| s.0.get(i).copied()).ok_or_else(|| format!("get_slide_collision: no collision {i}"))?;
+        Ok(RV::array(vec![rent(col), rv3(p), rv3(n)]))
     });
     e.register("is_on_floor", |c, a| {
         let w = world(c)?;

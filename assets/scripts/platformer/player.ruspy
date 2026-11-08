@@ -25,7 +25,6 @@ spawn = [0.0, 1.0, 0.0];
 
 fn _ready() {
     add_to_group("player");
-    set_collision_mask(1);          // collide with the world (layer 1), pass through enemies (layer 2)
     add_body("kinematic", "capsule", [0.8, 1.8, 0.8]);
     self.spawn = self.position;
     game = get_node("/Game");
@@ -77,6 +76,7 @@ fn _physics_process(dt) {
 
     v = move_and_slide([vx, vy, 0.0]);
     vy = v[1];
+    touch_enemies();
     if is_on_ceiling() && vy > 0.0 {
         vy = 0.0;
     }
@@ -88,6 +88,27 @@ fn _physics_process(dt) {
     if self.position[1] < -8.0 {
         respawn();
         emit_signal("hurt");
+    }
+}
+
+// Godot's pattern: look at what move_and_slide ran into. Landing on an enemy stomps it, any
+// other touch hurts.
+fn touch_enemies() {
+    n = get_slide_collision_count();
+    i = 0;
+    while i < n {
+        c = get_slide_collision(i);
+        other = c[0];
+        if other.is_in_group("enemies") {
+            if c[2][1] > 0.6 {
+                other.die();
+                bounce();
+                get_node("/Game").on_stomp();
+            } else {
+                take_hit(other.position[0]);
+            }
+        }
+        i += 1;
     }
 }
 

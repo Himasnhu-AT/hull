@@ -119,6 +119,9 @@ fn tree(e: &mut Engine) {
             live(w, p)?;
         }
         let id = w.spawn((Name::new(name), Transform::default(), Visibility::default())).id();
+        if super::scene_owned(w, parent) {
+            w.entity_mut(id).insert(super::SceneOwned);
+        }
         if let Some(p) = parent {
             w.entity_mut(id).insert(ChildOf(p));
         }
@@ -164,7 +167,13 @@ fn tree(e: &mut Engine) {
         let parent = opt_ent(a.get(1))?.map(|p| live(w, p)).transpose()?;
         #[cfg(feature = "level")]
         {
-            Ok(super::api::ropt(instantiate(w, &path, parent)?))
+            let root = instantiate(w, &path, parent)?;
+            if let Some(r) = root
+                && super::scene_owned(w, parent)
+            {
+                w.entity_mut(r).insert(super::SceneOwned);
+            }
+            Ok(super::api::ropt(root))
         }
         #[cfg(not(feature = "level"))]
         {

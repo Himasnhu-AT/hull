@@ -56,15 +56,18 @@ pub(super) fn register(e: &mut Engine) {
             RV::Float(x) if x.fract() == 0.0 => ProcessMode::from_index(*x as i64).ok_or_else(|| format!("process mode {x} out of range 0..4"))?,
             other => return Err(format!("mode must be a str or int, got {}", other.type_name())),
         };
-        let mut sc = w.get_mut::<Script>(t).ok_or_else(|| format!("entity {t} has no Script"))?;
-        sc.process_mode = mode;
+        if let Some(mut sc) = w.get_mut::<Script>(t) {
+            sc.process_mode = mode;
+        } else {
+            w.entity_mut(t).insert(super::NodeProcessMode(mode));
+        }
         Ok(RV::Void)
     });
     // The mode as set on the node (`inherit` is not resolved).
     e.register("get_process_mode", |c, a| {
         let w = world(c)?;
         let (t, _) = split(w, a, 0, "get_process_mode([node])")?;
-        let m = w.get::<Script>(t).map_or(ProcessMode::Inherit, |s| s.process_mode);
+        let m = w.get::<Script>(t).map(|s| s.process_mode).or_else(|| w.get::<super::NodeProcessMode>(t).map(|m| m.0)).unwrap_or(ProcessMode::Inherit);
         Ok(RV::Str(m.name().into()))
     });
     e.register("set_process", |c, a| {

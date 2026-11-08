@@ -450,6 +450,7 @@ Feature `physics` (`src/scripting/api_physics.rs`). Layers and masks are Godot-s
 | `set_collision_layer([n,] m)`, `set_collision_mask([n,] m)`, `get_collision_layer([n])`, `get_collision_mask([n])` | `CollisionLayers` memberships / filters |
 | `add_body([n,] kind, shape, size)` | collider + body from script: kind `static kinematic dynamic sensor` (sensor = static + `Sensor`), shape `box sphere capsule cylinder`, `size` = full extents like `Primitive`; also enables collision events |
 | `move_and_slide([n,] velocity)` | Godot `CharacterBody3D`: sweeps the node's `Collider` by `velocity * physics_delta`, slides up to 4 times, returns the new velocity |
+| `get_slide_collision_count([n])`, `get_slide_collision([n,] i)` | contacts of the last `move_and_slide`: `[collider, point, normal]` (normal points toward the mover; `normal[1] > 0.6` is landing on top) |
 | `is_on_floor([n])`, `is_on_wall([n])`, `is_on_ceiling([n])`, `get_floor_normal([n])` | state of the last `move_and_slide` |
 
 `move_and_slide` adds a `CharacterBody { up, floor_max_angle (45 deg), snap (0.1 m) }` component
@@ -466,9 +467,12 @@ fn _physics_process(dt) {
 }
 ```
 
-Kinematic characters block each other (shape cast with a small skin), so a player and an enemy that
-should overlap need layers: `set_collision_mask(1)` on the player, `set_collision_layer(2)` on enemies,
-then `get_overlapping_bodies()` sees the touch.
+Kinematic characters block each other. The Godot pattern for contact damage and stomps is to read
+what `move_and_slide` ran into: after the call, loop `get_slide_collision(i)`, test
+`collider.is_in_group("enemies")` and `normal[1] > 0.6` (landed on top: stomp) (see
+`assets/scripts/platformer/player.ruspy`, `touch_enemies`). A mover that stands still makes no cast, so
+the enemy that walks into it checks its own slide collisions too. Static sensors (`add_body("sensor", ...)`)
+never block and fire `body_entered` for kinematic bodies.
 
 Scripted entities with a `Collider` get `CollisionEventsEnabled` automatically, so the built-in
 `body_entered` / `body_exited` signals work for sensors (`Sensor`) as well as bodies, including a
@@ -496,7 +500,10 @@ did not install is an error ("sound is not set up in this app"). `[n,]` is the o
 | `push_error(msg)`, `push_warning(msg)`, `assert(cond [, msg])` | Output panel (file of the running script); a failed assert raises an error |
 | `nav_goto([n,] [x,y,z])`, `nav_stop([n])`, `nav_is_done([n])`, `nav_status([n])`, `nav_target([n])` | `NavAgent` control |
 
-UI roots a script creates (`ui_panel()` with no parent) are freed with that script's node. A runtime
+UI roots a script creates (`ui_panel()` with no parent) are freed with that script's node.
+`set_process_mode` / `set_process` work on nodes without a script (children inherit the mode). What a
+scene's scripts create at run time (`spawn_node`, `instantiate`, `spawn_vfx`, sounds from `play_sound`)
+is freed by `change_scene`; anything created by an autoload or under one stays. A runtime
 connection to a node that was freed is dropped quietly. `tween_callback(t, "queue_free")` works.
 
 A `NavAgent` node emits `navigation_finished` on arrival and `navigation_failed` when no path
