@@ -22,6 +22,7 @@ mod api_engine;
 mod api_input;
 mod api_node;
 mod api_obj;
+mod coroutines;
 mod api_pause;
 #[cfg(feature = "physics")]
 mod api_physics;
@@ -47,6 +48,8 @@ mod tests_ui;
 mod tests_api;
 #[cfg(test)]
 mod tests_lang;
+#[cfg(test)]
+mod tests_co;
 #[cfg(test)]
 mod bench;
 #[cfg(test)]
@@ -353,6 +356,8 @@ pub struct ScriptRuntime {
     scratch: Vec<Entity>,
     /// `call_deferred`, deferred connections and busy signal targets (ruspy values kept).
     deferred: Vec<(Entity, String, Vec<RV>)>,
+    /// Suspended `await` coroutines of all instances.
+    pub(crate) coroutines: Vec<coroutines::Co>,
 }
 
 impl Default for ScriptRuntime {
@@ -372,6 +377,7 @@ impl Default for ScriptRuntime {
             last_poll: None,
             scratch: vec![],
             deferred: vec![],
+            coroutines: vec![],
         }
     }
 }
@@ -470,6 +476,7 @@ impl Plugin for ScriptingPlugin {
             .add_systems(Update, (poll_sources, attach, run_ready).chain().in_set(ScriptSet::Attach))
             .add_systems(Update, (timers, ui_signals, input).chain().in_set(ScriptSet::Events))
             .add_systems(Update, process.in_set(ScriptSet::Process))
+            .add_systems(Update, coroutines::tick.in_set(ScriptSet::Process).after(process))
             .add_systems(Update, flush.in_set(ScriptSet::Flush))
             .add_systems(FixedUpdate, physics_process.run_if(scripts_active));
         #[cfg(feature = "physics")]
@@ -636,6 +643,7 @@ fn instantiate(world: &mut World, e: Entity, script: &Script, keep: Option<Vec<(
     // A reloaded instance keeps its place in the process order.
     let inst = Instance { engine, module, key, hooks, priority: script.priority, seq: old_seq, signals, ready: was_ready, fns };
     rt.instances.insert(e, Rc::new(RefCell::new(inst)));
+    rt.coroutines.retain(|c| c.entity != e);
     rt.order_dirty = true;
     if !was_ready {
         rt.pending_ready.push(e);
@@ -678,6 +686,11 @@ pub(crate) fn call_rv(world: &mut World, e: Entity, f: &str, args: Vec<RV>) -> R
     let r = i.engine.call(m, f, args, world);
     let us = t.elapsed().as_secs_f64() * 1e6;
     world.resource_mut::<ScriptCtx>().stack.pop();
+    let sus = i.engine.take_suspended(m);
+    if !sus.is_empty() {
+        let key = i.key.clone();
+        coroutines::register_suspended(world, e, &key, sus);
+    }
     let mut st = world.resource_mut::<ScriptStats>();
     st.calls += 1;
     st.call_us += us;
@@ -851,6 +864,7 @@ pub fn emit_signal(world: &mut World, src: Entity, signal: &str, args: &[Value])
 
 /// [`emit_signal`] with ruspy values (script to script keeps ints and floats apart).
 pub(crate) fn emit_signal_rv(world: &mut World, src: Entity, signal: &str, args: Vec<RV>) -> usize {
+    coroutines::wake_signal(world, src, signal, &args);
     let Some(conns) = world.get::<Connections>(src) else { return 0 };
     if !conns.0.iter().any(|c| c.signal == signal) {
         return 0;
@@ -1074,6 +1088,7 @@ fn drop_instance(world: &mut World, e: Entity, exit: bool) {
     rt.instances.remove(&e);
     rt.failed.remove(&e);
     rt.order_dirty = true;
+    coroutines::drop_for(world, e);
 }
 
 fn depth(world: &World, mut e: Entity) -> usize {

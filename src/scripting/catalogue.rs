@@ -204,5 +204,8 @@ pub const CATALOGUE: &[(&str, &str, &str)] = &[
     (r#"is_on_floor"#, r#"is_on_floor([n])"#, r#"Standing on a floor after move_and_slide?"#),
     (r#"is_on_wall"#, r#"is_on_wall([n])"#, r#"Touching a wall?"#),
     (r#"is_on_ceiling"#, r#"is_on_ceiling([n])"#, r#"Touching a ceiling?"#),
+    (r#"wait"#, r#"wait(seconds)"#, r#"Use as `await wait(s)`. Awaitable: resume the coroutine after game time (respects pause / process mode)."#),
+    (r#"next_frame"#, r#"next_frame()"#, r#"Use as `await next_frame()`. Awaitable: resume on the next frame."#),
+    (r#"signal_of"#, r#"signal_of([node,] "signal")"#, r#"Use as `await signal_of(n, "s")`. Awaitable: resume when the node emits the signal; evaluates to its argument(s)."#),
     (r#"get_floor_normal"#, r#"get_floor_normal([n])"#, r#"Normal of the floor under the body."#),
 ];

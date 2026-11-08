@@ -246,6 +246,35 @@ disconnect(btn, "pressed", self(), "on_button");
 `find(name)` is the first entity with that `Name` anywhere (slow: scans the world; call it in
 `_ready`, not every frame). Names are not unique: name things you look up.
 
+## Coroutines
+
+A function containing `await` is a coroutine (GDScript 2 style). Calling it runs to the first
+`await` and returns `void`; the engine resumes it later. Awaitables are plain values from host
+functions:
+
+```
+fn _ready() {
+    await wait(1.5);                     # game seconds; follows pause / process mode
+    await next_frame();                  # the next frame, not this one
+    args = await signal_of(boss, "died"); # the signal's argument (null for none, an array for 2+)
+    hp = await signal_of("healed");      # node defaults to self
+}
+```
+
+- `await` is a whole statement: `await e;`, `x = await e;`, `x: T = await e;`, `return await e;`.
+  It can sit in `if`, `while`, `for`, `match` and blocks (`break`/`continue` work across it).
+  Not supported: inside a bigger expression (`1 + await e`, call arguments), at file top level,
+  `a.f = await e`. These are located compile errors (`E0360`, `E0361`).
+- `await some_coroutine()` does not wait for it: the inner one starts detached and the outer
+  resumes on the next frame. Use a signal to wait for completion.
+- Time and frame waits only advance while the node may process (a paused `Pausable` node
+  waits; `Always` / `WhenPaused` keep going). Signal waits wake synchronously inside
+  `emit_signal`; if the waiting node is on the call stack then, it resumes next frame.
+- Coroutines die with their node (`queue_free`, despawn, `Script` removed) and on hot reload.
+  A runtime error after a resume is reported with the script's `file:line:col` and ends it.
+- Coroutine files run in the interpreter (automatic). Locals survive suspension; each resume
+  gets a fresh step budget. `script.api` lists `wait`, `next_frame`, `signal_of`.
+
 ## GDScript-style access
 
 Nodes are **object handles** (`Value::Object`): `get_node`, `self`, `get_parent`, signal and
@@ -656,8 +685,7 @@ Still to measure (release):
 
 ## Known limits
 
-- **No coroutines / `await`**: use `start_timer(secs, method)`, a `ScriptTimer`, or a state
-  member advanced in `_process`.
+- **`await` is statement-level only** (see Coroutines); awaiting another coroutine does not wait for it.
 - **No synchronous re-entrant calls into the same script**: if A calls B and B calls A while A
   is running, the inner call fails with "already running". Pass data in signal arguments, or
   use `call_deferred`.
