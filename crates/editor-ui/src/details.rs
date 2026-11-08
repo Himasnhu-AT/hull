@@ -8,6 +8,7 @@ use egui::{RichText, Ui};
 use serde_json::{Value, json};
 
 use crate::model::{NodeInfo, Req};
+use crate::node_script;
 use crate::props::{self, Cx, Phase};
 
 /// Section order in the panel.
@@ -40,6 +41,7 @@ pub(crate) struct DetailsState {
     last_id: Option<EntityId>,
     /// A script asked to open a popup (`add` or `logic`); done on the next frame.
     want_popup: Option<&'static str>,
+    script: node_script::ScriptState,
 }
 
 impl DetailsState {
@@ -52,6 +54,15 @@ impl DetailsState {
             other => return Err(format!("no popup `{other}` (add | logic)")),
         };
         Ok(())
+    }
+
+    /// Whether the Connect panel of the Signals section is open (the target list is built then).
+    pub(crate) fn connect_open(&self) -> bool {
+        self.script.connect_open()
+    }
+
+    pub(crate) fn set_connect_target(&mut self, target: Result<node_script::TargetPick, String>, source_name: &str) {
+        self.script.set_target(target, source_name);
     }
 
     /// Remember a graph created for `entity` so the Logic section can offer to open it.
@@ -68,6 +79,10 @@ pub(crate) struct View<'a> {
     pub types: &'a [(String, TypeSchema)],
     /// The `.logic.ron` files that exist.
     pub logic: &'a [LogicFile],
+    /// Members, functions, signals and connections of the selected entity.
+    pub script: Option<&'a editor_proto::ScriptInfo>,
+    /// Every entity, filled while the Connect panel is open.
+    pub targets: &'a [(EntityId, String)],
 }
 
 /// Which section a component belongs to: the backend's word, else a guess from its name.
@@ -138,12 +153,14 @@ pub(crate) fn show(ui: &mut Ui, st: &mut DetailsState, v: &View<'_>, reqs: &mut 
                 for cat in CATEGORIES {
                     if cat == "Logic" {
                         logic_section(ui, st, id, info, comps, v, reqs);
+                        let sv = node_script::View { id, eref, name: &info.name, editable: !info.generated, comps, types: v.types, info: v.script, files: v.logic, targets: v.targets };
+                        node_script::show(ui, &mut st.script, &sv, reqs);
                         shown += 1;
                         continue;
                     }
                     let docs: Vec<&ComponentDoc> = comps
                         .iter()
-                        .filter(|d| !is_logic_component(d) && category_of(d) == cat)
+                        .filter(|d| !is_logic_component(d) && !node_script::is_script_component(d) && category_of(d) == cat)
                         .filter(|d| f.is_empty() || d.short_name.to_lowercase().contains(&f))
                         .collect();
                     if docs.is_empty() {
