@@ -41,6 +41,7 @@ The rules that matter most, so you don't skip them:
 | docs/ACTIONS.md | Input actions, rebinding, gamepad, accessibility |
 | docs/L10N.md | Localization |
 | docs/WORLD.md | Terrain, scatter, cell streaming, HLOD, floating origin |
+| docs/VEHICLE.md | Wheeled vehicles: suspension, tyres, surfaces, drivetrain, winch |
 | docs/PCG.md | Procedural content: node graphs, cells, catalog, scalability |
 | docs/LOGIC.md | Logic graphs (events, flow, commands) and ruspy scripts |
 | docs/SCRIPTING.md | Godot-style node scripts in ruspy: lifecycle, signals, groups, node paths, UI, host functions |

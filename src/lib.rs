@@ -61,6 +61,8 @@ pub mod devtools;
 pub mod l10n;
 #[cfg(feature = "fps")]
 pub mod fps;
+#[cfg(feature = "vehicle")]
+pub mod vehicle;
 #[cfg(feature = "level")]
 pub mod level;
 #[cfg(feature = "editor")]
