@@ -24,6 +24,8 @@ pub mod tree;
 pub mod ui;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_ui;
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -1009,8 +1011,11 @@ fn timers(world: &mut World, q: &mut QueryState<(Entity, &mut ScriptTimer)>) {
 /// `mouse_exited` when `Hovered` changes.
 fn ui_signals(
     world: &mut World,
-    pressed: &mut QueryState<Entity, Added<bevy::ui::Pressed>>,
-    hovered: &mut QueryState<(Entity, Ref<bevy::picking::hover::Hovered>), Changed<bevy::picking::hover::Hovered>>,
+    pressed: &mut QueryState<Entity, (Added<bevy::ui::Pressed>, Without<bevy::ui::InteractionDisabled>)>,
+    hovered: &mut QueryState<
+        (Entity, Ref<bevy::picking::hover::Hovered>),
+        (Changed<bevy::picking::hover::Hovered>, Without<bevy::ui::InteractionDisabled>),
+    >,
 ) {
     let mut out: Vec<(Entity, &'static str)> = vec![];
     for (e, h) in hovered.iter(world) {
