@@ -205,3 +205,13 @@ fn props_take_the_members_shape() {
     assert!(errors(&app).is_empty(), "{:?}", errors(&app));
     assert_eq!(call(app.world_mut(), e, "sum", &[]).unwrap(), Value::Num(11.0));
 }
+
+/// A headless app whose assets folder is the repo's real `assets/` (for kit tests).
+pub(crate) fn repo_app() -> App {
+    let mut app = App::new();
+    app.add_plugins(MinimalPlugins);
+    app.init_resource::<Paused>();
+    app.insert_resource(AssetsDir(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("assets")));
+    app.add_plugins(ScriptingPlugin);
+    app
+}
