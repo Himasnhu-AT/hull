@@ -427,3 +427,32 @@ pub fn spawn(world: &mut World, parsed: &ParsedLevel) -> Result<(usize, u64), Le
     }
     Ok((count, max_id))
 }
+
+/// Spawns a parsed level as new, generated entities (Godot `PackedScene.instantiate`): no
+/// [`LevelEntity`], so they are not saved with the current level and `despawn_level` leaves
+/// them alone. The file's hierarchy is kept; its root entities go under `parent` if given.
+/// Returns every spawned entity in file order (the first root comes first among roots).
+pub fn spawn_instance(world: &mut World, parsed: &ParsedLevel, parent: Option<Entity>) -> Result<Vec<Entity>, LevelError> {
+    let registry = world.resource::<AppTypeRegistry>().clone();
+    let reg = registry.read();
+    let mut map: EntityHashMap<Entity> = EntityHashMap::default();
+    parsed.entities.write_to_world_with(world, &mut map, &reg).map_err(|e| LevelError::Invalid(e.to_string()))?;
+    let mut out = Vec::with_capacity(parsed.entities.entities.len());
+    for de in &parsed.entities.entities {
+        let e = map[&de.entity];
+        world.entity_mut(e).remove::<LevelEntity>();
+        match world.get::<ChildOf>(e).map(|c| c.parent()) {
+            // `write_to_world` skips relationship hooks; re-insert so `Children` is rebuilt.
+            Some(p) => {
+                world.entity_mut(e).insert(ChildOf(p));
+            }
+            None => {
+                if let Some(p) = parent {
+                    world.entity_mut(e).insert(ChildOf(p));
+                }
+            }
+        }
+        out.push(e);
+    }
+    Ok(out)
+}

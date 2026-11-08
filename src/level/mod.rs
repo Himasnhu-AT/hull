@@ -157,7 +157,7 @@ pub fn origin_dir(world: &World) -> Option<PathBuf> {
 
 /// Relative paths: next to the original level, else as given (project folder), else under the
 /// assets folder.
-fn resolve(world: &World, p: &Path) -> PathBuf {
+pub(crate) fn resolve(world: &World, p: &Path) -> PathBuf {
     if p.is_absolute() {
         return p.to_path_buf();
     }

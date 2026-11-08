@@ -18,6 +18,8 @@
 //! - `queue_free` despawns at the end of the frame, after `_exit_tree`.
 
 mod api;
+mod api_input;
+mod api_node;
 #[cfg(feature = "devtools")]
 mod devtools;
 pub mod tree;
@@ -26,6 +28,8 @@ pub mod ui;
 mod tests;
 #[cfg(test)]
 mod tests_ui;
+#[cfg(test)]
+mod tests_api;
 
 use std::cell::RefCell;
 use std::collections::HashMap;
