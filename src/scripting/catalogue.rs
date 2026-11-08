@@ -235,4 +235,9 @@ pub const CATALOGUE: &[(&str, &str, &str)] = &[
     (r#"rope_tension"#, r#"rope_tension(rope)"#, r#"Current pull of the rope in newtons."#),
     (r#"rope_length"#, r#"rope_length(rope)"#, r#"Current rope length in metres."#),
     (r#"rope_release"#, r#"rope_release(rope)"#, r#"Remove the rope."#),
+    (r#"ui_open"#, r#"ui_open(name)"#, r#"Open a ui2 screen (assets/ui/<name>.ui.ron)."#),
+    (r#"ui_back"#, r#"ui_back()"#, r#"Close the top ui2 screen or modal."#),
+    (r#"ui_data_set"#, r#"ui_data_set(key, value)"#, r#"Set a ui2 data key screens bind to (number, bool, str, null)."#),
+    (r#"ui_data_get"#, r#"ui_data_get(key)"#, r#"Read a ui2 data key (null when unset)."#),
+    (r#"ui_on"#, r#"ui_on(event_id, method)"#, r#"Call method(kind, arg) on this script when a ui2 component fires ("*" = any)."#),
 ];

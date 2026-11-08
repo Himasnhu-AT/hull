@@ -441,6 +441,12 @@ events skip it. `set_mouse_mode("captured")` locks the cursor and turns pointer 
 free-look camera keeps receiving motion. `_input_event` always sees everything (Godot's `_input`).
 Resources: `UiCapture { keyboard, pointer }`, `ScriptMouse { mode, delta }`.
 
+### ui2 (feature `ui2`)
+
+`ui_open(name)`, `ui_back()`, `ui_data_set(key, value)`, `ui_data_get(key)`, `ui_on(event_id, method)`
+drive the React-style screens of `docs/UI2.md`: open `assets/ui/<name>.ui.ron`, set the data keys they bind to
+(`{player.credits}`), and get `method(kind, arg)` calls when a component fires.
+
 ### Time and timers
 
 `delta()`, `physics_delta()`, `time()` (seconds since start), `start_timer(secs, method [, repeat])`

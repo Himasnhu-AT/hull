@@ -1,0 +1,41 @@
+// An original hub screen: header, tabs, tile grid, key hints. Edit and save: it hot reloads.
+Screen(
+    root: Column(gap: 22, align: Stretch, height: 100, children: [
+        Header(
+            name: "Nova Vance",
+            subtitle: "Level {player.level}  -  Club Meridian",
+            avatar: Tile(3),
+            stats: [
+                Stat(label: "credits", value: "{player.credits}", color: Token("accent")),
+                Stat(label: "tokens", value: "{player.tokens}", color: Tile(2)),
+            ],
+        ),
+        TabBar(id: "hub", selected: 0, tabs: [
+            TabSpec(label: "Drive"),
+            TabSpec(label: "Series", badge: "n.series"),
+            TabSpec(label: "Garage", badge: "n.garage"),
+            TabSpec(label: "Social"),
+            TabSpec(label: "Shop", badge: "n.shop"),
+        ]),
+        Grid(columns: 4, gap: 22, row_height: 212, children: [
+            Tile(id: "freeroam", title: "Open Roads", subtitle: "Cruise the valley, no rules", accent: Tile(0), pattern: Circles, span: (2, 2), tag: "Featured"),
+            Tile(id: "series", title: "Weekly Series", subtitle: "3 races to go", accent: Tile(1), pattern: Stripes, badge: "n.series"),
+            Tile(id: "garage", title: "Garage", subtitle: "12 cars", accent: Tile(2), pattern: Diamonds, badge: "n.garage"),
+            Tile(id: "timeattack", title: "Time Attack", subtitle: "Beat the ghost", accent: Tile(3), pattern: Rings),
+            Tile(id: "showcase", title: "Showcase", subtitle: "Paint and share", accent: Tile(5), pattern: Circles, tag: "New"),
+            Tile(id: "photo", title: "Photo Mode", subtitle: "Frame the perfect shot", accent: Tile(1), pattern: Diamonds),
+            Tile(id: "lobby", title: "Online Lobby", subtitle: "4 friends are playing", accent: Tile(4), pattern: Stripes, span: (2, 1), badge: "n.lobby"),
+            Tile(id: "options", title: "Options", subtitle: "Controls, audio, display", accent: Tile(2), pattern: Rings, action: Open("options")),
+        ]),
+        Spacer(0),
+        Row(justify: Between, align: Center, children: [
+            Text(text: "Season 4  -  Day 12", size: Small, color: Token("muted"), upper: true),
+            KeyHints(hints: [
+                Hint(action: "navigate", label: "Move"),
+                Hint(action: "confirm", label: "Select"),
+                Hint(action: "back", label: "Back"),
+                Hint(action: "option", label: "Options"),
+            ]),
+        ]),
+    ]),
+)
