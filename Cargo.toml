@@ -123,6 +123,8 @@ scripting = ["logic"]
 photo = ["look", "physics", "dep:png"]
 # Weather state machine (data + seeded schedule) driving look, rain/snow, wetness, wind (src/weather, docs/WEATHER.md).
 weather = ["look", "vfx"]
+# React-style UI library on bevy_ui: tokens, components, declarative assets/ui/*.ui.ron screens, spatial focus, transitions, data binding (src/ui2, docs/UI2.md).
+ui2 = ["dep:ron", "actions"]
 # Multiplayer: transports, channels, replication, prediction (not in default: many games are single-player).
 net = ["dep:postcard"]
 # The level editor: `--editor` opens the game's own binary as an Unreal-style editor (src/editor, docs/EDITOR.md).
@@ -147,6 +149,10 @@ required-features = ["spline"]
 [[example]]
 name = "devtools_probe"
 required-features = ["devtools"]
+
+[[example]]
+name = "ui2_demo"
+required-features = ["ui2", "devtools"]
 
 [[example]]
 name = "ui_gallery"

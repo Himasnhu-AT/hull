@@ -44,6 +44,7 @@ The rules that matter most, so you don't skip them:
 | docs/PCG.md | Procedural content: node graphs, cells, catalog, scalability |
 | docs/LOGIC.md | Logic graphs (events, flow, commands) and ruspy scripts |
 | docs/SCRIPTING.md | Godot-style node scripts in ruspy: lifecycle, signals, groups, node paths, UI, host functions |
+| docs/UI2.md | React-style UI library: tokens, components, `.ui.ron` screens, spatial focus, data binding (feature `ui2`) |
 | docs/NET.md | Multiplayer (feature `net`) |
 
 ## Shared build cache
