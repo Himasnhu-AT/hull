@@ -125,6 +125,8 @@ pub(crate) enum Req {
     },
     /// Open a `.logic.ron` in the Logic tab.
     OpenLogic(String),
+    /// Open a `.ruspy` in the Logic tab at a 0-based line.
+    OpenScriptAt { path: String, line: usize },
     /// Create a node script from a template and attach it (`Script` component), then open it.
     ScriptNew {
         entity: EntityId,

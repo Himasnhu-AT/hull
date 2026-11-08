@@ -101,10 +101,6 @@ pub(crate) fn rv3(v: Vec3) -> RV {
     RV::Vec3([v.x as f64, v.y as f64, v.z as f64])
 }
 
-pub(crate) fn rv2(v: Vec2) -> RV {
-    RV::Vec2([v.x as f64, v.y as f64])
-}
-
 pub(crate) fn rent(e: Entity) -> RV {
     RV::Object(e.to_bits())
 }
@@ -146,6 +142,7 @@ pub(super) fn register(e: &mut Engine) {
     super::tween::register(e);
     super::api_meta::register(e);
     super::api_obj::register(e);
+    super::coroutines::register(e);
 }
 
 fn core(e: &mut Engine) {

@@ -246,6 +246,35 @@ disconnect(btn, "pressed", self(), "on_button");
 `find(name)` is the first entity with that `Name` anywhere (slow: scans the world; call it in
 `_ready`, not every frame). Names are not unique: name things you look up.
 
+## Coroutines
+
+A function containing `await` is a coroutine (GDScript 2 style). Calling it runs to the first
+`await` and returns `void`; the engine resumes it later. Awaitables are plain values from host
+functions:
+
+```
+fn _ready() {
+    await wait(1.5);                     # game seconds; follows pause / process mode
+    await next_frame();                  # the next frame, not this one
+    args = await signal_of(boss, "died"); # the signal's argument (null for none, an array for 2+)
+    hp = await signal_of("healed");      # node defaults to self
+}
+```
+
+- `await` is a whole statement: `await e;`, `x = await e;`, `x: T = await e;`, `return await e;`.
+  It can sit in `if`, `while`, `for`, `match` and blocks (`break`/`continue` work across it).
+  Not supported: inside a bigger expression (`1 + await e`, call arguments), at file top level,
+  `a.f = await e`. These are located compile errors (`E0360`, `E0361`).
+- `await some_coroutine()` does not wait for it: the inner one starts detached and the outer
+  resumes on the next frame. Use a signal to wait for completion.
+- Time and frame waits only advance while the node may process (a paused `Pausable` node
+  waits; `Always` / `WhenPaused` keep going). Signal waits wake synchronously inside
+  `emit_signal`; if the waiting node is on the call stack then, it resumes next frame.
+- Coroutines die with their node (`queue_free`, despawn, `Script` removed) and on hot reload.
+  A runtime error after a resume is reported with the script's `file:line:col` and ends it.
+- Coroutine files run in the interpreter (automatic). Locals survive suspension; each resume
+  gets a fresh step budget. `script.api` lists `wait`, `next_frame`, `signal_of`.
+
 ## GDScript-style access
 
 Nodes are **object handles** (`Value::Object`): `get_node`, `self`, `get_parent`, signal and
@@ -385,15 +414,15 @@ Actions are the engine's (`ActionDef`, rebinding, gamepad: `docs/ACTIONS.md`); p
 
 Besides `_input(action, pressed)`, a script that defines `_input_event(ev)` gets every raw event
 (reverse tree order until `set_input_as_handled()`), then `_unhandled_input_event(ev)` for events
-the GUI did not consume (`src/scripting/input_events.rs`). `ev` is an array, element 0 the type.
-The layout is fixed so it can become a dictionary with the same field names once ruspy has them:
+the GUI did not consume (`src/scripting/input_events.rs`). `ev` is a dictionary (`ev.type`
+or `ev["type"]`):
 
-| type | layout |
+| `type` | other fields |
 |---|---|
-| key | `["key", code, pressed, echo]`: `code` is a Bevy `KeyCode` name (`"KeyW"`, `"Space"`, `"ArrowLeft"`), `echo` is key repeat |
-| mouse button | `["mouse_button", button, pressed, [x, y]]`: `"Left"`, `"Right"`, `"Middle"`, `"Back"`, `"Forward"`, window pixels |
-| mouse motion | `["mouse_motion", [x, y], [dx, dy]]` |
-| mouse wheel | `["mouse_wheel", [dx, dy]]` (notches for a wheel, pixels for a trackpad; `dy > 0` is up) |
+| `"key"` | `keycode` (Bevy `KeyCode` name: `"KeyW"`, `"Space"`, `"ArrowLeft"`), `pressed`, `echo` (key repeat) |
+| `"mouse_button"` | `button` (`"Left"`, `"Right"`, `"Middle"`, `"Back"`, `"Forward"`), `pressed`, `position` (Vec2, window pixels) |
+| `"mouse_motion"` | `position`, `relative` (Vec2) |
+| `"mouse_wheel"` | `delta` (Vec2; notches for a wheel, pixels for a trackpad; `dy > 0` is up) |
 
 GUI gets first refusal: while a line edit has focus keyboard events skip `_unhandled_input_event`
 (and `_unhandled_input`); while the pointer is over a button or widget (or a `ui_scroll`) mouse
@@ -630,8 +659,11 @@ Script problems go to `LogicDiagnostics` (the same list graphs use; the editor's
 
 One instance per scripted entity (an `Engine` + `Module`, a few KB). Hooks a script does not
 define cost nothing. Calls go through the ruspy VM (bytecode) and fall back to the interpreter
-for files that use arrays or method calls (`Source::interp`), which is slower; keep per-frame
-hot paths in number-only functions when you can, and use `script.stats` to see where time goes.
+for files that use arrays, dicts, vectors' methods, handles' members/methods, `match`, `await`
+(`Source::interp`). **The fallback is cheap**: measured on the same script, the interpreter and
+the VM cost the same per call (below), because the time is the per-call plumbing and the host
+functions, not expression evaluation. So there is no reason to avoid the GDScript-style syntax
+in a hot `_process`; use `script.stats` to see where time goes.
 `find`, `%Name` and `/Root` lookups use `tree::NameIndex` (`Name` → entities, kept by
 observers), so they no longer scan the world. The presence of `_process` etc. and the check in
 `call`/`has_method` use the function names recorded when the file was loaded (its outline) instead
@@ -649,6 +681,23 @@ scripting crate code is unoptimised; run
 | `_process` on 1 000 scripts (3 member updates, `get_position` + `set_position`), 120 frames | 1210 us/frame, 1.21 us/call | 1206 us/frame, 1.21 us/call (same within noise: the VM call dominates, the old `has_fn` check was cheap) |
 | `find(name)` among 10 000 named entities | 73.4 us/lookup (full scan) | 0.20 us/lookup (index) |
 
+**GDScript-style syntax vs flat calls** (1 000 `_process` scripts, 120 frames, in-call = time
+inside the script call; two runs, the machine was busier in run 1, so compare rows within a run):
+
+| Script body | Run 1 us/call (in-call) | Run 2 us/call (in-call) |
+|---|---|---|
+| flat: 2 member updates + `get_position()` + `set_position([..])` (VM) | 1.12 (0.83) | 0.77 (0.58) |
+| the same file forced onto the interpreter | 1.13 (0.84) | 0.78 (0.59) |
+| new syntax: dict `+=`, `self.position = self.position + vec3(..)`, string concat (interpreter) | 1.45 (1.16) | 0.95 (0.75) |
+| single constructs on an otherwise empty `_process` (run 1 / run 2): empty, `d["n"] += 1`, `vec3(..) + vec3(..) * dt`, `"n=" + x`, `self.position` read, `self.position = [..]`, `get_position()`, `self.x = self.x + dt` | in-call 0.29 / 0.33 / 0.57 / 0.38 / 0.36 / 0.36 / 0.31 / 0.35 | 0.19 / 0.22 / 0.29 / 0.24 / 0.23 / 0.23 / 0.20 / 0.23 |
+
+Reading: the new syntax adds about 0.17-0.33 us per call over the flat style; most of it is the
+vector constructor (fixed in this round: `vec2/vec3/Color` with plain numbers no longer
+allocate, 0.57 to 0.29 us in the same load), then string concat and dict updates (~0.05 each).
+Extending the VM to compile handles, dicts and vectors was evaluated and not done: the VM would
+save at most ~0.05 us/call (VM and interpreter agree to within noise), and it would duplicate
+the member/hook logic. A 1 000-script `_process` frame costs ~0.8-1.0 ms with either syntax.
+
 Still to measure (release):
 
 | Case | Result |
@@ -662,10 +711,28 @@ Still to measure (release):
 | Lantern Keeper frame cost (`script.stats.last_frame_us`) | TBD |
 | Hot reload of one script on 100 instances | TBD |
 
+## Errors and call stacks
+
+A runtime error carries the script call stack (innermost first), both in the VM and the
+interpreter, and after a coroutine resume. `LogicDiagnostics` messages, the `Err` of `call`, and
+`script.list` (`last_error`, plus a `coroutines` count per script) show it:
+
+```
+scripts/a.ruspy:5:12: [E0205] division by zero
+  at inner (scripts/a.ruspy:5:12)
+  at boom (scripts/a.ruspy:2:10)
+```
+
+The first line is the located error (the script that failed). Across script, host, script calls
+(`node.method()`, `call(..)`) the callee's lines are embedded in the caller's error text, followed
+by the caller's own frames. Frame positions are the failing expression for the innermost frame and
+the call site for the others. Two builtins (no registration, so not in `script.api`):
+`get_stack()` returns an array of `{"function", "file", "line", "col"}` dicts, innermost first
+(the function calling `get_stack` is first); `print_stack()` logs the same as text through `print`.
+
 ## Known limits
 
-- **No coroutines / `await`**: use `start_timer(secs, method)`, a `ScriptTimer`, or a state
-  member advanced in `_process`.
+- **`await` is statement-level only** (see Coroutines); awaiting another coroutine does not wait for it.
 - **No synchronous re-entrant calls into the same script**: if A calls B and B calls A while A
   is running, the inner call fails with "already running". Pass data in signal arguments, or
   use `call_deferred`.

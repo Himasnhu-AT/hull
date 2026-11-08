@@ -5,9 +5,27 @@ use ashlar_ui::tokens;
 use egui::text::{LayoutJob, TextFormat};
 use egui::{Color32, FontId, RichText, Ui};
 
-use super::state::ScriptDoc;
+use super::complete;
+use super::state::{Popup, ScriptDoc};
 
-const KEYWORDS: &[&str] = &["fn", "return", "if", "else", "while", "for", "in", "break", "continue", "true", "false", "null", "let", "struct"];
+fn edit_id(doc: &ScriptDoc) -> egui::Id {
+    egui::Id::new(("script.edit", &doc.path))
+}
+
+/// Replace the typed word with the chosen candidate and park the caret after it.
+fn accept(doc: &mut ScriptDoc) {
+    let Some(p) = doc.popup.take() else { return };
+    let Some(c) = p.items.get(p.sel) else { return };
+    let chars: Vec<char> = doc.text.chars().collect();
+    let end = doc.cursor.min(chars.len()).max(p.start);
+    let mut out: String = chars[..p.start].iter().collect();
+    out.push_str(&c.insert);
+    out.extend(chars[end..].iter());
+    doc.set_cursor = Some(p.start + c.insert.chars().count());
+    doc.text = out;
+}
+
+pub(super) const KEYWORDS: &[&str] = &["fn", "return", "if", "else", "while", "for", "in", "break", "continue", "true", "false", "null", "let", "struct"];
 
 /// Colours one line.
 fn highlight_line(job: &mut LayoutJob, line: &str, font: &FontId) {
@@ -146,7 +164,47 @@ pub fn show(ui: &mut Ui, doc: &mut ScriptDoc) -> Out {
             }
         });
     }
+    if let Some((name, arg)) = complete::call_context(&doc.text, doc.cursor)
+        && let Some((sig, d)) = complete::describe(&name, &doc.api, &doc.outline)
+    {
+        egui::Panel::bottom(egui::Id::new(("script.sig", &doc.path))).resizable(false).show(ui, |ui| {
+            ui.horizontal_wrapped(|ui| {
+                ui.label(RichText::new(sig).monospace().color(t.text.primary));
+                ui.label(RichText::new(format!("(argument {})", arg + 1)).small().color(t.text.disabled));
+                if !d.is_empty() {
+                    ui.label(RichText::new(d).color(t.text.secondary));
+                }
+            });
+        });
+    }
     let font = FontId::monospace(13.0);
+    let id = edit_id(doc);
+    if let Some(at) = doc.set_cursor.take() {
+        let mut st = egui::text_edit::TextEditState::load(ui.ctx(), id).unwrap_or_default();
+        st.cursor.set_char_range(Some(egui::text::CCursorRange::one(egui::text::CCursor::new(at))));
+        st.store(ui.ctx(), id);
+        ui.ctx().memory_mut(|m| m.request_focus(id));
+    }
+    if let Some(p) = &mut doc.popup {
+        let n = p.items.len().max(1);
+        let (down, up, esc) = ui.ctx().input_mut(|i| {
+            (i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowDown), i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowUp), i.consume_key(egui::Modifiers::NONE, egui::Key::Escape))
+        });
+        if down {
+            p.sel = (p.sel + 1) % n;
+        }
+        if up {
+            p.sel = (p.sel + n - 1) % n;
+        }
+        if esc {
+            doc.popup = None;
+        }
+    }
+    let take = doc.popup.is_some() && ui.ctx().input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Tab) || i.consume_key(egui::Modifiers::NONE, egui::Key::Enter));
+    if take {
+        accept(doc);
+    }
+    let manual = ui.ctx().input_mut(|i| i.consume_key(egui::Modifiers::CTRL, egui::Key::Space));
     let row_h = ui.fonts_mut(|f| f.row_height(&font));
     egui::CentralPanel::default().frame(egui::Frame::NONE).show(ui, |ui| {
         let mut scroll = egui::ScrollArea::both().auto_shrink([false, false]);
@@ -159,10 +217,60 @@ pub fn show(ui: &mut Ui, doc: &mut ScriptDoc) -> Out {
             let resp = egui::Frame::NONE.inner_margin(egui::Margin { left: gutter as i8, ..Default::default() }).show(ui, |ui| {
                 let f = font.clone();
                 let mut lay = |ui: &Ui, s: &dyn egui::TextBuffer, _w: f32| layouter(ui, s.as_str(), &f);
-                egui::TextEdit::multiline(&mut doc.text).font(font.clone()).desired_width(f32::INFINITY).desired_rows(30).lock_focus(true).layouter(&mut lay).frame(egui::Frame::NONE).show(ui)
+                egui::TextEdit::multiline(&mut doc.text).font(font.clone()).desired_width(f32::INFINITY).desired_rows(30).id(id).lock_focus(true).layouter(&mut lay).frame(egui::Frame::NONE).show(ui)
             });
             let o = resp.inner;
             let origin = o.galley_pos;
+            if let Some(r) = o.cursor_range {
+                doc.cursor = r.primary.index.into();
+            }
+            if o.response.changed() || manual {
+                let (start, prefix) = complete::word_before(&doc.text, doc.cursor);
+                let items = if prefix.is_empty() && !manual { vec![] } else { complete::candidates(&prefix, &doc.api, &doc.outline) };
+                doc.popup = (!items.is_empty()).then_some(Popup { start, items, sel: 0 });
+            } else if o.response.clicked() || o.response.lost_focus() {
+                doc.popup = None;
+            }
+            let mut picked = None;
+            if let Some(p) = &doc.popup {
+                let at = o.galley.pos_from_cursor(egui::text::CCursor::new(p.start));
+                let pos = origin + at.left_bottom().to_vec2() + egui::vec2(0.0, 2.0);
+                egui::Area::new(egui::Id::new(("script.popup", &doc.path))).order(egui::Order::Foreground).fixed_pos(pos).show(ui.ctx(), |ui| {
+                    egui::Frame::popup(ui.style()).show(ui, |ui| {
+                        for (i, c) in p.items.iter().enumerate() {
+                            let r = ui.horizontal(|ui| {
+                                let r = ui.selectable_label(i == p.sel, RichText::new(&c.label).monospace());
+                                ui.label(RichText::new(&c.detail).color(t.text.disabled).small());
+                                r
+                            });
+                            if r.inner.clicked() {
+                                picked = Some(i);
+                            }
+                            if i == p.sel && !c.doc.is_empty() {
+                                r.response.on_hover_text(&c.doc);
+                            }
+                        }
+                    });
+                });
+            }
+            if let Some(i) = picked {
+                if let Some(p) = &mut doc.popup {
+                    p.sel = i;
+                }
+                accept(doc);
+            }
+            // Hover: signature and doc of the word under the pointer.
+            if let Some(pos) = o.response.hover_pos() {
+                let cur = o.galley.cursor_from_pos(pos - origin).index;
+                if let Some((sig, d)) = complete::word_at(&doc.text, cur.into()).and_then(|w| complete::describe(&w, &doc.api, &doc.outline)) {
+                    <egui::Response as Clone>::clone(&o.response).on_hover_ui_at_pointer(|ui| {
+                        ui.label(RichText::new(sig).monospace().strong());
+                        if !d.is_empty() {
+                            ui.label(d);
+                        }
+                    });
+                }
+            }
             let painter = ui.painter();
             let mut shapes = Vec::new();
             for (i, row) in o.galley.rows.iter().enumerate() {

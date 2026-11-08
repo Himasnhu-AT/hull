@@ -22,6 +22,7 @@ mod api_engine;
 mod api_input;
 mod api_node;
 mod api_obj;
+mod coroutines;
 mod api_pause;
 #[cfg(feature = "physics")]
 mod api_physics;
@@ -47,6 +48,8 @@ mod tests_ui;
 mod tests_api;
 #[cfg(test)]
 mod tests_lang;
+#[cfg(test)]
+mod tests_co;
 #[cfg(test)]
 mod bench;
 #[cfg(test)]
@@ -355,6 +358,10 @@ pub struct ScriptRuntime {
     scratch: Vec<Entity>,
     /// `call_deferred`, deferred connections and busy signal targets (ruspy values kept).
     deferred: Vec<(Entity, String, Vec<RV>)>,
+    /// Suspended `await` coroutines of all instances.
+    pub(crate) coroutines: Vec<coroutines::Co>,
+    /// The latest runtime error (with its stack) per entity, for `script.list`.
+    pub(crate) last_errors: HashMap<Entity, String>,
 }
 
 impl Default for ScriptRuntime {
@@ -374,6 +381,8 @@ impl Default for ScriptRuntime {
             last_poll: None,
             scratch: vec![],
             deferred: vec![],
+            coroutines: vec![],
+            last_errors: HashMap::new(),
         }
     }
 }
@@ -472,6 +481,7 @@ impl Plugin for ScriptingPlugin {
             .add_systems(Update, (poll_sources, attach, run_ready).chain().in_set(ScriptSet::Attach))
             .add_systems(Update, (timers, ui_signals, input).chain().in_set(ScriptSet::Events))
             .add_systems(Update, process.in_set(ScriptSet::Process))
+            .add_systems(Update, coroutines::tick.in_set(ScriptSet::Process).after(process))
             .add_systems(Update, flush.in_set(ScriptSet::Flush))
             .add_systems(FixedUpdate, physics_process.run_if(scripts_active));
         #[cfg(feature = "physics")]
@@ -608,7 +618,10 @@ fn instantiate(world: &mut World, e: Entity, script: &Script, keep: Option<Vec<(
     } else if let Some(props) = world.get::<ScriptProps>(e).cloned() {
         for p in props.values {
             match serde_json::from_str::<serde_json::Value>(&p.value) {
-                Ok(j) if engine.global(module, &p.name).is_some() => engine.set_global(module, &p.name, rv_of_json_exact(&j)),
+                Ok(j) if engine.global(module, &p.name).is_some() => {
+                    let cur = engine.global(module, &p.name);
+                    engine.set_global(module, &p.name, coerce_like(cur.as_ref(), rv_of_json_exact(&j)));
+                }
                 Ok(_) => diag(world, &key, 0, 0, format!("prop `{}` on {e}: the script has no member `{}`", p.name, p.name)),
                 Err(err) => diag(world, &key, 0, 0, format!("prop `{}` on {e}: bad JSON: {err}", p.name)),
             }
@@ -635,6 +648,7 @@ fn instantiate(world: &mut World, e: Entity, script: &Script, keep: Option<Vec<(
     // A reloaded instance keeps its place in the process order.
     let inst = Instance { engine, module, key, hooks, priority: script.priority, seq: old_seq, signals, ready: was_ready, fns };
     rt.instances.insert(e, Rc::new(RefCell::new(inst)));
+    rt.coroutines.retain(|c| c.entity != e);
     rt.order_dirty = true;
     if !was_ready {
         rt.pending_ready.push(e);
@@ -677,6 +691,11 @@ pub(crate) fn call_rv(world: &mut World, e: Entity, f: &str, args: Vec<RV>) -> R
     let r = i.engine.call(m, f, args, world);
     let us = t.elapsed().as_secs_f64() * 1e6;
     world.resource_mut::<ScriptCtx>().stack.pop();
+    let sus = i.engine.take_suspended(m);
+    if !sus.is_empty() {
+        let key = i.key.clone();
+        coroutines::register_suspended(world, e, &key, sus);
+    }
     let mut st = world.resource_mut::<ScriptStats>();
     st.calls += 1;
     st.call_us += us;
@@ -685,9 +704,12 @@ pub(crate) fn call_rv(world: &mut World, e: Entity, f: &str, args: Vec<RV>) -> R
         Err(x) => {
             let key = i.key.clone();
             drop(i);
-            let msg = format!("[{}] {}", x.code, x.message);
-            diag(world, &key, x.line, x.col, msg);
-            Err(format!("{key}:{}:{}: {}", x.line, x.col, x.message))
+            let trace = x.trace_text();
+            let tail = if trace.is_empty() { String::new() } else { format!("\n{trace}") };
+            diag(world, &key, x.line, x.col, format!("[{}] {}{tail}", x.code, x.message));
+            let text = format!("{key}:{}:{}: {}{tail}", x.line, x.col, x.message);
+            world.non_send_mut::<ScriptRuntime>().last_errors.insert(e, text.clone());
+            Err(text)
         }
     }
 }
@@ -850,6 +872,7 @@ pub fn emit_signal(world: &mut World, src: Entity, signal: &str, args: &[Value])
 
 /// [`emit_signal`] with ruspy values (script to script keeps ints and floats apart).
 pub(crate) fn emit_signal_rv(world: &mut World, src: Entity, signal: &str, args: Vec<RV>) -> usize {
+    coroutines::wake_signal(world, src, signal, &args);
     let Some(conns) = world.get::<Connections>(src) else { return 0 };
     if !conns.0.iter().any(|c| c.signal == signal) {
         return 0;
@@ -905,6 +928,26 @@ pub(crate) fn is_busy(world: &World, e: Entity) -> bool {
 pub(crate) fn defer(world: &mut World, e: Entity, method: String, args: Vec<RV>) {
     if let Some(mut rt) = world.get_non_send_mut::<ScriptRuntime>() {
         rt.deferred.push((e, method, args));
+    }
+}
+
+/// A saved prop value shaped like the member's default: JSON arrays become `vec2` / `vec3` /
+/// `Color` when the member is one, and whole numbers stay floats for float members.
+pub(crate) fn coerce_like(cur: Option<&RV>, v: RV) -> RV {
+    let nums = |v: &RV| -> Option<Vec<f64>> {
+        let RV::Array(a) = v else { return None };
+        a.borrow().iter().map(|x| match x { RV::Int(i) => Some(*i as f64), RV::Float(f) => Some(*f), _ => None }).collect()
+    };
+    match (cur, &v) {
+        (Some(RV::Vec2(_)), _) => match nums(&v).as_deref() { Some([x, y]) => RV::Vec2([*x, *y]), _ => v },
+        (Some(RV::Vec3(_)), _) => match nums(&v).as_deref() { Some([x, y, z]) => RV::Vec3([*x, *y, *z]), _ => v },
+        (Some(RV::Color(_)), _) => match nums(&v).as_deref() {
+            Some([r, g, b]) => RV::Color([*r, *g, *b, 1.0]),
+            Some([r, g, b, a]) => RV::Color([*r, *g, *b, *a]),
+            _ => v,
+        },
+        (Some(RV::Float(_)), RV::Int(i)) => RV::Float(*i as f64),
+        _ => v,
     }
 }
 
@@ -1061,6 +1104,7 @@ fn drop_instance(world: &mut World, e: Entity, exit: bool) {
     rt.instances.remove(&e);
     rt.failed.remove(&e);
     rt.order_dirty = true;
+    coroutines::drop_for(world, e);
 }
 
 fn depth(world: &World, mut e: Entity) -> usize {

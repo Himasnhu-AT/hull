@@ -73,6 +73,7 @@ fn list(world: &mut World, _: Json) -> Result<Json, String> {
                 json!({
                     "entity": e.to_string(), "bits": e.to_bits(), "name": tree::name_of(world, *e),
                     "script": i.key, "ready": i.ready, "priority": i.priority, "signals": i.signals,
+                    "last_error": rt.last_errors.get(e), "coroutines": rt.coroutines.iter().filter(|c| c.entity == *e).count(),
                     "hooks": {"ready": i.hooks.ready, "process": i.hooks.process, "physics_process": i.hooks.physics,
                               "input": i.hooks.input, "unhandled_input": i.hooks.unhandled, "exit_tree": i.hooks.exit},
                 }),

@@ -122,6 +122,8 @@ pub(crate) fn click_reqs(d: &Diagnostic) -> Vec<Req> {
     if let Some(f) = &d.file {
         if f.ends_with(".logic.ron") {
             out.push(Req::OpenLogic(f.clone()));
+        } else if f.ends_with(".ruspy") && d.line.is_some_and(|l| l > 0) {
+            out.push(Req::OpenScriptAt { path: f.clone(), line: d.line.unwrap_or(1) as usize - 1 });
         } else if let Some(loc) = location(d) {
             out.push(Req::Copy(loc));
         }
@@ -256,6 +258,8 @@ mod tests {
         assert!(matches!(r[0], Req::Select(ref v) if v == &[7]));
         assert!(matches!(r[1], Req::OpenLogic(ref p) if p == "logic/door.logic.ron"));
         let d = Diagnostic::new(Level::Error, "ruspy", "m").at("scripts/a.ruspy", Some(3), Some(2));
-        assert!(matches!(click_reqs(&d)[0], Req::Copy(ref s) if s == "scripts/a.ruspy:3:2"));
+        assert!(matches!(click_reqs(&d)[0], Req::OpenScriptAt { ref path, line: 2 } if path == "scripts/a.ruspy"));
+        let d = Diagnostic::new(Level::Error, "build", "m").at("src/main.rs", Some(3), Some(2));
+        assert!(matches!(click_reqs(&d)[0], Req::Copy(ref s) if s == "src/main.rs:3:2"));
     }
 }

@@ -7,6 +7,7 @@
 //! `logic-core`, on every edit.
 
 mod canvas;
+mod complete;
 mod compile_ui;
 mod inspector;
 pub mod mock;
@@ -35,6 +36,7 @@ pub struct LogicTab {
     lib_loaded: bool,
     lib_polled: f64,
     pending_open: Vec<String>,
+    pending_jump: Vec<(String, usize)>,
     new_name: String,
     press_count: u64,
     users: Vec<EntityId>,
@@ -51,6 +53,12 @@ impl LogicTab {
     /// Queue a `.logic.ron` / `.ruspy` file to open (and bring to the front) on the next frame.
     pub fn open(&mut self, path: &str) {
         self.pending_open.push(path.to_string());
+    }
+
+    /// Open `path` and scroll to a 0-based `line` (a diagnostic click).
+    pub fn open_at(&mut self, path: &str, line: usize) {
+        self.pending_open.push(path.to_string());
+        self.pending_jump.push((path.to_string(), line));
     }
 
     /// Ops to put on the editor's undo stack (the tab applied them through the backend).
@@ -73,6 +81,22 @@ impl LogicTab {
     /// The path of the front document.
     pub fn active_path(&self) -> Option<&str> {
         self.docs.get(self.active).map(Doc::path)
+    }
+
+    /// Text of the front document when it is a script (tests, host commands).
+    pub fn active_text(&self) -> Option<String> {
+        match self.docs.get(self.active) {
+            Some(Doc::Script(s)) => Some(s.text.clone()),
+            _ => None,
+        }
+    }
+
+    /// The scroll target of the front script (0-based line), if a jump is pending.
+    pub fn active_jump(&self) -> Option<usize> {
+        match self.docs.get(self.active) {
+            Some(Doc::Script(s)) => s.jump_to,
+            _ => None,
+        }
     }
 
     /// The graph on the canvas of the front document, if it is a graph.
@@ -222,7 +246,7 @@ impl LogicTab {
 }
 
 fn script_doc(path: &str, text: String, errors: Vec<GraphErrorDoc>, now: f64) -> ScriptDoc {
-    ScriptDoc { path: path.into(), saved: text.clone(), disk_text: text.clone(), text, errors, last_poll: now, changed_on_disk: false, jump_to: None }
+    ScriptDoc { path: path.into(), saved: text.clone(), disk_text: text.clone(), text, errors, last_poll: now, changed_on_disk: false, jump_to: None, api: vec![], api_loaded: false, outline: Default::default(), outline_of: String::new(), cursor: 0, set_cursor: None, popup: None }
 }
 
 /// Draw the Logic tab body with its own document strip (standalone hosts and tests).
@@ -267,6 +291,11 @@ fn begin(ui: &mut Ui, tab: &mut LogicTab, backend: &mut dyn EditorBackend) -> f6
     }
     for p in std::mem::take(&mut tab.pending_open) {
         tab.open_now(backend, &p, now);
+    }
+    for (p, line) in std::mem::take(&mut tab.pending_jump) {
+        if let Some(Doc::Script(s)) = tab.docs.iter_mut().find(|d| d.path() == p) {
+            s.jump_to = Some(line);
+        }
     }
     now
 }
@@ -394,6 +423,14 @@ fn script_ui(ui: &mut Ui, tab: &mut LogicTab, s: &mut ScriptDoc, backend: &mut d
             }
             s.disk_text = disk;
         }
+    }
+    if !s.api_loaded {
+        s.api = backend.script_api();
+        s.api_loaded = true;
+    }
+    if s.outline_of != s.text {
+        s.outline = backend.script_outline(&s.text);
+        s.outline_of = s.text.clone();
     }
     let key_save = ui.ctx().input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S));
     let out = script_tab::show(ui, s);

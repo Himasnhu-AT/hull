@@ -207,4 +207,7 @@ pub const CATALOGUE: &[(&str, &str, &str)] = &[
     (r#"set_mouse_mode"#, r#"set_mouse_mode(mode)"#, r#"Set the cursor mode (visible, captured, ...)."#),
     (r#"get_mouse_mode"#, r#"get_mouse_mode()"#, r#"Current cursor mode name."#),
     (r#"is_mouse_button_pressed"#, r#"is_mouse_button_pressed(button)"#, r#"Is the mouse button held?"#),
+    (r#"wait"#, r#"wait(seconds)"#, r#"Use as `await wait(s)`. Awaitable: resume the coroutine after game time (respects pause / process mode)."#),
+    (r#"next_frame"#, r#"next_frame()"#, r#"Use as `await next_frame()`. Awaitable: resume on the next frame."#),
+    (r#"signal_of"#, r#"signal_of([node,] "signal")"#, r#"Use as `await signal_of(n, "s")`. Awaitable: resume when the node emits the signal; evaluates to its argument(s)."#),
 ];

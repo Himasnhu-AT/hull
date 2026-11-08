@@ -93,6 +93,32 @@ impl EditorBackend for LogicMock {
     fn logic_palette(&mut self) -> LogicPalette {
         self.palette.clone()
     }
+    fn script_api(&mut self) -> Vec<ApiFn> {
+        let row = |name: &str, sig: &str, doc: &str| ApiFn { name: name.into(), sig: sig.into(), doc: doc.into() };
+        vec![
+            row("get_node", "get_node([node,] path)", "Resolve a node path."),
+            row("get_name", "get_name([node])", "Name of the node."),
+            row("connect", "connect([source,] signal, target, method)", "Connect a signal."),
+        ]
+    }
+    /// Good enough for tests: `fn name(a, b)` lines and `name = ...;` lines at column 0.
+    fn script_outline(&mut self, text: &str) -> ScriptOutline {
+        let mut o = ScriptOutline::default();
+        for l in text.lines() {
+            if let Some(rest) = l.strip_prefix("fn ") {
+                let (name, params) = rest.split_once('(').unwrap_or((rest, ""));
+                let params = params.split(')').next().unwrap_or("");
+                o.fns.push(ScriptFn { name: name.trim().into(), params: params.split(',').map(|p| p.trim().to_string()).filter(|p| !p.is_empty()).collect() });
+            } else if let Some((name, _)) = l.split_once(" = ")
+                && !name.is_empty()
+                && name.chars().all(|c| c.is_alphanumeric() || c == '_')
+                && !o.vars.contains(&name.to_string())
+            {
+                o.vars.push(name.into());
+            }
+        }
+        o
+    }
     fn logic_users(&mut self, path: &str) -> Vec<EntityId> {
         self.users.get(path).cloned().unwrap_or_default()
     }

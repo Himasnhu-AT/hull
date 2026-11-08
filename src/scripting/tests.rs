@@ -181,3 +181,17 @@ fn signal_back_into_running_script_is_deferred_and_floats_stay_floats() {
     // Handled at the end of the same frame, with 2.0 still a float (2.0 / 4 = 0.5, not 0).
     assert_eq!(get_member(app.world(), p, "got"), Some(Value::Num(0.5)));
 }
+
+#[test]
+fn props_take_the_members_shape() {
+    let src = "offset = vec3(0, 1, 2);\ntint = Color(1, 1, 1);\nspeed = 2.5;\nfn sum() { return offset.x + offset.y + offset.z + tint.a + speed; }\n";
+    let mut app = app("props_shape", &[("p.ruspy", src)]);
+    let props = ScriptProps::default()
+        .with("offset", serde_json::json!([1, 2, 3]))
+        .with("tint", serde_json::json!([0.5, 0.5, 0.5]))
+        .with("speed", serde_json::json!(4));
+    let e = app.world_mut().spawn((Script::new("p.ruspy"), props)).id();
+    app.update();
+    assert!(errors(&app).is_empty(), "{:?}", errors(&app));
+    assert_eq!(call(app.world_mut(), e, "sum", &[]).unwrap(), Value::Num(11.0));
+}
