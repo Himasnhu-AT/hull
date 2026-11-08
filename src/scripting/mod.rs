@@ -32,6 +32,10 @@ mod tween;
 mod devtools;
 pub mod tree;
 pub mod ui;
+pub mod ui_widgets;
+pub mod input_events;
+#[cfg(test)]
+mod tests_widgets;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
@@ -281,6 +285,8 @@ pub(crate) struct Hooks {
     pub physics: bool,
     pub input: bool,
     pub unhandled: bool,
+    pub input_event: bool,
+    pub unhandled_event: bool,
     pub exit: bool,
 }
 
@@ -455,6 +461,8 @@ impl Plugin for ScriptingPlugin {
         app.add_systems(Update, api_engine::nav_signals.after(timers).before(ui_signals).in_set(ScriptSet::Events));
         tree::plugin(app);
         ui::plugin(app);
+        ui_widgets::plugin(app);
+        input_events::plugin(app);
         tween::plugin(app);
         #[cfg(feature = "devtools")]
         devtools::register(app);
@@ -590,6 +598,8 @@ fn instantiate(world: &mut World, e: Entity, script: &Script, keep: Option<Vec<(
         physics: fns.contains("_physics_process"),
         input: fns.contains("_input"),
         unhandled: fns.contains("_unhandled_input"),
+        input_event: fns.contains("_input_event"),
+        unhandled_event: fns.contains("_unhandled_input_event"),
         exit: fns.contains("_exit_tree"),
     };
     let signals = world.get_resource_mut::<DeclaredSignals>().and_then(|mut d| d.0.remove(&e)).unwrap_or_default();
@@ -1122,6 +1132,10 @@ fn input(world: &mut World) {
                 }
             }
             if world.resource::<ScriptCtx>().handled {
+                continue;
+            }
+            // A focused line edit owns the keyboard: its keys are not game actions.
+            if world.get_resource::<ui_widgets::UiCapture>().is_some_and(|c| c.keyboard) {
                 continue;
             }
             for &e in unhandled.iter().rev() {

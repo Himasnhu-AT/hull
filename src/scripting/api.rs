@@ -122,6 +122,8 @@ fn target_of(v: &RV) -> Result<String, String> {
 pub(super) fn register(e: &mut Engine) {
     core(e);
     super::ui::register(e);
+    super::ui_widgets::register(e);
+    super::input_events::register(e);
     super::api_node::register(e);
     super::api_input::register(e);
     super::api_pause::register(e);

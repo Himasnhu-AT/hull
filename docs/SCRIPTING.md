@@ -327,8 +327,30 @@ function acts on `self`. Errors in a host call become a diagnostic with the scri
 
 `is_action_pressed(a)`, `is_action_just_pressed(a)`, `is_action_just_released(a)`,
 `get_action_strength(a)`, `get_axis(neg, pos)` (-1..1), `get_vector(neg_x, pos_x, neg_y, pos_y)`
-or `get_vector(action2d)` (the value of one 2D action, `ActionState::axis2d`) (`[x, y]`), `is_key_pressed("KeyW")`, `get_mouse_position()`, `set_input_as_handled()`.
+or `get_vector(action2d)` (the value of one 2D action, `ActionState::axis2d`) (`[x, y]`), `is_key_pressed("KeyW")`, `get_mouse_position()`, `set_input_as_handled()`,
+`get_mouse_delta()`, `set_mouse_mode("visible" | "hidden" | "captured")`, `get_mouse_mode()`,
+`is_mouse_button_pressed("Left")`. Raw events as values: see **Input events** below.
 Actions are the engine's (`ActionDef`, rebinding, gamepad: `docs/ACTIONS.md`); prefer them to raw keys.
+
+#### Input events
+
+Besides `_input(action, pressed)`, a script that defines `_input_event(ev)` gets every raw event
+(reverse tree order until `set_input_as_handled()`), then `_unhandled_input_event(ev)` for events
+the GUI did not consume (`src/scripting/input_events.rs`). `ev` is an array, element 0 the type.
+The layout is fixed so it can become a dictionary with the same field names once ruspy has them:
+
+| type | layout |
+|---|---|
+| key | `["key", code, pressed, echo]`: `code` is a Bevy `KeyCode` name (`"KeyW"`, `"Space"`, `"ArrowLeft"`), `echo` is key repeat |
+| mouse button | `["mouse_button", button, pressed, [x, y]]`: `"Left"`, `"Right"`, `"Middle"`, `"Back"`, `"Forward"`, window pixels |
+| mouse motion | `["mouse_motion", [x, y], [dx, dy]]` |
+| mouse wheel | `["mouse_wheel", [dx, dy]]` (notches for a wheel, pixels for a trackpad; `dy > 0` is up) |
+
+GUI gets first refusal: while a line edit has focus keyboard events skip `_unhandled_input_event`
+(and `_unhandled_input`); while the pointer is over a button or widget (or a `ui_scroll`) mouse
+events skip it. `set_mouse_mode("captured")` locks the cursor and turns pointer capture off, so a
+free-look camera keeps receiving motion. `_input_event` always sees everything (Godot's `_input`).
+Resources: `UiCapture { keyboard, pointer }`, `ScriptMouse { mode, delta }`.
 
 ### Time and timers
 
@@ -469,6 +491,43 @@ bar2  = ui_progress(panel, 0.5);        set_progress(bar2, 0.8);
 Containers lay out children (vbox: column, hbox: row, `gap` between). Buttons emit `pressed`
 (pointer down), `mouse_entered`, `mouse_exited`. UI nodes are ordinary Bevy UI entities (`Node`, `Text`, `Button`), so the usual UI tools see them. Build UI once in
 `_ready` and update text only when a value changes (`HUD.on_score`); do not rebuild per frame.
+
+### Widgets
+
+`src/scripting/ui_widgets.rs`. Godot names; each is a Bevy UI entity with a reflected state
+component and named children, themed from `Theme`, so it can live in a level file.
+
+| Build | Signal | Read / write |
+|---|---|---|
+| `ui_checkbox(parent, text [, checked])` | `toggled(pressed)` | `is_checked([n])`, `set_checked([n,] b)` |
+| `ui_slider(parent, min, max, value [, step])` | `value_changed(v)` | `get_value([n])`, `set_value([n,] v)` (also drives `ui_progress` bars) |
+| `ui_line_edit(parent [, placeholder])` | `text_changed(text)`, `text_submitted(text)` | `get_text`, `set_text` (no signal) |
+| `ui_option_button(parent, items)` | `item_selected(index)` | `get_selected([n])`, `select([n,] i)` (no signal) |
+| `ui_tabs(parent, titles)` | `tab_changed(i)` | `get_current_tab([n])`, `set_current_tab([n,] i)` |
+| `ui_texture_rect(parent, path)` | | an `ImageNode` from an asset path |
+| `ui_grid(parent, columns)` | | CSS grid, auto columns |
+| `ui_scroll(parent)` | | vertical scroll with the mouse wheel; give it a `height` |
+| `ui_margin(parent, px)` | | padding container |
+
+`set_checked` / `set_value` / `set_current_tab` emit their signal when the value changes (Godot
+does too), the others do not. Tabs: child 0 of the `ui_tabs` node is the bar, every later child
+(`ui_panel(tabs)`, `ui_margin(tabs, 8)` ...) is a page; page `i` shows when tab `i` is selected.
+A line edit shows a caret while focused and the placeholder while empty; `get_text` returns the
+real text.
+
+**Focus and keyboard.** Buttons and every widget are focusable. A click focuses (clicking
+elsewhere clears), Tab / Shift+Tab / Up / Down (gamepad D-pad) move focus in tree order, Left /
+Right adjust a slider or option, Enter / Space (gamepad South) activate (button: `pressed`,
+checkbox: toggle, option: open), Esc closes a dropdown. Arrows and Enter only act while something
+has focus, so games that move with arrows are unaffected. The focused widget gets an accent
+outline. `grab_focus([n])`, `release_focus([n])`, `has_focus([n])`; `set_tooltip([n,] text)`
+shows a hover bubble after 0.45 s (`""` removes it).
+
+Demo: `examples/script_ui_demo.rs` + `assets/scripts/ui_demo.ruspy` (every widget in a settings
+form); `python3 -I scripts/play.py scripts/script-ui-demo.json --example script_ui_demo`.
+Known limits: no cursor movement or selection inside a line edit (typing and Backspace only, no
+IME composition), no password mode, focus order is tree order (no spatial arrow navigation), one
+tooltip at a time without rich content.
 
 ## Hot reload
 

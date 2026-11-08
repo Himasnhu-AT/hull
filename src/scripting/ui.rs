@@ -29,7 +29,7 @@ pub struct UiButton {
 }
 
 impl UiButton {
-    fn themed(t: &Theme) -> Self {
+    pub(super) fn themed(t: &Theme) -> Self {
         UiButton { idle: t.raised, hot: t.line_strong.mix(&t.raised, 0.6), down: t.accent, text: t.text, text_disabled: t.text_dim }
     }
 }
@@ -80,11 +80,11 @@ fn button_look(mut buttons: LookQuery, mut texts: Query<&mut TextColor, Without<
 
 // ---------------------------------------------------------------- helpers
 
-fn theme_of(w: &World) -> Theme {
+pub(super) fn theme_of(w: &World) -> Theme {
     w.get_resource::<Theme>().cloned().unwrap_or_default()
 }
 
-fn color(v: &RV, what: &str) -> Result<Color, String> {
+pub(super) fn color(v: &RV, what: &str) -> Result<Color, String> {
     if let RV::Array(a) = v {
         let a = a.borrow();
         if a.len() == 3 || a.len() == 4 {
@@ -116,7 +116,7 @@ fn val(v: &RV, what: &str) -> Result<Val, String> {
 }
 
 /// Spawns `bundle` under `parent` (an entity) or as an absolutely positioned root (null).
-fn spawn_node(w: &mut World, parent: Option<&RV>, name: &str, bundle: impl Bundle) -> Result<Entity, String> {
+pub(super) fn spawn_node(w: &mut World, parent: Option<&RV>, name: &str, bundle: impl Bundle) -> Result<Entity, String> {
     let parent = match parent {
         None | Some(RV::Null) => None,
         Some(p) => Some(api::live(w, api::ent(p)?)?),
@@ -137,7 +137,7 @@ fn spawn_node(w: &mut World, parent: Option<&RV>, name: &str, bundle: impl Bundl
     Ok(e)
 }
 
-fn flex(dir: FlexDirection, gap: f32) -> Node {
+pub(super) fn flex(dir: FlexDirection, gap: f32) -> Node {
     Node { flex_direction: dir, row_gap: Val::Px(gap), column_gap: Val::Px(gap), ..default() }
 }
 
@@ -257,7 +257,7 @@ fn ui_set(w: &mut World, e: Entity, prop: &str, v: &RV) -> Result<(), String> {
     }
 }
 
-fn set_fill(w: &mut World, e: Entity, value: f32) -> Result<(), String> {
+pub(super) fn set_fill(w: &mut World, e: Entity, value: f32) -> Result<(), String> {
     let value = value.clamp(0.0, 1.0);
     let kids: Vec<Entity> = w.get::<Children>(e).map(|c| c.iter().collect()).unwrap_or_default();
     let fill = kids.into_iter().find(|k| w.get::<UiProgressFill>(*k).is_some()).ok_or_else(|| format!("{e} is not a progress bar (ui_progress)"))?;
@@ -307,7 +307,7 @@ pub(super) fn register(e: &mut Engine) {
             border_radius: BorderRadius::all(Val::Px(RADIUS)),
             ..default()
         };
-        let e = spawn_node(w, a.first(), "Button", (node, BackgroundColor(look.idle), Button, Hovered::default(), look))?;
+        let e = spawn_node(w, a.first(), "Button", (node, BackgroundColor(look.idle), Button, Hovered::default(), super::ui_widgets::UiFocusable, look))?;
         let text = a[1].to_string();
         w.spawn((Name::new("Label"), Text::new(text), theme::label(SIZE_BODY), TextColor(t.text), Pickable::IGNORE, ChildOf(e)));
         Ok(rent(e))
@@ -335,6 +335,9 @@ pub(super) fn register(e: &mut Engine) {
     e.register("set_text", |c, a| {
         let w = world(c)?;
         let (t, r) = split(w, a, 1, "set_text([node,] text)")?;
+        if super::ui_widgets::set_line_edit_text(w, t, r[0].to_string()) {
+            return Ok(RV::Void);
+        }
         let te = need_text(w, t)?;
         let new = r[0].to_string();
         if let Some(mut x) = w.get_mut::<Text>(te)
@@ -347,6 +350,9 @@ pub(super) fn register(e: &mut Engine) {
     e.register("get_text", |c, a| {
         let w = world(c)?;
         let (t, _) = split(w, a, 0, "get_text([node])")?;
+        if let Some(text) = super::ui_widgets::line_edit_text(w, t) {
+            return Ok(RV::Str(text));
+        }
         let te = need_text(w, t)?;
         Ok(RV::Str(w.get::<Text>(te).map(|x| x.0.clone()).unwrap_or_default()))
     });
