@@ -711,7 +711,7 @@ impl Build for TabBarEl {
             w.entity_mut(bar).insert(en);
         }
         if self.hints {
-            glyph::spawn_cap(w, bar, t, Glyph { action: "tab_prev".into(), kb: "Q".into(), pad: "LB".into() });
+            glyph::spawn_cap(w, bar, t, Glyph { action: "tab_prev".into(), kb: "PgUp".into(), pad: "LB".into() });
         }
         for (i, tab) in self.tabs.iter().enumerate() {
             let item = w
@@ -735,7 +735,7 @@ impl Build for TabBarEl {
             w.entity_mut(item).insert(TabLook { underline, label });
         }
         if self.hints {
-            glyph::spawn_cap(w, bar, t, Glyph { action: "tab_next".into(), kb: "E".into(), pad: "RB".into() });
+            glyph::spawn_cap(w, bar, t, Glyph { action: "tab_next".into(), kb: "PgDn".into(), pad: "RB".into() });
         }
         bar
     }
@@ -764,8 +764,8 @@ fn default_glyph(action: &str) -> (String, String) {
     let (k, p) = match action {
         "confirm" | "accept" | "select" => ("Enter", "A"),
         "back" | "cancel" => ("Esc", "B"),
-        "tab_next" => ("E", "RB"),
-        "tab_prev" => ("Q", "LB"),
+        "tab_next" => ("PgDn", "RB"),
+        "tab_prev" => ("PgUp", "LB"),
         "navigate" | "move" => ("Arrows", "D-pad"),
         "menu" => ("Tab", "Menu"),
         "option" | "extra" => ("F", "X"),
