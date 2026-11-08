@@ -90,7 +90,8 @@ reflect-registered, so `save_level` writes them and the editor can edit them. Se
 
 ## Lifecycle and ordering
 
-Per frame (all of it skipped while the game is paused):
+Per frame (each instance follows its `process_mode` while the game is paused, see
+[Pause and process mode](#pause-and-process-mode); the editor's edit world runs no scripts):
 
 1. **Attach** (`ScriptSet::Attach`): changed script files are polled (every 0.5 s), new `Script`
    entities get instances (the top level runs, `ScriptProps` are applied), then `_ready` runs for
@@ -114,6 +115,46 @@ Exception: if the target script is currently running (a child emits to its paren
 parent's `_process` is calling the child), the call is delivered at the end of the frame
 instead of failing.
 `one_shot` connections are removed before the call; `deferred` ones run in Flush.
+
+## Pause and process mode
+
+`Script.process_mode` (Reflect, saved in levels; Godot `PROCESS_MODE_*`):
+
+| Mode | Runs |
+|---|---|
+| `Inherit` (default) | the parent's mode; `Pausable` at the root. A node without a `Script` passes it up |
+| `Pausable` | only while the game is not paused |
+| `WhenPaused` | only while the game is paused (a pause menu) |
+| `Always` | paused or not |
+| `Disabled` | never |
+
+The scripting systems no longer stop when `Paused` is set; every instance is checked instead
+(`effective_mode`). The mode gates `_process`, `_physics_process`, `_input` / `_unhandled_input`,
+`ScriptTimer` and `start_timer` countdowns, the built-in UI signals (`pressed`, `mouse_*`) of the
+entity that emits them, deferred calls, and `_ready`. Instances are created whatever the pause
+state; `_ready` waits until the instance would process (a `Pausable` script spawned in a paused
+game is readied on resume). Deferred calls to a node that may not run now are kept until it may
+(dropped when it is `Disabled`). Synchronous signal calls and `call()` ignore the mode, as in Godot.
+
+While paused, `delta()` is **real** time (so `Always` / `WhenPaused` scripts and timers still
+animate); `time()` stays on game time. Limits: `_physics_process` follows `FixedUpdate`, which
+follows virtual time, so it does not tick while paused whatever the mode; gameplay-context actions
+are off while paused (the engine ties that context to `Paused`), UI actions still arrive.
+
+Host functions: `get_tree_paused()`, `set_tree_paused(bool)` (through `PauseCtl`: `Paused`,
+`Time<Virtual>` and physics time), `set_process_mode([n,] "always")` (also Godot's ints 0..4:
+inherit, pausable, when_paused, always, disabled), `get_process_mode([n])`.
+
+Per instance, `set_process([n,] bool)` and `set_physics_process([n,] bool)` turn the hooks off and
+on (a script can stop its own `_process`); `is_processing([n])`, `is_physics_processing([n])`
+read the toggles (default on). They live in the `ScriptProcessing` component (runtime only).
+
+Editor: the editor keeps its own world paused (`editor::keep_paused` sets `Paused` every frame) and
+Play runs the game in another process. Since a pause no longer stops the sets, the scripting
+sets and `physics_process` carry a run condition `scripts_active`: with the `editor` feature they
+do not run while the `EditorMode` resource exists. So edit-world scripts do not run (not even
+`Always` ones, and no instances are created), while a Play process (no `EditorMode`) runs them
+normally.
 
 ## Members and ScriptProps
 
@@ -139,6 +180,8 @@ signal("lit");                         // top level: declare (shows up in script
 emit_signal("lit", points);            // call every connection with (points, binds...)
 connect("lit", "/Game", "add_score");  // self -> /Game.add_score
 connect(btn, "pressed", self(), "on_button");   // source, signal, target (node or path), method
+connect(btn, "pressed", self(), "on_button", CONNECT_ONE_SHOT());   // + Godot flags
+if is_connected(btn, "pressed", self(), "on_button") { }
 disconnect(btn, "pressed", self(), "on_button");
 ```
 
@@ -203,7 +246,9 @@ function acts on `self`. Errors in a host call become a diagnostic with the scri
 |---|---|
 | `signal(name)` | declare a signal (top level) |
 | `emit_signal(name, args...)` | emit from `self`; returns the number of calls made |
-| `connect([source,] signal, target, method)`, `disconnect(...)` | runtime connections |
+| `connect([source,] signal, target, method [, flags])`, `disconnect(...)`, `is_connected(...)` | runtime connections; `source` is told apart by being an **int entity** first argument (not by argument count), else `self` |
+| `connect_flags.DEFERRED` / `connect_flags.ONE_SHOT` (or `CONNECT_DEFERRED()` / `CONNECT_ONE_SHOT()`) | Godot's flag values 1 and 4; combine with `+` (ruspy has no `|`): `connect("s", t, "m", connect_flags.DEFERRED + connect_flags.ONE_SHOT)`. Other bits are ignored |
+| `get_tree_paused()`, `set_tree_paused(b)`, `set_process_mode([n,] m)`, `get_process_mode([n])`, `set_process([n,] b)`, `set_physics_process([n,] b)`, `is_processing([n])` | [pause and process mode](#pause-and-process-mode) |
 | `call(node, method, args...)` | synchronous call into another script; returns its value |
 | `has_method([n,] method)` | |
 | `call_deferred([node,] method, args...)` | at the end of the frame |
@@ -233,7 +278,7 @@ function acts on `self`. Errors in a host call become a diagnostic with the scri
 
 `is_action_pressed(a)`, `is_action_just_pressed(a)`, `is_action_just_released(a)`,
 `get_action_strength(a)`, `get_axis(neg, pos)` (-1..1), `get_vector(neg_x, pos_x, neg_y, pos_y)`
-(`[x, y]`), `is_key_pressed("KeyW")`, `get_mouse_position()`, `set_input_as_handled()`.
+or `get_vector(action2d)` (the value of one 2D action, `ActionState::axis2d`) (`[x, y]`), `is_key_pressed("KeyW")`, `get_mouse_position()`, `set_input_as_handled()`.
 Actions are the engine's (`ActionDef`, rebinding, gamepad: `docs/ACTIONS.md`); prefer them to raw keys.
 
 ### Time and timers
@@ -317,11 +362,24 @@ One instance per scripted entity (an `Engine` + `Module`, a few KB). Hooks a scr
 define cost nothing. Calls go through the ruspy VM (bytecode) and fall back to the interpreter
 for files that use arrays or method calls (`Source::interp`), which is slower; keep per-frame
 hot paths in number-only functions when you can, and use `script.stats` to see where time goes.
-Host functions that walk the world (`find`, `get_nodes_in_group` over many nodes,
+`find`, `%Name` and `/Root` lookups use `tree::NameIndex` (`Name` → entities, kept by
+observers), so they no longer scan the world. The presence of `_process` etc. and the check in
+`call`/`has_method` use the function names recorded when the file was loaded (its outline) instead
+of building a VM per call.
+Host functions that walk the world (`get_nodes_in_group` over many nodes,
 `get`/`set` with reflection paths at ~4 us each) are for events, not for every entity every frame.
 For hundreds of entities per frame write a Rust system.
 
-Measurements (M-series Mac, release; to be filled in after merge):
+Measurements (M-series Mac, `cargo test` dev profile with optimised dependencies, so the
+scripting crate code is unoptimised; run
+`memgate -- cargo test -q --lib scripting::bench -- --ignored --nocapture --test-threads=1`):
+
+| Case | Before | After |
+|---|---|---|
+| `_process` on 1 000 scripts (3 member updates, `get_position` + `set_position`), 120 frames | 1210 us/frame, 1.21 us/call | 1206 us/frame, 1.21 us/call (same within noise: the VM call dominates, the old `has_fn` check was cheap) |
+| `find(name)` among 10 000 named entities | 73.4 us/lookup (full scan) | 0.20 us/lookup (index) |
+
+Still to measure (release):
 
 | Case | Result |
 |---|---|
@@ -341,8 +399,8 @@ Measurements (M-series Mac, release; to be filled in after merge):
 - **No synchronous re-entrant calls into the same script**: if A calls B and B calls A while A
   is running, the inner call fails with "already running". Pass data in signal arguments, or
   use `call_deferred`.
-- **Pause is all-or-nothing**: every scripting set is skipped while the game is paused (Godot's
-  per-node `process_mode` does not exist). Deferred calls queued before the pause run after it.
+- **Pause follows `process_mode`** (see above). `_physics_process` does not tick while paused
+  in any mode (it rides `FixedUpdate`, which rides virtual time).
 - The VM falls back to the interpreter for arrays and method calls (see Performance).
 - No maps, closures or classes in ruspy: structured data is arrays or JSON text; there is no
   `@export` metadata (types, ranges) yet, so the editor shows members as plain values.

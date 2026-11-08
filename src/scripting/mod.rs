@@ -20,6 +20,7 @@
 mod api;
 mod api_input;
 mod api_node;
+mod api_pause;
 #[cfg(feature = "devtools")]
 mod devtools;
 pub mod tree;
@@ -30,9 +31,13 @@ mod tests;
 mod tests_ui;
 #[cfg(test)]
 mod tests_api;
+#[cfg(test)]
+mod bench;
+#[cfg(test)]
+mod tests_pause;
 
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::time::{Instant, SystemTime};
@@ -44,7 +49,7 @@ use ruspy::value::Value as RV;
 
 use crate::logic::LogicDiagnostics;
 use crate::logic::script::{rv_of, value_of_rv};
-use crate::pause::not_paused;
+use crate::pause::Paused;
 use crate::paths::AssetsDir;
 
 pub use tree::{get_node, resolve_path};
@@ -57,12 +62,114 @@ pub struct Script {
     pub path: String,
     /// Lower runs first in `_process` / `_physics_process` (Godot `process_priority`).
     pub priority: i32,
+    /// When this script runs relative to the game's pause (Godot `process_mode`).
+    pub process_mode: ProcessMode,
 }
 
 impl Script {
     pub fn new(path: impl Into<String>) -> Self {
-        Script { path: path.into(), priority: 0 }
+        Script { path: path.into(), priority: 0, process_mode: ProcessMode::Inherit }
     }
+}
+
+/// Godot `Node.process_mode`: whether a script's `_process`, input, timers, UI signals and
+/// deferred calls run while the game is paused (`Paused`, `get_tree_paused()`).
+#[derive(Reflect, Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ProcessMode {
+    /// The parent's mode (`Pausable` for a root). The default.
+    #[default]
+    Inherit,
+    /// Runs only while the game is not paused.
+    Pausable,
+    /// Runs only while the game is paused (a pause menu).
+    WhenPaused,
+    /// Runs paused or not.
+    Always,
+    /// Never runs.
+    Disabled,
+}
+
+impl ProcessMode {
+    /// Godot's constant order: `INHERIT 0, PAUSABLE 1, WHEN_PAUSED 2, ALWAYS 3, DISABLED 4`.
+    pub fn from_name(s: &str) -> Option<Self> {
+        Some(match s.to_ascii_lowercase().replace('-', "_").as_str() {
+            "inherit" => Self::Inherit,
+            "pausable" => Self::Pausable,
+            "when_paused" | "whenpaused" => Self::WhenPaused,
+            "always" => Self::Always,
+            "disabled" => Self::Disabled,
+            _ => return None,
+        })
+    }
+    pub fn from_index(i: i64) -> Option<Self> {
+        Some(match i {
+            0 => Self::Inherit,
+            1 => Self::Pausable,
+            2 => Self::WhenPaused,
+            3 => Self::Always,
+            4 => Self::Disabled,
+            _ => return None,
+        })
+    }
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Inherit => "inherit",
+            Self::Pausable => "pausable",
+            Self::WhenPaused => "when_paused",
+            Self::Always => "always",
+            Self::Disabled => "disabled",
+        }
+    }
+    /// Does a script in this (resolved) mode run while the game is `paused`?
+    pub fn runs(self, paused: bool) -> bool {
+        match self {
+            Self::Inherit | Self::Pausable => !paused,
+            Self::WhenPaused => paused,
+            Self::Always => true,
+            Self::Disabled => false,
+        }
+    }
+}
+
+/// `set_process(false)` / `set_physics_process(false)` per instance (Godot). Absent = both on.
+/// Runtime state, not saved.
+#[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ScriptProcessing {
+    pub process: bool,
+    pub physics: bool,
+}
+
+impl Default for ScriptProcessing {
+    fn default() -> Self {
+        ScriptProcessing { process: true, physics: true }
+    }
+}
+
+/// `mode` resolved through the parents (a node without a `Script` passes `Inherit` up);
+/// `Pausable` at the root.
+pub fn effective_mode(world: &World, mut e: Entity) -> ProcessMode {
+    for _ in 0..256 {
+        if let Some(s) = world.get::<Script>(e)
+            && s.process_mode != ProcessMode::Inherit
+        {
+            return s.process_mode;
+        }
+        match world.get::<ChildOf>(e) {
+            Some(p) => e = p.parent(),
+            None => break,
+        }
+    }
+    ProcessMode::Pausable
+}
+
+/// Is the game paused (`Paused`)?
+pub fn tree_paused(world: &World) -> bool {
+    world.get_resource::<Paused>().is_some_and(|p| p.0)
+}
+
+/// Would `e`'s scripts run now, given the pause state and its process mode?
+fn runs_now(world: &World, e: Entity, paused: bool) -> bool {
+    effective_mode(world, e).runs(paused)
 }
 
 /// Member values set on this entity (Godot exported properties stored in the scene). Applied
@@ -125,6 +232,11 @@ impl Connections {
     }
 }
 
+/// `connect` flag bits (Godot `ConnectFlags`): call at the end of the frame.
+pub const CONNECT_DEFERRED: i64 = 1;
+/// `connect` flag bit: disconnect after the first emission.
+pub const CONNECT_ONE_SHOT: i64 = 4;
+
 /// A countdown that emits `timeout` (Godot `Timer` node). Saved in levels.
 #[derive(Component, Reflect, Clone, Debug, PartialEq)]
 #[reflect(Component, Default)]
@@ -168,12 +280,21 @@ pub(crate) struct Instance {
     /// Names given to `signal("name")` at top level.
     pub signals: Vec<String>,
     pub ready: bool,
+    /// Top-level function names of the file (from its outline): `has_fn` without a VM.
+    pub fns: Rc<HashSet<String>>,
+}
+
+impl Instance {
+    pub fn has(&self, f: &str) -> bool {
+        self.fns.contains(f)
+    }
 }
 
 struct Source {
     mtime: Option<SystemTime>,
     text: Option<Rc<str>>,
     outline: Outline,
+    fns: Rc<HashSet<String>>,
     /// The VM rejected this file (arrays, methods, structs): use the interpreter.
     interp: bool,
 }
@@ -293,6 +414,7 @@ impl Plugin for ScriptingPlugin {
             .register_type::<Connections>()
             .register_type::<Connection>()
             .register_type::<ScriptTimer>()
+            .register_type::<ProcessMode>()
             .init_resource::<ScriptCtx>()
             .init_resource::<ScriptQueue>()
             .init_resource::<ScriptStats>()
@@ -303,19 +425,33 @@ impl Plugin for ScriptingPlugin {
         app.world_mut().insert_non_send(ScriptRuntime::default());
         app.world_mut().resource_mut::<ScriptCtx>().rng = 0x9E37_79B9_7F4A_7C15;
         app.add_observer(|ev: On<Remove<Script>>, mut q: ResMut<ScriptQueue>| q.removed.push(ev.entity));
-        app.configure_sets(Update, (ScriptSet::Attach, ScriptSet::Events, ScriptSet::Process, ScriptSet::Flush).chain().run_if(not_paused));
+        app.configure_sets(Update, (ScriptSet::Attach, ScriptSet::Events, ScriptSet::Process, ScriptSet::Flush).chain().run_if(scripts_active));
         app.add_systems(Startup, spawn_autoloads)
             .add_systems(Update, (poll_sources, attach, run_ready).chain().in_set(ScriptSet::Attach))
             .add_systems(Update, (timers, ui_signals, input).chain().in_set(ScriptSet::Events))
             .add_systems(Update, process.in_set(ScriptSet::Process))
             .add_systems(Update, flush.in_set(ScriptSet::Flush))
-            .add_systems(FixedUpdate, physics_process.run_if(not_paused));
+            .add_systems(FixedUpdate, physics_process.run_if(scripts_active));
         #[cfg(feature = "physics")]
         app.add_systems(Update, physics_signals.after(timers).before(ui_signals).in_set(ScriptSet::Events));
+        tree::plugin(app);
         ui::plugin(app);
         #[cfg(feature = "devtools")]
         devtools::register(app);
     }
+}
+
+/// Scripts do not run in the editor's edit world (`EditorMode`: virtual time is paused there
+/// and the game runs in another process on Play). Pause itself no longer stops the systems:
+/// each instance follows its [`ProcessMode`].
+#[cfg(feature = "editor")]
+fn scripts_active(editor: Option<Res<crate::editor::EditorMode>>) -> bool {
+    editor.is_none()
+}
+
+#[cfg(not(feature = "editor"))]
+fn scripts_active() -> bool {
+    true
 }
 
 fn spawn_autoloads(mut commands: Commands, autoloads: Res<Autoloads>) {
@@ -347,11 +483,12 @@ fn read_source(rt: &mut ScriptRuntime, root: &std::path::Path, key: &str) -> Res
     match std::fs::read_to_string(&path) {
         Ok(text) => {
             let outline = ruspy::embed::outline(&text);
-            rt.sources.insert(key.to_string(), Source { mtime, text: Some(Rc::from(text)), outline, interp: false });
+            let fns = Rc::new(outline.fns.iter().map(|(n, _)| n.clone()).collect());
+            rt.sources.insert(key.to_string(), Source { mtime, text: Some(Rc::from(text)), outline, fns, interp: false });
             Ok(())
         }
         Err(e) => {
-            rt.sources.insert(key.to_string(), Source { mtime, text: None, outline: Outline::default(), interp: false });
+            rt.sources.insert(key.to_string(), Source { mtime, text: None, outline: Outline::default(), fns: Rc::default(), interp: false });
             Err(format!("can't read {}: {e}", path.display()))
         }
     }
@@ -425,13 +562,14 @@ fn instantiate(world: &mut World, e: Entity, script: &Script, keep: Option<Vec<(
             }
         }
     }
+    let fns = world.non_send::<ScriptRuntime>().sources.get(&key).map(|s| s.fns.clone()).unwrap_or_default();
     let hooks = Hooks {
-        ready: engine.has_fn(module, "_ready"),
-        process: engine.has_fn(module, "_process"),
-        physics: engine.has_fn(module, "_physics_process"),
-        input: engine.has_fn(module, "_input"),
-        unhandled: engine.has_fn(module, "_unhandled_input"),
-        exit: engine.has_fn(module, "_exit_tree"),
+        ready: fns.contains("_ready"),
+        process: fns.contains("_process"),
+        physics: fns.contains("_physics_process"),
+        input: fns.contains("_input"),
+        unhandled: fns.contains("_unhandled_input"),
+        exit: fns.contains("_exit_tree"),
     };
     let signals = world.get_resource_mut::<DeclaredSignals>().and_then(|mut d| d.0.remove(&e)).unwrap_or_default();
     let mut rt = world.non_send_mut::<ScriptRuntime>();
@@ -441,7 +579,7 @@ fn instantiate(world: &mut World, e: Entity, script: &Script, keep: Option<Vec<(
     rt.failed.remove(&e);
     let (was_ready, old_seq) = rt.instances.get(&e).and_then(|i| i.try_borrow().ok().map(|i| (i.ready, i.seq))).unwrap_or((false, seq));
     // A reloaded instance keeps its place in the process order.
-    let inst = Instance { engine, module, key, hooks, priority: script.priority, seq: old_seq, signals, ready: was_ready };
+    let inst = Instance { engine, module, key, hooks, priority: script.priority, seq: old_seq, signals, ready: was_ready, fns };
     rt.instances.insert(e, Rc::new(RefCell::new(inst)));
     rt.order_dirty = true;
     if !was_ready {
@@ -473,7 +611,7 @@ pub(crate) fn call_rv(world: &mut World, e: Entity, f: &str, args: Vec<RV>) -> R
     let Ok(mut i) = inst.try_borrow_mut() else {
         return Err(format!("entity {e}'s script is already running (re-entrant call to `{f}`); use call_deferred"));
     };
-    if !i.engine.has_fn(i.module, f) {
+    if !i.has(f) {
         return Err(format!("{} has no function `{f}`", i.key));
     }
     if world.resource::<ScriptCtx>().stack.len() >= 32 {
@@ -505,7 +643,7 @@ pub fn call_if(world: &mut World, e: Entity, f: &str, args: Vec<RV>) {
     let has = world
         .get_non_send::<ScriptRuntime>()
         .and_then(|rt| rt.instances.get(&e).cloned())
-        .and_then(|i| i.try_borrow().ok().map(|i| i.engine.has_fn(i.module, f)))
+        .and_then(|i| i.try_borrow().ok().map(|i| i.has(f)))
         .unwrap_or(false);
     if has {
         let _ = call_rv(world, e, f, args);
@@ -516,7 +654,7 @@ pub fn has_method(world: &World, e: Entity, f: &str) -> bool {
     world
         .get_non_send::<ScriptRuntime>()
         .and_then(|rt| rt.instances.get(&e).cloned())
-        .and_then(|i| i.try_borrow().ok().map(|i| i.engine.has_fn(i.module, f)))
+        .and_then(|i| i.try_borrow().ok().map(|i| i.has(f)))
         .unwrap_or(false)
 }
 
@@ -815,6 +953,9 @@ fn depth(world: &World, mut e: Entity) -> usize {
 
 /// `_ready` for new instances, deepest first (children are ready before their parent).
 fn run_ready(world: &mut World) {
+    let paused = tree_paused(world);
+    // Instances that would not process right now (paused game, `Disabled`) wait for their turn.
+    let mut held: Vec<Entity> = vec![];
     loop {
         let mut pending = std::mem::take(&mut world.non_send_mut::<ScriptRuntime>().pending_ready);
         if pending.is_empty() {
@@ -823,6 +964,10 @@ fn run_ready(world: &mut World) {
         pending.sort_by_key(|e| std::cmp::Reverse(depth(world, *e)));
         for e in pending {
             let Some(inst) = world.non_send::<ScriptRuntime>().instances.get(&e).cloned() else { continue };
+            if !runs_now(world, e, paused) {
+                held.push(e);
+                continue;
+            }
             let hooks = {
                 let Ok(mut i) = inst.try_borrow_mut() else { continue };
                 if i.ready {
@@ -835,6 +980,9 @@ fn run_ready(world: &mut World) {
                 let _ = call_rv(world, e, "_ready", vec![]);
             }
         }
+    }
+    if !held.is_empty() {
+        world.non_send_mut::<ScriptRuntime>().pending_ready.extend(held);
     }
 }
 
@@ -849,9 +997,11 @@ fn sorted_order(world: &mut World) {
     rt.order = v.into_iter().map(|(_, _, e)| e).collect();
 }
 
-/// Entities whose instance is ready and has `pick`, in process order (reuses a buffer).
-fn take_list(world: &mut World, pick: impl Fn(&Hooks) -> bool) -> Vec<Entity> {
+/// Entities whose instance is ready, has `pick`, has not turned it off (`toggle`) and may run
+/// now ([`ProcessMode`] against the pause state), in process order (reuses a buffer).
+fn take_list(world: &mut World, pick: impl Fn(&Hooks) -> bool, toggle: impl Fn(&ScriptProcessing) -> bool) -> Vec<Entity> {
     sorted_order(world);
+    let paused = tree_paused(world);
     let mut rt = world.non_send_mut::<ScriptRuntime>();
     let mut out = std::mem::take(&mut rt.scratch);
     out.clear();
@@ -864,9 +1014,14 @@ fn take_list(world: &mut World, pick: impl Fn(&Hooks) -> bool) -> Vec<Entity> {
             out.push(*e);
         }
     }
-    drop(rt);
-    out.retain(|e| world.get_entity(*e).is_ok());
+    out.retain(|e| world.get_entity(*e).is_ok() && world.get::<ScriptProcessing>(*e).is_none_or(&toggle) && runs_now(world, *e, paused));
     out
+}
+
+/// The delta a script sees: game time, or real time while the game is paused (so `Always` and
+/// `WhenPaused` scripts still animate).
+fn frame_dt(world: &World, paused: bool) -> f32 {
+    if paused { world.get_resource::<Time<Real>>().map_or(0.0, |t| t.delta_secs()) } else { world.resource::<Time>().delta_secs() }
 }
 
 fn give_back(world: &mut World, v: Vec<Entity>) {
@@ -875,13 +1030,15 @@ fn give_back(world: &mut World, v: Vec<Entity>) {
 
 fn process(world: &mut World) {
     let t = Instant::now();
-    let dt = world.resource::<Time>().delta_secs();
+    let paused = tree_paused(world);
+    let dt = frame_dt(world, paused);
+    let game_dt = world.resource::<Time>().delta_secs();
     {
         let mut c = world.resource_mut::<ScriptCtx>();
         c.delta = dt;
-        c.elapsed += dt as f64;
+        c.elapsed += game_dt as f64;
     }
-    let list = take_list(world, |h| h.process);
+    let list = take_list(world, |h| h.process, |p| p.process);
     for &e in &list {
         let _ = call_rv(world, e, "_process", vec![RV::Float(dt as f64)]);
     }
@@ -898,7 +1055,7 @@ fn physics_process(world: &mut World) {
     drain_removed(world);
     let dt = world.resource::<Time>().delta_secs();
     world.resource_mut::<ScriptCtx>().physics_delta = dt;
-    let list = take_list(world, |h| h.physics);
+    let list = take_list(world, |h| h.physics, |p| p.physics);
     for &e in &list {
         let _ = call_rv(world, e, "_physics_process", vec![RV::Float(dt as f64)]);
     }
@@ -927,9 +1084,9 @@ fn input(world: &mut World) {
         if events.is_empty() {
             return;
         }
-        let inputs = take_list(world, |h| h.input);
+        let inputs = take_list(world, |h| h.input, |_| true);
         let unhandled: Vec<Entity> = {
-            let l = take_list(world, |h| h.unhandled);
+            let l = take_list(world, |h| h.unhandled, |_| true);
             let v = l.clone();
             give_back(world, l);
             v
@@ -960,9 +1117,12 @@ fn input(world: &mut World) {
 
 /// [`ScriptTimer`] → `timeout`; `start_timer` timers → their method.
 fn timers(world: &mut World, q: &mut QueryState<(Entity, &mut ScriptTimer)>) {
-    let dt = world.resource::<Time>().delta_secs();
+    let paused = tree_paused(world);
+    let dt = frame_dt(world, paused);
     let mut fired: Vec<Entity> = vec![];
-    for (e, mut t) in q.iter_mut(world) {
+    let ents: Vec<Entity> = q.iter(world).map(|(e, _)| e).filter(|e| runs_now(world, *e, paused)).collect();
+    for e in ents {
+        let Ok((_, mut t)) = q.get_mut(world, e) else { continue };
         if !t.started {
             t.started = true;
             if t.autostart {
@@ -987,9 +1147,13 @@ fn timers(world: &mut World, q: &mut QueryState<(Entity, &mut ScriptTimer)>) {
         emit_signal(world, e, "timeout", &[]);
     }
     let mut due: Vec<(Entity, String)> = vec![];
+    let go: Vec<bool> = world.resource::<ScriptQueue>().timers.iter().map(|t| runs_now(world, t.entity, paused)).collect();
     {
         let mut q = world.resource_mut::<ScriptQueue>();
-        for t in q.timers.iter_mut() {
+        for (t, go) in q.timers.iter_mut().zip(go) {
+            if !go {
+                continue;
+            }
             t.left -= dt;
             if t.left <= 0.0 {
                 due.push((t.entity, t.method.clone()));
@@ -1002,7 +1166,6 @@ fn timers(world: &mut World, q: &mut QueryState<(Entity, &mut ScriptTimer)>) {
         }
         q.timers.retain(|t| t.left > 0.0);
         let mut alive = std::mem::take(&mut q.timers);
-        drop(q);
         alive.retain(|t| world.get_entity(t.entity).is_ok());
         world.resource_mut::<ScriptQueue>().timers = alive;
     }
@@ -1031,8 +1194,11 @@ fn ui_signals(
     for e in pressed.iter(world) {
         out.push((e, "pressed"));
     }
+    let paused = tree_paused(world);
     for (e, s) in out {
-        emit_signal(world, e, s, &[]);
+        if runs_now(world, e, paused) {
+            emit_signal(world, e, s, &[]);
+        }
     }
 }
 
@@ -1073,6 +1239,10 @@ struct PhysicsCursor {
 /// End of frame: deferred calls, then `queue_free` (`_exit_tree` on the subtree, then despawn),
 /// then a requested scene change.
 fn flush(world: &mut World) {
+    let paused = tree_paused(world);
+    // Calls whose target may not run now (paused game): kept for when it may.
+    let mut held_rv: Vec<(Entity, String, Vec<RV>)> = vec![];
+    let mut held: Vec<(Entity, String, Vec<Value>)> = vec![];
     for _ in 0..8 {
         let rv_calls = std::mem::take(&mut world.non_send_mut::<ScriptRuntime>().deferred);
         let calls = std::mem::take(&mut world.resource_mut::<ScriptQueue>().calls);
@@ -1080,21 +1250,45 @@ fn flush(world: &mut World) {
             break;
         }
         for (e, m, a) in rv_calls {
-            if world.get_entity(e).is_ok()
-                && let Err(err) = call_rv(world, e, &m, a)
+            if world.get_entity(e).is_err() {
+                continue;
+            }
+            let mode = effective_mode(world, e);
+            if !mode.runs(paused) {
+                if mode != ProcessMode::Disabled {
+                    held_rv.push((e, m, a));
+                }
+                continue;
+            }
+            if let Err(err) = call_rv(world, e, &m, a)
                 && !err.contains(".ruspy:")
             {
                 diag(world, "call_deferred", 0, 0, format!("{e}.{m}: {err}"));
             }
         }
         for (e, m, a) in calls {
-            if world.get_entity(e).is_ok()
-                && let Err(err) = call(world, e, &m, &a)
+            if world.get_entity(e).is_err() {
+                continue;
+            }
+            let mode = effective_mode(world, e);
+            if !mode.runs(paused) {
+                if mode != ProcessMode::Disabled {
+                    held.push((e, m, a));
+                }
+                continue;
+            }
+            if let Err(err) = call(world, e, &m, &a)
                 && !err.contains(".ruspy:")
             {
                 diag(world, "call_deferred", 0, 0, format!("{e}.{m}: {err}"));
             }
         }
+    }
+    if !held_rv.is_empty() {
+        world.non_send_mut::<ScriptRuntime>().deferred.extend(held_rv);
+    }
+    if !held.is_empty() {
+        world.resource_mut::<ScriptQueue>().calls.extend(held);
     }
     let free = std::mem::take(&mut world.resource_mut::<ScriptQueue>().free);
     for e in free {

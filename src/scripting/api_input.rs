@@ -2,7 +2,7 @@
 //!
 //! | Group | Functions |
 //! |---|---|
-//! | Input | `is_action_pressed/just_pressed/just_released(a)`, `get_action_strength(a)`, `get_axis(neg, pos)`, `get_vector(nx, px, ny, py)`, `is_key_pressed("KeyW")`, `get_mouse_position()`, `set_input_as_handled()` |
+//! | Input | `is_action_pressed/just_pressed/just_released(a)`, `get_action_strength(a)`, `get_axis(neg, pos)`, `get_vector(action2d)` / `get_vector(nx, px, ny, py)`, `is_key_pressed("KeyW")`, `get_mouse_position()`, `set_input_as_handled()` |
 //! | Groups | `add_to_group/remove_from_group/is_in_group([n,] g)`, `get_nodes_in_group(g)`, `get_first_node_in_group(g)`, `call_group(g, method, args...)` |
 //! | Time | `delta()`, `physics_delta()`, `time()`, `start_timer(secs, method [, repeat])`, `stop_timer(id)`, `timer_start([n] [, secs])`, `timer_stop([n])`, `timer_left([n])` |
 //! | Math | `vec3`, `vadd`, `vsub`, `vscale`, `vlen`, `vnorm`, `vdot`, `vcross`, `distance`, `lerp`, `randf`, `randi_range`, `clampf` |
@@ -37,6 +37,15 @@ fn strength(w: &World, name: &str) -> f32 {
 #[cfg(not(feature = "actions"))]
 fn strength(_: &World, _: &str) -> f32 {
     0.0
+}
+
+#[cfg(feature = "actions")]
+fn axis2d(w: &World, name: &str) -> Vec2 {
+    w.get_resource::<crate::actions::ActionState>().map_or(Vec2::ZERO, |st| st.axis2d(name))
+}
+#[cfg(not(feature = "actions"))]
+fn axis2d(_: &World, _: &str) -> Vec2 {
+    Vec2::ZERO
 }
 
 #[cfg(feature = "actions")]
@@ -76,14 +85,19 @@ fn input(e: &mut Engine) {
         let w = world(c)?;
         Ok(RV::Float((strength(w, s(&a[1], "action")?) - strength(w, s(&a[0], "action")?)) as f64))
     });
+    // get_vector(neg_x, pos_x, neg_y, pos_y) from four actions, or get_vector(action2d): the
+    // value of one 2D action (`ActionState::axis2d`).
     e.register("get_vector", |c, a| {
-        if a.len() != 4 {
-            return Err("usage: get_vector(neg_x, pos_x, neg_y, pos_y)".into());
-        }
         let w = world(c)?;
-        let x = strength(w, s(&a[1], "action")?) - strength(w, s(&a[0], "action")?);
-        let y = strength(w, s(&a[3], "action")?) - strength(w, s(&a[2], "action")?);
-        let v = Vec2::new(x, y).clamp_length_max(1.0);
+        let v = match a.len() {
+            1 => axis2d(w, s(&a[0], "action")?),
+            4 => {
+                let x = strength(w, s(&a[1], "action")?) - strength(w, s(&a[0], "action")?);
+                let y = strength(w, s(&a[3], "action")?) - strength(w, s(&a[2], "action")?);
+                Vec2::new(x, y).clamp_length_max(1.0)
+            }
+            _ => return Err("usage: get_vector(action2d) or get_vector(neg_x, pos_x, neg_y, pos_y)".into()),
+        };
         Ok(RV::array(vec![RV::Float(v.x as f64), RV::Float(v.y as f64)]))
     });
     e.register("is_key_pressed", |c, a| {
