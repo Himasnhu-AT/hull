@@ -5,18 +5,20 @@ use avian3d::prelude::*;
 use super::tests::{app, errors};
 use super::*;
 
-fn physics_app(tag: &str, files: &[(&str, &str)]) -> App {
+pub(super) fn physics_app(tag: &str, files: &[(&str, &str)]) -> App {
     let mut app = app(tag, files);
     app.add_plugins((bevy::asset::AssetPlugin::default(), bevy::transform::TransformPlugin));
     app.init_asset::<Mesh>();
     app.add_plugins(PhysicsPlugins::default());
+    #[cfg(feature = "vehicle")]
+    app.add_plugins(crate::vehicle::VehiclePlugin);
     app.insert_resource(bevy::time::TimeUpdateStrategy::ManualDuration(std::time::Duration::from_secs_f64(1.0 / 64.0)));
     app.finish();
     app.cleanup();
     app
 }
 
-fn num(app: &App, e: Entity, name: &str) -> f64 {
+pub(super) fn num(app: &App, e: Entity, name: &str) -> f64 {
     match get_member(app.world(), e, name) {
         Some(Value::Num(n)) => n,
         Some(Value::Entity(bits)) => bits as f64,
@@ -28,7 +30,7 @@ fn ground(app: &mut App) {
     app.world_mut().spawn((RigidBody::Static, Collider::cuboid(40.0, 1.0, 40.0), Transform::from_xyz(0.0, -0.5, 0.0)));
 }
 
-fn steps(app: &mut App, n: usize) {
+pub(super) fn steps(app: &mut App, n: usize) {
     for _ in 0..n {
         app.update();
     }

@@ -1,0 +1,184 @@
+[
+ {
+  "sleep": 3.0
+ },
+ {
+  "cmd": "vehicle.state",
+  "params": {
+   "entity": "Vehicle"
+  },
+  "expect": {
+   "result.grounded_wheels": 4,
+   "result.transfer": 0
+  }
+ },
+ {
+  "shot": "start"
+ },
+ {
+  "cmd": "input.key",
+  "params": {
+   "key": "2",
+   "action": "down"
+  }
+ },
+ {
+  "cmd": "input.key",
+  "params": {
+   "key": "2",
+   "action": "up"
+  }
+ },
+ {
+  "sleep": 0.2
+ },
+ {
+  "cmd": "vehicle.state",
+  "params": {
+   "entity": "Vehicle"
+  },
+  "expect": {
+   "result.transfer": 1
+  }
+ },
+ {
+  "cmd": "input.key",
+  "params": {
+   "key": "w",
+   "action": "down"
+  }
+ },
+ {
+  "sleep": 2.2
+ },
+ {
+  "shot": "driving"
+ },
+ {
+  "cmd": "input.key",
+  "params": {
+   "key": "w",
+   "action": "up"
+  }
+ },
+ {
+  "cmd": "input.key",
+  "params": {
+   "key": "s",
+   "action": "down"
+  }
+ },
+ {
+  "sleep": 1.5
+ },
+ {
+  "cmd": "input.key",
+  "params": {
+   "key": "s",
+   "action": "up"
+  }
+ },
+ {
+  "cmd": "input.key",
+  "params": {
+   "key": "m",
+   "action": "down"
+  }
+ },
+ {
+  "cmd": "input.key",
+  "params": {
+   "key": "m",
+   "action": "up"
+  }
+ },
+ {
+  "cmd": "input.key",
+  "params": {
+   "key": "1",
+   "action": "down"
+  }
+ },
+ {
+  "cmd": "input.key",
+  "params": {
+   "key": "1",
+   "action": "up"
+  }
+ },
+ {
+  "sleep": 1.5
+ },
+ {
+  "cmd": "vehicle.state",
+  "params": {
+   "entity": "Vehicle"
+  },
+  "expect": {
+   "result.transfer": 0
+  }
+ },
+ {
+  "cmd": "input.key",
+  "params": {
+   "key": "w",
+   "action": "down"
+  }
+ },
+ {
+  "sleep": 3.0
+ },
+ {
+  "shot": "stuck-in-mud"
+ },
+ {
+  "cmd": "input.key",
+  "params": {
+   "key": "e",
+   "action": "down"
+  }
+ },
+ {
+  "cmd": "input.key",
+  "params": {
+   "key": "e",
+   "action": "up"
+  }
+ },
+ {
+  "sleep": 0.3
+ },
+ {
+  "cmd": "input.key",
+  "params": {
+   "key": "r",
+   "action": "down"
+  }
+ },
+ {
+  "sleep": 9.0
+ },
+ {
+  "shot": "winching"
+ },
+ {
+  "cmd": "input.key",
+  "params": {
+   "key": "r",
+   "action": "up"
+  }
+ },
+ {
+  "cmd": "input.key",
+  "params": {
+   "key": "w",
+   "action": "up"
+  }
+ },
+ {
+  "cmd": "vehicle.state",
+  "params": {
+   "entity": "Vehicle"
+  }
+ }
+]

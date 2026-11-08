@@ -13,11 +13,18 @@
 //! input.throttle = 1.0; input.steer = -0.3; input.transfer = 2; // 4L
 //! ```
 
+// Parallel per-wheel arrays are clearer as index loops.
+#![allow(clippy::needless_range_loop)]
+
 pub mod drivetrain;
 pub mod rope;
 pub mod spec;
 pub mod surface;
 pub mod tyre;
+#[cfg(feature = "level")]
+mod visual;
+#[cfg(feature = "level")]
+pub use visual::{WheelVisual, spawn_wheel_visuals};
 
 #[cfg(feature = "devtools")]
 mod devtools;
@@ -49,6 +56,8 @@ impl Plugin for VehiclePlugin {
             .add_message::<VehicleEvent>()
             .register_type::<SurfaceTag>()
             .add_systems(FixedUpdate, (vehicle_step, rope::rope_step).chain().in_set(VehicleSet));
+        #[cfg(feature = "level")]
+        app.add_systems(PostUpdate, visual::sync_wheels.before(TransformSystems::Propagate));
         #[cfg(feature = "devtools")]
         devtools::register(app);
     }
@@ -172,6 +181,8 @@ pub struct WheelTelemetry {
     pub contact: Vec3,
     pub normal: Vec3,
     pub drive_torque: f32,
+    /// Wheel-centre distance below the mount, metres (for drawing the wheel).
+    pub len: f32,
 }
 
 #[derive(Clone, Copy, Default)]
@@ -308,7 +319,10 @@ fn vehicle_step(
         st.shift_cd = (st.shift_cd - dt).max(0.0);
         if spec.gearbox.auto {
             let g = &spec.gearbox;
-            let new = drivetrain::auto_gear(g, st.gear, speed, input.throttle, st.shift_cd <= 0.0, |gear| drivetrain::rpm_of(omega_driven, drivetrain::gear_ratio(g, gear) * range));
+            // Shift on ground speed, not wheel speed: a spinning wheel must not run the box up the gears.
+            let radius = spec.wheels.iter().map(|w| w.radius).sum::<f32>() / nw.max(1) as f32;
+            let ground_omega = speed.abs() / radius.max(0.1);
+            let new = drivetrain::auto_gear(g, st.gear, speed, input.throttle, st.shift_cd <= 0.0, |gear| drivetrain::rpm_of(ground_omega, drivetrain::gear_ratio(g, gear) * range));
             if new != st.gear {
                 st.shift_cd = g.shift_time;
                 st.gear = new;
@@ -417,7 +431,7 @@ fn vehicle_step(
         for (i, w) in spec.wheels.iter().enumerate() {
             let c = contacts[i];
             let mount = tf.transform_point(w.pos);
-            let mut wt = WheelTelemetry { grounded: c.grounded, steer: st.steer * w.steer, spin: st.wheels[i].omega, drive_torque: drive[i], surface: surf_id[i], ..default() };
+            let mut wt = WheelTelemetry { len: c.len, grounded: c.grounded, steer: st.steer * w.steer, spin: st.wheels[i].omega, drive_torque: drive[i], surface: surf_id[i], ..default() };
             wt.compression = ((w.spring.max_len - c.len) / (w.spring.max_len - w.spring.min_len).max(1e-3)).clamp(0.0, 1.2);
             // events
             if c.grounded && !st.wheels[i].grounded {

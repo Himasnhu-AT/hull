@@ -211,9 +211,9 @@ impl VehicleSpec {
         };
         VehicleSpec {
             mass: 2_000.0,
-            body: Vec3::new(1.9, 0.9, 4.6),
+            body: Vec3::new(1.8, 0.9, 4.6),
             com: Vec3::new(0.0, -0.45, -0.1),
-            wheels: vec![wheel(-0.85, -1.5, 1.0, 0), wheel(0.85, -1.5, 1.0, 0), wheel(-0.85, 1.5, 0.0, 1), wheel(0.85, 1.5, 0.0, 1)],
+            wheels: vec![wheel(-1.0, -1.5, 1.0, 0), wheel(1.0, -1.5, 1.0, 0), wheel(-1.0, 1.5, 0.0, 1), wheel(1.0, 1.5, 0.0, 1)],
             axles: vec![AxleSpec::default(), AxleSpec { roll_coupling: 6_000.0, ..default() }],
             engine: EngineSpec {
                 torque: vec![(800.0, 220.0), (1500.0, 320.0), (2500.0, 380.0), (3500.0, 360.0), (4500.0, 300.0), (5500.0, 220.0)],

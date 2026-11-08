@@ -815,3 +815,7 @@ no instance (the older model); a node script can fire a graph with `send_message
 (a `Message` node), and a graph can call into a node script with `emit` + a connection or
 `command("script.call", ...)`. Prefer node scripts for new gameplay code; keep graphs where a
 designer needs to see and tweak the wiring.
+
+### Vehicles
+
+Feature `vehicle` (`src/scripting/api_vehicle.rs`, `docs/VEHICLE.md`): `vehicle_drive`, `vehicle_handbrake`, `vehicle_park`, `vehicle_set_mode`, `vehicle_diff_lock`, `vehicle_shift`, `vehicle_set_pressure`, `vehicle_get`, `vehicle_wheel`, `winch_attach`, `tow_strap`, `rope_reel`, `rope_tension`, `rope_length`, `rope_release`.

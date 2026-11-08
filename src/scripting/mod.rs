@@ -27,6 +27,8 @@ mod coroutines;
 mod api_pause;
 #[cfg(feature = "physics")]
 mod api_physics;
+#[cfg(feature = "vehicle")]
+mod api_vehicle;
 #[cfg(feature = "physics")]
 pub use api_physics::CharacterBody;
 mod tween;
@@ -59,6 +61,8 @@ mod tests_pause;
 mod tests_dogfood;
 #[cfg(all(test, feature = "physics"))]
 mod tests_physics;
+#[cfg(all(test, feature = "vehicle"))]
+mod tests_vehicle;
 #[cfg(test)]
 mod tests_engine;
 #[cfg(test)]

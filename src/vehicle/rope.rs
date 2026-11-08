@@ -105,9 +105,7 @@ pub(super) fn rope_step(mut commands: Commands, time: Res<Time>, mut ropes: Quer
             t = (r.stiffness * stretch + r.damping * (vb - va).dot(dir)).clamp(0.0, r.max_force);
         }
         // Motor: reel in only while the winch can still pull; pay out any time.
-        if r.reel > 0.0 && t < r.max_force * 0.98 {
-            r.length -= r.reel * r.reel_speed * dt;
-        } else if r.reel < 0.0 {
+        if (r.reel > 0.0 && t < r.max_force * 0.98) || r.reel < 0.0 {
             r.length -= r.reel * r.reel_speed * dt;
         }
         r.length = r.length.clamp(r.min_length, r.max_length);
