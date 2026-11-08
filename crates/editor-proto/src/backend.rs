@@ -124,6 +124,14 @@ pub trait EditorBackend {
     fn script_info(&mut self, _id: EntityId) -> ScriptInfo {
         ScriptInfo::default()
     }
+    /// Every host function with signature and doc (autocomplete, hover).
+    fn script_api(&mut self) -> Vec<ApiFn> {
+        Vec::new()
+    }
+    /// Top-level variables and functions of a script text (parsed even when it has errors).
+    fn script_outline(&mut self, _text: &str) -> ScriptOutline {
+        ScriptOutline::default()
+    }
     /// Creates `scripts/<name>.ruspy` from a template (`node`, `empty`); returns its path.
     fn script_create(&mut self, _name: &str, _template: &str) -> Result<String, String> {
         Err("node scripts are not supported by this backend".into())

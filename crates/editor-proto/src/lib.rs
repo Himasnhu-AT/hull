@@ -622,6 +622,21 @@ pub struct ScriptFn {
     pub params: Vec<String>,
 }
 
+/// A host function scripts can call (the `script.api` catalogue row).
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct ApiFn {
+    pub name: String,
+    pub sig: String,
+    pub doc: String,
+}
+
+/// Top-level names of a script text (`ruspy::embed::outline`), for completion.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct ScriptOutline {
+    pub vars: Vec<String>,
+    pub fns: Vec<ScriptFn>,
+}
+
 /// A top-level variable of a node script (Godot exported property): its name and the literal
 /// default text when the script assigns a literal (`speed = 5`), else empty.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]

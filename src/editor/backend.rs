@@ -797,6 +797,15 @@ impl EditorBackend for WorldBackend<'_> {
         self.script_info_impl(id)
     }
     #[cfg(feature = "scripting")]
+    fn script_api(&mut self) -> Vec<ApiFn> {
+        crate::scripting::api_catalogue().into_iter().map(|a| ApiFn { name: a.name.into(), sig: a.sig.into(), doc: a.doc.into() }).collect()
+    }
+    #[cfg(feature = "scripting")]
+    fn script_outline(&mut self, text: &str) -> ScriptOutline {
+        let o = ruspy::embed::outline(text);
+        ScriptOutline { vars: o.vars, fns: o.fns.into_iter().map(|(name, params)| ScriptFn { name, params }).collect() }
+    }
+    #[cfg(feature = "scripting")]
     fn script_create(&mut self, name: &str, template: &str) -> Result<String, String> {
         self.script_create_impl(name, template)
     }
