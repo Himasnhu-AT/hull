@@ -57,6 +57,7 @@ default = [
     "pcg",
     "vfx",
     "ai",
+    "vehicle",
     "sound",
     "actions",
     "l10n",
@@ -81,6 +82,8 @@ ktx2 = ["bevy/ktx2", "bevy/zstd_rust"]
 physics = ["dep:avian3d"]
 # First-person controller (kinematic collide-and-slide + mouse look). Needs physics.
 fps = ["physics"]
+# Wheeled vehicles: raycast suspension, tyres, drivetrain, winch (src/vehicle, docs/VEHICLE.md). Needs physics.
+vehicle = ["physics"]
 # Control port + MCP, offscreen capture, perf overlay. Ship builds turn this off.
 devtools = ["dep:ashlar-control", "dep:ashlar-command", "dep:ashlar-mcp", "dep:sysinfo"]
 trace = ["dep:ashlar-trace"]
