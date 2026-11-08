@@ -47,7 +47,7 @@ pub fn spawn_cap(w: &mut World, parent: Entity, t: &Tokens, g: Glyph) -> Entity 
     w.spawn((
         Name::new("GlyphText"),
         Text::new(label),
-        crate::ui::theme::label(t.type_scale.small),
+        crate::ui::theme::body_bold(t.type_scale.small),
         TextColor(t.colors.text.color()),
         Pickable::IGNORE,
         ChildOf(cap),
