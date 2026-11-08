@@ -117,6 +117,18 @@ impl Drop for LoopbackTransport {
     }
 }
 
+impl Transport for Box<dyn Transport> {
+    fn send(&mut self, to: SocketAddr, packet: &[u8]) -> io::Result<()> {
+        (**self).send(to, packet)
+    }
+    fn recv(&mut self, buf: &mut Vec<u8>) -> Option<SocketAddr> {
+        (**self).recv(buf)
+    }
+    fn local_addr(&self) -> SocketAddr {
+        (**self).local_addr()
+    }
+}
+
 // ---------------------------------------------------------------------------------------------
 // UDP
 

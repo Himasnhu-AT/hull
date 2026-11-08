@@ -38,6 +38,8 @@ ruspy = { git = "https://github.com/Himasnhu-AT/ruspy", rev = "982b759423b5984e0
 png = { version = "0.18", default-features = false, optional = true }
 # net: compact serde wire format for replicated components / messages (pulls only cobs + serde).
 postcard = { version = "1", default-features = false, features = ["alloc"], optional = true }
+# voice: microphone capture (the same cpal Bevy audio already builds).
+cpal = { version = "0.17.3", optional = true }
 # editor: egui inside the Bevy window (bevy_egui) hosting the Bevy-free editor UI (src/editor, docs/EDITOR.md).
 bevy_egui = { version = "0.43", default-features = false, features = ["render", "default_fonts", "manage_clipboard"], optional = true }
 editor-proto = { path = "crates/editor-proto", optional = true }
@@ -119,6 +121,8 @@ logic = ["dep:logic-core", "dep:ruspy"]
 scripting = ["logic"]
 # Multiplayer: transports, channels, replication, prediction (not in default: many games are single-player).
 net = ["dep:postcard"]
+# Voice chat over a net session: cpal capture, ADPCM, jitter buffer, push-to-talk / open mic, proximity (src/voice, docs/VOICE.md).
+voice = ["net", "sound", "actions", "dep:cpal"]
 # The level editor: `--editor` opens the game's own binary as an Unreal-style editor (src/editor, docs/EDITOR.md).
 # Off by default; default and ship builds do not pull bevy_egui or editor-ui.
 editor = ["devtools", "devkit", "level", "world", "pcg", "spline", "logic", "scripting", "dep:bevy_egui", "dep:editor-proto", "dep:editor-ui"]
@@ -199,8 +203,17 @@ name = "net_demo"
 required-features = ["net"]
 
 [[example]]
+name = "coop_demo"
+required-features = ["net"]
+
+[[example]]
 name = "level_demo"
 required-features = ["level"]
+
+[[bin]]
+name = "relay"
+path = "src/bin/relay.rs"
+required-features = ["net"]
 
 [[example]]
 name = "editor_demo"

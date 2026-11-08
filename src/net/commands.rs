@@ -8,6 +8,10 @@
 //! | `net.host` | `{port?, listen?}` | `{addr}` (UDP) |
 //! | `net.connect` | `{addr}` | `{}` (UDP; poll `net.status` for `state`) |
 //! | `net.disconnect` | — | `{}` |
+//! | `session.status` | — | `{active, role, phase, code?, route, my_id, seed, version, peers, migrations, error?, path}` |
+//! | `session.host` | `{relay, name?, seed?, version?}` | `{}` (poll `session.status` for `code`) |
+//! | `session.join` | `{relay, code, name?, version?}` | `{}` |
+//! | `session.leave` | — | `{}` |
 
 use bevy::prelude::*;
 use serde_json::{Value, json};
@@ -44,7 +48,28 @@ pub(super) fn register(app: &mut App) {
             host,
         )
         .add_control_command("net.connect", "Connect to a UDP server", params(&[("addr", "string", "host:port")]), connect)
-        .add_control_command("net.disconnect", "Leave / stop the server", params(&[]), disconnect);
+        .add_control_command("net.disconnect", "Leave / stop the server", params(&[]), disconnect)
+        .add_control_command("session.status", "Co-op session: phase, invite code, route (direct / relayed), peers", params(&[]), |w, _| Ok(super::session::status_json(w)))
+        .add_control_command(
+            "session.host",
+            "Host a co-op session through a relay",
+            params(&[("relay", "string", "relay host:port"), ("name", "string", "display name"), ("seed", "integer", "world seed"), ("version", "integer", "game version")]),
+            |w, p| session_cfg(&p).and_then(|c| super::session::Session::host(w, c).map_err(|e| e.to_string())).map(|()| json!({})),
+        )
+        .add_control_command(
+            "session.join",
+            "Join a co-op session by invite code",
+            params(&[("relay", "string", "relay host:port"), ("code", "string", "invite code"), ("name", "string", "display name"), ("version", "integer", "game version")]),
+            |w, p| {
+                let code = p.get("code").and_then(Value::as_str).ok_or("`code` (string) is required")?.to_string();
+                let c = session_cfg(&p)?;
+                super::session::Session::join(w, c, &code).map_err(|e| e.to_string()).map(|()| json!({}))
+            },
+        )
+        .add_control_command("session.leave", "Leave the co-op session (a host hands over first)", params(&[]), |w, _| {
+            super::session::Session::leave(w);
+            Ok(json!({}))
+        });
 }
 
 /// One sample per frame: link health and replication load.
@@ -162,6 +187,18 @@ fn connect(world: &mut World, p: Value) -> Result<Value, String> {
     let addr = super::parse_addr(a).ok_or_else(|| format!("bad address {a}"))?;
     super::connect_udp(world, addr).map_err(|e| e.to_string())?;
     Ok(json!({}))
+}
+
+fn session_cfg(p: &Value) -> Result<super::session::SessionConfig, String> {
+    let a = p.get("relay").and_then(Value::as_str).ok_or("`relay` (host:port) is required")?;
+    let addr = super::parse_addr(a).ok_or_else(|| format!("bad relay address {a}"))?;
+    let mut c = super::session::SessionConfig::new(addr);
+    if let Some(n) = p.get("name").and_then(Value::as_str) {
+        c.name = n.into();
+    }
+    c.world_seed = p.get("seed").and_then(Value::as_u64).unwrap_or(0);
+    c.game_version = p.get("version").and_then(Value::as_u64).unwrap_or(1) as u32;
+    Ok(c)
 }
 
 fn disconnect(world: &mut World, _: Value) -> Result<Value, String> {

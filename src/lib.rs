@@ -71,6 +71,8 @@ pub mod look;
 pub mod world;
 #[cfg(feature = "net")]
 pub mod net;
+#[cfg(feature = "voice")]
+pub mod voice;
 #[cfg(feature = "trace")]
 pub mod trace;
 #[cfg(feature = "vfx")]
