@@ -78,7 +78,16 @@ pub(crate) fn b(v: &RV, what: &str) -> Result<bool, String> {
     }
 }
 
+/// A vector/color value as the equivalent number array, so helpers that take `[x, y, z]` also
+/// accept `vec3(..)`, `vec2(..)` and `Color(..)`.
+pub(crate) fn arr_of(v: &RV) -> Option<RV> {
+    let (_, c, n) = ruspy::value::vec_parts(v)?;
+    Some(RV::array(c[..n].iter().map(|x| RV::Float(*x)).collect()))
+}
+
 pub(crate) fn v3(v: &RV, what: &str) -> Result<Vec3, String> {
+    let norm = arr_of(v);
+    let v = norm.as_ref().unwrap_or(v);
     if let RV::Array(a) = v {
         let a = a.borrow();
         if a.len() == 3 {
@@ -89,7 +98,11 @@ pub(crate) fn v3(v: &RV, what: &str) -> Result<Vec3, String> {
 }
 
 pub(crate) fn rv3(v: Vec3) -> RV {
-    RV::array(vec![RV::Float(v.x as f64), RV::Float(v.y as f64), RV::Float(v.z as f64)])
+    RV::Vec3([v.x as f64, v.y as f64, v.z as f64])
+}
+
+pub(crate) fn rv2(v: Vec2) -> RV {
+    RV::Vec2([v.x as f64, v.y as f64])
 }
 
 pub(crate) fn rent(e: Entity) -> RV {

@@ -85,6 +85,8 @@ pub(super) fn theme_of(w: &World) -> Theme {
 }
 
 pub(super) fn color(v: &RV, what: &str) -> Result<Color, String> {
+    let norm = super::api::arr_of(v);
+    let v = norm.as_ref().unwrap_or(v);
     if let RV::Array(a) = v {
         let a = a.borrow();
         if a.len() == 3 || a.len() == 4 {

@@ -59,7 +59,7 @@ pub(crate) fn rv_of(v: &Value) -> RV {
         Value::Bool(b) => RV::Bool(*b),
         Value::Num(n) => num(*n),
         Value::Str(s) => RV::Str(s.to_string()),
-        Value::Vec3(a) => RV::array(a.iter().map(|x| RV::Float(*x as f64)).collect()),
+        Value::Vec3(a) => RV::Vec3([a[0] as f64, a[1] as f64, a[2] as f64]),
         Value::Entity(e) => RV::Object(*e),
         Value::Json(j) => rv_of_json(j),
     }
@@ -104,6 +104,10 @@ pub(crate) fn json_of_rv(v: &RV) -> Result<serde_json::Value, String> {
                 .collect::<Result<_, _>>()?,
         ),
         RV::Object(id) => J::from(*id),
+        RV::Vec2(_) | RV::Vec3(_) | RV::Color(_) => {
+            let (_, c, n) = ruspy::value::vec_parts(v).unwrap_or((0, [0.0; 4], 0));
+            J::Array(c[..n].iter().map(|x| serde_json::Number::from_f64(*x).map_or(J::Null, J::Number)).collect())
+        }
         RV::Struct(..) => return Err("structs can't be passed to the game".into()),
     })
 }
@@ -116,6 +120,7 @@ pub(crate) fn value_of_rv(v: &RV) -> Result<Value, String> {
         RV::Str(s) => Value::text(s),
         RV::Null | RV::Void => Value::Null,
         RV::Object(id) => Value::Entity(*id),
+        RV::Vec3(a) => Value::Vec3([a[0] as f32, a[1] as f32, a[2] as f32]),
         other => Value::from_json(&json_of_rv(other)?),
     })
 }
