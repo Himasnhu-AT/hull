@@ -39,10 +39,10 @@ step runs in `FixedUpdate` (`VehicleSet`), before avian's step, and applies forc
   sink drag come from the surface. **Pressure** (`Vehicle::pressure` vs `TyreSpec::pressure`): lower
   pressure grows the patch: more grip and less rolling resistance on soft surfaces, a little less
   grip and more rolling resistance on hard ones (`Surface::softness` decides).
-- **Surfaces** (`Surfaces` table, `SurfaceMap` trait): grip, rolling, sink drag, softness and wet
+- **Surfaces** (`Surfaces` table, shared `SurfaceMap` trait from `src/surface.rs`, also used by `spray`; `SurfaceId::GRASS` added): grip, rolling, sink drag, softness and wet
   multipliers per `SurfaceId`. The map answers "what is under this wheel" from a `SurfaceQuery`
-  (point, normal, collider, its `SurfaceTag`); the default reads `SurfaceTag` on the collider, the
-  demo samples a mud disc by position. `Wetness` (0..1 resource) scales grip / rolling by each
+  (`SurfaceProbe`, alias `SurfaceQuery`: point, normal, optional collider, its `SurfaceTag`); the default reads `SurfaceTag` on the collider, the
+  demo samples a mud disc by position. `Wetness` (0..1 resource, shared with `weather`, which writes it) scales grip / rolling by each
   surface's `wet_*`.
 - **Drivetrain**: engine torque curve with redline cut and engine braking, gearbox (ratios, reverse,
   final drive, automatic shifting on ground speed, or manual with `VehicleInput::shift`), transfer

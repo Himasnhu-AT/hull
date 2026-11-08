@@ -64,7 +64,10 @@ Insert [`DayClock`] to turn it on (no clock: no system runs). The clock moves on
   `env_refresh_hz` (default 0.05: once per 20 s) keeps the sky-light refilter cheap; a jump of the clock
   boosts it to 4 Hz for 3 s.
 - **`DayWeather { cover: Option<f32>, overcast }`**: overcast adds cloud, dims the direct sun (to
-  20 %), shortens visibility, kills the sun disk. Weather systems (rain, storms) write it.
+  20 %), shortens visibility, kills the sun disk. Weather systems (rain, storms) write it. With
+  feature `weather` and a live `DayClock`, `Weather.params.cloud` is written into `overcast` for you and
+  weather no longer dims the sun itself (once, not twice; see docs/WEATHER.md). `DayWeather` has no
+  fog or precipitation knobs; weather keeps those.
 - **Clouds** (`CloudConfig` in `DayConfig::clouds`): one camera-following dome mesh; the fragment
   shader ray-marches a 1.8-3.2 km shell over a curved earth (Low: one sample of a flat layer; Medium
   4 steps, 1 light tap; High+ 8 steps, 2 taps). Coverage is keyed, wanders slowly and follows
@@ -155,7 +158,7 @@ Known limits: no collision for mounted / orbit / free; no per-axis shake frequen
 ```rust
 commands.entity(car).with_child((SprayPoint { rear: true, ..default() }, SprayInput::default(),
                                  SprayTracker::default(), Transform::from_xyz(0.9, -0.35, 1.2)));
-commands.insert_resource(SurfaceMap::new(|p| Some(if mud_at(p) { Surface::Mud } else { Surface::Gravel })));
+commands.insert_resource(SurfaceMapRes::from_fn(|p| Some(if mud_at(p) { SurfaceId::MUD } else { SurfaceId::GRAVEL })));   // engine::surface
 ```
 
 A `SprayPoint` entity (its `Transform` is the contact patch) throws up to seven kinds (`SprayKind`:
@@ -166,8 +169,10 @@ before, and `VfxBudget` caps the total.
 
 - **`SprayInput { surface, speed, slip }`** on the point: write it from your simulation (wheel
   contact, slip ratio and angle) or add **`SprayTracker`**, which derives speed and slip from how the
-  entity moves (sideways share of the velocity) and asks **`SurfaceMap`** (your terrain / road
-  lookup: `Fn(Vec3) -> Option<Surface>`) for the surface. `None` sprays nothing (airborne).
+  entity moves (sideways share of the velocity) and asks the shared **`SurfaceMap`** (`engine::surface`, the same
+  one `vehicle` uses; resource `SurfaceMapRes`, `surface_at(pos) -> Option<SurfaceId>`) and converts the
+  id with `Surface::from_id`. `None` sprays nothing (airborne). Spray's old own `SurfaceMap` closure
+  resource is gone.
 - **`SprayRules`** (data): rows of `kind x surface` with `gain`, `roll` / `slip` weights, `slip_from`,
   speed range, ramp `power`, front / rear weights. `intensity()` is a pure function (tested).
   Defaults: dust on gravel / dirt / grass, sand, chips only in a slide, mud, snow, tyre smoke on hard
