@@ -103,6 +103,7 @@ pub(crate) fn vals(a: &[RV]) -> Result<Vec<Value>, String> {
 
 pub(super) fn register(e: &mut Engine) {
     core(e);
+    super::ui::register(e);
 }
 
 fn core(e: &mut Engine) {
