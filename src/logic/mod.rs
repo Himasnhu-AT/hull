@@ -181,6 +181,9 @@ impl LogicDiagnostics {
     pub fn error(&mut self, file: &str, line: u32, col: u32, node: Option<u32>, message: impl Into<String>) {
         self.report(LogicDiag { severity: Severity::Error, file: file.into(), line, col, node, message: message.into(), count: 1 });
     }
+    pub fn warning(&mut self, file: &str, line: u32, col: u32, message: impl Into<String>) {
+        self.report(LogicDiag { severity: Severity::Warning, file: file.into(), line, col, node: None, message: message.into(), count: 1 });
+    }
     /// Forget everything reported for `file` (it reloaded cleanly).
     pub fn clear_file(&mut self, file: &str) {
         self.items.retain(|d| d.file != file);

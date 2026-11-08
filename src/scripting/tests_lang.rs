@@ -210,3 +210,18 @@ fn get_stack_and_print_stack() {
     let l = logs(&app);
     assert!(l[0].starts_with("stack:\n  at mid (scripts/s.ruspy:2:") && l[0].contains("at outer"), "{l:?}");
 }
+
+#[test]
+fn integer_division_warns_in_diagnostics_and_casts_work() {
+    let src = "hp = 30;\nmax_hp = 100;\nfn pct() { return hp * 100 / max_hp; }\nfn bar() { return float(hp) / max_hp; }\nfn mix() { return [int(2.9), str(5) + \"x\", bool(0), idiv(7, 2)]; }\n";
+    let mut app = app("idiv", &[("d.ruspy", src)]);
+    let e = app.world_mut().spawn(Script::new("d.ruspy")).id();
+    app.update();
+    let w = super::tests::warnings(&app);
+    assert_eq!(w.len(), 1, "{w:?}");
+    assert!(w[0].contains("d.ruspy:3:") && w[0].contains("W0101") && w[0].contains("integer division"), "{w:?}");
+    assert!(errors(&app).is_empty(), "warnings are not errors: {:?}", errors(&app));
+    assert_eq!(call(app.world_mut(), e, "pct", &[]).unwrap(), Value::Num(30.0));
+    assert_eq!(call(app.world_mut(), e, "bar", &[]).unwrap(), Value::Num(0.3));
+    assert_eq!(call(app.world_mut(), e, "mix", &[]).unwrap().to_json(), serde_json::json!([2, "5x", false, 3]));
+}

@@ -24,7 +24,17 @@ pub(crate) fn app(tag: &str, files: &[(&str, &str)]) -> App {
 }
 
 pub(crate) fn errors(app: &App) -> Vec<String> {
-    app.world().resource::<LogicDiagnostics>().items.iter().map(|d| format!("{}:{}:{} {}", d.file, d.line, d.col, d.message)).collect()
+    app.world().resource::<LogicDiagnostics>().items.iter().filter(|d| d.severity == crate::logic::Severity::Error).map(|d| format!("{}:{}:{} {}", d.file, d.line, d.col, d.message)).collect()
+}
+
+pub(crate) fn warnings(app: &App) -> Vec<String> {
+    app.world()
+        .resource::<LogicDiagnostics>()
+        .items
+        .iter()
+        .filter(|d| d.severity == crate::logic::Severity::Warning)
+        .map(|d| format!("{}:{}:{} {}", d.file, d.line, d.col, d.message))
+        .collect()
 }
 
 pub(crate) fn logs(app: &App) -> Vec<String> {

@@ -608,6 +608,12 @@ fn instantiate(world: &mut World, e: Entity, script: &Script, keep: Option<Vec<(
             return false;
         }
     };
+    for w in engine.warnings(module) {
+        if let Some(mut d) = world.get_resource_mut::<LogicDiagnostics>() {
+            let help = if w.code == "W0101" { " (float(a) / b, or idiv(a, b))" } else { "" };
+            d.warning(&key, w.line as u32, w.col as u32, format!("[{}] {}{help}", w.code, w.message));
+        }
+    }
     // Members: the old values first (hot reload), then the entity's saved props.
     if let Some(keep) = keep {
         for (name, v) in keep {
