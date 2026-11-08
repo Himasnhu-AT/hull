@@ -366,15 +366,15 @@ Actions are the engine's (`ActionDef`, rebinding, gamepad: `docs/ACTIONS.md`); p
 
 Besides `_input(action, pressed)`, a script that defines `_input_event(ev)` gets every raw event
 (reverse tree order until `set_input_as_handled()`), then `_unhandled_input_event(ev)` for events
-the GUI did not consume (`src/scripting/input_events.rs`). `ev` is an array, element 0 the type.
-The layout is fixed so it can become a dictionary with the same field names once ruspy has them:
+the GUI did not consume (`src/scripting/input_events.rs`). `ev` is a dictionary (`ev.type`
+or `ev["type"]`):
 
-| type | layout |
+| `type` | other fields |
 |---|---|
-| key | `["key", code, pressed, echo]`: `code` is a Bevy `KeyCode` name (`"KeyW"`, `"Space"`, `"ArrowLeft"`), `echo` is key repeat |
-| mouse button | `["mouse_button", button, pressed, [x, y]]`: `"Left"`, `"Right"`, `"Middle"`, `"Back"`, `"Forward"`, window pixels |
-| mouse motion | `["mouse_motion", [x, y], [dx, dy]]` |
-| mouse wheel | `["mouse_wheel", [dx, dy]]` (notches for a wheel, pixels for a trackpad; `dy > 0` is up) |
+| `"key"` | `keycode` (Bevy `KeyCode` name: `"KeyW"`, `"Space"`, `"ArrowLeft"`), `pressed`, `echo` (key repeat) |
+| `"mouse_button"` | `button` (`"Left"`, `"Right"`, `"Middle"`, `"Back"`, `"Forward"`), `pressed`, `position` `[x, y]` (window pixels) |
+| `"mouse_motion"` | `position` `[x, y]`, `relative` `[dx, dy]` |
+| `"mouse_wheel"` | `delta` `[dx, dy]` (notches for a wheel, pixels for a trackpad; `dy > 0` is up) |
 
 GUI gets first refusal: while a line edit has focus keyboard events skip `_unhandled_input_event`
 (and `_unhandled_input`); while the pointer is over a button or widget (or a `ui_scroll`) mouse

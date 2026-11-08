@@ -266,12 +266,14 @@ fn tab_and_arrow_keys_move_focus_and_adjust_widgets() {
 const EVENTS: &str = r#"
 seen = "";
 un = "";
+first_key = "";
 handle = false;
 fn _input_event(ev) {
-    seen = seen + ev[0] + ";";
+    if ev.type == "key" { first_key = ev.keycode + ":" + tostr(ev.pressed); }
+    seen = seen + ev.type + ";";
     if handle { set_input_as_handled(); }
 }
-fn _unhandled_input_event(ev) { un = un + ev[0] + ";"; }
+fn _unhandled_input_event(ev) { un = un + ev["type"] + ";"; }
 fn set_handle(b) { handle = b; }
 "#;
 
@@ -308,6 +310,7 @@ fn raw_events_arrive_as_arrays_and_gui_gets_first_refusal() {
     assert!(errors(&app).is_empty(), "{:?}", errors(&app));
     assert_eq!(list(&app, e, "seen"), vec!["key", "mouse_button", "mouse_motion", "mouse_wheel"]);
     assert_eq!(list(&app, e, "un"), list(&app, e, "seen"));
+    assert!(matches!(get_member_rv(app.world(), e, "first_key"), Ok(RV::Str(t)) if t.as_str() == "KeyW:true"));
     assert_eq!(app.world().resource::<input_events::ScriptMouse>().delta, Vec2::new(3.0, -2.0));
     // A hovered button consumes pointer events; unhandled input does not see them.
     let ui = app.world_mut().spawn((Node::default(), bevy::ui_widgets::Button, Hovered(true))).id();
