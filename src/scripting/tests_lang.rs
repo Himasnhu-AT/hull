@@ -174,3 +174,39 @@ fn strings_const_enum_match_in_scripts() {
     assert_eq!(get_member(app.world(), e, "last"), Some(Value::text("3:HI")));
     assert_eq!(call(app.world_mut(), e, "go", &[Value::Num(0.0)]).unwrap(), Value::Num(4.0));
 }
+
+#[test]
+fn runtime_errors_carry_a_call_stack_across_scripts() {
+    let a = "fn boom(x) {\n  return inner(x);\n}\nfn inner(x) {\n  return 1 / x;\n}\n";
+    let b = "target = null;\nfn setup() { target = get_node(\"../A\"); }\nfn go() {\n  return relay();\n}\nfn relay() {\n  return target.boom(0);\n}\n";
+    let mut app = app("trace", &[("a.ruspy", a), ("b.ruspy", b)]);
+    let w = app.world_mut();
+    let root = w.spawn(Name::new("Root")).id();
+    w.spawn((Name::new("A"), Script::new("a.ruspy"), ChildOf(root)));
+    let be = w.spawn((Name::new("B"), Script::new("b.ruspy"), ChildOf(root))).id();
+    app.update();
+    call(app.world_mut(), be, "setup", &[]).unwrap();
+    let err = call(app.world_mut(), be, "go", &[]).unwrap_err();
+    // B's frames, with A's frames inside the host error text.
+    assert!(err.contains("at relay (scripts/b.ruspy:7:") && err.contains("at go (scripts/b.ruspy:4:"), "{err}");
+    assert!(err.contains("at inner (scripts/a.ruspy:5:") && err.contains("at boom (scripts/a.ruspy:2:"), "{err}");
+    let shown = errors(&app).join("\n");
+    assert!(shown.contains("at inner") && shown.contains("at go"), "{shown}");
+    let rt = app.world().non_send::<ScriptRuntime>();
+    assert!(rt.last_errors.get(&be).is_some_and(|m| m.contains("at relay")));
+}
+
+#[test]
+fn get_stack_and_print_stack() {
+    let src = "fn outer() { return mid(); }\nfn mid() { print_stack(); return get_stack(); }\n";
+    let mut app = app("stack", &[("s.ruspy", src)]);
+    let e = app.world_mut().spawn(Script::new("s.ruspy")).id();
+    app.update();
+    let r = call(app.world_mut(), e, "outer", &[]).unwrap();
+    let j = r.to_json();
+    assert_eq!(j[0]["function"], "mid");
+    assert_eq!(j[1]["function"], "outer");
+    assert_eq!(j[1]["line"], 1);
+    let l = logs(&app);
+    assert!(l[0].starts_with("stack:\n  at mid (scripts/s.ruspy:2:") && l[0].contains("at outer"), "{l:?}");
+}

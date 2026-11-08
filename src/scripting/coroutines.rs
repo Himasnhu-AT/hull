@@ -85,7 +85,12 @@ fn resume(world: &mut World, mut co: Co, value: RV) {
             Err(msg) => diag(world, &key, 0, 0, format!("await on {e}: {msg}")),
         },
         Ok(Outcome::Done(_)) => {}
-        Err(x) => diag(world, &key, x.line, x.col, format!("[{}] {}", x.code, x.message)),
+        Err(x) => {
+            let trace = x.trace_text();
+            let tail = if trace.is_empty() { String::new() } else { format!("\n{trace}") };
+            diag(world, &key, x.line, x.col, format!("[{}] {}{tail}", x.code, x.message));
+            world.non_send_mut::<ScriptRuntime>().last_errors.insert(e, format!("{key}:{}:{}: {}{tail}", x.line, x.col, x.message));
+        }
     }
     register_suspended(world, e, &key, more);
 }
