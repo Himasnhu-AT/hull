@@ -1,0 +1,13 @@
+[
+  {"wait": "host", "cmd": "session.status", "field": "phase", "value": "Hosting"},
+  {"wait": "guest", "cmd": "session.status", "field": "phase", "value": "InSession"},
+  {"sleep": 1.0},
+  {"to": "host", "cmd": "session.status"},
+  {"to": "guest", "cmd": "session.status"},
+  {"to": "all", "shot": "joined"},
+  {"to": "guest", "cmd": "input.key", "params": {"key": "d", "action": "down"}},
+  {"sleep": 1.2},
+  {"to": "guest", "cmd": "input.key", "params": {"key": "d", "action": "up"}},
+  {"sleep": 0.5},
+  {"to": "all", "shot": "moved"}
+]

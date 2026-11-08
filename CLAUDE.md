@@ -45,9 +45,10 @@ The rules that matter most, so you don't skip them:
 | docs/PCG.md | Procedural content: node graphs, cells, catalog, scalability |
 | docs/LOGIC.md | Logic graphs (events, flow, commands) and ruspy scripts |
 | docs/SCRIPTING.md | Godot-style node scripts in ruspy: lifecycle, signals, groups, node paths, UI, host functions |
+| docs/NET.md | Multiplayer (feature `net`): replication, prediction, **co-op sessions** (invite codes, relay, host migration) |
+| docs/VOICE.md | Voice chat over a net session (feature `voice`) |
 | docs/ENVIRONMENT.md | Day clock + sun / moon / stars / clouds / night lights (`daytime`), camera rigs, surface spray, foliage impostors |
 | docs/UI2.md | React-style UI library: tokens, components, `.ui.ron` screens, spatial focus, data binding (feature `ui2`) |
-| docs/NET.md | Multiplayer (feature `net`) |
 
 ## Shared build cache
 - `engine/target` is the one Cargo target dir for the engine and every game (shroud, pacenote, courier, worktrees): each repo's `.cargo/config.toml` points here, so Bevy compiles once. Don't set another `CARGO_TARGET_DIR`.

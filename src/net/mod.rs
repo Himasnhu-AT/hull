@@ -33,6 +33,7 @@ pub(crate) mod messages;
 pub mod predict;
 pub mod registry;
 pub mod server;
+pub mod session;
 pub mod transport;
 pub mod wire;
 
@@ -425,6 +426,7 @@ struct PendingLaunch(Option<NetLaunch>);
 impl Plugin for NetPlugin {
     fn build(&self, app: &mut App) {
         registry::registry(app);
+        app.add_plugins(session::SessionPlugin);
         app.init_resource::<NetConfig>()
             .init_resource::<NetRole>()
             .init_resource::<NetClock>()
