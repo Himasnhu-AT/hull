@@ -38,6 +38,8 @@ impl Val {
         Color::srgba(self.v[0], self.v[1], self.v[2], if self.n == 4 { self.v[3] } else { 1.0 })
     }
     fn of_rv(v: &RV, what: &str) -> Result<Val, String> {
+        let norm = super::api::arr_of(v);
+        let v = norm.as_ref().unwrap_or(v);
         match v {
             RV::Int(_) | RV::Float(_) => Ok(Val::num(f(v, what)?)),
             RV::Array(a) => {

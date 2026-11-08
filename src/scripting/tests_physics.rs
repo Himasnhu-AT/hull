@@ -19,6 +19,7 @@ fn physics_app(tag: &str, files: &[(&str, &str)]) -> App {
 fn num(app: &App, e: Entity, name: &str) -> f64 {
     match get_member(app.world(), e, name) {
         Some(Value::Num(n)) => n,
+        Some(Value::Entity(bits)) => bits as f64,
         other => panic!("{name}: {other:?}"),
     }
 }
