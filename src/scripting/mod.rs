@@ -28,6 +28,9 @@ mod api_physics;
 #[cfg(feature = "physics")]
 pub use api_physics::CharacterBody;
 mod tween;
+pub mod meta;
+mod catalogue;
+mod api_meta;
 #[cfg(feature = "devtools")]
 mod devtools;
 pub mod tree;
@@ -54,6 +57,8 @@ mod tests_physics;
 mod tests_engine;
 #[cfg(test)]
 mod tests_tween;
+#[cfg(test)]
+mod tests_meta;
 
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
@@ -318,6 +323,18 @@ struct Source {
     fns: Rc<HashSet<String>>,
     /// The VM rejected this file (arrays, methods, structs): use the interpreter.
     interp: bool,
+    /// Exported variables with their hints (`@export_*` annotations).
+    props: Vec<meta::PropInfo>,
+    /// The script and its bases, derived first, with their `class_name`s.
+    chain: Vec<(String, Option<String>)>,
+    /// Base files this source was composed from, with the mtime seen.
+    deps: Vec<(String, Option<SystemTime>)>,
+}
+
+impl Source {
+    fn empty(mtime: Option<SystemTime>) -> Source {
+        Source { mtime, text: None, outline: Outline::default(), fns: Rc::default(), interp: false, props: vec![], chain: vec![], deps: vec![] }
+    }
 }
 
 /// Every script instance (non-send: ruspy values are `Rc`). Stays in the world during calls,
@@ -508,16 +525,20 @@ fn diag(world: &mut World, key: &str, line: usize, col: usize, msg: String) {
 fn read_source(rt: &mut ScriptRuntime, root: &std::path::Path, key: &str) -> Result<(), String> {
     let path = root.join(key);
     let mtime = std::fs::metadata(&path).and_then(|m| m.modified()).ok();
-    match std::fs::read_to_string(&path) {
-        Ok(text) => {
-            let outline = ruspy::embed::outline(&text);
+    let read = |k: &str| std::fs::read_to_string(root.join(k)).map_err(|e| e.to_string());
+    let composed = std::fs::read_to_string(&path).map_err(|e| format!("can't read {}: {e}", path.display())).and_then(|text| meta::compose(key, &text, &read));
+    match composed {
+        Ok(c) => {
+            let outline = ruspy::embed::outline(&c.text);
             let fns = Rc::new(outline.fns.iter().map(|(n, _)| n.clone()).collect());
-            rt.sources.insert(key.to_string(), Source { mtime, text: Some(Rc::from(text)), outline, fns, interp: false });
+            let props = meta::scan_props(&c.text, &outline.vars);
+            let deps = c.deps.iter().map(|d| (d.clone(), std::fs::metadata(root.join(d)).and_then(|m| m.modified()).ok())).collect();
+            rt.sources.insert(key.to_string(), Source { text: Some(Rc::from(c.text)), outline, fns, props, chain: c.chain, deps, ..Source::empty(mtime) });
             Ok(())
         }
         Err(e) => {
-            rt.sources.insert(key.to_string(), Source { mtime, text: None, outline: Outline::default(), fns: Rc::default(), interp: false });
-            Err(format!("can't read {}: {e}", path.display()))
+            rt.sources.insert(key.to_string(), Source::empty(mtime));
+            Err(e)
         }
     }
 }
@@ -740,6 +761,66 @@ pub fn outline(world: &mut World, path: &str) -> Result<Outline, String> {
     Ok(rt.sources[&key].outline.clone())
 }
 
+/// One host function: name, signature, one-line doc.
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+pub struct ApiFn {
+    pub name: &'static str,
+    pub sig: &'static str,
+    pub doc: &'static str,
+}
+
+/// Every host function scripts can call (`script.api`, editor completion).
+pub fn api_catalogue() -> Vec<ApiFn> {
+    catalogue::CATALOGUE.iter().map(|&(name, sig, doc)| ApiFn { name, sig, doc }).collect()
+}
+
+/// Exported variables (non-private, with `@export_*` hints and defaults) of a script file.
+pub fn script_props(world: &mut World, path: &str) -> Result<Vec<meta::PropInfo>, String> {
+    let key = key_of(path);
+    let root = assets_root(world);
+    let mut rt = world.non_send_mut::<ScriptRuntime>();
+    if !rt.sources.contains_key(&key) {
+        read_source(&mut rt, &root, &key)?;
+    }
+    Ok(rt.sources[&key].props.clone())
+}
+
+/// The script file registered as `class_name`, from loaded scripts, else a scan of `scripts/`.
+pub fn resolve_class(world: &World, name: &str) -> Option<String> {
+    if let Some(rt) = world.get_non_send::<ScriptRuntime>()
+        && let Some(k) = rt.sources.iter().find(|(k, s)| s.chain.first().is_some_and(|c| &c.0 == *k && c.1.as_deref() == Some(name))).map(|(k, _)| k.clone())
+    {
+        return Some(k);
+    }
+    fn scan(dir: &std::path::Path, root: &std::path::Path, name: &str) -> Option<String> {
+        for ent in std::fs::read_dir(dir).ok()?.flatten() {
+            let p = ent.path();
+            if p.is_dir() {
+                if let Some(k) = scan(&p, root, name) {
+                    return Some(k);
+                }
+            } else if p.extension().is_some_and(|x| x == "ruspy")
+                && let Ok(text) = std::fs::read_to_string(&p)
+                && meta::scan_header(&text).class_name.as_deref() == Some(name)
+            {
+                return p.strip_prefix(root).ok().map(|r| r.to_string_lossy().replace('\\', "/"));
+            }
+        }
+        None
+    }
+    let root = assets_root(world);
+    scan(&root.join("scripts"), &root, name)
+}
+
+/// Is `e`'s script `class` (a `class_name` or a path), or does it extend it?
+pub fn is_class(world: &World, e: Entity, class: &str) -> bool {
+    let Some(rt) = world.get_non_send::<ScriptRuntime>() else { return false };
+    let Some(inst) = rt.instances.get(&e) else { return false };
+    let key = inst.try_borrow().map(|i| i.key.clone()).unwrap_or_default();
+    let want = key_of(class);
+    rt.sources.get(&key).is_some_and(|s| s.chain.iter().any(|(k, c)| c.as_deref() == Some(class) || *k == want))
+}
+
 /// Signals `e`'s script declared with `signal("name")` (at top level or later).
 pub fn declared_signals(world: &World, e: Entity) -> Vec<String> {
     let mut v = world
@@ -863,7 +944,8 @@ fn poll_sources(world: &mut World) {
         let keys: Vec<String> = rt.sources.keys().cloned().collect();
         for k in keys {
             let mtime = std::fs::metadata(root.join(&k)).and_then(|m| m.modified()).ok();
-            if rt.sources[&k].mtime != mtime {
+            let dep_changed = rt.sources[&k].deps.iter().any(|(d, m)| std::fs::metadata(root.join(d)).and_then(|x| x.modified()).ok() != *m);
+            if rt.sources[&k].mtime != mtime || dep_changed {
                 let _ = read_source(&mut rt, &root, &k);
                 changed.push(k);
             }

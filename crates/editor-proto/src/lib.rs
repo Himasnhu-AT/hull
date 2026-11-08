@@ -628,6 +628,25 @@ pub struct ScriptFn {
 pub struct ScriptMember {
     pub name: String,
     pub default: String,
+    /// How to edit it (`// @export_range(...)` and friends above the variable).
+    #[serde(default)]
+    pub hint: MemberHint,
+    #[serde(default)]
+    pub tooltip: String,
+}
+
+/// Editing widget for a script member.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum MemberHint {
+    /// Free JSON text.
+    #[default]
+    None,
+    Range { min: f64, max: f64, step: f64 },
+    /// A string member takes the option text; an int member takes the index.
+    Enum { options: Vec<String> },
+    Color,
+    File { filter: String },
 }
 
 /// A signal an entity can emit.

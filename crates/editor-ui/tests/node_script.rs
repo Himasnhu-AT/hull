@@ -14,6 +14,8 @@ struct App {
 
 const MENU_SCRIPT: &str = "// menu\nspeed = 5;\nlabel = \"hi\";\nsignal(\"started\");\nfn _ready() {\n}\nfn on_play(who) {\n}\n";
 
+const HINTED: &str = "// @export_range(0, 10, 0.5)\n// @tooltip Metres per second\nspeed = 5;\n// @export_enum(\"easy\",\"hard\")\nmode = \"easy\";\n// @export_color\ntint = [1, 0, 0];\n_cache = 0;\nfn _ready() {\n}\n";
+
 fn harness() -> Harness<'static, App> {
     let mut b = MockBackend::empty().with_scripting();
     let t = || (TRANSFORM, json!({"translation": [0.0, 0.0, 0.0], "rotation": [0.0, 0.0, 0.0, 1.0], "scale": [1.0, 1.0, 1.0]}));
@@ -21,6 +23,8 @@ fn harness() -> Harness<'static, App> {
     let start = b.add("Start", Some(menu), NodeKind::Mesh, false, vec![t()]);
     b.add("HUD", Some(menu), NodeKind::Mesh, false, vec![t(), (SCRIPT, json!({"path": "scripts/hud.ruspy", "priority": 0}))]);
     b.add("Plain", None, NodeKind::Mesh, false, vec![t()]);
+    b.add("Hinted", None, NodeKind::Mesh, false, vec![t(), (SCRIPT, json!({"path": "scripts/hinted.ruspy", "priority": 0}))]);
+    b.script_files.insert("scripts/hinted.ruspy".into(), HINTED.into());
     b.script_files.insert("scripts/menu.ruspy".into(), MENU_SCRIPT.into());
     b.script_files.insert("scripts/hud.ruspy".into(), "fn show_score(n) {\n}\n".into());
     b.script_files.insert("scripts/door.ruspy".into(), "fn _ready() {\n}\n".into());
@@ -205,4 +209,21 @@ fn groups_are_added_and_removed() {
     h.get_by_label("\u{00D7}").click();
     h.run_steps(4);
     assert_eq!(comp(&h, "Menu", GROUPS), Some(json!([])));
+}
+
+#[test]
+fn export_hints_pick_the_widget_and_private_vars_are_hidden() {
+    let mut h = harness();
+    select(&mut h, "Plain");
+    let sliders = h.query_all_by_role(egui::accesskit::Role::Slider).count();
+    select(&mut h, "Hinted");
+    assert_eq!(h.query_all_by_role(egui::accesskit::Role::Slider).count(), sliders + 1);
+    assert!(h.query_by_label("_cache").is_none());
+    assert!(h.query_by_role_and_label(egui::accesskit::Role::TextInput, "member speed").is_none());
+    // Enum: a combo box; picking an option stores the option text.
+    h.get_by_value("easy").click();
+    h.run_steps(3);
+    h.get_by_label("hard").click();
+    h.run_steps(4);
+    assert_eq!(comp(&h, "Hinted", SCRIPT_PROPS), Some(json!({"values": [{"name": "mode", "value": "\"hard\""}]})));
 }

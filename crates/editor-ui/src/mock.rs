@@ -721,8 +721,23 @@ impl EditorBackend for MockBackend {
         info.signals = self.signal_hints.get(&id).cloned().unwrap_or_default().into_iter().map(|n| SignalDoc { name: n, builtin: true, doc: String::new() }).collect();
         if let Some(src) = self.script_src(&path).cloned() {
             info.found = true;
+            let (mut hint, mut tip) = (MemberHint::None, String::new());
             for l in src.lines() {
-                if let Some(rest) = l.strip_prefix("fn ") {
+                if let Some(a) = l.strip_prefix("// @") {
+                    let args: Vec<String> = a.split_once('(').map(|(_, r)| r.trim_end_matches(')').split(',').map(|x| x.trim().trim_matches('"').to_owned()).collect()).unwrap_or_default();
+                    let num = |i: usize| args.get(i).and_then(|x| x.parse::<f64>().ok()).unwrap_or(0.0);
+                    if let Some(t) = a.strip_prefix("tooltip") {
+                        tip = t.trim().to_owned();
+                    } else if a.starts_with("export_range") {
+                        hint = MemberHint::Range { min: num(0), max: num(1), step: num(2) };
+                    } else if a.starts_with("export_enum") {
+                        hint = MemberHint::Enum { options: args };
+                    } else if a.starts_with("export_color") {
+                        hint = MemberHint::Color;
+                    } else if a.starts_with("export_file") {
+                        hint = MemberHint::File { filter: args.first().cloned().unwrap_or_default() };
+                    }
+                } else if let Some(rest) = l.strip_prefix("fn ") {
                     let (n, a) = rest.split_once('(').unwrap_or((rest, ""));
                     let params = a.split(')').next().unwrap_or("").split(',').map(|p| p.trim().to_owned()).filter(|p| !p.is_empty()).collect();
                     info.fns.push(ScriptFn { name: n.trim().to_owned(), params });
@@ -730,7 +745,14 @@ impl EditorBackend for MockBackend {
                     && !l.starts_with(' ')
                     && !n.contains('(')
                 {
-                    info.members.push(ScriptMember { name: n.trim().to_owned(), default: rhs.trim().trim_end_matches(';').to_owned() });
+                    if !n.trim().starts_with('_') {
+                        info.members.push(ScriptMember {
+                            name: n.trim().to_owned(),
+                            default: rhs.trim().trim_end_matches(';').to_owned(),
+                            hint: std::mem::take(&mut hint),
+                            tooltip: std::mem::take(&mut tip),
+                        });
+                    }
                 } else if let Some(rest) = l.strip_prefix("signal(\"") {
                     info.signals.push(SignalDoc { name: rest.split('"').next().unwrap_or("").to_owned(), builtin: false, doc: String::new() });
                 }
