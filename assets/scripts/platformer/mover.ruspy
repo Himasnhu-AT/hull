@@ -1,0 +1,29 @@
+// A kinematic platform tweened between two points. Carries the player standing on it.
+// @export_range(0.5, 10, 0.1)
+secs = 3.0;
+from = [0.0, 1.0, 0.0];
+to = [0.0, 1.0, 0.0];
+last = [0.0, 0.0, 0.0];
+
+fn _ready() {
+    add_to_group("platforms");
+    add_body("kinematic", "box", [3.0, 0.4, 3.0]);
+    self.position = from;
+    last = from;
+    t = tween();
+    tween_set_trans(t, "sine");
+    tween_set_ease(t, "in_out");
+    tween_property(t, "position", to, secs);
+    tween_property(t, "position", from, secs);
+    tween_set_loops(t, 0);
+}
+
+fn _physics_process(dt) {
+    p = self.position;
+    d = vsub(p, last);
+    last = p;
+    pl = get_first_node_in_group("player");
+    if pl != null && pl.ground == self {
+        pl.translate(d);
+    }
+}

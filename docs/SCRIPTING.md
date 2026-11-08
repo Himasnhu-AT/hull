@@ -392,7 +392,7 @@ function acts on `self`. Errors in a host call become a diagnostic with the scri
 
 ### Render
 
-`set_visible([n,] b)`, `is_visible([n])`, `set_color([n,] [r, g, b(, a)])` (the node's
+`add_primitive([n,] shape, size, color)` (box, sphere, cylinder, capsule, plane: a visible `Primitive`, so a node built from script has a look), `set_visible([n,] b)`, `is_visible([n])`, `set_color([n,] [r, g, b(, a)])` (the node's
 `Primitive` colour: shared meshes and materials are kept, see GAME_GUIDE).
 
 ### Groups
@@ -448,6 +448,7 @@ Feature `physics` (`src/scripting/api_physics.rs`). Layers and masks are Godot-s
 | `overlap_sphere(center, radius)` | entities inside a sphere |
 | `get_velocity([n])`, `set_velocity([n,] v)`, `apply_impulse([n,] v)`, `set_gravity_scale([n,] x)` | `LinearVelocity`, impulse = `v / mass`, `GravityScale` |
 | `set_collision_layer([n,] m)`, `set_collision_mask([n,] m)`, `get_collision_layer([n])`, `get_collision_mask([n])` | `CollisionLayers` memberships / filters |
+| `add_body([n,] kind, shape, size)` | collider + body from script: kind `static kinematic dynamic sensor` (sensor = static + `Sensor`), shape `box sphere capsule cylinder`, `size` = full extents like `Primitive`; also enables collision events |
 | `move_and_slide([n,] velocity)` | Godot `CharacterBody3D`: sweeps the node's `Collider` by `velocity * physics_delta`, slides up to 4 times, returns the new velocity |
 | `is_on_floor([n])`, `is_on_wall([n])`, `is_on_ceiling([n])`, `get_floor_normal([n])` | state of the last `move_and_slide` |
 
@@ -464,6 +465,10 @@ fn _physics_process(dt) {
     vy = v[1] - 20.0 * dt;
 }
 ```
+
+Kinematic characters block each other (shape cast with a small skin), so a player and an enemy that
+should overlap need layers: `set_collision_mask(1)` on the player, `set_collision_layer(2)` on enemies,
+then `get_overlapping_bodies()` sees the touch.
 
 Scripted entities with a `Collider` get `CollisionEventsEnabled` automatically, so the built-in
 `body_entered` / `body_exited` signals work for sensors (`Sensor`) as well as bodies, including a
@@ -490,6 +495,9 @@ did not install is an error ("sound is not set up in this app"). `[n,]` is the o
 | `set_time_scale(x)` (0..8), `get_time_scale()`, `get_fps()`, `quit()` | engine |
 | `push_error(msg)`, `push_warning(msg)`, `assert(cond [, msg])` | Output panel (file of the running script); a failed assert raises an error |
 | `nav_goto([n,] [x,y,z])`, `nav_stop([n])`, `nav_is_done([n])`, `nav_status([n])`, `nav_target([n])` | `NavAgent` control |
+
+UI roots a script creates (`ui_panel()` with no parent) are freed with that script's node. A runtime
+connection to a node that was freed is dropped quietly. `tween_callback(t, "queue_free")` works.
 
 A `NavAgent` node emits `navigation_finished` on arrival and `navigation_failed` when no path
 exists.

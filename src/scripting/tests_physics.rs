@@ -51,7 +51,7 @@ fn raycast_and_overlap_queries() {
     assert!((num(&app, e, "ny") - 1.0).abs() < 1e-3);
     assert_eq!(num(&app, e, "miss"), 1.0);
     assert_eq!(num(&app, e, "n"), 1.0, "max_dist too short");
-    assert_ne!(num(&app, e, "ent"), 0.0);
+    assert!(matches!(get_member(app.world(), e, "ent"), Some(Value::Entity(_))));
     call(app.world_mut(), e, "count", &[]).unwrap();
     assert_eq!(num(&app, e, "cnt"), 1.0, "only the ground is within 1 m");
     let _ = crate_e;

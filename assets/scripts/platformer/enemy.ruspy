@@ -1,0 +1,75 @@
+// Base for the patrolling enemies; variants override look() and tune members.
+// class_name Enemy
+// @export_range(0.5, 8, 0.1)
+speed = 2.0;
+dir = 1.0;
+vy = 0.0;
+alive = true;
+// @export_range(1, 12, 0.5)
+range = 4.0;
+home = null;
+tint = [0.9, 0.3, 0.25];
+size = [0.9, 0.9, 0.9];
+
+fn look() {
+    add_primitive("box", size, tint);
+}
+
+fn _ready() {
+    add_to_group("enemies");
+    home = self.position[0];
+    look();
+    add_body("kinematic", "box", size);
+    set_collision_layer(2);
+    set_collision_mask(1);
+}
+
+fn _physics_process(dt) {
+    if !alive {
+        return;
+    }
+    p = self.position;
+    // Wall ahead or no floor ahead: turn around.
+    wall = raycast_dir([p[0], p[1], 0.0], [dir, 0.0, 0.0], 0.7, self);
+    ahead = [p[0] + dir * 0.8, p[1], 0.0];
+    floor = raycast(ahead, [ahead[0], ahead[1] - 1.2, 0.0], self);
+    if wall != null || floor == null || (p[0] - home) * dir > range {
+        dir = -dir;
+    }
+    vy -= 28.0 * dt;
+    if is_on_floor() {
+        vy = 0.0;
+    }
+    v = move_and_slide([dir * speed, vy, 0.0]);
+    vy = v[1];
+    contact();
+}
+
+fn contact() {
+    for b in get_overlapping_bodies() {
+        if b.is_in_group("player") {
+            if b.vy < -1.0 && b.position[1] > self.position[1] + 0.5 {
+                die();
+                b.bounce();
+                get_node("/Game").on_stomp();
+            } else {
+                b.take_hit(self.position[0]);
+            }
+        }
+    }
+}
+
+fn die() {
+    alive = false;
+    remove_from_group("enemies");
+    t = tween();
+    tween_property(t, "scale", [1.4, 0.05, 1.4], 0.15);
+    tween_callback(t, "queue_free");
+    spawn_vfx("dust_puff", self.global_position);
+}
+
+// Test hook for the play.py steps file: stop here.
+fn freeze_at(x) {
+    speed = 0.0;
+    self.position = [x, self.position[1], 0.0];
+}

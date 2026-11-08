@@ -1,0 +1,26 @@
+// Builds the static part of the level from data, then counts shards for the Game.
+platforms = [[8, 1.2, 3], [12, 2.6, 3], [16, 1.2, 3], [20, 2.4, 4], [41, 2.4, 3]];
+shards = [[8, 2.4], [12, 3.8], [16, 2.4], [20, 3.6], [21, 3.6], [27, 2.7], [33, 0.9], [36, 4.5], [41, 3.6], [4, 1.0], [14, 1.0], [43, 1.0]];
+
+fn _ready() {
+    for pl in platforms {
+        n = spawn_node("Platform", self);
+        n.position = [pl[0], pl[1], 0.0];
+        n.add_primitive("box", [pl[2], 0.4, 3.0], [0.45, 0.4, 0.55]);
+        n.add_body("static", "box", [pl[2], 0.4, 3.0]);
+        n.add_to_group("platforms");
+    }
+    for s in shards {
+        n = spawn_node("Shard", self);
+        n.position = [s[0], s[1], 0.0];
+        n.attach_script("scripts/platformer/shard.ruspy");
+    }
+    // Shards run _ready next frame; count them then.
+    start_timer(0.2, "count");
+}
+
+fn count() {
+    get_node("/Game").set_total(len(get_nodes_in_group("shards")));
+    call_group("enemies", "set_process", true);
+    log("level ready: " + len(get_nodes_in_group("platforms")) + " platforms, " + len(get_nodes_in_group("enemies")) + " enemies");
+}

@@ -45,7 +45,20 @@ pub struct UiProgress {
 #[reflect(Component)]
 pub struct UiProgressFill;
 
+/// The script node that created this root UI node; the UI node is despawned with it.
+#[derive(Component)]
+pub(super) struct UiOwner(Entity);
+
+fn free_orphaned_ui(mut commands: Commands, q: Query<(Entity, &UiOwner)>, entities: Query<Entity>) {
+    for (e, o) in &q {
+        if entities.get(o.0).is_err() {
+            commands.entity(e).despawn();
+        }
+    }
+}
+
 pub(super) fn plugin(app: &mut App) {
+    app.add_systems(Update, free_orphaned_ui.in_set(super::ScriptSet::Flush));
     app.register_type::<UiButton>().register_type::<UiProgress>().register_type::<UiProgressFill>();
     app.add_systems(Update, button_look.in_set(super::ScriptSet::Events));
 }
@@ -129,6 +142,11 @@ pub(super) fn spawn_node(w: &mut World, parent: Option<&RV>, name: &str, bundle:
             w.entity_mut(e).insert(ChildOf(p));
         }
         None => {
+            // A root made by a script goes away with that script's node (Godot: a Control added
+            // to the scene is freed with it), so a reloaded scene does not leak its HUD.
+            if let Ok(owner) = api::me(w) {
+                w.entity_mut(e).insert(UiOwner(owner));
+            }
             if let Some(mut n) = w.get_mut::<Node>(e) {
                 n.position_type = PositionType::Absolute;
                 n.left = Val::Px(0.0);
