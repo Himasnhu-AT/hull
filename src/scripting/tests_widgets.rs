@@ -386,3 +386,130 @@ fn set_value_drives_progress_bars() {
     assert_eq!(call(app.world_mut(), e, "bump", &[]).unwrap(), Value::Num(0.75));
     assert!(errors(&app).is_empty(), "{:?}", errors(&app));
 }
+
+// ---------------------------------------------------------------- actions, contexts, physics edges
+
+#[cfg(feature = "actions")]
+mod actions {
+    use std::time::Duration;
+
+    use bevy::time::TimeUpdateStrategy;
+
+    use super::*;
+
+    const SRC: &str = r#"
+fixed_seen = 0;
+fixed_released = 0;
+frames_seen = 0;
+fn _ready() {
+    add_action("pause");
+    action_add_key("pause", "KeyP");
+    add_action("menu_ok", "ui_ctx");
+    action_add_key("menu_ok", "Enter");
+    action_add_button("menu_ok", "South");
+    action_add_mouse("menu_ok", "Left");
+}
+fn _physics_process(dt) {
+    if is_action_just_pressed("pause") { fixed_seen = fixed_seen + 1; }
+    if is_action_just_released("pause") { fixed_released = fixed_released + 1; }
+}
+fn _process(dt) {
+    if is_action_just_pressed("pause") { frames_seen = frames_seen + 1; }
+}
+fn known() { return has_action("pause") && has_action("menu_ok") && !has_action("nope"); }
+fn push() { push_input_context("ui_ctx"); }
+fn pop() { pop_input_context(); }
+fn bad_key() { action_add_key("pause", "Nope"); }
+fn no_action() { action_add_key("ghost", "KeyA"); }
+"#;
+
+    fn setup(tag: &str, step_multiple: f64) -> (App, Entity) {
+        let mut app = app(tag, &[("a.ruspy", SRC)]);
+        app.init_resource::<crate::actions::ActionMap>().init_resource::<crate::actions::InputContexts>().init_resource::<crate::actions::ActionState>();
+        app.add_systems(PreUpdate, crate::actions::state::update_actions);
+        app.init_resource::<ButtonInput<KeyCode>>();
+        let fixed = app.world().resource::<Time<Fixed>>().timestep();
+        app.insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_secs_f64(fixed.as_secs_f64() * step_multiple)));
+        let e = app.world_mut().spawn(Script::new("a.ruspy")).id();
+        for _ in 0..3 {
+            app.update();
+        }
+        assert!(errors(&app).is_empty(), "{:?}", errors(&app));
+        (app, e)
+    }
+
+    fn num(app: &App, e: Entity, n: &str) -> f64 {
+        match get_member(app.world(), e, n) {
+            Some(Value::Num(x)) => x,
+            o => panic!("{o:?}"),
+        }
+    }
+
+    #[test]
+    fn script_defined_actions_and_contexts_work() {
+        let (mut app, e) = setup("act_def", 1.0);
+        assert_eq!(call(app.world_mut(), e, "known", &[]).unwrap(), Value::Bool(true));
+        assert!(app.world().resource::<crate::actions::ActionMap>().get("menu_ok").unwrap().def.bindings.len() == 3);
+        // `pause` is in the always-on gameplay-less default context? It must be pressable once its context is live.
+        let ctx = app.world().resource::<crate::actions::InputContexts>();
+        assert!(!ctx.is_active("ui_ctx"));
+        call(app.world_mut(), e, "push", &[]).unwrap();
+        assert!(app.world().resource::<crate::actions::InputContexts>().is_active("ui_ctx"));
+        call(app.world_mut(), e, "pop", &[]).unwrap();
+        assert!(!app.world().resource::<crate::actions::InputContexts>().is_active("ui_ctx"));
+        assert!(call(app.world_mut(), e, "bad_key", &[]).unwrap_err().contains("unknown key"));
+        assert!(call(app.world_mut(), e, "no_action", &[]).unwrap_err().contains("unknown action"));
+    }
+
+    fn tap(app: &mut App) {
+        let mut k = app.world_mut().resource_mut::<ButtonInput<KeyCode>>();
+        k.press(KeyCode::KeyP);
+        app.update();
+        let mut k = app.world_mut().resource_mut::<ButtonInput<KeyCode>>();
+        k.clear();
+        k.release(KeyCode::KeyP);
+    }
+
+    #[test]
+    fn just_pressed_is_seen_once_by_physics_with_two_fixed_steps_per_frame() {
+        let (mut app, e) = setup("act_two", 2.0);
+        app.world_mut().resource_mut::<crate::actions::InputContexts>().push("gameplay");
+        tap(&mut app);
+        app.update();
+        assert_eq!(num(&app, e, "frames_seen"), 1.0);
+        assert_eq!(num(&app, e, "fixed_seen"), 1.0, "two fixed steps in the frame, one edge");
+        assert_eq!(num(&app, e, "fixed_released"), 1.0);
+    }
+
+    #[test]
+    fn just_pressed_survives_a_frame_with_no_fixed_step() {
+        let (mut app, e) = setup("act_zero", 0.4);
+        app.world_mut().resource_mut::<crate::actions::InputContexts>().push("gameplay");
+        tap(&mut app);
+        for _ in 0..6 {
+            app.update();
+        }
+        assert_eq!(num(&app, e, "fixed_seen"), 1.0, "seen by the next fixed step, once");
+        assert_eq!(num(&app, e, "fixed_released"), 1.0);
+    }
+}
+
+#[test]
+fn ui_under_a_non_ui_parent_warns_once_and_becomes_an_owned_root() {
+    let src = "fn build() { ui_label(self(), \"a\"); ui_label(self(), \"b\"); }\n";
+    let mut app = app("nonui", &[("n.ruspy", src)]);
+    let e = app.world_mut().spawn((Name::new("Player"), Transform::default(), Script::new("n.ruspy"))).id();
+    app.update();
+    call(app.world_mut(), e, "build", &[]).unwrap();
+    let w = app.world_mut();
+    let warnings: Vec<String> = w.resource::<crate::logic::LogicDiagnostics>().items.iter().map(|d| d.message.clone()).collect();
+    assert_eq!(warnings.len(), 1, "once per parent: {warnings:?}");
+    assert!(warnings[0].contains("Player") && warnings[0].contains("not a UI node"));
+    let roots = w.query::<(&Text, &ui::UiOwner)>().iter(w).count();
+    assert_eq!(roots, 2, "both labels are owned UI roots");
+    assert_eq!(w.query_filtered::<&Text, With<ChildOf>>().iter(w).count(), 0);
+    // They follow the node's lifetime.
+    w.entity_mut(e).despawn();
+    app.update();
+    assert_eq!(app.world_mut().query::<&Text>().iter(app.world()).count(), 0);
+}

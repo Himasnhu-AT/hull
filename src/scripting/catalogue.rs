@@ -213,4 +213,11 @@ pub const CATALOGUE: &[(&str, &str, &str)] = &[
     (r#"next_frame"#, r#"next_frame()"#, r#"Use as `await next_frame()`. Awaitable: resume on the next frame."#),
     (r#"signal_of"#, r#"signal_of([node,] "signal")"#, r#"Use as `await signal_of(n, "s")`. Awaitable: resume when the node emits the signal; evaluates to its argument(s)."#),
     (r#"save_scene"#, r#"save_scene(node, path)"#, r#"Write a node and its descendants as a .level.ron instance file for instantiate."#),
+    (r#"add_action"#, r#"add_action(name [, context])"#, r#"Define an input action (default context gameplay); bind it with action_add_*."#),
+    (r#"has_action"#, r#"has_action(name)"#, r#"Does the input action exist?"#),
+    (r#"action_add_key"#, r#"action_add_key(name, key)"#, r#"Bind a keyboard key ("KeyP") to an action."#),
+    (r#"action_add_button"#, r#"action_add_button(name, button)"#, r#"Bind a gamepad button ("South") to an action."#),
+    (r#"action_add_mouse"#, r#"action_add_mouse(name, button)"#, r#"Bind a mouse button ("Left") to an action."#),
+    (r#"push_input_context"#, r#"push_input_context(name)"#, r#"Activate an input context (created if new)."#),
+    (r#"pop_input_context"#, r#"pop_input_context([name])"#, r#"Deactivate a context (default: the one pushed last from script)."#),
 ];

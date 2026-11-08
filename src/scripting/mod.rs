@@ -19,6 +19,7 @@
 
 mod api;
 mod api_engine;
+mod api_actions;
 mod api_input;
 mod api_node;
 mod api_obj;
@@ -513,6 +514,7 @@ impl Plugin for ScriptingPlugin {
             .init_resource::<ScriptCtx>()
             .init_resource::<ScriptQueue>()
             .init_resource::<ScriptStats>()
+            .init_resource::<api_actions::PhysicsEdges>()
             .init_resource::<Autoloads>();
         if !app.world().contains_resource::<LogicDiagnostics>() {
             app.init_resource::<LogicDiagnostics>();
@@ -532,6 +534,8 @@ impl Plugin for ScriptingPlugin {
         app.add_systems(Update, physics_signals.after(timers).before(ui_signals).in_set(ScriptSet::Events));
         #[cfg(feature = "ai")]
         app.add_systems(Update, api_engine::nav_signals.after(timers).before(ui_signals).in_set(ScriptSet::Events));
+        #[cfg(feature = "actions")]
+        app.add_systems(bevy::app::RunFixedMainLoop, api_actions::latch_edges.in_set(bevy::app::RunFixedMainLoopSystems::BeforeFixedMainLoop));
         tree::plugin(app);
         ui::plugin(app);
         ui_widgets::plugin(app);
@@ -573,6 +577,13 @@ fn assets_root(world: &World) -> PathBuf {
 fn diag(world: &mut World, key: &str, line: usize, col: usize, msg: String) {
     if let Some(mut d) = world.get_resource_mut::<LogicDiagnostics>() {
         d.error(key, line as u32, col as u32, None, msg);
+    }
+}
+
+/// A diagnostics warning (shown in the editor's Output, does not stop anything).
+pub(crate) fn diag_warn(world: &mut World, msg: String) {
+    if let Some(mut d) = world.get_resource_mut::<LogicDiagnostics>() {
+        d.report(crate::logic::LogicDiag { severity: crate::logic::Severity::Warning, file: "scripting".into(), line: 0, col: 0, node: None, message: msg, count: 1 });
     }
 }
 
@@ -1306,8 +1317,15 @@ fn physics_process(world: &mut World) {
     let dt = world.resource::<Time>().delta_secs();
     world.resource_mut::<ScriptCtx>().physics_delta = dt;
     let list = take_list(world, |h| h.physics, |p| p.physics);
+    world.resource_mut::<api_actions::PhysicsEdges>().active = true;
     for &e in &list {
         let _ = call_rv(world, e, "_physics_process", vec![RV::Float(dt as f64)]);
+    }
+    {
+        let mut edges = world.resource_mut::<api_actions::PhysicsEdges>();
+        edges.active = false;
+        edges.pressed.clear();
+        edges.released.clear();
     }
     give_back(world, list);
 }

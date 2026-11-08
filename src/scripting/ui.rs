@@ -16,6 +16,10 @@ use ruspy::value::Value as RV;
 use super::api::{self, b, f, rent, s, split, world};
 use crate::ui::theme::{self, GAP_M, GAP_S, GAP_XS, RADIUS, REM_PX, SIZE_BODY, Theme};
 
+/// Parents already warned about by [`spawn_node`] (once per node).
+#[derive(Resource, Default)]
+struct WarnedParents(std::collections::HashSet<Entity>);
+
 /// A script-built (or any) button's colours. [`button_look`] applies them from hover / press /
 /// disabled state.
 #[derive(Component, Reflect, Clone, Debug)]
@@ -136,6 +140,24 @@ pub(super) fn spawn_node(w: &mut World, parent: Option<&RV>, name: &str, bundle:
         None | Some(RV::Null) => None,
         Some(p) => Some(api::live(w, api::ent(p)?)?),
     };
+    // A parent that is not a UI node cannot lay out children (they would be invisible). Say so
+    // once per parent and make the child a UI root owned by it: it is freed with that node.
+    let mut owner = None;
+    let parent = match parent {
+        Some(p) if w.get::<Node>(p).is_none() => {
+            let label = super::tree::path_of(w, p);
+            let first = w.get_resource_or_insert_with(WarnedParents::default).0.insert(p);
+            if first {
+                super::diag_warn(
+                    w,
+                    format!("ui_*: parent `{label}` is not a UI node (no Node component), so `{name}` is a UI root owned by it; build UI under a Control (ui_panel/ui_vbox) or pass no parent"),
+                );
+            }
+            owner = Some(p);
+            None
+        }
+        other => other,
+    };
     let e = w.spawn((Name::new(name.to_string()), bundle)).id();
     match parent {
         Some(p) => {
@@ -144,7 +166,7 @@ pub(super) fn spawn_node(w: &mut World, parent: Option<&RV>, name: &str, bundle:
         None => {
             // A root made by a script goes away with that script's node (Godot: a Control added
             // to the scene is freed with it), so a reloaded scene does not leak its HUD.
-            if let Ok(owner) = api::me(w) {
+            if let Some(owner) = owner.or_else(|| api::me(w).ok()) {
                 w.entity_mut(e).insert(UiOwner(owner));
             }
             if let Some(mut n) = w.get_mut::<Node>(e) {

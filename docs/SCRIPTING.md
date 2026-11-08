@@ -410,6 +410,17 @@ or `get_vector(action2d)` (the value of one 2D action, `ActionState::axis2d`) (`
 `is_mouse_button_pressed("Left")`. Raw events as values: see **Input events** below.
 Actions are the engine's (`ActionDef`, rebinding, gamepad: `docs/ACTIONS.md`); prefer them to raw keys.
 
+#### Actions and contexts from script
+
+Godot's `InputMap`: `add_action(name [, context])`, `has_action(name)`, `action_add_key(name, "KeyP")`,
+`action_add_button(name, "South")` (gamepad), `action_add_mouse(name, "Left")`. Actions live in the
+`"gameplay"` context unless you name one; a context you name is created on first use and is
+**inactive until pushed**: `push_input_context(name)` / `pop_input_context([name])` (without a name,
+the one pushed last from script). Use a pushed context for keys that must work while the game is
+paused or a menu is open (the platformer's pause key, `assets/scripts/platformer/game.ruspy`).
+`is_action_just_pressed` / `_just_released` inside `_physics_process` are latched: a press is seen
+by exactly one fixed step, even when a frame runs no fixed step or several.
+
 #### Input events
 
 Besides `_input(action, pressed)`, a script that defines `_input_event(ev)` gets every raw event
@@ -631,6 +642,11 @@ does too), the others do not. Tabs: child 0 of the `ui_tabs` node is the bar, ev
 (`ui_panel(tabs)`, `ui_margin(tabs, 8)` ...) is a page; page `i` shows when tab `i` is selected.
 A line edit shows a caret while focused and the placeholder while empty; `get_text` returns the
 real text.
+
+**UI under a non-UI parent.** `ui_*(parent, ...)` needs a UI parent (`ui_panel`, `ui_vbox`, a node
+with `Node`). If the parent is a plain or 3D node, a warning is added to the diagnostics (once per
+parent) and the widget becomes a UI root owned by that node: it is freed when the node is, but it
+does not follow its position. Pass no parent for an ordinary root.
 
 **Focus and keyboard.** Buttons and every widget are focusable. A click focuses (clicking
 elsewhere clears), Tab / Shift+Tab / Up / Down (gamepad D-pad) move focus in tree order, Left /
