@@ -3,18 +3,10 @@
 
 use bevy::prelude::*;
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Reflect)]
-pub struct SurfaceId(pub u8);
+pub use crate::surface::{FnSurfaceMap, SurfaceId, SurfaceMap, SurfaceMapRes, SurfaceProbe, SurfaceTag, TagSurfaceMap, Wetness};
 
-impl SurfaceId {
-    pub const ASPHALT: SurfaceId = SurfaceId(0);
-    pub const GRAVEL: SurfaceId = SurfaceId(1);
-    pub const DIRT: SurfaceId = SurfaceId(2);
-    pub const SAND: SurfaceId = SurfaceId(3);
-    pub const MUD: SurfaceId = SurfaceId(4);
-    pub const SNOW: SurfaceId = SurfaceId(5);
-    pub const ICE: SurfaceId = SurfaceId(6);
-}
+/// Old name of [`SurfaceProbe`].
+pub type SurfaceQuery = SurfaceProbe;
 
 #[derive(Clone, Debug)]
 pub struct Surface {
@@ -52,6 +44,7 @@ impl Default for Surfaces {
             Surface::new("mud", 0.4, 0.09, 350.0, 0.8, 0.8, 1.2),
             Surface::new("snow", 0.3, 0.05, 80.0, 0.7, 0.9, 1.0),
             Surface::new("ice", 0.1, 0.015, 0.0, 0.0, 0.7, 1.0),
+            Surface::new("grass", 0.85, 0.04, 0.0, 0.3, 0.75, 1.1),
         ])
     }
 }
@@ -59,49 +52,5 @@ impl Default for Surfaces {
 impl Surfaces {
     pub fn get(&self, id: SurfaceId) -> &Surface {
         self.0.get(id.0 as usize).unwrap_or(&self.0[0])
-    }
-}
-
-/// 0 dry .. 1 soaked; weather writes it, `Surface::wet_*` decide the effect.
-#[derive(Resource, Clone, Copy, Debug, Default)]
-pub struct Wetness(pub f32);
-
-/// Put on a collider entity to give it a surface (the default [`SurfaceMap`] reads it).
-#[derive(Component, Clone, Copy, Debug, Default, Reflect)]
-#[reflect(Component)]
-pub struct SurfaceTag(pub SurfaceId);
-
-/// What a wheel touches.
-#[derive(Clone, Copy, Debug)]
-pub struct SurfaceQuery {
-    pub point: Vec3,
-    pub normal: Vec3,
-    pub collider: Entity,
-    /// The `SurfaceTag` on the collider, if any.
-    pub tag: Option<SurfaceId>,
-}
-
-/// The game's answer to "what is under this wheel". Runs once per grounded wheel per tick, so
-/// keep it cheap (a splat-map sample, a table lookup).
-pub trait SurfaceMap: Send + Sync + 'static {
-    fn surface(&self, q: &SurfaceQuery) -> SurfaceId;
-}
-
-/// Default: the collider's [`SurfaceTag`], asphalt without one.
-pub struct TagSurfaceMap;
-
-impl SurfaceMap for TagSurfaceMap {
-    fn surface(&self, q: &SurfaceQuery) -> SurfaceId {
-        q.tag.unwrap_or_default()
-    }
-}
-
-/// The active map; replace the box to change how surfaces are found.
-#[derive(Resource)]
-pub struct SurfaceMapRes(pub Box<dyn SurfaceMap>);
-
-impl Default for SurfaceMapRes {
-    fn default() -> Self {
-        SurfaceMapRes(Box::new(TagSurfaceMap))
     }
 }

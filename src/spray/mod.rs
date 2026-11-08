@@ -8,7 +8,7 @@
 //! // A wheel: a child entity at the contact patch.
 //! commands.entity(car).with_child((SprayPoint::default(), SprayInput::default(), SprayTracker::default(), Transform::from_xyz(0.9, -0.35, 1.2)));
 //! // Tell the module what is under the wheels (or fill `SprayInput.surface` yourself):
-//! commands.insert_resource(SurfaceMap::new(|p| Some(if p.x > 0.0 { Surface::Mud } else { Surface::Gravel })));
+//! commands.insert_resource(SurfaceMapRes::from_fn(|p| Some(if p.x > 0.0 { SurfaceId::MUD } else { SurfaceId::GRAVEL })));
 //! ```
 //!
 //! - [`SprayRules`] (data): which kind sprays on which surface, how much rolling and slip
@@ -24,12 +24,11 @@ mod defs;
 #[cfg(feature = "devtools")]
 mod control;
 
-use std::sync::Arc;
-
 use bevy::prelude::*;
 
 pub use defs::{SprayPalette, defs};
 
+use crate::surface::{SurfaceId, SurfaceMapRes};
 use crate::vfx::{ParticleEffect, VfxLibrary, VfxSet};
 
 /// What is thrown up.
@@ -82,6 +81,21 @@ pub enum Surface {
     Snow,
     /// A wet road or shallow water.
     Wet,
+}
+
+impl Surface {
+    /// The spray surface for a shared [`SurfaceId`] (unknown ids are `Hard`).
+    pub fn from_id(id: SurfaceId) -> Surface {
+        match id {
+            SurfaceId::GRAVEL => Surface::Gravel,
+            SurfaceId::DIRT => Surface::Dirt,
+            SurfaceId::SAND => Surface::Sand,
+            SurfaceId::MUD => Surface::Mud,
+            SurfaceId::SNOW => Surface::Snow,
+            SurfaceId::GRASS => Surface::Grass,
+            _ => Surface::Hard,
+        }
+    }
 }
 
 /// One row of the spray table: `kind` is thrown up on `surface`.
@@ -184,7 +198,7 @@ impl Default for SprayPoint {
 /// What is happening at a point: write it (from a vehicle sim) or let [`SprayTracker`] derive it.
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq)]
 pub struct SprayInput {
-    /// `None` sprays nothing (airborne / unknown); [`SurfaceMap`] fills it when a tracker is on.
+    /// `None` sprays nothing (airborne / unknown); the shared [`SurfaceMapRes`] fills it when a tracker is on.
     pub surface: Option<Surface>,
     /// Metres per second of the point over the ground.
     pub speed: f32,
@@ -193,7 +207,7 @@ pub struct SprayInput {
 }
 
 /// Derives [`SprayInput`] speed and slip from how the entity moves (its sideways share of the
-/// velocity against its forward `-Z` axis) and the surface from [`SurfaceMap`].
+/// velocity against its forward `-Z` axis) and the surface from the shared [`SurfaceMapRes`] (`crate::surface`).
 #[derive(Component, Clone, Copy, Debug)]
 pub struct SprayTracker {
     /// Sideways share of the speed that counts as full slip.
@@ -204,17 +218,6 @@ pub struct SprayTracker {
 impl Default for SprayTracker {
     fn default() -> Self {
         SprayTracker { slip_at: 0.5, last: None }
-    }
-}
-
-/// What is under a world point: the game's terrain / road lookup. Without one a tracker keeps
-/// whatever `SprayInput.surface` already holds.
-#[derive(Resource, Clone)]
-pub struct SurfaceMap(pub Arc<dyn Fn(Vec3) -> Option<Surface> + Send + Sync>);
-
-impl SurfaceMap {
-    pub fn new(f: impl Fn(Vec3) -> Option<Surface> + Send + Sync + 'static) -> Self {
-        SurfaceMap(Arc::new(f))
     }
 }
 
@@ -250,7 +253,7 @@ fn register_palette(mut lib: Option<ResMut<VfxLibrary>>, palette: Res<SprayPalet
     }
 }
 
-fn track(time: Res<Time>, map: Option<Res<SurfaceMap>>, mut q: Query<(&GlobalTransform, &mut SprayTracker, &mut SprayInput)>) {
+fn track(time: Res<Time>, map: Option<Res<SurfaceMapRes>>, mut q: Query<(&GlobalTransform, &mut SprayTracker, &mut SprayInput)>) {
     let dt = time.delta_secs();
     for (g, mut tr, mut input) in &mut q {
         let pos = g.translation();
@@ -272,7 +275,7 @@ fn track(time: Res<Time>, map: Option<Res<SurfaceMap>>, mut q: Query<(&GlobalTra
             input.slip += (slip - input.slip) * k;
         }
         if let Some(map) = &map {
-            let s = (map.0)(pos);
+            let s = map.0.surface_at(pos).map(Surface::from_id);
             if input.surface != s {
                 input.surface = s;
             }
@@ -376,7 +379,7 @@ mod tests {
         app.init_resource::<VfxLibrary>();
         app.add_plugins(SprayPlugin);
         app.insert_resource(TimeUpdateStrategy::ManualDuration(std::time::Duration::from_secs_f64(1.0 / 60.0)));
-        app.insert_resource(SurfaceMap::new(|p| Some(if p.x < 100.0 { Surface::Gravel } else { Surface::Hard })));
+        app.insert_resource(SurfaceMapRes::from_fn(|p| Some(if p.x < 100.0 { SurfaceId::GRAVEL } else { SurfaceId::ASPHALT })));
         let e = app.world_mut().spawn((SprayPoint { rear: true, ..default() }, SprayInput::default(), SprayTracker::default(), Transform::default())).id();
         app.update();
         let scale = |app: &mut App| {

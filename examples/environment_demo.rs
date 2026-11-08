@@ -14,7 +14,8 @@ use engine::cli::{arg_value, has_flag};
 use engine::daytime::{DayClock, DayWeather, NightLight};
 use engine::foliage::{Foliage, FoliageConfig, FoliageSpecies, ImpostorAtlas};
 use engine::prelude::*;
-use engine::spray::{SprayInput, SprayPoint, SprayTracker, Surface, SurfaceMap};
+use engine::spray::{SprayInput, SprayPoint, SprayTracker};
+use engine::surface::{SurfaceId, SurfaceMapRes};
 
 const RING: f32 = 60.0;
 const SPEED: f32 = 17.0;
@@ -44,12 +45,12 @@ fn main() {
         .insert_resource(Driving(true))
         .insert_resource(FoliageConfig { near: 80.0, fade: 30.0, far: 1800.0, ..default() })
         // What is under the wheels: a gravel ring, mud in one quarter, grass elsewhere.
-        .insert_resource(SurfaceMap::new(|p| {
+        .insert_resource(SurfaceMapRes::from_fn(|p| {
             let r = Vec2::new(p.x, p.z).length();
             Some(if (RING - 9.0..RING + 9.0).contains(&r) {
-                if p.x > 0.0 && p.z > 0.0 { Surface::Mud } else { Surface::Gravel }
+                if p.x > 0.0 && p.z > 0.0 { SurfaceId::MUD } else { SurfaceId::GRAVEL }
             } else {
-                Surface::Grass
+                SurfaceId::GRASS
             })
         }))
         .add_systems(OnEnter(AppState::InGame), spawn_scene)
