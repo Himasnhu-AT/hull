@@ -37,7 +37,7 @@ pub use window::{CursorMode, WindowInfo, WindowSettings};
 /// and exits if another copy holds it. Call right after `engine::app(..)`. `--allow-multiple`
 /// skips it.
 pub fn single_instance(app: &mut App) {
-    if crate::cli::has_flag("--allow-multiple") || app.world().contains_resource::<InstanceGuard>() {
+    if crate::cli::has_flag("allow-multiple") || app.world().contains_resource::<InstanceGuard>() {
         return;
     }
     let info = app.world().get_resource::<crate::GameInfo>().cloned().unwrap_or_else(|| crate::GameInfo::new("game", "Game"));
@@ -69,7 +69,7 @@ impl Plugin for PlatformPlugin {
         // PLATFORM_NATIVE=1.
         let os: Box<dyn OsServices> = if quiet && std::env::var_os("PLATFORM_NATIVE").is_none() { Box::new(NullOs::default()) } else { os::native() };
         let mut folders = GameFolders::new(info.title, UserDirs::detect());
-        if let Some(root) = crate::cli::arg_value("--platform-root").map(std::path::PathBuf::from).or_else(|| std::env::var_os("PLATFORM_ROOT").map(std::path::PathBuf::from)) {
+        if let Some(root) = crate::cli::arg_value("platform-root").map(std::path::PathBuf::from).or_else(|| std::env::var_os("PLATFORM_ROOT").map(std::path::PathBuf::from)) {
             folders = folders.with_root(root);
         }
         if self.single_instance {
