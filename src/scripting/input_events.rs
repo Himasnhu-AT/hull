@@ -9,9 +9,9 @@
 //! | `type` | other fields |
 //! |---|---|
 //! | `"key"` | `keycode` (Bevy `KeyCode` name: `"KeyW"`, `"Space"`, `"ArrowLeft"`), `pressed`, `echo` (key repeat) |
-//! | `"mouse_button"` | `button` (`"Left"`, `"Right"`, `"Middle"`, `"Back"`, `"Forward"`), `pressed`, `position` `[x, y]` in window pixels |
-//! | `"mouse_motion"` | `position` `[x, y]`, `relative` `[dx, dy]` |
-//! | `"mouse_wheel"` | `delta` `[dx, dy]` (notches for a wheel, pixels for a trackpad; `dy > 0` is up) |
+//! | `"mouse_button"` | `button` (`"Left"`, `"Right"`, `"Middle"`, `"Back"`, `"Forward"`), `pressed`, `position` `Vec2` in window pixels |
+//! | `"mouse_motion"` | `position` `Vec2`, `relative` `Vec2` |
+//! | `"mouse_wheel"` | `delta` `Vec2` (notches for a wheel, pixels for a trackpad; `dy > 0` is up) |
 //!
 //! Also: `get_mouse_delta()` (motion summed over the last frame), `set_mouse_mode("visible" |
 //! "hidden" | "captured")`, `get_mouse_mode()`, `is_mouse_button_pressed("Left")`.
