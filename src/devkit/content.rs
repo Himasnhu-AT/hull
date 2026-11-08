@@ -9,6 +9,10 @@
 //!   (`gfx::PendingMips`). Cook to KTX2 (`scripts/cook.py`) to skip that work.
 //! - **large_file** (warning): any asset above `max_file_mb`.
 //! - **unreadable** (error): a texture whose header can't be parsed.
+//! - **unlicensed_asset** (error): a file under `library/<kind>/<name>/` whose item has no entry
+//!   in `library/LICENSES.json` (key `<kind>/<name>`), or a file loose in `library/` or a kind folder.
+//! - **forbidden_license** (error): the entry's `license` is empty or one of [`FORBIDDEN_LICENSES`]
+//!   (`ue-only`, `reference-only`, `epic-sample`). See docs/ASSETS.md.
 //! - **unreferenced** (info): files no scanned source mentions (paths built at runtime show up
 //!   here too, so it's only a hint).
 //!
@@ -26,6 +30,9 @@ const ASSET_EXT: [&str; 18] = [
     "png", "jpg", "jpeg", "ktx2", "dds", "hdr", "exr", "gltf", "glb", "ogg", "wav", "mp3", "flac", "ron", "json", "wgsl", "ttf", "otf",
 ];
 const SOURCE_EXT: [&str; 6] = ["rs", "ron", "json", "toml", "gltf", "scn"];
+
+/// Licence ids that may never ship in the asset library (checked case-insensitively).
+pub const FORBIDDEN_LICENSES: [&str; 3] = ["ue-only", "reference-only", "epic-sample"];
 
 #[derive(Clone, Debug)]
 pub struct AssetCheckConfig {
@@ -264,6 +271,7 @@ pub fn check_assets(assets: &Path, cfg: &AssetCheckConfig) -> AssetReport {
             }
         }
     }
+    check_library(&present, &read_licenses(assets), &mut r);
     if cfg.report_unreferenced {
         for p in &present {
             let in_gltf_dir = p.ends_with(".bin");
@@ -276,6 +284,53 @@ pub fn check_assets(assets: &Path, cfg: &AssetCheckConfig) -> AssetReport {
     r.errors = r.issues.iter().filter(|i| i.severity == Severity::Error).count();
     r.warnings = r.issues.iter().filter(|i| i.severity == Severity::Warning).count();
     r
+}
+
+/// `library/LICENSES.json` as `key -> license` (`None` when the file is missing or unreadable).
+fn read_licenses(assets: &Path) -> Option<std::collections::BTreeMap<String, String>> {
+    let text = std::fs::read_to_string(assets.join("library/LICENSES.json")).ok()?;
+    let v: serde_json::Value = serde_json::from_str(&text).ok()?;
+    Some(
+        v.as_object()?
+            .iter()
+            .map(|(k, e)| (k.clone(), e.get("license").and_then(|l| l.as_str()).unwrap_or_default().trim().to_string()))
+            .collect(),
+    )
+}
+
+/// Every item (`library/<kind>/<name>`) needs a LICENSES.json entry with an allowed licence.
+fn check_library(present: &BTreeSet<String>, licenses: &Option<std::collections::BTreeMap<String, String>>, r: &mut AssetReport) {
+    let mut items: BTreeSet<String> = BTreeSet::new();
+    let mut loose: Vec<&String> = Vec::new();
+    for p in present {
+        let Some(rest) = p.strip_prefix("library/") else { continue };
+        if rest == "LICENSES.json" {
+            continue;
+        }
+        let parts: Vec<&str> = rest.split('/').collect();
+        if parts.len() >= 3 {
+            items.insert(format!("{}/{}", parts[0], parts[1]));
+        } else {
+            loose.push(p);
+        }
+    }
+    let mut push = |kind, path: String, message: String| {
+        r.issues.push(AssetIssue { severity: Severity::Error, kind, path, message, at: None });
+    };
+    for p in loose {
+        push("unlicensed_asset", p.clone(), "library files must live in library/<kind>/<name>/ with a LICENSES.json entry".into());
+    }
+    for key in items {
+        let path = format!("library/{key}");
+        match licenses.as_ref().and_then(|l| l.get(&key)) {
+            None => push("unlicensed_asset", path, format!("no `{key}` entry in library/LICENSES.json")),
+            Some(l) if l.is_empty() => push("forbidden_license", path, format!("`{key}` has no license")),
+            Some(l) if FORBIDDEN_LICENSES.iter().any(|f| f.eq_ignore_ascii_case(l)) => {
+                push("forbidden_license", path, format!("`{key}` is licensed `{l}`, which cannot ship"));
+            }
+            Some(_) => {}
+        }
+    }
 }
 
 fn read_head(p: &Path, n: usize) -> Vec<u8> {
@@ -347,5 +402,34 @@ mod tests {
         let src = r#"let a = server.load("textures/wall.png"); let b = "scene.gltf#Scene0"; let c = format!("{x}.png"); let d = "Cargo.json";"#;
         let refs: Vec<String> = asset_refs(src).into_iter().map(|(_, s)| s).collect();
         assert_eq!(refs, vec!["textures/wall.png", "scene.gltf"]);
+    }
+
+    #[test]
+    fn library_needs_allowed_license() {
+        let dir = std::env::temp_dir().join(format!("engine_lib_check_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        for item in ["cars/ok", "cars/missing", "cars/ue", "props/blank"] {
+            let d = dir.join("library").join(item);
+            std::fs::create_dir_all(&d).unwrap();
+            std::fs::write(d.join("m.glb"), b"glTF").unwrap();
+        }
+        std::fs::write(dir.join("library/stray.glb"), b"glTF").unwrap();
+        std::fs::write(
+            dir.join("library/LICENSES.json"),
+            r#"{"cars/ok":{"license":"CC0-1.0"},"cars/ue":{"license":"UE-Only"},"props/blank":{"license":""}}"#,
+        )
+        .unwrap();
+        let cfg = AssetCheckConfig { sources: vec![], report_unreferenced: false, ..Default::default() };
+        let r = check_assets(&dir, &cfg);
+        let got: Vec<(&str, &str)> = r.issues.iter().filter(|i| i.severity == Severity::Error).map(|i| (i.kind, i.path.as_str())).collect();
+        assert!(got.contains(&("unlicensed_asset", "library/cars/missing")), "{got:?}");
+        assert!(got.contains(&("unlicensed_asset", "library/stray.glb")), "{got:?}");
+        assert!(got.contains(&("forbidden_license", "library/cars/ue")), "{got:?}");
+        assert!(got.contains(&("forbidden_license", "library/props/blank")), "{got:?}");
+        assert_eq!(r.errors, 4, "{got:?}");
+        // No LICENSES.json at all: every item is unlicensed.
+        std::fs::remove_file(dir.join("library/LICENSES.json")).unwrap();
+        assert!(check_assets(&dir, &cfg).issues.iter().any(|i| i.path == "library/cars/ok" && i.kind == "unlicensed_asset"));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

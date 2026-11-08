@@ -61,6 +61,10 @@ pub mod devtools;
 pub mod l10n;
 #[cfg(feature = "fps")]
 pub mod fps;
+#[cfg(feature = "level")]
+pub mod level;
+#[cfg(feature = "editor")]
+pub mod editor;
 #[cfg(feature = "look")]
 pub mod look;
 #[cfg(feature = "world")]
@@ -73,6 +77,12 @@ pub mod trace;
 pub mod vfx;
 #[cfg(feature = "pcg")]
 pub mod pcg;
+#[cfg(feature = "spline")]
+pub mod spline;
+#[cfg(feature = "logic")]
+pub mod logic;
+#[cfg(feature = "scripting")]
+pub mod scripting;
 #[cfg(feature = "props")]
 pub mod props;
 #[cfg(feature = "sound")]
@@ -123,6 +133,8 @@ pub mod prelude {
     };
     #[cfg(feature = "world")]
     pub use crate::world::{Heightfield, SpawnWorld, StreamMode, StreamSource, Terrain, WorldCells, WorldDesc, WorldOrigin, WorldPlugin, WorldSettings, WorldStats};
+    #[cfg(feature = "spline")]
+    pub use crate::spline::{Spline, SplineCache, SplineChanged, SplineMode, SplinePlugin, SplinePoint, SplineRoad, SplineSample};
     #[cfg(feature = "net")]
     pub use crate::net::{
         AlwaysRelevant, ClientId, FromClient, FromServer, LocalInput, NetAppExt, NetClient, NetClock, NetConfig, NetEvent, NetId, NetInput,

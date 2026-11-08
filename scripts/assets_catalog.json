@@ -1,0 +1,26 @@
+{
+  "_comment": "CC0 sources for `scripts/assets.py fetch <name>...`. kind -> assets/library/<kind>/<name>/. Licences are re-verified at fetch time (kenney: the page must link CC0; polyhaven/ambientcg: site-wide CC0).",
+  "kits": {
+    "kenney-car-kit":          {"type": "kenney", "slug": "car-kit",             "kind": "cars",      "license": "CC0-1.0"},
+    "kenney-racing-kit":       {"type": "kenney", "slug": "racing-kit",          "kind": "roads",     "license": "CC0-1.0"},
+    "kenney-city-kit-roads":   {"type": "kenney", "slug": "city-kit-roads",      "kind": "roads",     "license": "CC0-1.0"},
+    "kenney-city-kit-commercial": {"type": "kenney", "slug": "city-kit-commercial", "kind": "buildings", "license": "CC0-1.0"},
+    "kenney-city-kit-suburban":   {"type": "kenney", "slug": "city-kit-suburban",   "kind": "buildings", "license": "CC0-1.0"},
+
+    "polyhaven-asphalt_01":         {"type": "polyhaven", "id": "asphalt_01",         "kind": "textures", "res": "1k", "license": "CC0-1.0"},
+    "polyhaven-concrete_floor_02":  {"type": "polyhaven", "id": "concrete_floor_02",  "kind": "textures", "res": "1k", "license": "CC0-1.0"},
+    "polyhaven-red_brick":          {"type": "polyhaven", "id": "red_brick",          "kind": "textures", "res": "1k", "license": "CC0-1.0"},
+    "polyhaven-asphalt_02":         {"type": "polyhaven", "id": "asphalt_02",         "kind": "textures", "res": "1k", "license": "CC0-1.0"},
+    "polyhaven-kloofendal_48d_partly_cloudy_puresky": {"type": "polyhaven-hdri", "id": "kloofendal_48d_partly_cloudy_puresky", "kind": "hdris", "res": "1k", "license": "CC0-1.0"},
+
+    "ambientcg-asphalt004":  {"type": "ambientcg", "id": "Asphalt004", "kind": "textures", "res": "1K", "license": "CC0-1.0"},
+    "ambientcg-concrete034": {"type": "ambientcg", "id": "Concrete034", "kind": "textures", "res": "1K", "license": "CC0-1.0"}
+  },
+  "groups": {
+    "cars-and-roads": ["kenney-car-kit", "kenney-city-kit-roads", "polyhaven-asphalt_01", "polyhaven-concrete_floor_02", "polyhaven-red_brick"],
+    "all": ["kenney-car-kit", "kenney-racing-kit", "kenney-city-kit-roads", "kenney-city-kit-commercial", "kenney-city-kit-suburban", "polyhaven-asphalt_01", "polyhaven-concrete_floor_02", "polyhaven-red_brick", "polyhaven-asphalt_02", "polyhaven-kloofendal_48d_partly_cloudy_puresky", "ambientcg-asphalt004", "ambientcg-concrete034"]
+  },
+  "not_included": {
+    "quaternius": "Quaternius packs (CC0) are distributed through Google Drive / itch.io pages with no stable direct links; download by hand and use `assets.py import <zip> --source other --license CC0-1.0 --url https://quaternius.com/... --author Quaternius`."
+  }
+}

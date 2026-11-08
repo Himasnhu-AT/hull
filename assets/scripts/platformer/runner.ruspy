@@ -1,0 +1,10 @@
+// extends scripts/platformer/enemy.ruspy
+// class_name Runner
+speed = 3.6;
+tint = [0.95, 0.65, 0.2];
+size = [0.7, 1.2, 0.7];
+
+fn die() {
+    play_sound("pop");
+    super_call("die");
+}

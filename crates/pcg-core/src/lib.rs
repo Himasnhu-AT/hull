@@ -21,7 +21,7 @@ mod eval;
 mod graph;
 mod points;
 
-pub use eval::{Output, Spawned, evaluate, keep_for_tier};
+pub use eval::{Output, Spawned, evaluate, evaluate_on, keep_for_tier};
 pub use graph::{Builder, Graph, Node, Op, PcgError, Side, SpawnDef, SpawnKind, Tier};
 pub use points::{Area, Inputs, Point, PointSet, Polyline, Rect, Shapes, Surface, mix64, seed_at, str_hash, tag_id, unit};
 
@@ -182,6 +182,19 @@ mod tests {
         let o = evaluate(&g, &i, None).unwrap();
         let anchors = o.counts.iter().find(|(n, _)| n == "anchors").unwrap().1;
         assert_eq!(o.spawned(), anchors * 2);
+    }
+
+    #[test]
+    fn seeds_ignore_the_ground_height() {
+        let g = Graph::build(1).input("lots").poisson(4.0).project(0.0, false).spawn(&[("x", 1.0)], Tier::Fine).finish().unwrap();
+        let flat = town().surface(Surface::Plane(0.0));
+        let hilly = town().surface(Surface::Heightfield { origin: Vec2::new(-50.0, -50.0), cell: 10.0, width: 20, heights: (0..400).map(|k| (k % 20) as f32 * 3.0).collect() });
+        let (a, b) = (evaluate(&g, &flat, None).unwrap(), evaluate(&g, &hilly, None).unwrap());
+        let (a, b) = (&a.spawns[0].points, &b.spawns[0].points);
+        assert!(a.len() > 20);
+        assert_eq!(a.seed, b.seed, "same keys on any terrain");
+        assert_ne!(a.pos, b.pos);
+        assert_eq!(a.pos.iter().map(|p| (p.x, p.z)).collect::<Vec<_>>(), b.pos.iter().map(|p| (p.x, p.z)).collect::<Vec<_>>());
     }
 
     #[test]

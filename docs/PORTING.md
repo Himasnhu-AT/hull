@@ -44,9 +44,11 @@ What Shroud's port must change:
 
 ## Metrics window
 
-Dev builds (feature `devtools`) chart every metric in a second window and keep a history of runs, so a code change can be judged against the runs before it.
+Dev builds (feature `devtools`) chart every metric and keep a history of runs, so a code change can be judged against the runs before it. On screen this is the **metrics viewer**, its own process (`src/devtools/metrics_viewer.rs`).
 
-- **Window**: `"<title> — metrics"` opens next to the game window in plain dev runs. It never opens in `--headless`, `--offscreen`, `--control` or `--mcp` runs, or with `--no-metrics-window`. `--metrics-window` forces it on. F4 (`MetricsWindowKey`) or `metrics.window {on?, scroll?}` toggles it. Closing it doesn't quit the game; closing the game window quits both. It never takes focus. Clicking it doesn't grab the game's cursor (`input.rs` only counts clicks while the game window has focus). Keys pressed while it has focus still reach the game, because Bevy's input is global.
+- **Viewer process**: plain dev runs start `<game exe> --metrics-viewer` at launch (never in `--headless`, `--offscreen`, `--control` or `--mcp` runs, or with `--no-metrics-window`; `--metrics-window` forces it). F4 (`MetricsWindowKey`) or `metrics.window` starts it again after it was closed. It runs in its own process group, so closing the game leaves the viewer open and closing the viewer leaves the game running; one viewer per data folder (`<data>/metrics/viewer.pid`). Games need nothing: `engine::app` turns the process into the viewer when it sees `--metrics-viewer`, and runs no game code.
+- **Files only**: the viewer reads `<data>/logs/session-<id>.jsonl` (the newest 20 runs; each run now also writes a `{"kind": "metrics", "v": {key: 1 s average}}` line per second) and `<data>/metrics/sessions.jsonl`, so it works with no game running. The live run's log is followed as it grows (`LIVE` in the header). Left / Right pick an older / newer run, L the latest; on the latest it follows new runs. Per run: the tiles, every key charted over the whole run with avg / p95 / max (of 1 s averages), the event list (state changes, governor steps, hitches, pause...) under the keys, and the runs table. Runs logged before the `metrics` lines show the keys their perf samples carry (fps, frame times, CPU, GPU, entities).
+- **Scripts**: `<game exe> --metrics-viewer --viewer-shot out.png [--viewer-run N]` saves the viewer (run N, 1 = oldest) after a few seconds and quits. `--offscreen --metrics-window` still draws the view inside the game into an image (`metrics.screenshot`), for tests.
 - **Layout**: a header (game, commit + `*` if dirty, profile, mode, quality, labels, uptime), six summary tiles, then optional big charts for `MetricsFeatured` (empty by default), then every key grouped by prefix with now / sparkline / avg / p95 / max over the last 60 s (scroll with the wheel). At the bottom is the **runs table**: this run plus the last runs' session stats for `MetricsCompare` rows, each with its change vs the previous *comparable* run (same mode, quality, labels; others are marked ≠). Green means better, red worse, dim means within 3 %. Colours follow thresholds: frame ms green < 16.7, amber < 33.3, red above.
 - **Summary tiles** (top row): **Frame** (fps, ms, p95, budget at the governor's `target_fps`);
   **CPU** (process share of the whole machine, "N of M cores", main and render thread ms per
@@ -66,7 +68,7 @@ Dev builds (feature `devtools`) chart every metric in a second window and keep a
   "busy % · ms" and memory vs the working set; the Memory tile shows system RAM, this game,
   pressure and swap. Developer counters (GPU resource counts, ECS, monitor overhead) are hidden
   unless `metrics.window {dev: true}`.
-- **Cost**: it redraws at 4 Hz. Between redraws its camera is inactive, so Bevy doesn't touch the window at all, and it presents without vsync. A redraw takes ~0.4–1 ms of main-thread time in a dev build (`perf.metrics_view_ms`, also shown in the header). Measured on an M-series Mac, vsync off: frame p50 5.8 → 6.0–6.3 ms and p95 6.2 → 8.3 ms with it open. Close it (F4) for clean perf numbers.
+- **Cost**: the viewer is another process: the game only writes one log line a second. The viewer redraws at 4 Hz (its camera is inactive between redraws, no vsync); a redraw is ~0.4–1 ms of the viewer's own main thread (shown in its header). Close it for the cleanest perf numbers (it still uses some GPU and CPU).
 - **Engine keys** (from the perf monitor, no extra sampling): `frame.ms` (every frame), `frame.fps/p50_ms/p95_ms/p99_ms/max_ms/hitches`, `cpu.process_pct/machine_pct/main_pct/render_pct/<pool>_pct`, `gpu.pct/renderer_pct/tiler_pct/process_pct/frame_ms/mem_mb/alloc_mb/passes_ms`, `mem.footprint_mb/rss_mb`, `ecs.entities`, `span.<perf_span label>_ms`, `perf.overhead_us`. The render stream adds `render.*` (every `RenderStats` field).
 - **Game keys**: one line, one sample per key per frame (last write wins), behind the game's `dev` feature:
   ```rust
@@ -140,6 +142,12 @@ What runs by default:
   Bevy's `MainPassResolutionOverride` is no substitute: post passes ignore it (DLSS only).
   While scaled, `world_to_viewport` on the main camera is in scaled-image pixels. Township Ultra
   offscreen: GPU 13.8 ms at 1.0, 10.6 ms at 0.5 (fixed costs: 4096 sun cascades, probes).
+  On a high-DPI window (scale factor ≥ `QualityPreset::hidpi_scale_factor`, 1.5) the tier
+  ceiling `QualityPreset::hidpi_render_scale` (Low 0.7, Medium 0.85, High/Ultra 1) caps it:
+  applied = min(`scale`, ceiling), so the governor and games still go lower but never higher.
+  It starts once the main camera has its quality settings (`AppliedQuality`, `Msaa::Off`), so
+  warm-up isn't scaled with MSAA still on. `render.governor` shows `scale.ceiling`. At 3024×1964,
+  0.7 cuts the 3D view's targets (two Rgba16F main textures, depth, prepass) roughly in half.
 - **Quality governor** (`QualityGovernor`, `render_budget/governor.rs`). Holds `target_fps`
   (60, budget B = 1000/fps ms).
   - *Signal.* In devtools builds: `GpuLoad::sample`, this process's GPU time per frame over a
@@ -188,6 +196,14 @@ What runs by default:
   window events, and a Shroud window opened behind a fullscreen app in another macOS Space once
   culled nearly all scenery for a round. `render.stats` also reports `eye`, `eye_forward`,
   `aspect` and `viewport`.
+- **Draws after batching** (`render.stats` → `draws`, `draw_sets`; metric `render.draws`;
+  detailed stats only). `meshes_visible` counts entities; Bevy draws each visible
+  (mesh, material) pair once, instancing every entity that shares it. `draws` counts those
+  pairs (skinned and `NoAutomaticBatching` meshes one each; materials other than
+  `StandardMaterial` one per entity, an upper bound). `draw_sets` counts distinct materials:
+  with GPU culling each is one multi-draw call (on Metal still one indirect draw per pair).
+  Budgets "after batching" mean `draws`. To lower it, share mesh and material handles (PCG
+  does: instanced items share them) and merge static pieces.
 - **Frame pacing.** Menus, pause and boot update reactively (30 Hz when focused, 8 Hz unfocused;
   30 Hz in control-port/offscreen runs) so the GPU idles; unpaused gameplay is continuous.
 - **CPU frustum culling** (Bevy, always on) is counted; `RenderStats` is filled every frame and

@@ -1,11 +1,11 @@
-//! The metrics window (dev builds with visuals): a second OS window "<title> — metrics" next to
-//! the game window, charting every [`Metrics`] key and comparing this run with past runs.
+//! The metrics view (dev builds with visuals): charts every [`Metrics`] key and compares runs.
 //!
-//! - Opens at start in plain dev runs. Never in `--headless`, `--offscreen`, `--control` or
-//!   `--mcp` runs ([`crate::cli::test_driven`]) or with `--no-metrics-window`;
-//!   `--metrics-window` forces it. [`MetricsWindowKey`] (default F4) or `metrics.window`
-//!   toggles it. Closing it never quits the game; closing the game window quits both.
-//! - With `--offscreen --metrics-window` the view renders into an image instead of a window
+//! - On screen it is the metrics viewer, its own process ([`super::metrics_viewer`]): it starts
+//!   with plain dev runs (never with `--headless`, `--offscreen`, `--control` or `--mcp`
+//!   ([`crate::cli::test_driven`]) or `--no-metrics-window`; `--metrics-window` forces it),
+//!   and [`MetricsWindowKey`] (default F4) or `metrics.window` starts it again. Closing the
+//!   game or the viewer leaves the other open.
+//! - With `--offscreen --metrics-window` the view renders inside the game into an image
 //!   (`metrics.screenshot` saves it), for tests and agents.
 //! - Cost: the view redraws at most 4×/s ([`REFRESH`]). Its camera is active only on those
 //!   frames; on the others Bevy skips the window entirely (no swap-chain acquire, no draw), so
@@ -37,6 +37,7 @@ use super::control::{AddControlCommand, PendingReplies, ReplyId, params};
 use super::metrics::{Metrics, Summary, Threshold, WINDOW_SECS};
 use super::metrics_chart::{self as chart, Canvas, Col, Style};
 use super::metrics_history::{MetricsHistory, RunInfo, SessionSummary, current, delta};
+use super::metrics_viewer::{ViewerLauncher, ViewerState};
 use crate::app::GameInfo;
 use crate::cli::{dev_flag, test_driven};
 use crate::flow::Headless;
@@ -114,9 +115,16 @@ impl Default for MetricsCompare {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Target {
+    /// A second window of this process (unused on screen since the viewer process).
     Window,
     Image,
+    /// The viewer process's own window.
+    Primary,
 }
+
+/// The view's systems (the viewer orders its file reading before them).
+#[derive(SystemSet, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct ViewSystems;
 
 /// State of the view. `open` is what the user / commands want; the systems follow it.
 #[derive(Resource)]
@@ -140,12 +148,17 @@ pub struct MetricsView {
 }
 
 impl MetricsView {
+    /// Draw on the next frame (the view skips the frames between refreshes).
+    pub fn redraw(&mut self) {
+        self.force = true;
+    }
+
     pub fn json(&self) -> Value {
         json!({
             "open": self.open,
             "dev": self.dev,
             "shown": self.camera.is_some(),
-            "target": match self.target { Target::Window => "window", Target::Image => "image" },
+            "target": match self.target { Target::Window => "window", Target::Image => "image", Target::Primary => "viewer" },
             "redraw_ms": (self.cost_ms * 1000.0).round() / 1000.0,
             "redraws": self.redraws,
             "refresh_hz": 1.0 / REFRESH.as_secs_f32(),
@@ -171,6 +184,10 @@ struct Slot(usize);
 #[derive(Clone, Debug, PartialEq)]
 enum SlotKind {
     Info,
+    /// Viewer: which run is shown.
+    Picker,
+    /// Viewer: the run's events, one line each.
+    Events,
     /// Summary tile line: 0 = big value, 1..=3 = detail lines.
     Tile(Tile, u8),
     FeatValue(&'static str),
@@ -254,6 +271,7 @@ struct Plan {
     run_cols: usize,
     size: (u32, u32),
     scale: u32,
+    viewer: bool,
 }
 
 pub(super) fn build(app: &mut App) {
@@ -286,15 +304,15 @@ pub(super) fn finish(app: &mut App) {
     if headless || !ui {
         return;
     }
-    {
-        let mut fonts = app.world_mut().resource_mut::<Assets<Font>>();
-        let _ = fonts.insert(FONT_BODY.id(), Font::from_bytes(include_bytes!("../../assets/fonts/Barlow-Medium.ttf").to_vec()));
-        let _ = fonts.insert(FONT_LABEL.id(), Font::from_bytes(include_bytes!("../../assets/fonts/BarlowCondensed-SemiBold.ttf").to_vec()));
+    load_fonts(app);
+    if !super::offscreen::enabled() {
+        app.init_resource::<ViewerLauncher>().add_systems(Update, launch_viewer);
+        return;
     }
     app.insert_resource(MetricsView {
         open: wanted_at_start(),
         dev: false,
-        target: if super::offscreen::enabled() { Target::Image } else { Target::Window },
+        target: Target::Image,
         window: None,
         camera: None,
         root: None,
@@ -307,8 +325,55 @@ pub(super) fn finish(app: &mut App) {
         cost_ms: 0.0,
         redraws: 0,
     })
-    .add_systems(Update, (toggle_key, sync_view, scroll, refresh).chain())
+    .add_systems(Update, (toggle_key, (sync_view, scroll, refresh).chain().in_set(ViewSystems)).chain())
     .add_systems(Last, exit_with_primary);
+}
+
+fn load_fonts(app: &mut App) {
+    let mut fonts = app.world_mut().resource_mut::<Assets<Font>>();
+    let _ = fonts.insert(FONT_BODY.id(), Font::from_bytes(include_bytes!("../../assets/fonts/Barlow-Medium.ttf").to_vec()));
+    let _ = fonts.insert(FONT_LABEL.id(), Font::from_bytes(include_bytes!("../../assets/fonts/BarlowCondensed-SemiBold.ttf").to_vec()));
+}
+
+/// The viewer process's app: the view in its own window ([`super::metrics_viewer::run`]).
+pub(super) fn viewer_build(app: &mut App) {
+    load_fonts(app);
+    app.init_resource::<MetricsWindowKey>()
+        .init_resource::<MetricsFeatured>()
+        .init_resource::<MetricsCompare>()
+        .insert_resource(MetricsView {
+            open: true,
+            dev: false,
+            target: Target::Primary,
+            window: None,
+            camera: None,
+            root: None,
+            image: None,
+            plan: None,
+            slots: Vec::new(),
+            charts: Vec::new(),
+            last: None,
+            force: true,
+            cost_ms: 0.0,
+            redraws: 0,
+        })
+        .add_systems(Update, (sync_view, scroll, refresh).chain().in_set(ViewSystems));
+}
+
+/// On screen: start the viewer at launch (plain dev runs) and on [`MetricsWindowKey`].
+fn launch_viewer(
+    mut launcher: ResMut<ViewerLauncher>,
+    keys: Option<Res<ButtonInput<KeyCode>>>,
+    key: Res<MetricsWindowKey>,
+    data: Option<Res<DataDir>>,
+    mut started: Local<bool>,
+) {
+    let Some(data) = data else { return };
+    let want = (!*started && wanted_at_start()) || keys.is_some_and(|k| k.just_pressed(key.0));
+    *started = true;
+    if want && let Err(e) = launcher.launch(&data.0) {
+        warn!("{e}");
+    }
 }
 
 fn toggle_key(keys: Option<Res<ButtonInput<KeyCode>>>, key: Res<MetricsWindowKey>, mut view: ResMut<MetricsView>) {
@@ -334,7 +399,7 @@ fn sync_view(
     mut view: ResMut<MetricsView>,
     mut images: ResMut<Assets<Image>>,
     windows: Query<&Window>,
-    primary: Query<&Window, With<PrimaryWindow>>,
+    primary: Query<(Entity, &Window), With<PrimaryWindow>>,
     monitors: Query<&Monitor, With<PrimaryMonitor>>,
     info: Option<Res<GameInfo>>,
     theme: Option<Res<Theme>>,
@@ -362,9 +427,14 @@ fn sync_view(
     }
     let bg = theme.map_or_else(|| Theme::default().bg, |t| t.bg);
     let target = match view.target {
+        Target::Primary => {
+            let Ok((e, _)) = primary.single() else { return };
+            view.window = Some(e);
+            RenderTarget::Window(WindowRef::Primary)
+        }
         Target::Window => {
             // Wait for the game window so the new one can sit next to it.
-            let Ok(pw) = primary.single() else { return };
+            let Ok((_, pw)) = primary.single() else { return };
             if frames.0 < 3 {
                 return;
             }
@@ -457,7 +527,7 @@ fn refresh(
     mut commands: Commands,
     mut view: ResMut<MetricsView>,
     mut m: ResMut<Metrics>,
-    (history, run, settings): (Option<Res<MetricsHistory>>, Option<Res<RunInfo>>, Option<Res<crate::settings::CoreSettings>>),
+    (history, run, settings, viewer): (Option<Res<MetricsHistory>>, Option<Res<RunInfo>>, Option<Res<crate::settings::CoreSettings>>, Option<Res<ViewerState>>),
     (compare, featured, key): (Res<MetricsCompare>, Res<MetricsFeatured>, Res<MetricsWindowKey>),
     theme: Option<Res<Theme>>,
     windows: Query<&Window>,
@@ -478,12 +548,19 @@ fn refresh(
     let t0 = Instant::now();
     let theme = theme.map(|t| t.clone()).unwrap_or_default();
     let (size, scale) = match (view.target, view.window.and_then(|w| windows.get(w).ok())) {
-        (Target::Window, Some(w)) => ((w.width() as u32, w.height() as u32), w.scale_factor().clamp(1.0, 2.0)),
-        (Target::Window, None) => return,
+        (Target::Window | Target::Primary, Some(w)) => ((w.width() as u32, w.height() as u32), w.scale_factor().clamp(1.0, 2.0)),
+        (Target::Window | Target::Primary, None) => return,
         (Target::Image, _) => (SIZE, 1.0),
     };
-    let past: &[SessionSummary] = history.as_ref().map_or(&[], |h| &h.past);
-    let plan = make_plan_dev(&m, past, &compare, &featured, size, scale, view.dev);
+    let viewer = viewer.as_deref();
+    // The viewer: the selected run first (its finished summary, or the live one), then the
+    // others newest first.
+    let shown_id = viewer.and_then(|v| v.current()).map(|r| r.id.clone());
+    let past_all: &[SessionSummary] = history.as_ref().map_or(&[], |h| &h.past);
+    let past_vec: Vec<SessionSummary> = past_all.iter().filter(|s| Some(&s.id) != shown_id.as_ref()).cloned().collect();
+    let past: &[SessionSummary] = if viewer.is_some() { &past_vec } else { past_all };
+    let mut plan = make_plan_dev(&m, past, &compare, &featured, size, scale, view.dev);
+    plan.viewer = viewer.is_some();
     if view.plan.as_ref() != Some(&plan) {
         if let Some(root) = view.root.take() {
             commands.entity(root).try_despawn();
@@ -509,7 +586,9 @@ fn refresh(
         };
         let Some(px) = img.data.as_mut() else { continue };
         let threshold = m.threshold(c.key);
-        let cols: Vec<Option<Col>> = chart::columns(samples, now, WINDOW_SECS, c.cols);
+        // The viewer charts the whole run.
+        let span = if viewer.is_some() { now.max(1.0) } else { WINDOW_SECS };
+        let cols: Vec<Option<Col>> = chart::columns(samples, now, span, c.cols);
         let zoom = threshold.is_none() || c.key.starts_with("mem.");
         let range = chart::y_range(&cols, threshold, zoom);
         let style = palette.chart_style(threshold.is_some(), scale, c.h as f32 >= 40.0 * scale);
@@ -521,14 +600,25 @@ fn refresh(
     }
 
     // Runs: this run first, then the past newest first.
-    let quality = settings.map(|s| format!("{:?}", s.quality));
-    let cur = run.as_ref().map(|r| current(&m, r, quality.clone(), "running"));
+    let quality = match viewer {
+        Some(v) => v.quality.clone(),
+        None => settings.map(|s| format!("{:?}", s.quality)),
+    };
+    let cur = match viewer.and_then(|v| v.summary.clone()) {
+        Some(done) => Some(done),
+        None => run.as_ref().map(|r| current(&m, r, quality.clone(), "running")),
+    };
     let runs: Vec<&SessionSummary> = cur.iter().chain(past.iter().rev()).collect();
     let rows = view.plan.as_ref().map(|p| p.rows.clone()).unwrap_or_default();
     // One 60 s summary per key per redraw (each sorts up to a minute of samples).
     let recent: std::collections::HashMap<&'static str, Summary> = m.keys().filter_map(|k| m.recent(k).map(|s| (k, s))).collect();
-    let live = live.get();
-    let ctx = FillCtx { m: &m, recent: &recent, runs: &runs, rows: &rows, palette: &palette, view: &view, live: &live };
+    let mut live = live.get();
+    if viewer.is_some() {
+        live.quality = quality.clone();
+        live.level = m.latest("render.governor_level").map_or(0, |l| l as usize);
+        live.scale = m.latest("render.scale").map_or(1.0, |s| s as f32);
+    }
+    let ctx = FillCtx { m: &m, recent: &recent, runs: &runs, rows: &rows, palette: &palette, view: &view, live: &live, viewer };
     for (slot, mut text, mut color) in &mut texts {
         let Some(kind) = view.slots.get(slot.0) else { continue };
         let (s, c) = ctx.fill(kind);
@@ -546,7 +636,9 @@ fn refresh(
     let ms = t0.elapsed().as_secs_f32() * 1000.0;
     view.cost_ms = if view.redraws == 0 { ms } else { view.cost_ms + 0.2 * (ms - view.cost_ms) };
     view.redraws += 1;
-    m.record("perf.metrics_view_ms", ms as f64);
+    if viewer.is_none() {
+        m.record("perf.metrics_view_ms", ms as f64);
+    }
 }
 
 /// Resources behind [`Live`].
@@ -739,7 +831,7 @@ fn make_plan_dev(m: &Metrics, past: &[SessionSummary], compare: &MetricsCompare,
     rows.dedup();
     rows.truncate(MAX_RUN_ROWS);
     let fit = ((size.0 as f32 - 32.0 - 20.0 - RUN_KEY) / RUN_COL).floor().max(1.0) as usize;
-    Plan { featured, groups: cols, rows, run_cols: fit.min(1 + past.len()).min(10), size, scale: (scale * 100.0) as u32 }
+    Plan { featured, groups: cols, rows, run_cols: fit.min(1 + past.len()).min(10), size, scale: (scale * 100.0) as u32, viewer: false }
 }
 
 // ---- building ----
@@ -888,8 +980,17 @@ fn build_ui(
                     let s = ui.slot(SlotKind::Info);
                     p.spawn((s, text("", font(body, 14.0), t.text_muted)));
                 });
-                p.spawn(text(format!("{key:?} hide · wheel scrolls · last {WINDOW_SECS:.0} s"), font(body, 13.0), t.text_dim));
+                let hint = if plan.viewer {
+                    "Left / Right: older / newer run · L: latest · wheel scrolls (events below the keys) · whole run, 1 s averages".to_string()
+                } else {
+                    format!("{key:?} hide · wheel scrolls · last {WINDOW_SECS:.0} s")
+                };
+                p.spawn(text(hint, font(body, 13.0), t.text_dim));
             });
+        if plan.viewer {
+            let s = ui.slot(SlotKind::Picker);
+            p.spawn((s, text("", font(label, 16.0), t.text)));
+        }
 
         // Summary tiles.
         {
@@ -975,10 +1076,11 @@ fn build_ui(
         // Every key, grouped, two columns, scrolls.
         p.spawn((
             MetricsScroll,
-            Node { flex_grow: 1.0, min_height: px(0), overflow: Overflow::scroll_y(), column_gap: px(12), align_items: AlignItems::FlexStart, ..default() },
+            Node { flex_grow: 1.0, min_height: px(0), overflow: Overflow::scroll_y(), flex_direction: FlexDirection::Column, row_gap: px(10), ..default() },
             ScrollPosition::default(),
         ))
         .with_children(|p| {
+          p.spawn(Node { column_gap: px(12), align_items: AlignItems::FlexStart, flex_shrink: 0.0, ..default() }).with_children(|p| {
             for col in &plan.groups {
                 p.spawn(Node { flex_direction: FlexDirection::Column, flex_grow: 1.0, flex_basis: px(0), row_gap: px(10), ..default() })
                     .with_children(|p| {
@@ -1021,6 +1123,18 @@ fn build_ui(
                             });
                         }
                     });
+            }
+          });
+            // Viewer: the run's events, under the keys.
+            if plan.viewer {
+                let (mut node, bg) = ui.panel();
+                node.flex_shrink = 0.0;
+                node.row_gap = px(4);
+                p.spawn((node, bg)).with_children(|p| {
+                    p.spawn(text("EVENTS", font(label, 15.0), t.info));
+                    let s = ui.slot(SlotKind::Events);
+                    p.spawn((s, text("", font(body, 12.0), t.text_muted)));
+                });
             }
         });
 
@@ -1086,6 +1200,7 @@ struct FillCtx<'a> {
     palette: &'a Palette,
     view: &'a MetricsView,
     live: &'a Live,
+    viewer: Option<&'a ViewerState>,
 }
 
 impl FillCtx<'_> {
@@ -1094,6 +1209,14 @@ impl FillCtx<'_> {
         let m = self.m;
         match kind {
             SlotKind::Info => (self.info(), t.text_muted),
+            SlotKind::Picker => match self.viewer {
+                Some(v) => (v.picker(), if v.current().is_some_and(|r| r.live) { t.accent } else { t.text }),
+                None => (String::new(), t.text_dim),
+            },
+            SlotKind::Events => match self.viewer {
+                Some(v) if !v.events.is_empty() => (v.events.join("\n"), t.text_muted),
+                _ => ("no events".into(), t.text_dim),
+            },
             SlotKind::Tile(tile, line) => self.tile(*tile, *line),
             SlotKind::FeatValue(k) | SlotKind::RowValue(k) => match m.latest(k) {
                 Some(v) => (with_unit(k, v), self.palette.value(m.threshold(k), v)),
@@ -1399,6 +1522,15 @@ fn stat_num(key: &str, v: f64) -> String {
 // ---- commands ----
 
 fn window_cmd(world: &mut World, p: Value) -> Result<Value, String> {
+    // On screen the view is the viewer process: (re)start it.
+    if world.contains_resource::<ViewerLauncher>() {
+        if p.get("on").and_then(Value::as_bool) == Some(false) {
+            return Err("the metrics viewer is its own process: close its window".into());
+        }
+        let data = world.get_resource::<DataDir>().map(|d| d.0.clone()).ok_or("no data folder")?;
+        let pid = world.resource_mut::<ViewerLauncher>().launch(&data)?;
+        return Ok(json!({"open": true, "target": "viewer", "pid": pid}));
+    }
     let mut view = world.get_resource_mut::<MetricsView>().ok_or("no metrics view in this run (headless or no UI)")?;
     let keep = p.get("scroll").is_some() || p.get("dev").is_some();
     let on = p.get("on").and_then(Value::as_bool).unwrap_or(if keep { view.open } else { !view.open });

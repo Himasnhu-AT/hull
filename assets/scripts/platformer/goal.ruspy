@@ -1,0 +1,19 @@
+// The exit post. body_entered and reached are wired in levels/platformer.level.ron.
+signal("reached");
+done = false;
+
+fn _ready() {
+    add_body("sensor", "box", [1.5, 3.0, 3.0]);
+    t = tween();
+    tween_property(t, "scale", [1.0, 1.15, 1.0], 0.8);
+    tween_property(t, "scale", [1.0, 1.0, 1.0], 0.8);
+    tween_set_loops(t, 0);
+}
+
+fn on_enter(other) {
+    if done || !other.is_in_group("player") {
+        return;
+    }
+    done = true;
+    emit_signal("reached");
+}

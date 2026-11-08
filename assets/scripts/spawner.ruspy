@@ -1,0 +1,25 @@
+// Spawns lanterns from a scene file on its ScriptTimer (`timeout` -> _on_timeout is wired in
+// script_demo.level.ron). The timer is autostart: false; the Game starts and stops it.
+max_lanterns = 8;
+scene = "levels/lantern.level.ron";
+
+fn begin() {
+    spawn_lantern([4.0, 0.5, 0.0]);       // the first one is always close, so a round starts gently
+    timer_start();
+}
+
+fn stop() {
+    timer_stop();
+}
+
+fn _on_timeout() {
+    if len(get_nodes_in_group("lanterns")) < max_lanterns {
+        spawn_lantern([lerp(-10.0, 10.0, randf()), 0.5, lerp(-9.0, 9.0, randf())]);
+    }
+}
+
+fn spawn_lantern(pos) {
+    l = instantiate(scene, self());       // root entity of the cloned level file
+    set_position(l, pos);
+    return l;
+}

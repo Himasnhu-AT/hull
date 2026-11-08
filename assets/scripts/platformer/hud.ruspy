@@ -1,0 +1,106 @@
+// Score, health bar, pause menu and the end panel; built once from script.
+// It keeps running while the game is paused (process_mode always).
+game = null;
+score_label = null;
+hp_bar = null;
+menu = null;
+end_panel = null;
+end_label = null;
+shown_pause = false;
+
+fn _ready() {
+    set_process_mode("always");
+    game = get_node("/Game");
+
+    bar = ui_hbox();
+    ui_set(bar, "anchor", "top");
+    ui_set(bar, "padding", 14);
+    ui_set(bar, "gap", 24);
+    score_label = ui_label(bar, "Shards 0");
+    set_font_size(score_label, 26);
+    hp_bar = ui_progress(bar, 1.0);
+    ui_set(hp_bar, "width", 160);
+    hint = ui_label(bar, "A/D move  Space jump  P pause");
+    set_font_size(hint, 16);
+
+    menu = ui_panel();
+    ui_set(menu, "anchor", "center");
+    ui_set(menu, "padding", 24);
+    ui_set(menu, "bg", [0.04, 0.05, 0.08, 0.9]);
+    ui_set(menu, "visible", false);
+    col = ui_vbox(menu);
+    ui_set(col, "gap", 12);
+    ui_set(col, "align", "center");
+    t = ui_label(col, "Paused");
+    set_font_size(t, 36);
+    vol = ui_slider(col, 0.0, 1.0, 1.0, 0.05);
+    ui_set(vol, "width", 220);
+    vol.connect("value_changed", self, "on_volume");
+    mute = ui_checkbox(col, "Mute music", false);
+    mute.connect("toggled", self, "on_mute");
+    resume = ui_button(col, "Resume");
+    resume.connect("pressed", self, "on_resume");
+    again = ui_button(col, "Restart");
+    again.connect("pressed", self, "on_restart");
+
+    end_panel = ui_panel();
+    ui_set(end_panel, "anchor", "center");
+    ui_set(end_panel, "padding", 28);
+    ui_set(end_panel, "bg", [0.04, 0.05, 0.08, 0.9]);
+    ui_set(end_panel, "visible", false);
+    ecol = ui_vbox(end_panel);
+    ui_set(ecol, "gap", 14);
+    ui_set(ecol, "align", "center");
+    end_label = ui_label(ecol, "");
+    set_font_size(end_label, 36);
+    eb = ui_button(ecol, "Play again");
+    eb.connect("pressed", self, "on_restart");
+
+    game.connect("score_changed", self, "on_score");
+    game.connect("hp_changed", self, "on_hp");
+    game.connect("state_changed", self, "on_state");
+}
+
+fn _process(dt) {
+    if is_action_just_pressed("pf_pause") && game.state == "playing" {
+        toggle_pause();
+    }
+}
+
+fn toggle_pause() {
+    shown_pause = !get_tree_paused();
+    set_tree_paused(shown_pause);
+    ui_set(menu, "visible", shown_pause);
+}
+
+fn on_score(score, total) {
+    score_label.text = "Shards " + score + " / " + total;
+}
+
+fn on_hp(hp, max_hp) {
+    set_progress(hp_bar, 1.0 * hp / max_hp);
+}
+
+fn on_state(state) {
+    end_label.text = "You made it!";
+    if state == "lost" {
+        end_label.text = "Out of health";
+    }
+    ui_set(end_panel, "visible", true);
+}
+
+fn on_volume(v) {
+    set_bus_volume("music", v);
+}
+
+fn on_mute(on) {
+    set_bus_mute("music", on);
+}
+
+fn on_resume() {
+    toggle_pause();
+}
+
+fn on_restart() {
+    game.call_deferred("restart");
+}

@@ -1,0 +1,50 @@
+// Autoload "Game": the rules of a round. Reach it from anywhere with get_node("/Game").
+// Members (top-level variables) are the game state; signals tell the HUD what changed.
+signal("score_changed");   // (score)
+signal("state_changed");   // (state, score, best): "menu" | "playing" | "over"
+
+state = "menu";
+score = 0;
+best = 0;
+round_len = 30.0;
+time_left = 0.0;
+
+// Called by the HUD's Play button (deferred, so the HUD is not mid-call).
+fn start() {
+    score = 0;
+    time_left = round_len;
+    state = "playing";
+    set_position(get_node("/Player"), [0.0, 0.5, 0.0]);
+    call_group("lanterns", "reset");
+    call(get_node("/Spawner"), "begin");
+    emit_signal("score_changed", score);
+    emit_signal("state_changed", state, score, best);
+}
+
+// Lantern.lit is connected to this in lantern.level.ron: `lit -> /Game add_score`.
+fn add_score(points) {
+    if state != "playing" {
+        return;
+    }
+    score = score + points;
+    emit_signal("score_changed", score);
+}
+
+fn finish() {
+    state = "over";
+    time_left = 0.0;
+    if score > best {
+        best = score;
+    }
+    call(get_node("/Spawner"), "stop");
+    emit_signal("state_changed", state, score, best);
+}
+
+fn _process(dt) {
+    if state == "playing" {
+        time_left = time_left - dt;
+        if time_left <= 0.0 {
+            finish();
+        }
+    }
+}

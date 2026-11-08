@@ -1,0 +1,89 @@
+(
+  version: 1,
+  world: None,
+  look: Some(Preset("clear_day")),
+  entities: (
+    resources: {},
+    entities: {
+      4294966001: (
+        components: {
+          "bevy_ecs::name::Name": "Main",
+          "bevy_transform::components::transform::Transform": (translation: (0, 0, 0), rotation: (0.0, 0.0, 0.0, 1.0), scale: (1.0, 1.0, 1.0)),
+          "bevy_camera::visibility::Visibility": Inherited,
+          "engine::level::LevelEntity": (id: (1)),
+          "engine::scripting::Script": (path: "scripts/platformer/main.ruspy", priority: 0, process_mode: Inherit),
+        },
+      ),
+      4294966002: (
+        components: {
+          "bevy_ecs::name::Name": "Player",
+          "bevy_transform::components::transform::Transform": (translation: (0, 1.0, 0), rotation: (0.0, 0.0, 0.0, 1.0), scale: (1.0, 1.0, 1.0)),
+          "bevy_camera::visibility::Visibility": Inherited,
+          "engine::level::LevelEntity": (id: (2)),
+          "engine::scripting::Script": (path: "scripts/platformer/player.ruspy", priority: 0, process_mode: Inherit),
+          "engine::level::primitive::Primitive": (shape: Capsule, size: (0.8, 1.8, 0.8), color: Srgba((red: 0.2, green: 0.75, blue: 0.7, alpha: 1.0)), metallic: 0.0, roughness: 0.6),
+        },
+      ),
+      4294966003: (
+        components: {
+          "bevy_ecs::name::Name": "Goal",
+          "bevy_transform::components::transform::Transform": (translation: (46, 1.5, 0), rotation: (0.0, 0.0, 0.0, 1.0), scale: (1.0, 1.0, 1.0)),
+          "bevy_camera::visibility::Visibility": Inherited,
+          "engine::level::LevelEntity": (id: (3)),
+          "engine::scripting::Script": (path: "scripts/platformer/goal.ruspy", priority: 0, process_mode: Inherit),
+          "engine::level::primitive::Primitive": (shape: Cuboid, size: (0.5, 3.0, 0.5), color: Srgba((red: 0.95, green: 0.9, blue: 0.4, alpha: 1.0)), metallic: 0.0, roughness: 0.6),
+          "engine::scripting::Connections": ([(signal: "body_entered", target: ".", method: "on_enter", binds: [], deferred: false, one_shot: false), (signal: "reached", target: "/Game", method: "win", binds: [], deferred: false, one_shot: false)]),
+        },
+      ),
+      4294966004: (
+        components: {
+          "bevy_ecs::name::Name": "MoverA",
+          "bevy_transform::components::transform::Transform": (translation: (23, 1.2, 0), rotation: (0.0, 0.0, 0.0, 1.0), scale: (1.0, 1.0, 1.0)),
+          "bevy_camera::visibility::Visibility": Inherited,
+          "engine::level::LevelEntity": (id: (4)),
+          "engine::scripting::Script": (path: "scripts/platformer/mover.ruspy", priority: 0, process_mode: Inherit),
+          "engine::level::primitive::Primitive": (shape: Cuboid, size: (3.0, 0.4, 3.0), color: Srgba((red: 0.35, green: 0.5, blue: 0.8, alpha: 1.0)), metallic: 0.0, roughness: 0.6),
+          "engine::scripting::ScriptProps": (values: [(name: "from", value: "[23.0, 1.2, 0.0]"), (name: "to", value: "[27.0, 1.2, 0.0]"), (name: "secs", value: "3.0")]),
+        },
+      ),
+      4294966005: (
+        components: {
+          "bevy_ecs::name::Name": "MoverB",
+          "bevy_transform::components::transform::Transform": (translation: (36, 0.6, 0), rotation: (0.0, 0.0, 0.0, 1.0), scale: (1.0, 1.0, 1.0)),
+          "bevy_camera::visibility::Visibility": Inherited,
+          "engine::level::LevelEntity": (id: (5)),
+          "engine::scripting::Script": (path: "scripts/platformer/mover.ruspy", priority: 0, process_mode: Inherit),
+          "engine::level::primitive::Primitive": (shape: Cuboid, size: (3.0, 0.4, 3.0), color: Srgba((red: 0.35, green: 0.5, blue: 0.8, alpha: 1.0)), metallic: 0.0, roughness: 0.6),
+          "engine::scripting::ScriptProps": (values: [(name: "from", value: "[36.0, 0.6, 0.0]"), (name: "to", value: "[36.0, 3.0, 0.0]"), (name: "secs", value: "2.5")]),
+        },
+      ),
+      4294966006: (
+        components: {
+          "bevy_ecs::name::Name": "Walker",
+          "bevy_transform::components::transform::Transform": (translation: (14, 0.45, 0), rotation: (0.0, 0.0, 0.0, 1.0), scale: (1.0, 1.0, 1.0)),
+          "bevy_camera::visibility::Visibility": Inherited,
+          "engine::level::LevelEntity": (id: (6)),
+          "engine::scripting::Script": (path: "scripts/platformer/walker.ruspy", priority: 0, process_mode: Inherit),
+        },
+      ),
+      4294966007: (
+        components: {
+          "bevy_ecs::name::Name": "Runner",
+          "bevy_transform::components::transform::Transform": (translation: (32, 0.6, 0), rotation: (0.0, 0.0, 0.0, 1.0), scale: (1.0, 1.0, 1.0)),
+          "bevy_camera::visibility::Visibility": Inherited,
+          "engine::level::LevelEntity": (id: (7)),
+          "engine::scripting::Script": (path: "scripts/platformer/runner.ruspy", priority: 0, process_mode: Inherit),
+        },
+      ),
+      4294966008: (
+        components: {
+          "bevy_ecs::name::Name": "Hud",
+          "bevy_transform::components::transform::Transform": (translation: (0, 0, 0), rotation: (0.0, 0.0, 0.0, 1.0), scale: (1.0, 1.0, 1.0)),
+          "bevy_camera::visibility::Visibility": Inherited,
+          "engine::level::LevelEntity": (id: (8)),
+          "engine::scripting::Script": (path: "scripts/platformer/hud.ruspy", priority: 0, process_mode: Inherit),
+        },
+      ),
+    },
+  ),
+)

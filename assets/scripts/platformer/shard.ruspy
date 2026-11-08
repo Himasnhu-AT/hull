@@ -1,0 +1,33 @@
+// A collectible: bobs on a looping tween, collected through the sensor's body_entered.
+signal("collected");
+base_y = 0.0;
+taken = false;
+bob = 0;
+
+fn _ready() {
+    add_to_group("shards");
+    add_primitive("sphere", [0.45, 0.45, 0.45], [1.0, 0.82, 0.25]);
+    add_body("sensor", "sphere", [1.0, 1.0, 1.0]);
+    connect("body_entered", self, "on_body");
+    connect("collected", get_node("/Game"), "add_score");
+    base_y = self.position[1];
+    bob = tween();
+    tween_set_trans(bob, "sine");
+    tween_property(bob, "position", [self.position[0], base_y + 0.3, 0.0], 0.7);
+    tween_property(bob, "position", [self.position[0], base_y, 0.0], 0.7);
+    tween_set_loops(bob, 0);
+}
+
+fn on_body(other) {
+    if taken || !other.is_in_group("player") {
+        return;
+    }
+    taken = true;
+    tween_kill(bob);
+    emit_signal("collected", 1);
+    t = tween();
+    tween_property(t, "scale", [0.01, 0.01, 0.01], 0.2);
+    tween_callback(t, "queue_free");
+    spawn_vfx("sparks", self.global_position);
+    play_sound("pickup");
+}

@@ -117,6 +117,32 @@ inputs, wrong input counts, cycles and bad parameters, naming the node.
 - `PcgSettings::cells_per_frame` (2) cells spawn per frame.
 - `Emit` ports arrive once per evaluated cell as `PcgEmitted { volume, cell, port, points }`.
 
+## Streaming (`PcgStreaming`)
+
+Without it, every cell of a volume is evaluated and kept for the whole run (output cache, root
+entities, emitted points). For large worlds put `PcgStreaming` on the volume entity:
+
+```rust
+commands.spawn((PcgVolume { cell: 64.0, ..PcgVolume::new(graph, inputs, area) }, PcgStreaming::radius(600.0)));
+```
+
+- A cell loads when its square is within `radius` (XZ) of the `MainCamera` or of any
+  `world::StreamSource` (feature `world`), and is dropped past `radius + margin`
+  (`PcgStreaming::radius(r)` sets margin to r/8, at least 16 m).
+- Dropping a cell despawns its root, frees its cached output and cancels an evaluation in
+  flight. Cells that had spawned send `PcgCellDropped { volume, cell }`: drop whatever you
+  built from that cell's `PcgEmitted` points. On re-entry the cell evaluates again (same
+  seeds, same points) and emits again.
+- Dropped and replaced cell roots are despawned in `Last`, after every `Update` / `PostUpdate`
+  command has applied, so a game system that tags fresh output (`insert` on `Added`
+  entities) never meets a root despawned under it. A system in `Last` should still use
+  `try_insert` / `try_remove`.
+- Only cells around the sources are visited each frame; `pcg.stats` shows `cells` (loaded)
+  and `cells_dropped`.
+- Things that must exist far away (impostor fields, map markers) shouldn't come from a
+  streamed volume's emits: put them in a second, unstreamed volume with only the `Emit`
+  nodes they need, or generate them with `pcg-core` directly.
+
 ## Scalability
 
 - `Spawn` tiers: `Essential` (gameplay: never thinned), `Normal`, `Fine` (thinned first).
@@ -130,10 +156,98 @@ inputs, wrong input counts, cycles and bad parameters, naming the node.
 
 | Command | Params | Returns |
 |---|---|---|
-| `pcg.stats` | | volumes, cells, pending, evaluations, cache hits, live cell roots, points spawned/thinned, last evaluation µs, errors, density |
+| `pcg.stats` | | volumes, cells, pending, evaluations, cache hits, cells dropped, live cell roots, points spawned/thinned, last evaluation µs, errors, density |
 | `pcg.inspect` | `x`, `z`, `volume` | points per node in that cell, spawns, emits |
 | `pcg.regen` | | regenerate every cell |
 | `pcg.scale` | `density` | set `PcgSettings::density` (respawns from cache) |
+
+## Following the terrain (`PcgFollowTerrain`, feature `world`)
+
+A volume's `Inputs::surface` is a copy of the heights. Put `PcgFollowTerrain` (reflected, saved in
+levels) next to the `PcgVolume` and `Project` nodes sample the live `world::TerrainHeights`
+instead: each cell's evaluation gets a small grid-aligned crop (cell + graph halo + 2 samples, so
+bilinear heights and normals equal the full grid's), never a copy of the whole map. The copy in
+`Inputs` is then only the fallback.
+
+A `world::TerrainChanged` (Height layer) marks the cells overlapping `rect_world` grown by the
+graph halo and 2 samples. Marked cells get a new key (the cell key mixes a per-cell terrain
+revision), so only they re-evaluate; the rest keep their `Output` (same `Arc`). Marks are flushed
+at most every `PcgSettings::terrain_interval` (0.1 s): the first edit of a stroke flushes at once,
+the following ones are batched, and the last batch flushes within one interval of the stroke
+ending, so a 20 Hz brush does not re-evaluate a cell per dab. Cells not loaded (streaming) just
+evaluate against the current terrain when they load. A re-evaluated cell that had emitted points
+sends `PcgCellDropped` and then a fresh `PcgEmitted`.
+
+Override keys survive a height change: seeds hash the graph, the node and the sampler's position
+(from the input shapes), never the ground height (`seeds_ignore_the_ground_height` in pcg-core).
+Removed / moved / area edits therefore still apply after sculpting; moved and hand-placed items
+keep the Y they were given. `Project` is the only op that reads the ground. Heights are the
+bilinear ones of pcg-core's `Surface`, not the terrain mesh's triangles: a rock can sit a few cm
+off the rendered surface on a sharp crease.
+
+## Overrides (hand edits on top of the graph)
+
+`PcgOverrides` (a reflected component on the `PcgVolume` entity, saved in levels) holds what a
+person changed: `removed` (generated points deleted), `moved` (point -> new transform), `added`
+(hand-placed `item` + transform + the Spawn `node` it belongs to) and `areas` (XZ polygons with a
+`density`; 0 = clear, e.g. a no-tree zone; `nodes: Some([..])` limits it to those nodes). No
+component = no cost.
+
+**Keys.** A generated point is named by `PointKey { node, seed }`: the Spawn / Emit node id and
+the point's seed. `pcg_core::seed_at` hashes graph seed, node and the world position (1 mm), so
+the key is the same after re-evaluation, after a streaming drop and re-entry, at any cell size
+and in any order (tested). Moving a point keeps its key (it is the generated identity); a
+hand-placed item's key follows its position. A key whose point no longer exists (graph changed)
+is ignored. A move records the item, so it is self-contained and area-correct: any area apply drops a
+moved point whose destination is outside it and appends one whose destination is inside, even
+if it was generated elsewhere, so it appears exactly once (origin and destination cells both
+respawn). Moved and hand-placed points are never thinned by quality or the governor.
+
+**Apply.** `OverrideIndex` (`ov.index(cell_size)`) removes, moves, thins by area (deterministic
+by seed, nested: density 0.3 is a subset of 0.6) and appends hand-placed items inside the area it
+is given (half-open, so tiles never double). The volume applies it to the cached evaluation when a
+cell spawns, so editing overrides respawns only the cells they touch (a per-cell hash compares),
+without evaluating the graph again; `PcgStats::override_respawns` counts them. `PcgEmitted` carries
+the edited points; when an edit changes a cell that has emits, `PcgCellDropped` then a fresh
+`PcgEmitted` is sent (drop what you built from that cell, rebuild from the new points).
+
+**In a game's own evaluation** (colliders, nav): evaluate the graph per tile as before, then
+
+```rust
+let ix = overrides.index(32.0);                       // once per change, not per tile
+let area = Area::new(tile_min, tile_max);            // the tile's XZ rect
+for s in &mut out.spawns { ix.apply_spawned(area, s); }       // or
+ix.apply_points("trees", area, &mut points);                  // any PointSet of node "trees"
+```
+
+The result equals what the volume spawned in that area (same removed / moved / thinned points).
+Added items are appended to the set whose area contains them, with `HAND_ATTR` ("hand") = 1.
+`PcgOverrides::apply(node, area, pts)` is the one-shot form (builds an index each call).
+Edit helpers: `remove_point`, `move_point`, `add_item`.
+
+**Picking.** `pcg_pick(&World, origin, dir) -> Option<PcgPick { volume, key, item, transform,
+distance, cell, emitted }>` rays against the point sets of loaded cells (bounding sphere per point
+from the catalog mesh AABB x scale; Emit points use their extent), so it works on merged meshes;
+thinned and removed points are not hit, hand-placed ones are. `find_point(world, volume, &key)`
+looks a key up.
+
+| Command | Params | Returns |
+|---|---|---|
+| `pcg.pick` | `origin`, `dir` | nearest hit: volume, key `{node, seed}` (seed as a string), item, transform, distance, cell |
+| `pcg.overrides.get` | `volume` (entity id, default first) | counts and every entry |
+| `pcg.overrides.remove` | `volume`, `key`, `at`? | removes a generated or hand-placed point (`at` only for unloaded cells) |
+| `pcg.overrides.move` | `volume`, `key`, `transform` `{translation, rotation (xyzw), scale}`, `at`? | the key afterwards |
+| `pcg.overrides.add` | `volume`, `item`, `transform`, `node`? | its key (`node` defaults to the Spawn node listing the item) |
+| `pcg.overrides.area` | `volume`, `polygon` `[[x,z],..]`, `density`? (0), `nodes`? | counts |
+| `pcg.overrides.clear` | `volume` | removes all |
+
+`pcg.inspect` takes `node` and then lists that node's points with keys. Demo:
+`python3 -I scripts/play.py examples/pcg_town_edit.steps.json --example pcg_town --features pcg`
+(clears a polygon, removes three trees, hand-places two trees and a bush).
+
+Cost (dev build, Apple M5 Pro): building the index for 1000 edits 0.4 ms; applying it to a cell
+of 4000 points with 1000 removed / moved and an area 46 us; a cell no override touches is used as
+is (one hash lookup).
 
 ## Gameplay safety
 
@@ -150,9 +264,11 @@ re-evaluation.
 
 ## Known limits (v1)
 
-- No streaming by distance yet: every cell of a volume is generated (nearest first).
+- Streaming radius is distance only (no view-direction or speed look-ahead); positions are
+  world coordinates (with a floating origin, keep volumes and sources in the same frame).
 - `Difference` / `Intersect` test rects and point boxes, not polylines (buffer streets into
   rects to keep things off them).
 - No subgraphs, loops, splines (`SplineSample`), grammar (`SubdivideSegment`) or GPU path.
 - Merged meshes carry positions, normals, UVs and tangents only (no vertex colours or skinning).
+- Overrides: hand-placed Emit points carry no item name; keys are lost if the graph's node ids change.
 - No gizmo overlay yet; use `pcg.inspect` and screenshots.

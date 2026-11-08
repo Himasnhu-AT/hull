@@ -18,6 +18,11 @@
 //!   ([`PcgScalability`]) and by the governor's [`crate::render_budget::GovernorStep::PcgDensity`],
 //!   deterministically (lower quality ⊂ higher); changing it respawns from the cache.
 //!   `Essential` (gameplay) never thins.
+//! - **Overrides** ([`PcgOverrides`]): hand edits (delete, move, add, clear areas) applied to the cached output; `docs/PCG.md`.
+//! - **Streaming** (optional, [`PcgStreaming`] next to the volume): only cells within `radius`
+//!   of the main camera (and `world::StreamSource`s, feature `world`) are evaluated and kept;
+//!   cells past `radius + margin` are dropped (entities, cached output, emitted points: a
+//!   [`PcgCellDropped`] message) and evaluated again, deterministically, when re-entered.
 
 use std::sync::Arc;
 
@@ -29,6 +34,10 @@ use bevy::tasks::{AsyncComputeTaskPool, Task, futures_lite::future};
 
 pub use pcg_core;
 use pcg_core::{Area, Graph, Inputs, Output, SpawnKind, keep_for_tier, mix64};
+
+mod overrides;
+
+pub use overrides::{AddedItem, HAND_ATTR, MovedPoint, OverrideArea, OverrideIndex, PcgOverrides, PcgPick, PointKey, RemovedPoint, find_point, pcg_pick};
 
 use crate::gfx::MainCamera;
 use crate::render_budget::Scenery;
@@ -61,6 +70,15 @@ impl PcgVolume {
     }
 }
 
+/// Marks a [`PcgVolume`] that follows the live terrain (feature `world`): `Project` nodes sample
+/// `world::TerrainHeights` (a crop per cell, bilinear) instead of the copy in the inputs, and a
+/// `world::TerrainChanged` re-evaluates only the cells it overlaps (plus the graph halo), at most
+/// every [`PcgSettings::terrain_interval`] while an edit stream runs, and once more at its end.
+/// Override keys survive (seeds never read the ground height). Hand-placed items keep their Y.
+#[derive(Component, Reflect, Clone, Copy, Debug, Default)]
+#[reflect(Component, Default)]
+pub struct PcgFollowTerrain;
+
 /// One mesh item: what to draw (and collide with) for a point. Point scale applies to all.
 #[derive(Clone, Debug)]
 pub struct PcgMesh {
@@ -75,6 +93,37 @@ pub struct PcgMesh {
 pub enum PcgLight {
     Point(PointLight, Vec3),
     Spot(SpotLight, Vec3),
+}
+
+/// Streams a [`PcgVolume`]: only cells near the main camera (and `world::StreamSource`
+/// entities) are evaluated and kept. Without it every cell of the area is evaluated and kept.
+#[derive(Component, Clone, Copy, Debug)]
+pub struct PcgStreaming {
+    /// A cell loads when its square is within this distance (m, XZ) of a source.
+    pub radius: f32,
+    /// A loaded cell unloads past `radius + margin` (no load/unload flicker at the edge).
+    pub margin: f32,
+}
+
+impl Default for PcgStreaming {
+    fn default() -> Self {
+        PcgStreaming { radius: 512.0, margin: 64.0 }
+    }
+}
+
+impl PcgStreaming {
+    pub fn radius(radius: f32) -> PcgStreaming {
+        PcgStreaming { radius, margin: (radius * 0.125).max(16.0) }
+    }
+}
+
+/// A cell that had spawned was dropped (left a [`PcgStreaming`] radius or the area, or the
+/// volume was removed from its cells): its entities are gone; drop anything built from its
+/// [`PcgEmitted`] points. If it comes back, its points are emitted again.
+#[derive(Message, Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PcgCellDropped {
+    pub volume: Entity,
+    pub cell: IVec2,
 }
 
 /// Item names → assets.
@@ -127,11 +176,13 @@ pub struct PcgSettings {
     pub merge_max_vertices: usize,
     /// Extra multiplier on every thinned tier (1 = as [`PcgScalability`] says).
     pub density: f32,
+    /// Seconds between re-evaluations of cells dirtied by terrain edits ([`PcgFollowTerrain`]).
+    pub terrain_interval: f32,
 }
 
 impl Default for PcgSettings {
     fn default() -> Self {
-        PcgSettings { in_flight: 4, cells_per_frame: 2, merge_min_count: 8, merge_max_vertices: 2048, density: 1.0 }
+        PcgSettings { in_flight: 4, cells_per_frame: 2, merge_min_count: 8, merge_max_vertices: 2048, density: 1.0, terrain_interval: 0.1 }
     }
 }
 
@@ -153,6 +204,10 @@ pub struct PcgStats {
     pub evaluations: u64,
     /// Cells respawned from cached output (quality or density changed) without evaluating.
     pub cache_hits: u64,
+    /// Cells respawned because their [`PcgOverrides`] changed (from the cached output).
+    pub override_respawns: u64,
+    /// Cells dropped by streaming (or leaving the area), total since start.
+    pub cells_dropped: u64,
     /// Cell root entities alive now.
     pub entities: u32,
     /// Points spawned / thinned out, totals since start (respawns count again).
@@ -171,6 +226,12 @@ struct Cell {
     root: Option<Entity>,
     /// The thinning it was spawned with.
     spawned_with: Option<(f32, f32)>,
+    /// [`OverrideIndex::cell_hash`] it was spawned with.
+    spawned_ov: u64,
+    /// Emitted points were handed out for this cell (a re-evaluation announces a drop first).
+    emitted: bool,
+    /// `output` with the volume's [`PcgOverrides`] applied (only cells an override touches).
+    shown: Option<Arc<Output>>,
 }
 
 /// Per volume: its cells.
@@ -182,6 +243,24 @@ pub struct PcgCells {
     /// only recomputed when the volume's inputs, graph or cells change.
     keyed: Option<(usize, u64, u32)>,
     keys: HashMap<IVec2, u64>,
+    /// Terrain edits ([`PcgFollowTerrain`]): per-cell revision mixed into the cell key, cells
+    /// waiting for the next flush, and when the last flush ran.
+    terrain_rev: HashMap<IVec2, u32>,
+    terrain_dirty: bevy::platform::collections::HashSet<IVec2>,
+    terrain_flushed: f64,
+    /// Index of the volume's [`PcgOverrides`] (None: no overrides) and the cell size it was built for.
+    ov: Option<Arc<OverrideIndex>>,
+}
+
+impl PcgCells {
+    /// The cell's cache key: graph + nearby inputs, and its terrain revision.
+    fn key_of(&self, k: IVec2) -> u64 {
+        let base = self.keys.get(&k).copied().unwrap_or(0);
+        match self.terrain_rev.get(&k) {
+            Some(r) => mix64(base ^ (*r as u64).wrapping_mul(0x9e37_79b9_7f4a_7c15)),
+            None => base,
+        }
+    }
 }
 
 /// Marks a cell's root entity.
@@ -202,7 +281,15 @@ impl Plugin for PcgPlugin {
             .init_resource::<PcgSettings>()
             .init_resource::<PcgStats>()
             .add_message::<PcgEmitted>()
-            .add_systems(Update, (schedule_cells, collect_cells, spawn_cells).chain());
+            .add_message::<PcgCellDropped>()
+            .register_type::<PcgOverrides>()
+            .register_type::<PcgFollowTerrain>()
+            .init_resource::<RetiredRoots>()
+            .add_systems(Update, (schedule_cells, collect_cells, spawn_cells).chain())
+            .add_systems(Update, follow_terrain.before(schedule_cells))
+            .add_systems(Last, despawn_retired);
+        #[cfg(feature = "world")]
+        app.add_message::<crate::world::TerrainChanged>();
         #[cfg(feature = "devtools")]
         devtools::register(app);
     }
@@ -241,19 +328,156 @@ fn cells_of(area: Area, size: f32) -> impl Iterator<Item = IVec2> {
     (z0..=z1).flat_map(move |z| (x0..=x1).map(move |x| IVec2::new(x, z)))
 }
 
+/// Distance (XZ) from `p` to the square `area` (0 inside).
+fn rect_distance(area: Area, p: Vec2) -> f32 {
+    (area.min - p).max(p - area.max).max(Vec2::ZERO).length()
+}
+
+/// The cells of `area` a streamed volume wants: within `radius` of a source, or within
+/// `radius + margin` while already loaded. Only the cells around the sources are visited.
+fn streamed_cells(area: Area, size: f32, s: &PcgStreaming, sources: &[Vec2], loaded: &HashMap<IVec2, Cell>, out: &mut Vec<IVec2>) {
+    let keep = s.radius.max(0.0) + s.margin.max(0.0);
+    for &p in sources {
+        let near = Area::new(p - Vec2::splat(keep), p + Vec2::splat(keep)).intersect(area);
+        if near.max.x <= near.min.x || near.max.y <= near.min.y {
+            continue;
+        }
+        for k in cells_of(near, size) {
+            let cell = Area::cell(k.x, k.y, size).intersect(area);
+            let reach = if loaded.contains_key(&k) { keep } else { s.radius };
+            if sources.iter().any(|&q| rect_distance(cell, q) <= reach) {
+                out.push(k);
+            }
+        }
+    }
+    if sources.len() > 1 {
+        out.sort_unstable_by_key(|k| (k.y, k.x));
+        out.dedup();
+    }
+}
+
+/// Cell roots replaced or dropped this frame. They are despawned in `Last`, after every
+/// `Update` / `PostUpdate` command has applied: a game system that tags fresh PCG output
+/// (`commands.entity(e).insert(..)` on `Added` entities) never meets a root despawned under it.
+#[derive(Resource, Default)]
+struct RetiredRoots(Vec<Entity>);
+
+fn despawn_retired(mut commands: Commands, mut retired: ResMut<RetiredRoots>) {
+    for r in retired.0.drain(..) {
+        commands.entity(r).try_despawn();
+    }
+}
+
+#[cfg(feature = "world")]
+type TerrainArg<'a> = Option<&'a crate::world::TerrainHeights>;
+#[cfg(not(feature = "world"))]
+type TerrainArg<'a> = ();
+
+/// The terrain's heights over `rect` as a small pcg surface (grid-aligned, so sampling matches
+/// the full grid), or `None` without terrain.
+#[cfg(feature = "world")]
+fn terrain_crop(terrain: &TerrainArg, rect: Area) -> Option<pcg_core::Surface> {
+    let hf = terrain.as_ref()?.heightfield();
+    let (o, sp) = (hf.origin(), hf.spacing().max(1e-3));
+    // Two samples of margin: normals look one sample out.
+    let lo = ((rect.min - o) / sp).floor() - Vec2::splat(2.0);
+    let hi = ((rect.max - o) / sp).ceil() + Vec2::splat(2.0);
+    let (x0, z0) = (lo.x.max(0.0) as u32, lo.y.max(0.0) as u32);
+    let (x1, z1) = ((hi.x.max(1.0) as u32).min(hf.nx() - 1), (hi.y.max(1.0) as u32).min(hf.nz() - 1));
+    if x1 < x0 || z1 < z0 {
+        return None;
+    }
+    let (w, h) = (x1 - x0 + 1, z1 - z0 + 1);
+    let mut heights = Vec::new();
+    hf.copy_rect(x0, z0, w, h, &mut heights);
+    Some(pcg_core::Surface::Heightfield { origin: o + Vec2::new(x0 as f32, z0 as f32) * sp, cell: sp, width: w as usize, heights })
+}
+
+#[cfg(not(feature = "world"))]
+fn terrain_crop(_: &TerrainArg, _: Area) -> Option<pcg_core::Surface> {
+    None
+}
+
+/// Terrain edits dirty the cells of [`PcgFollowTerrain`] volumes they overlap; dirty cells are
+/// re-evaluated (their key changes) at most every [`PcgSettings::terrain_interval`].
+#[cfg(feature = "world")]
+fn follow_terrain(
+    mut changes: MessageReader<crate::world::TerrainChanged>,
+    mut volumes: Query<(&PcgVolume, &mut PcgCells), With<PcgFollowTerrain>>,
+    assets: Res<Assets<PcgGraphAsset>>,
+    settings: Res<PcgSettings>,
+    terrain: Option<Res<crate::world::TerrainHeights>>,
+    time: Res<Time<Real>>,
+) {
+    let spacing = terrain.as_ref().map_or(1.0, |t| t.heightfield().spacing());
+    let now = time.elapsed_secs_f64();
+    let rects: Vec<Area> = changes.read().filter(|c| c.layer == crate::world::TerrainLayer::Height).map(|c| Area::new(c.rect_world.min, c.rect_world.max)).collect();
+    for (v, mut cells) in &mut volumes {
+        if !rects.is_empty() {
+            let Some(g) = graph_of(v, &assets) else { continue };
+            let size = v.cell.max(1.0);
+            let reach = g.halo(&v.inputs) + spacing * 2.0;
+            for r in &rects {
+                let near = r.expand(reach).intersect(v.area);
+                if near.max.x <= near.min.x || near.max.y <= near.min.y {
+                    continue;
+                }
+                for k in cells_of(near, size) {
+                    cells.terrain_dirty.insert(k);
+                }
+            }
+        }
+        if !cells.terrain_dirty.is_empty() && now - cells.terrain_flushed >= settings.terrain_interval as f64 {
+            cells.terrain_flushed = now;
+            let dirty: Vec<IVec2> = cells.terrain_dirty.drain().collect();
+            for k in dirty {
+                // Cells not loaded evaluate against the current terrain when they load.
+                if cells.cells.contains_key(&k) {
+                    *cells.terrain_rev.entry(k).or_insert(0) += 1;
+                }
+            }
+        }
+    }
+}
+
+#[cfg(not(feature = "world"))]
+fn follow_terrain() {}
+
 /// Starts evaluations for cells whose key (graph + nearby inputs) changed, nearest first.
+/// Streamed volumes ([`PcgStreaming`]) also load and drop cells around the sources here.
+#[allow(clippy::too_many_arguments, clippy::type_complexity)]
 fn schedule_cells(
     mut commands: Commands,
-    mut volumes: Query<(Entity, &PcgVolume, Option<&mut PcgCells>)>,
+    mut volumes: Query<(Entity, &PcgVolume, Option<&mut PcgCells>, Option<&PcgStreaming>)>,
     assets: Res<Assets<PcgGraphAsset>>,
     settings: Res<PcgSettings>,
     cam: Query<&GlobalTransform, With<MainCamera>>,
+    #[cfg(feature = "world")] stream_sources: Query<&GlobalTransform, (With<crate::world::StreamSource>, Without<MainCamera>)>,
+    mut dropped: MessageWriter<PcgCellDropped>,
+    mut retired: ResMut<RetiredRoots>,
+    mut stats: ResMut<PcgStats>,
+    follow: Query<(), With<PcgFollowTerrain>>,
+    #[cfg(feature = "world")] terrain: Option<Res<crate::world::TerrainHeights>>,
     mut todo: Local<Vec<(f32, Entity, IVec2)>>,
+    mut sources: Local<Vec<Vec2>>,
+    mut wanted: Local<Vec<IVec2>>,
 ) {
-    let eye = cam.iter().next().map(|g| Vec2::new(g.translation().x, g.translation().z)).unwrap_or(Vec2::ZERO);
+    #[cfg(not(feature = "world"))]
+    let terrain = ();
+    #[cfg(feature = "world")]
+    let terrain = terrain.as_deref();
+    let xz = |g: &GlobalTransform| Vec2::new(g.translation().x, g.translation().z);
+    let eye = cam.iter().next().map(xz).unwrap_or(Vec2::ZERO);
+    sources.clear();
+    sources.extend(cam.iter().map(xz));
+    #[cfg(feature = "world")]
+    sources.extend(stream_sources.iter().map(xz));
+    if sources.is_empty() {
+        sources.push(eye);
+    }
     let mut running = 0;
     todo.clear();
-    for (e, v, cells) in &mut volumes {
+    for (e, v, cells, streaming) in &mut volumes {
         let Some(mut cells) = cells else {
             commands.entity(e).insert(PcgCells::default());
             continue;
@@ -277,19 +501,33 @@ fn schedule_cells(
             cells.keys = keys;
             cells.keyed = Some(stamp);
         }
-        let wanted: Vec<IVec2> = cells_of(v.area, size).collect();
-        // Cells no longer in the area: drop them.
-        cells.cells.retain(|k, c| {
-            let keep = wanted.contains(k);
-            if !keep && let Some(r) = c.root.take() {
-                commands.entity(r).try_despawn();
-            }
-            keep
-        });
-        for k in wanted {
+        wanted.clear();
+        match streaming {
+            Some(s) => streamed_cells(v.area, size, s, &sources, &cells.cells, &mut wanted),
+            None => wanted.extend(cells_of(v.area, size)),
+        }
+        // Cells no longer wanted (out of range or out of the area): drop them, their cached
+        // output and any evaluation in flight (dropping the task cancels it).
+        if cells.cells.len() + wanted.len() > 0 {
+            let want: bevy::platform::collections::HashSet<IVec2> = wanted.iter().copied().collect();
+            cells.cells.retain(|k, c| {
+                let keep = want.contains(k);
+                if !keep {
+                    if let Some(r) = c.root.take() {
+                        retired.0.push(r);
+                    }
+                    if c.spawned_with.is_some() {
+                        dropped.write(PcgCellDropped { volume: e, cell: *k });
+                    }
+                    stats.cells_dropped += 1;
+                }
+                keep
+            });
+        }
+        for &k in wanted.iter() {
             let area = Area::cell(k.x, k.y, size).intersect(v.area);
-            let key = cells.keys.get(&k).copied().unwrap_or(0);
-            let c = cells.cells.entry(k).or_insert(Cell { key: 0, output: None, task: None, root: None, spawned_with: None });
+            let key = cells.key_of(k);
+            let c = cells.cells.entry(k).or_insert(Cell { key: 0, output: None, task: None, root: None, spawned_with: None, spawned_ov: 0, emitted: false, shown: None });
             if c.task.is_some() {
                 running += 1;
                 continue;
@@ -306,15 +544,16 @@ fn schedule_cells(
         if running >= settings.in_flight {
             break;
         }
-        let Ok((_, v, Some(mut cells))) = volumes.get_mut(e) else { continue };
+        let Ok((_, v, Some(mut cells), _)) = volumes.get_mut(e) else { continue };
         let Some(g) = graph_of(v, &assets) else { continue };
         let size = v.cell.max(1.0);
         let area = Area::cell(k.x, k.y, size).intersect(v.area);
-        let key = cells.keys.get(&k).copied().unwrap_or(0);
+        let key = cells.key_of(k);
         let inputs = v.inputs.clone();
+        let surface = if follow.contains(e) { terrain_crop(&terrain, area.expand(g.halo(&v.inputs))) } else { None };
         let task = pool.spawn(async move {
             let t0 = std::time::Instant::now();
-            let out = pcg_core::evaluate(&g, &inputs, Some(area));
+            let out = pcg_core::evaluate_on(&g, &inputs, Some(area), surface.as_ref().or(inputs.surface.as_ref()));
             (key, out, t0.elapsed().as_secs_f32() * 1e6)
         });
         if let Some(c) = cells.cells.get_mut(&k) {
@@ -365,7 +604,7 @@ fn thinning(scal: &PcgScalability, settings: &PcgSettings, quality: Option<&crat
 #[allow(clippy::too_many_arguments)]
 fn spawn_cells(
     mut commands: Commands,
-    mut volumes: Query<(Entity, &mut PcgCells)>,
+    mut volumes: Query<(Entity, &PcgVolume, &mut PcgCells, Option<Ref<PcgOverrides>>)>,
     catalog: Res<PcgCatalog>,
     scal: Res<PcgScalability>,
     settings: Res<PcgSettings>,
@@ -373,21 +612,41 @@ fn spawn_cells(
     governor: Option<Res<crate::render_budget::GovernorState>>,
     mut meshes: Option<ResMut<Assets<Mesh>>>,
     mut emitted: MessageWriter<PcgEmitted>,
+    mut dropped: MessageWriter<PcgCellDropped>,
+    mut retired: ResMut<RetiredRoots>,
     mut stats: ResMut<PcgStats>,
 ) {
     let thin = thinning(&scal, &settings, quality.as_deref(), governor.as_deref());
     let mut budget = settings.cells_per_frame.max(1);
     let (mut cells_n, mut pending) = (0u32, 0u32);
-    for (volume, mut cells) in &mut volumes {
+    for (volume, v, mut cells, ov) in &mut volumes {
+        let size = v.cell.max(1.0);
+        // The overrides' lookup is rebuilt when they (or the cell size) change; cells compare
+        // their own hash, so only the ones an edit touches respawn.
+        match ov {
+            Some(o) if o.is_changed() || cells.ov.as_ref().is_none_or(|i| i.cell_size() != size) => {
+                cells.ov = (!o.is_empty()).then(|| Arc::new(o.index(size)));
+            }
+            None if cells.ov.is_some() => cells.ov = None,
+            _ => {}
+        }
+        let index = cells.ov.clone();
         for (k, c) in cells.cells.iter_mut() {
             cells_n += 1;
-            let Some(out) = c.output.clone() else {
+            let Some(base) = c.output.clone() else {
                 pending += 1;
                 continue;
             };
-            if c.spawned_with == Some(thin) {
+            let ov_hash = index.as_ref().map_or(0, |i| i.cell_hash(*k));
+            if c.spawned_with == Some(thin) && c.spawned_ov == ov_hash {
                 continue;
             }
+            // Overrides applied to the cached evaluation (cells they don't touch are used as is).
+            let edited = ov_hash != 0;
+            let out = match (&index, edited) {
+                (Some(i), true) => Arc::new(i.apply_output(Area::cell(k.x, k.y, size), &base)),
+                _ => base,
+            };
             // Mesh items still loading: merge needs their data; try again later.
             if needs_mesh_data(&out, &catalog, &settings, meshes.as_deref()) {
                 pending += 1;
@@ -399,16 +658,27 @@ fn spawn_cells(
             }
             budget -= 1;
             if let Some(r) = c.root.take() {
-                commands.entity(r).try_despawn();
+                retired.0.push(r);
             }
             let first = c.spawned_with.is_none();
+            let ov_changed = !first && c.spawned_ov != ov_hash;
             if !first {
-                // Respawned from the cached output (thinning changed): no evaluation.
+                // Respawned from the cached output (thinning or overrides changed): no evaluation.
                 stats.cache_hits += 1;
+            }
+            if ov_changed {
+                stats.override_respawns += 1;
             }
             c.root = Some(spawn_output(&mut commands, volume, *k, &out, &catalog, &settings, thin, meshes.as_deref_mut(), &mut stats));
             c.spawned_with = Some(thin);
-            if first {
+            c.spawned_ov = ov_hash;
+            c.shown = edited.then(|| out.clone());
+            if first || (ov_changed && !out.emits.is_empty()) {
+                if c.emitted {
+                    // Whoever built things from the old points drops them, then gets the new ones.
+                    dropped.write(PcgCellDropped { volume, cell: *k });
+                }
+                c.emitted |= !out.emits.is_empty();
                 for (port, points) in &out.emits {
                     emitted.write(PcgEmitted { volume, cell: *k, port: port.clone(), points: points.clone() });
                 }
@@ -416,7 +686,7 @@ fn spawn_cells(
         }
     }
     stats.volumes = volumes.iter().len() as u32;
-    stats.entities = volumes.iter().map(|(_, c)| c.cells.values().filter(|c| c.root.is_some()).count() as u32).sum();
+    stats.entities = volumes.iter().map(|(_, _, c, _)| c.cells.values().filter(|c| c.root.is_some()).count() as u32).sum();
     stats.cells = cells_n;
     stats.cells_pending = pending;
 }
@@ -447,8 +717,9 @@ fn spawn_output(
         let p = &s.points;
         // Kept points, grouped by item.
         let mut by_item: Vec<Vec<usize>> = vec![Vec::new(); s.def.items.len()];
+        let hand = p.attrs.get(HAND_ATTR);
         for k in 0..p.len() {
-            if keep_for_tier(p.seed[k], s.def.tier, normal, fine) {
+            if hand.is_some_and(|h| h[k] > 0.5) || keep_for_tier(p.seed[k], s.def.tier, normal, fine) {
                 by_item[s.item[k] as usize].push(k);
             } else {
                 stats.points_thinned += 1;
@@ -623,6 +894,7 @@ mod devtools {
     use crate::devtools::{AddControlCommand, params};
 
     pub(super) fn register(app: &mut App) {
+        overrides::control::register(app);
         app.add_control_command("pcg.stats", "PCG volumes, cells, evaluations, cache, spawned points, errors", params(&[]), stats)
             .add_control_command("pcg.regen", "Regenerate every PCG cell", params(&[]), regen)
             .add_control_command(
@@ -634,7 +906,7 @@ mod devtools {
             .add_control_command(
                 "pcg.inspect",
                 "Points per node in one cell of a volume",
-                params(&[("x", "number", "cell x"), ("z", "number", "cell z"), ("volume", "number", "volume index (default 0)")]),
+                params(&[("x", "number", "cell x"), ("z", "number", "cell z"), ("volume", "number", "volume index (default 0)"), ("node", "string", "also list this Spawn node's points with their override keys (max 200)")]),
                 inspect,
             );
     }
@@ -643,7 +915,7 @@ mod devtools {
         let s = world.resource::<PcgStats>().clone();
         Ok(json!({
             "volumes": s.volumes, "cells": s.cells, "cells_pending": s.cells_pending, "evaluations": s.evaluations,
-            "cache_hits": s.cache_hits, "cell_roots": s.entities, "points_spawned": s.points_spawned,
+            "cache_hits": s.cache_hits, "override_respawns": s.override_respawns, "cells_dropped": s.cells_dropped, "cell_roots": s.entities, "points_spawned": s.points_spawned,
             "points_thinned": s.points_thinned, "last_eval_us": s.last_eval_us, "errors": s.errors,
             "density": world.resource::<PcgSettings>().density,
         }))
@@ -667,7 +939,19 @@ mod devtools {
         let cells = q.iter(world).nth(i).ok_or("no such volume")?;
         let c = cells.cells.get(&cell).ok_or("no such cell")?;
         let out = c.output.as_ref().ok_or("cell not evaluated yet")?;
+        let out = c.shown.as_ref().unwrap_or(out);
+        let points: Vec<Value> = match p.get("node").and_then(Value::as_str) {
+            Some(n) => out
+                .spawns
+                .iter()
+                .filter(|s| s.node == n)
+                .flat_map(|s| (0..s.points.len()).map(move |i| json!({"key": {"node": s.node, "seed": s.points.seed[i].to_string()}, "item": s.def.items[s.item[i] as usize].0, "pos": s.points.pos[i].to_array()})))
+                .take(200)
+                .collect(),
+            None => Vec::new(),
+        };
         Ok(json!({
+            "points": points,
             "counts": out.counts.iter().map(|(n, c)| json!([n, c])).collect::<Vec<_>>(),
             "spawns": out.spawns.iter().map(|s| json!({"node": s.node, "points": s.points.len()})).collect::<Vec<_>>(),
             "emits": out.emits.iter().map(|(k, v)| json!({"port": k, "points": v.len()})).collect::<Vec<_>>(),
@@ -766,6 +1050,404 @@ mod tests {
         }
         let more = app.world().resource::<PcgStats>().evaluations - evals;
         assert!(more > 0 && more < 8, "re-evaluated {more} of 8 cells");
+    }
+
+    #[test]
+    fn streaming_loads_near_the_camera_and_drops_far_cells() {
+        let mut app = app();
+        // 512 x 64 m strip, 32 m cells: 16 x 2 cells.
+        let inputs = Inputs::default().rects("lots", vec![Rect::new(Vec2::ZERO, Vec2::new(256.0, 32.0))]);
+        let v = app
+            .world_mut()
+            .spawn((PcgVolume { cell: 32.0, ..PcgVolume::new(graph(), inputs, Area::new(Vec2::new(-256.0, -32.0), Vec2::new(256.0, 32.0))) }, PcgStreaming { radius: 30.0, margin: 16.0 }))
+            .id();
+        let cam = app.world_mut().spawn((MainCamera, Transform::from_xyz(-200.0, 2.0, 0.0), GlobalTransform::from_xyz(-200.0, 2.0, 0.0))).id();
+        let near = |app: &mut App| {
+            let mut c: Vec<IVec2> = app.world_mut().query::<&PcgCellRoot>().iter(app.world()).map(|r| r.cell).collect();
+            c.sort_by_key(|k| (k.x, k.y));
+            c
+        };
+        let points = |app: &mut App, cell: IVec2| {
+            let q = app.world_mut().query::<&PcgCells>().single(app.world()).unwrap().cells.get(&cell).and_then(|c| c.output.clone());
+            q.map(|o| o.spawns.iter().map(|s| s.points.len()).sum::<usize>())
+        };
+        run_until_done(&mut app);
+        let west = near(&mut app);
+        // x = -200 ± 30 m reaches cells -8..=-6 (x -256..-160; cell -5 starts 40 m away), both rows.
+        assert_eq!(west.len(), 6, "{west:?}");
+        assert!(west.iter().all(|k| (-8..=-6).contains(&k.x)), "{west:?}");
+        let first = points(&mut app, IVec2::new(-7, 0)).unwrap();
+        assert_eq!(app.world().resource::<PcgStats>().cells, 6, "only near cells are kept");
+
+        // Drive east: the west cells drop (message + no cached output), east cells load.
+        app.world_mut().entity_mut(cam).insert(GlobalTransform::from_xyz(200.0, 2.0, 0.0));
+        run_until_done(&mut app);
+        let east = near(&mut app);
+        assert!(east.iter().all(|k| (5..=7).contains(&k.x)), "{east:?}");
+        assert_eq!(points(&mut app, IVec2::new(-7, 0)), None, "dropped cells free their output");
+        let msgs = app.world().resource::<Messages<PcgCellDropped>>();
+        let dropped: Vec<_> = msgs.iter_current_update_messages().chain(msgs.get_cursor().read(msgs)).filter(|d| d.volume == v).map(|d| d.cell).collect();
+        assert!(dropped.contains(&IVec2::new(-7, 0)), "{dropped:?}");
+        assert!(app.world().resource::<PcgStats>().cells_dropped >= 6);
+
+        // Back west: re-evaluated, same points (deterministic).
+        app.world_mut().entity_mut(cam).insert(GlobalTransform::from_xyz(-200.0, 2.0, 0.0));
+        run_until_done(&mut app);
+        assert_eq!(near(&mut app), west);
+        assert_eq!(points(&mut app, IVec2::new(-7, 0)), Some(first));
+    }
+
+    /// A game system that tags PCG output in `Update` (plain `insert`, no `try_`) while
+    /// streaming drops cells must not hit a despawned entity. Commands apply in system order
+    /// at the end of `Update` (no auto sync), the order that panicked when drops despawned in
+    /// `schedule_cells`.
+    #[test]
+    fn tagging_output_while_cells_drop_is_safe() {
+        #[derive(Component)]
+        struct Tagged;
+        fn tag(mut commands: Commands, roots: Query<Entity, With<PcgCellRoot>>) {
+            for e in &roots {
+                commands.entity(e).insert(Tagged);
+            }
+        }
+        let mut app = app();
+        app.edit_schedule(Update, |s| {
+            s.set_build_settings(bevy::ecs::schedule::ScheduleBuildSettings { auto_insert_apply_deferred: false, ..default() });
+        });
+        app.add_systems(Update, tag.after(schedule_cells).before(collect_cells));
+        let inputs = Inputs::default().rects("lots", vec![Rect::new(Vec2::ZERO, Vec2::new(256.0, 32.0))]);
+        app.world_mut().spawn((PcgVolume { cell: 32.0, ..PcgVolume::new(graph(), inputs, Area::new(Vec2::new(-256.0, -32.0), Vec2::new(256.0, 32.0))) }, PcgStreaming { radius: 30.0, margin: 0.0 }));
+        let cam = app.world_mut().spawn((MainCamera, GlobalTransform::from_xyz(-240.0, 2.0, 0.0))).id();
+        run_until_done(&mut app);
+        // Fast drive east: cells drop every few frames.
+        for i in 0..240 {
+            let x = -240.0 + i as f32 * 2.0;
+            app.world_mut().entity_mut(cam).insert(GlobalTransform::from_xyz(x, 2.0, 0.0));
+            app.update();
+        }
+        assert!(app.world().resource::<PcgStats>().cells_dropped > 10);
+    }
+
+    fn graph_of_rock_app() -> Graph {
+        Graph::build(5).input("lots").poisson(3.0).spawn(&[("rock", 1.0)], Tier::Essential).id("rocks").from("lots").poisson(6.0).emit("pts").finish().unwrap()
+    }
+
+    fn rock_inputs() -> Inputs {
+        Inputs::default().rects("lots", vec![Rect::new(Vec2::ZERO, Vec2::new(40.0, 40.0))])
+    }
+
+    fn rock_app() -> (App, Entity) {
+        let mut app = app();
+        let (rock, mat) = {
+            let w = app.world_mut();
+            (w.resource_mut::<Assets<Mesh>>().add(Cuboid::new(0.5, 0.5, 0.5)), w.resource_mut::<Assets<StandardMaterial>>().add(StandardMaterial::default()))
+        };
+        app.world_mut().resource_mut::<PcgCatalog>().mesh("rock", rock, mat);
+        let g = Graph::build(5).input("lots").poisson(3.0).spawn(&[("rock", 1.0)], Tier::Essential).id("rocks").from("lots").poisson(6.0).emit("pts").finish().unwrap();
+        let inputs = Inputs::default().rects("lots", vec![Rect::new(Vec2::ZERO, Vec2::new(40.0, 40.0))]);
+        let v = app.world_mut().spawn(PcgVolume { cell: 32.0, ..PcgVolume::new(g, inputs, Area::new(Vec2::splat(-48.0), Vec2::splat(48.0))) }).id();
+        run_until_done(&mut app);
+        (app, v)
+    }
+
+    fn settle(app: &mut App) {
+        for _ in 0..12 {
+            app.update();
+        }
+    }
+
+    fn cell_seeds(app: &App, v: Entity, cell: IVec2, node: &str) -> Vec<u64> {
+        let c = app.world().get::<PcgCells>(v).unwrap().cells.get(&cell).unwrap();
+        let out = c.shown.as_ref().or(c.output.as_ref()).unwrap();
+        out.spawns.iter().filter(|s| s.node == node).flat_map(|s| s.points.seed.clone()).collect()
+    }
+
+    fn emitted(app: &mut App) -> Vec<PcgEmitted> {
+        let msgs = app.world().resource::<Messages<PcgEmitted>>();
+        msgs.iter_current_update_messages().cloned().collect()
+    }
+
+    #[test]
+    fn overrides_respawn_only_touched_cells_without_evaluating() {
+        let (mut app, v) = rock_app();
+        let evals = app.world().resource::<PcgStats>().evaluations;
+        let seeds = cell_seeds(&app, v, IVec2::new(0, 0), "rocks");
+        assert!(seeds.len() > 10);
+        let victim = seeds[3];
+        let at = {
+            let c = app.world().get::<PcgCells>(v).unwrap().cells.get(&IVec2::new(0, 0)).unwrap();
+            let s = c.output.as_ref().unwrap().spawns.iter().find(|s| s.node == "rocks").unwrap();
+            s.points.pos[3]
+        };
+        let roots_before: HashMap<IVec2, Entity> = app.world().get::<PcgCells>(v).unwrap().cells.iter().filter_map(|(k, c)| c.root.map(|r| (*k, r))).collect();
+        let mut ov = PcgOverrides::default();
+        ov.remove_point(&PointKey { node: "rocks".into(), seed: victim }, at);
+        app.world_mut().entity_mut(v).insert(ov);
+        settle(&mut app);
+        let stats = app.world().resource::<PcgStats>().clone();
+        assert_eq!(stats.evaluations, evals, "no re-evaluation");
+        assert_eq!(stats.override_respawns, 1, "one cell respawned");
+        let after = cell_seeds(&app, v, IVec2::new(0, 0), "rocks");
+        assert_eq!(after.len(), seeds.len() - 1);
+        assert!(!after.contains(&victim));
+        let roots_after: HashMap<IVec2, Entity> = app.world().get::<PcgCells>(v).unwrap().cells.iter().filter_map(|(k, c)| c.root.map(|r| (*k, r))).collect();
+        for (k, r) in &roots_before {
+            assert_eq!(*r != roots_after[k], *k == IVec2::new(0, 0), "cell {k}");
+        }
+        // The old root was despawned.
+        assert!(app.world().get_entity(roots_before[&IVec2::new(0, 0)]).is_err());
+
+        // Dropping the component restores the cell.
+        app.world_mut().entity_mut(v).remove::<PcgOverrides>();
+        settle(&mut app);
+        assert_eq!(cell_seeds(&app, v, IVec2::new(0, 0), "rocks"), seeds);
+        assert_eq!(app.world().resource::<PcgStats>().override_respawns, 2);
+    }
+
+    #[test]
+    fn emitted_points_carry_overrides_and_standalone_apply_matches() {
+        let (mut app, v) = rock_app();
+        let base_emit: pcg_core::PointSet = app.world().get::<PcgCells>(v).unwrap().cells[&IVec2::new(0, 0)].output.as_ref().unwrap().emits["pts"].clone();
+        let seeds = cell_seeds(&app, v, IVec2::new(0, 0), "rocks");
+        // Clear the west half of cell (0,0), add one rock by hand, remove one emitted point.
+        let mut ov = PcgOverrides::default();
+        ov.areas.push(OverrideArea { polygon: vec![Vec2::new(0.0, 0.0), Vec2::new(16.0, 0.0), Vec2::new(16.0, 32.0), Vec2::new(0.0, 32.0)], density: 0.0, nodes: None });
+        ov.add_item("rock", "rocks", Transform::from_xyz(20.0, 0.0, 20.0));
+        ov.remove_point(&PointKey { node: "pts".into(), seed: base_emit.seed[base_emit.len() - 1] }, base_emit.pos[base_emit.len() - 1]);
+        app.world_mut().entity_mut(v).insert(ov.clone());
+        settle(&mut app);
+        // The standalone application on the original evaluation equals what the volume shows.
+        let ix = ov.index(32.0);
+        let area = Area::cell(0, 0, 32.0);
+        let c = &app.world().get::<PcgCells>(v).unwrap().cells[&IVec2::new(0, 0)];
+        let want = ix.apply_output(area, c.output.as_ref().unwrap());
+        assert_eq!(&want, c.shown.as_deref().unwrap());
+        assert!(want.emits["pts"].len() < base_emit.len());
+        assert!(want.emits["pts"].pos.iter().all(|p| p.x >= 16.0 || p.x < 0.0));
+        let shown = cell_seeds(&app, v, IVec2::new(0, 0), "rocks");
+        assert!(shown.len() < seeds.len());
+        // Games apply to their own evaluation (here: same graph over the same cell).
+        let mut mine = base_emit.clone();
+        ov.index(32.0).apply_points("pts", area, &mut mine);
+        assert_eq!(mine, want.emits["pts"]);
+    }
+
+    #[test]
+    fn a_move_across_cells_shows_once_in_the_destination() {
+        let (mut app, v) = rock_app();
+        let (a, b) = (IVec2::new(0, 0), IVec2::new(1, 0));
+        let (pos, seed) = {
+            let c = &app.world().get::<PcgCells>(v).unwrap().cells[&a];
+            let s = c.output.as_ref().unwrap().spawns.iter().find(|s| s.node == "rocks").unwrap();
+            (s.points.pos[4], s.points.seed[4])
+        };
+        let (b_before, evals) = (cell_seeds(&app, v, b, "rocks").len(), app.world().resource::<PcgStats>().evaluations);
+        let key = PointKey { node: "rocks".into(), seed };
+        let to = Transform::from_xyz(40.0, 0.0, 10.0).with_scale(Vec3::splat(1.7));
+        let mut ov = PcgOverrides::default();
+        ov.move_point(&key, pos, "rock", to);
+        app.world_mut().entity_mut(v).insert(ov.clone());
+        settle(&mut app);
+        let st = app.world().resource::<PcgStats>().clone();
+        assert_eq!((st.evaluations, st.override_respawns), (evals, 2), "origin and destination respawn, nothing else");
+        let all: Vec<IVec2> = app.world().get::<PcgCells>(v).unwrap().cells.keys().copied().collect();
+        let holders: Vec<IVec2> = all.into_iter().filter(|k| cell_seeds(&app, v, *k, "rocks").contains(&seed)).collect();
+        assert_eq!(holders, vec![b], "drawn once, in the destination cell");
+        assert_eq!(cell_seeds(&app, v, b, "rocks").len(), b_before + 1);
+        // Standalone: over A's area it is gone, over B's it appears once, from either origin.
+        let ix = ov.index(32.0);
+        let spawn_in = |area: Area| {
+            let mut o = pcg_core::evaluate(&graph_of_rock_app(), &rock_inputs(), Some(area)).unwrap();
+            for s in &mut o.spawns {
+                ix.apply_spawned(area, s);
+            }
+            o.spawns.iter().filter(|s| s.node == "rocks").flat_map(|s| s.points.seed.iter().zip(s.points.pos.iter()).map(|(a, b)| (*a, *b)).collect::<Vec<_>>()).collect::<Vec<_>>()
+        };
+        let hits = |pts: &[(u64, Vec3)]| pts.iter().filter(|(s, _)| *s == seed).count();
+        assert_eq!(hits(&spawn_in(Area::cell(a.x, a.y, 32.0))), 0);
+        let in_b = spawn_in(Area::cell(b.x, b.y, 32.0));
+        assert_eq!(hits(&in_b), 1);
+        assert_eq!(in_b.iter().find(|(s, _)| *s == seed).unwrap().1, to.translation);
+        // A collider-style 128 m tile (not the volume's 32 m cells) gets it exactly once; the
+        // neighbouring tile does not have it.
+        assert_eq!(hits(&spawn_in(Area::new(Vec2::ZERO, Vec2::splat(128.0)))), 1);
+        assert_eq!(hits(&spawn_in(Area::new(Vec2::new(-128.0, 0.0), Vec2::new(0.0, 128.0)))), 0);
+        // Tiles that straddle: the origin tile and destination tile when they differ (64 m tiles).
+        let tiles = [Area::new(Vec2::splat(-64.0), Vec2::splat(0.0)), Area::new(Vec2::new(0.0, -64.0), Vec2::new(64.0, 0.0)), Area::new(Vec2::ZERO, Vec2::splat(64.0)), Area::new(Vec2::new(-64.0, 0.0), Vec2::new(0.0, 64.0))];
+        assert_eq!(tiles.iter().map(|t| hits(&spawn_in(*t))).sum::<usize>(), 1);
+    }
+
+    #[test]
+    fn emits_are_resent_when_overrides_change() {
+        let (mut app, v) = rock_app();
+        let at = Vec3::new(5.0, 0.0, 5.0);
+        let mut ov = PcgOverrides::default();
+        ov.add_item("rock", "pts", Transform::from_translation(at));
+        app.world_mut().entity_mut(v).insert(ov);
+        let mut saw = false;
+        let mut dropped = false;
+        for _ in 0..12 {
+            app.update();
+            saw |= emitted(&mut app).iter().any(|m| m.cell == IVec2::new(0, 0) && m.port == "pts" && m.points.pos.contains(&at));
+            let d = app.world().resource::<Messages<PcgCellDropped>>();
+            dropped |= d.iter_current_update_messages().any(|m| m.cell == IVec2::new(0, 0));
+        }
+        assert!(saw && dropped, "re-emitted with the hand-placed point: {saw} {dropped}");
+    }
+
+    #[test]
+    fn keys_survive_streaming_drop_and_reentry() {
+        let mut app = app();
+        let inputs = Inputs::default().rects("lots", vec![Rect::new(Vec2::ZERO, Vec2::new(256.0, 32.0))]);
+        let v = app
+            .world_mut()
+            .spawn((PcgVolume { cell: 32.0, ..PcgVolume::new(graph(), inputs, Area::new(Vec2::new(-256.0, -32.0), Vec2::new(256.0, 32.0))) }, PcgStreaming { radius: 30.0, margin: 16.0 }))
+            .id();
+        let cam = app.world_mut().spawn((MainCamera, GlobalTransform::from_xyz(-200.0, 2.0, 0.0))).id();
+        run_until_done(&mut app);
+        let first = cell_seeds(&app, v, IVec2::new(-7, 0), "rocks");
+        // An override on that cell, then leave and come back: same keys, edit still applied.
+        let victim = first[0];
+        let mut ov = PcgOverrides::default();
+        ov.remove_point(&PointKey { node: "rocks".into(), seed: victim }, Vec3::new(-200.0, 0.0, 0.0));
+        app.world_mut().entity_mut(v).insert(ov);
+        settle(&mut app);
+        let edited = cell_seeds(&app, v, IVec2::new(-7, 0), "rocks");
+        assert_eq!(edited.len(), first.len() - 1);
+        app.world_mut().entity_mut(cam).insert(GlobalTransform::from_xyz(200.0, 2.0, 0.0));
+        run_until_done(&mut app);
+        assert!(app.world().get::<PcgCells>(v).unwrap().cells.get(&IVec2::new(-7, 0)).is_none());
+        app.world_mut().entity_mut(cam).insert(GlobalTransform::from_xyz(-200.0, 2.0, 0.0));
+        run_until_done(&mut app);
+        settle(&mut app);
+        assert_eq!(cell_seeds(&app, v, IVec2::new(-7, 0), "rocks"), edited, "same points after re-entry, still without the victim");
+    }
+
+    #[test]
+    fn pick_finds_merged_instances_and_hand_placed_ones() {
+        let (mut app, v) = rock_app();
+        let (pos, _) = {
+            let c = &app.world().get::<PcgCells>(v).unwrap().cells[&IVec2::new(0, 0)];
+            let s = c.output.as_ref().unwrap().spawns.iter().find(|s| s.node == "rocks").unwrap();
+            (s.points.pos[2], s.points.seed[2])
+        };
+        let hit = pcg_pick(app.world(), pos + Vec3::new(0.0, 5.0, 0.0), Vec3::NEG_Y).expect("hit");
+        assert_eq!(hit.key.node, "rocks");
+        assert_eq!(hit.item, "rock");
+        // Nearest along the ray: the picked point is within a rock radius of the ray.
+        assert!((hit.transform.translation.xz() - pos.xz()).length() < 0.6);
+        let mut ov = PcgOverrides::default();
+        let key = ov.add_item("rock", "rocks", Transform::from_xyz(-500.0 + 520.0, 0.5, 6.0));
+        app.world_mut().entity_mut(v).insert(ov);
+        settle(&mut app);
+        let h = pcg_pick(app.world(), Vec3::new(20.0, 5.0, 6.0), Vec3::NEG_Y).expect("hand hit");
+        assert_eq!(h.key, key);
+        assert!(pcg_pick(app.world(), Vec3::new(20.0, 5.0, 6.0), Vec3::Y).is_none());
+    }
+
+    #[test]
+    fn overrides_round_trip_through_a_level() {
+        use crate::level::{LevelEntity, LevelPlugin, StableId, load_level, save_level};
+        let mut app = App::new();
+        app.add_plugins((MinimalPlugins, bevy::asset::AssetPlugin::default(), bevy::world_serialization::WorldSerializationPlugin))
+            .register_type::<Transform>()
+            .register_type::<PcgOverrides>()
+            .add_plugins(LevelPlugin);
+        app.finish();
+        app.cleanup();
+        let mut ov = PcgOverrides::default();
+        ov.remove_point(&PointKey { node: "rocks".into(), seed: u64::MAX - 3 }, Vec3::new(1.0, 2.0, 3.0));
+        ov.move_point(&PointKey { node: "rocks".into(), seed: 77 }, Vec3::X, "rock", Transform::from_xyz(4.0, 5.0, 6.0).with_scale(Vec3::splat(1.5)));
+        ov.add_item("rock", "rocks", Transform::from_xyz(9.0, 0.0, 9.0));
+        ov.areas.push(OverrideArea { polygon: vec![Vec2::ZERO, Vec2::X * 10.0, Vec2::splat(10.0)], density: 0.25, nodes: Some(vec!["rocks".into()]) });
+        app.world_mut().spawn((LevelEntity { id: StableId(1) }, ov.clone()));
+        let path = std::env::temp_dir().join(format!("pcg-ov-{}.level.ron", std::process::id()));
+        save_level(app.world_mut(), &path).unwrap();
+        crate::level::file::despawn_level(app.world_mut());
+        load_level(app.world_mut(), &path).unwrap();
+        let back = app.world_mut().query::<&PcgOverrides>().single(app.world()).unwrap().clone();
+        assert_eq!(back, ov);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[cfg(feature = "world")]
+    #[test]
+    fn terrain_edits_reevaluate_only_the_cells_they_touch() {
+        use crate::world::{Heightfield, SampleRect, TerrainChanged, TerrainHeights, TerrainLayer};
+        let mut app = app();
+        let mat = app.world_mut().resource_mut::<Assets<StandardMaterial>>().add(StandardMaterial::default());
+        let rock = app.world_mut().resource_mut::<Assets<Mesh>>().add(Cuboid::new(0.5, 0.5, 0.5));
+        app.world_mut().resource_mut::<PcgCatalog>().mesh("rock", rock, mat);
+        app.world_mut().resource_mut::<PcgSettings>().terrain_interval = 0.0;
+        let hf = Heightfield::flat(129, 129, 2.0, Vec2::splat(-128.0), 0.0);
+        app.world_mut().insert_resource(TerrainHeights::new(Arc::new(hf)));
+        let g = Graph::build(5)
+            .input("lots")
+            .poisson(4.0)
+            .project(0.0, false)
+            .spawn(&[("rock", 1.0)], Tier::Essential)
+            .id("rocks")
+            .from("lots")
+            .poisson(8.0)
+            .project(0.0, false)
+            .emit("pts")
+            .finish()
+            .unwrap();
+        let inputs = Inputs::default().rects("lots", vec![Rect::new(Vec2::ZERO, Vec2::splat(90.0))]);
+        let v = app.world_mut().spawn((PcgVolume { cell: 32.0, ..PcgVolume::new(g, inputs, Area::new(Vec2::splat(-96.0), Vec2::splat(96.0))) }, PcgFollowTerrain)).id();
+        run_until_done(&mut app);
+        let (a, far) = (IVec2::new(0, 0), IVec2::new(-3, -3));
+        let ys = |app: &App, k: IVec2| -> Vec<(u64, f32)> {
+            let c = &app.world().get::<PcgCells>(v).unwrap().cells[&k];
+            let out = c.shown.as_ref().or(c.output.as_ref()).unwrap();
+            out.spawns.iter().flat_map(|s| s.points.seed.iter().copied().zip(s.points.pos.iter().map(|p| p.y)).collect::<Vec<_>>()).collect()
+        };
+        // An override on cell (0,0): a removed rock.
+        let before = ys(&app, a);
+        let before_far = app.world().get::<PcgCells>(v).unwrap().cells[&far].output.clone().unwrap();
+        assert!(before.len() > 10 && before.iter().all(|(_, y)| *y == 0.0));
+        let victim = before[2].0;
+        let mut ov = PcgOverrides::default();
+        ov.remove_point(&PointKey { node: "rocks".into(), seed: victim }, Vec3::ZERO);
+        app.world_mut().entity_mut(v).insert(ov);
+        settle(&mut app);
+        let evals = app.world().resource::<PcgStats>().evaluations;
+        let dropped_before = app.world().resource::<PcgStats>().cells_dropped;
+
+        // Raise a hill under cell (0,0): samples x,z in 5..=10 (metres -118..-108 + ... use world coords).
+        let mut hf = app.world().resource::<TerrainHeights>().heightfield().clone();
+        let (ix0, ix1) = (((10.0 + 128.0) / 2.0) as u32, ((22.0 + 128.0) / 2.0) as u32);
+        for iz in ix0..=ix1 {
+            for ix in ix0..=ix1 {
+                hf.set(ix, iz, 6.0);
+            }
+        }
+        app.world_mut().insert_resource(TerrainHeights::new(Arc::new(hf)));
+        let rect_world = bevy::math::Rect::new(8.0, 8.0, 24.0, 24.0);
+        app.world_mut().write_message(TerrainChanged { layer: TerrainLayer::Height, rect: SampleRect::new(ix0, ix0, ix1 - ix0 + 1, ix1 - ix0 + 1), rect_world });
+        let mut saw_drop = false;
+        for _ in 0..200 {
+            app.update();
+            saw_drop |= app.world().resource::<Messages<PcgCellDropped>>().iter_current_update_messages().any(|d| d.cell == a);
+            let s = app.world().resource::<PcgStats>();
+            if s.evaluations > evals && s.cells_pending == 0 {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(2));
+        }
+        settle(&mut app);
+        let st = app.world().resource::<PcgStats>().clone();
+        // The edit (8..24 m) plus the graph's halo (12 m) and two samples reaches cells -1..=1.
+        assert_eq!(st.evaluations - evals, 9, "only the 3 x 3 cells around the edit re-evaluated (of 36)");
+        assert_eq!(st.cells_dropped, dropped_before);
+        assert!(saw_drop, "emits announce a drop before the new points");
+        let after = ys(&app, a);
+        // Same keys (minus the removed rock), heights follow the hill, override still applied.
+        let seeds = |v: &[(u64, f32)]| v.iter().map(|(s, _)| *s).collect::<std::collections::BTreeSet<_>>();
+        assert!(!seeds(&after).contains(&victim));
+        assert_eq!(seeds(&after).len() + 1, seeds(&before).len());
+        assert!(after.iter().any(|(_, y)| *y > 1.0), "rocks rose with the hill: {after:?}");
+        assert!(Arc::ptr_eq(&before_far, app.world().get::<PcgCells>(v).unwrap().cells[&far].output.as_ref().unwrap()), "untouched cell kept its output");
     }
 
     #[test]

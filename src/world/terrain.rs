@@ -50,6 +50,8 @@ pub struct Terrain {
     chunks_z: u32,
     lods: u8,
     info: Arc<Vec<ChunkInfo>>,
+    /// Samples of the source heightfield before padding to whole chunks.
+    source_samples: UVec2,
 }
 
 impl Terrain {
@@ -57,16 +59,33 @@ impl Terrain {
     /// (edge samples repeated) up to a multiple of the chunk size.
     pub fn new(hf: Heightfield, chunk_quads: u32) -> Self {
         let q = chunk_quads.clamp(8, 1 << (MAX_LODS - 1)).next_power_of_two();
+        let source_samples = UVec2::new(hf.nx(), hf.nz());
         let hf = pad(hf, q);
         let chunks_x = (hf.nx() - 1) / q;
         let chunks_z = (hf.nz() - 1) / q;
         let lods = (q.trailing_zeros() as u8 + 1).min(MAX_LODS as u8);
         let info = chunk_infos(&hf, q, chunks_x, chunks_z, lods);
-        Terrain { hf: Arc::new(hf), chunk_quads: q, chunks_x, chunks_z, lods, info: Arc::new(info) }
+        Terrain { hf: Arc::new(hf), chunk_quads: q, chunks_x, chunks_z, lods, info: Arc::new(info), source_samples }
     }
 
     pub fn heightfield(&self) -> &Heightfield {
         &self.hf
+    }
+    /// Samples (X, Z) of the heightfield the terrain was built from, before padding to whole
+    /// chunks (what gets saved).
+    pub fn source_samples(&self) -> UVec2 {
+        self.source_samples
+    }
+    /// Mutable heights (copy-on-write if a background task still holds the old grid). Chunk
+    /// data is not refreshed: use `TerrainEdit`.
+    pub(crate) fn heightfield_mut(&mut self) -> &mut Heightfield {
+        Arc::make_mut(&mut self.hf)
+    }
+    /// Recomputes LOD errors and skirts of chunk `c` from the current heights.
+    pub(crate) fn refresh_chunk_info(&mut self, c: UVec2) {
+        let i = (c.y * self.chunks_x + c.x) as usize;
+        let info = chunk_info(&self.hf, self.chunk_quads, c, self.lods);
+        Arc::make_mut(&mut self.info)[i] = info;
     }
     pub(crate) fn heightfield_arc(&self) -> Arc<Heightfield> {
         self.hf.clone()
@@ -484,6 +503,45 @@ fn terrain_lod(
     stats.terrain_builds_in_flight = in_flight as u32;
     stats.terrain_mesh_bytes = bytes;
     stats.heightfield_bytes = t.heightfield().memory_bytes() as u64;
+}
+
+/// Rebuilds, right now, everything derived from the heights of chunks `cs` (after an edit):
+/// the mesh at the chunk's current LOD (same handle, so the draw call is unchanged), its AABB,
+/// its collider, and cancels any LOD build still running on old heights. Chunks that were never
+/// drawn are left to the LOD system. Returns how many meshes were rebuilt.
+pub(super) fn rebuild_chunks(world: &mut World, cs: &[UVec2]) -> u32 {
+    let mut rebuilt = 0;
+    world.resource_scope(|world, t: Mut<Terrain>| {
+        let mut jobs: Vec<(Entity, Mesh, Aabb)> = Vec::with_capacity(cs.len());
+        world.resource_scope(|_, mut chunks: Mut<TerrainChunks>| {
+            for &c in cs {
+                let Some(rt) = chunks.rt.get_mut((c.y * t.chunks().x + c.x) as usize) else { continue };
+                rt.task = None;
+                let (Some(e), Some(lod)) = (rt.entity, rt.lod) else { continue };
+                let info = t.chunk_info(c);
+                let aabb = Aabb::from_min_max(Vec3::new(0.0, info.min_h - info.skirt[lod as usize], 0.0), Vec3::new(t.chunk_size(), info.max_h, t.chunk_size()));
+                jobs.push((e, build_chunk_mesh(t.heightfield(), t.chunk_quads(), c, lod, info.skirt[lod as usize]), aabb));
+            }
+        });
+        for (e, mesh, aabb) in jobs {
+            let Some(h) = world.get::<Mesh3d>(e).map(|m| m.0.clone()) else { continue };
+            if let Some(mut meshes) = world.get_resource_mut::<Assets<Mesh>>() {
+                let _ = meshes.insert(h.id(), mesh);
+                world.entity_mut(e).insert(aabb);
+                rebuilt += 1;
+            }
+        }
+        #[cfg(feature = "physics")]
+        {
+            let mut q = world.query::<(&TerrainCollider, &mut avian3d::prelude::Collider)>();
+            for (tc, mut col) in q.iter_mut(world) {
+                if cs.contains(&tc.coord) {
+                    *col = chunk_collider(&t, tc.coord).0;
+                }
+            }
+        }
+    });
+    rebuilt
 }
 
 /// Heightfield collider for chunk `c`: `(collider, absolute centre of the chunk at y = 0)`.

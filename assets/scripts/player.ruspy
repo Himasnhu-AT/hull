@@ -1,0 +1,23 @@
+// The glowing cube. Moves with the lk_* actions (WASD / arrows) while a round is on.
+speed = 7.0;
+limit = 12.0;      // half-size of the walkable square
+game = null;
+
+fn _ready() {
+    add_to_group("player");
+    game = get_node("/Game");
+}
+
+fn _physics_process(dt) {
+    if game.state != "playing" {
+        return;
+    }
+    v = get_vector("lk_left", "lk_right", "lk_up", "lk_down");
+    if v.x == 0 && v.y == 0 {
+        return;
+    }
+    p = self.position + vec3(v.x, 0, v.y) * (speed * dt);
+    p.x = clampf(p.x, -limit, limit);
+    p.z = clampf(p.z, -limit, limit);
+    self.position = p;
+}

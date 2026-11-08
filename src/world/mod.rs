@@ -39,10 +39,14 @@
 use bevy::prelude::*;
 use serde::Serialize;
 
+pub mod brush;
 pub mod cells;
+#[cfg(feature = "devtools")]
+mod edit_control;
 #[cfg(feature = "devtools")]
 mod control;
 pub mod desc;
+pub mod edit;
 pub mod heightfield;
 pub mod hlod;
 pub mod material;
@@ -51,6 +55,7 @@ pub mod origin;
 pub mod prefab;
 pub mod scatter;
 pub mod terrain;
+pub mod terrain_data;
 
 pub use cells::{CellId, CellLoaded, CellUnloaded, StreamFreeze, StreamSource, WorldCell, WorldCells};
 pub use desc::{SpawnWorld, WorldDesc, WorldError, despawn_world, spawn_world};
@@ -61,7 +66,10 @@ pub use noise::Fbm;
 pub use origin::{OriginShifted, WorldOrigin};
 pub use prefab::{MaterialDesc, PartDesc, PrefabDef, ShapeDesc, WorldAssets, WorldTags};
 pub use scatter::{ScatterMesh, ScatterRule};
+pub use brush::{BrushKind, BrushSettings, Falloff, SampleRect, SmoothKernel};
+pub use edit::{BlobId, EditError, StrokeBlobs, TerrainChanged, TerrainEdit, TerrainHeights, TerrainLayer, TerrainPatchStore, TerrainSaveTarget, TerrainSplat};
 pub use terrain::{Terrain, TerrainChunk};
+pub use terrain_data::{TerrainData, TerrainDataError, TerrainMeta};
 
 /// Parent of everything the world spawns (see the module docs). Its transform is the floating
 /// origin's negated offset.
@@ -309,7 +317,7 @@ impl Plugin for WorldPlugin {
                     .before(TransformSystems::Propagate)
                     .before(crate::render_budget::RenderBudgetSystems::Stream),
             )
-            .add_plugins((origin::OriginPlugin, cells::CellsPlugin, terrain::TerrainPlugin, scatter::ScatterPlugin, hlod::HlodPlugin, material::TerrainMaterialPlugin))
+            .add_plugins((origin::OriginPlugin, cells::CellsPlugin, terrain::TerrainPlugin, edit::EditPlugin, scatter::ScatterPlugin, hlod::HlodPlugin, material::TerrainMaterialPlugin))
             .add_systems(PostUpdate, finish_stats.in_set(WorldSystems::Stats));
         #[cfg(feature = "devtools")]
         control::register(app);

@@ -242,6 +242,52 @@ impl Heightfield {
         self.max = self.max.max(h);
     }
 
+    /// Copies samples `[x0, x0+w) × [z0, z0+h)` into `out` (row-major, `w * h`), clamping
+    /// indices to the grid.
+    pub fn copy_rect(&self, x0: u32, z0: u32, w: u32, h: u32, out: &mut Vec<f32>) {
+        out.clear();
+        out.reserve((w * h) as usize);
+        for iz in z0..z0 + h {
+            let z = iz.min(self.nz - 1) as usize;
+            let row = &self.heights[z * self.nx as usize..(z + 1) * self.nx as usize];
+            if x0 + w <= self.nx {
+                out.extend_from_slice(&row[x0 as usize..(x0 + w) as usize]);
+            } else {
+                out.extend((x0..x0 + w).map(|x| row[x.min(self.nx - 1) as usize]));
+            }
+        }
+    }
+
+    /// Overwrites samples `[x0, x0+w) × [z0, z0+h)` from `values` (row-major). The rectangle is
+    /// clipped to the grid; non-finite values are skipped. Min/max only grow (conservative, no
+    /// full scan): call [`Heightfield::recompute_bounds`] when exact bounds matter.
+    pub fn patch(&mut self, x0: u32, z0: u32, w: u32, h: u32, values: &[f32]) {
+        if values.len() < (w as usize) * (h as usize) {
+            return;
+        }
+        let (mut lo, mut hi) = (self.min, self.max);
+        for j in 0..h {
+            let iz = z0 + j;
+            if iz >= self.nz {
+                break;
+            }
+            let n = w.min(self.nx.saturating_sub(x0)) as usize;
+            if n == 0 {
+                break;
+            }
+            let dst = &mut self.heights[(iz * self.nx + x0) as usize..][..n];
+            let src = &values[(j * w) as usize..][..n];
+            for (d, v) in dst.iter_mut().zip(src) {
+                if v.is_finite() {
+                    *d = *v;
+                    lo = lo.min(*v);
+                    hi = hi.max(*v);
+                }
+            }
+        }
+        (self.min, self.max) = (lo, hi);
+    }
+
     pub fn recompute_bounds(&mut self) {
         (self.min, self.max) = self.heights.iter().fold((f32::MAX, f32::MIN), |(lo, hi), h| (lo.min(*h), hi.max(*h)));
     }

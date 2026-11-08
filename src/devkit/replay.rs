@@ -222,9 +222,7 @@ pub fn inject(world: &mut World, ev: &InputEvent) -> Result<(), String> {
         InputEvent::Button { button, down } => {
             let button = mouse_button(button).ok_or_else(|| format!("unknown mouse button `{button}`"))?;
             let window = window_entity(world);
-            world
-                .write_message(MouseButtonInput { button, state: state(*down), window })
-                .ok_or("no mouse input in this app")?;
+            crate::input::write_mouse_button(world, MouseButtonInput { button, state: state(*down), window }).ok_or("no mouse input in this app")?;
         }
         InputEvent::Motion { dx, dy } => {
             world.write_message(MouseMotion { delta: Vec2::new(*dx, *dy) }).ok_or("no mouse input in this app")?;

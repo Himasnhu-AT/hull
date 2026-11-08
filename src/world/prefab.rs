@@ -179,11 +179,13 @@ pub struct PrefabDef {
 }
 
 /// Tags of a spawned prefab instance (from [`PrefabDef::tags`]).
-#[derive(Component, Clone, Debug, Default)]
+#[derive(Component, Reflect, Clone, Debug, Default)]
+#[reflect(Component, Default)]
 pub struct WorldTags(pub Vec<String>);
 
 /// Root of a spawned prefab instance.
-#[derive(Component, Clone, Debug)]
+#[derive(Component, Reflect, Clone, Debug)]
+#[reflect(Component)]
 pub struct PrefabInstance {
     pub prefab: Arc<str>,
 }

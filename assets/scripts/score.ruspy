@@ -1,0 +1,8 @@
+// Called by the Script node in door.logic.ron every time the door opens.
+// `who` is the entity that walked in (an int).
+fn on_open(who) {
+    opens = get("Door.opens") + 1;
+    set("Door.opens", opens);
+    log("door opened by entity " + tostr(who) + ", opens so far: " + opens);
+    return opens;
+}

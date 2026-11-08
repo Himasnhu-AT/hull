@@ -386,6 +386,7 @@ fn perf_stats(world: &mut World, _: Value) -> Result<Value, String> {
         "frame_ms": {"p50": p50, "p95": p95, "p99": p99},
         "entities": world.entities().count_spawned(),
         "perf": super::perf::stats_json(world),
+        "textures": world.get_resource::<crate::gfx::TextureCapStats>().map(|t| json!({"capped": t.capped, "mb_saved": t.bytes_saved as f64 / 1048576.0})),
     }))
 }
 
@@ -598,11 +599,11 @@ fn input_mouse(world: &mut World, p: Value) -> Result<Value, String> {
         let window = window(world);
         let ev = |state| MouseButtonInput { button, state, window };
         if action != "up" {
-            world.write_message(ev(ButtonState::Pressed));
+            crate::input::write_mouse_button(world, ev(ButtonState::Pressed));
         }
         match action {
             "up" => {
-                world.write_message(ev(ButtonState::Released));
+                crate::input::write_mouse_button(world, ev(ButtonState::Released));
             }
             "tap" => world.resource_mut::<InjectedUps>().buttons.push(ev(ButtonState::Released)),
             _ => {}
@@ -618,7 +619,7 @@ fn release_taps(world: &mut World) {
         world.write_message(k);
     }
     for b in ups.buttons {
-        world.write_message(b);
+        crate::input::write_mouse_button(world, b);
     }
 }
 

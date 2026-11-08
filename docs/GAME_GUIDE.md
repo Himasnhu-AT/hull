@@ -155,6 +155,8 @@ first-shot stalls. Send it immediately after the load, not a second later.
 ### 3.8 Memory
 - Textures dominate: uncompressed RGBA8 with CPU mips keeps two copies (GPU + CPU). Cook to KTX2
   (5.1): Shroud's footprint fell 2850 → 2373 MB and RSS 1423 → 842 MB.
+- `QualityPreset::max_texture_size` caps texture sides per tier (Low 1024, Medium 2048, High
+  4096) by dropping top mips at load: a 2048² set shrinks to a quarter (LOOK.md "Texture size cap").
 - Shadow textures (3.4) and render targets are next. Watch `mem.footprint_mb`, `gpu.alloc_mb`
   and sudden square pulses (= a big texture being rebuilt).
 - The governor's memory steps start when footprint passes 60% of RAM.
@@ -307,3 +309,11 @@ All in LOOK.md; the short version:
 | Governor frozen while the game is slow | Another window (metrics) focused | Fixed: any app window counts |
 | `perf.stats` passes empty | Apple GPUs: no timestamps inside passes | Use `xctrace` |
 | Numbers changed but nothing should have | Different binary / assets / governor on | Same-binary A/B, governor off |
+
+## Scripting
+
+Gameplay objects, rules and HUD can be written as Godot-style ruspy node scripts (`Script` per
+entity, signals, groups, `instantiate`, script UI) instead of Rust systems: **docs/SCRIPTING.md**,
+example `examples/script_demo.rs` (Lantern Keeper). Keep per-frame work over hundreds of entities in
+Rust; scripts are for events and sparse per-object logic. Logic graphs (`docs/LOGIC.md`) stay for
+designer-wired triggers.

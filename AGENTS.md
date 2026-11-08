@@ -46,7 +46,13 @@ from the shell.
 | `src/sound/`, `src/audio.rs` | mixer buses, snapshots, ducking, cues, 3D, occlusion, music, captions (`sound.*`): **docs/SOUND.md** |
 | `src/world/` | terrain, scatter, cell streaming, HLOD, floating origin, worlds as data (`world.*`): **docs/WORLD.md** |
 | `src/actions/`, `src/l10n/` | action mapping, gamepad, rebinding, accessibility; localization (`actions.*`, `l10n.*`): **docs/ACTIONS.md**, **docs/L10N.md** |
+| `src/level/` | level files: `LevelEntity` + `levels/*.level.ron` (reflected scene format), hot reload, `--level`, `tree` (`level.*`): **docs/LEVELS.md** |
+| `src/editor/` | the level editor, feature `editor`: `--editor` hosts `crates/editor-ui` through bevy_egui, backend on the World, camera, gizmo, Play/Stop, `editor.*` commands: **docs/EDITOR.md** |
+| `src/spline/` | splines: points with width/bank/tags, Catmull-Rom, arc length, fast `nearest`, road ribbon, gizmos (`spline.*`): **docs/SPLINES.md** |
+| `src/logic/`, `crates/logic-core/` | game logic as node graphs (`assets/logic/*.logic.ron`) + ruspy scripts (`assets/scripts/*.ruspy`) (`logic.*`): **docs/LOGIC.md** |
+| `src/scripting/` | Godot-style node scripts: `Script` per entity, `_ready/_process/_input`, signals, groups, node paths, script UI (`script.*`); example `examples/script_demo.rs`: **docs/SCRIPTING.md** |
 | `src/net/` | multiplayer, feature `net` (off by default; test with `--features net`) (`net.*`): **docs/NET.md** |
+| `assets/library/`, `scripts/assets.py` | licence-tracked CC0 / Fab models, textures, HDRIs, fetched on demand (`assets.py fetch\|import\|list\|check`): **docs/ASSETS.md** |
 | `docs/PORTING.md` | conventions, devtools, metrics, ship builds, render budget measurements |
 | `tests/*.rs` | headless `App::update()` tests and control-port tests (they spawn an example) |
 | `scripts/play.py` | build + launch a game offscreen, run a JSON steps file over the port, save screenshots |
@@ -64,6 +70,11 @@ Steps: `{"cmd": "...", "params": {...}, "expect": {"result.path": value}}`,
 `{"write": "data/x.json", "json": {...}}`. It exits 1 if any `expect` fails. Run a game
 yourself with `--control 0`, which prints `control: port=<n> key=<file>`, and speak the JSON
 lines protocol (see `tests/control.rs`); or use `--mcp` for MCP over stdio.
+
+To start a game on screen for the user to play, launch it detached with output to a file
+(`nohup memgate -- cargo run -q > run.log 2>&1 &`) so it outlives the agent's command. (A blank
+grey window or an unclickable menu in dev runs was not the launch method: the UI fallback
+camera was removed when the metrics window's camera appeared; fixed in `ui::fallback_camera`.)
 
 The command catalogue is live: call `engine.commands`. The main ones:
 

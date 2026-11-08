@@ -1,0 +1,32 @@
+[
+  {"sleep": 1.0},
+  {"cmd": "script.list"},
+  {"cmd": "script.vars", "params": {"entity": "Game"}, "expect": {"result.state": "menu", "result.score": 0}},
+  {"shot": "menu"},
+
+  {"cmd": "script.call", "params": {"entity": "Game", "method": "start"}},
+  {"sleep": 0.5},
+  {"cmd": "script.vars", "params": {"entity": "Game"}, "expect": {"result.state": "playing", "result.score": 0}},
+  {"shot": "round-start"},
+
+  {"cmd": "input.key", "params": {"key": "d", "action": "down"}},
+  {"sleep": 1.0},
+  {"cmd": "input.key", "params": {"key": "d", "action": "up"}},
+  {"sleep": 0.6},
+  {"cmd": "script.vars", "params": {"entity": "Game"}, "expect": {"result.score": 2}},
+  {"shot": "lantern-lit"},
+  {"sleep": 0.3},
+  {"shot": "lantern-glow"},
+
+  {"sleep": 3.0},
+  {"cmd": "script.stats"},
+  {"cmd": "script.call", "params": {"entity": "Game", "method": "finish"}},
+  {"sleep": 0.3},
+  {"cmd": "script.vars", "params": {"entity": "Game"}, "expect": {"result.state": "over", "result.best": 2}},
+  {"shot": "game-over"},
+
+  {"cmd": "script.call", "params": {"entity": "Game", "method": "start"}},
+  {"sleep": 0.5},
+  {"cmd": "script.vars", "params": {"entity": "Game"}, "expect": {"result.state": "playing", "result.score": 0, "result.best": 2}},
+  {"shot": "restarted"}
+]
