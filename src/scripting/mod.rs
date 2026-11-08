@@ -42,6 +42,7 @@ mod bench;
 mod tests_pause;
 #[cfg(test)]
 mod tests_engine;
+#[cfg(test)]
 mod tests_tween;
 
 use std::cell::RefCell;
