@@ -172,7 +172,14 @@ fn groups(e: &mut Engine) {
         let (g, m) = (s(&a[0], "group")?, s(&a[1], "method")?);
         let mut n = 0;
         for t in group_members(w, g) {
-            if super::has_method(w, t, m) && super::call_rv(w, t, m, a[2..].to_vec()).is_ok() {
+            if !super::has_method(w, t, m) {
+                continue;
+            }
+            if super::is_busy(w, t) {
+                // Running right now (e.g. the caller itself): call at the end of the frame.
+                super::defer(w, t, m.to_string(), a[2..].to_vec());
+                n += 1;
+            } else if super::call_rv(w, t, m, a[2..].to_vec()).is_ok() {
                 n += 1;
             }
         }
