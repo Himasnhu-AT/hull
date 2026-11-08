@@ -173,6 +173,36 @@ writable from the outside (`get_var(node, "hp")`, `set_var(node, "hp", 5)`, `scr
 - **Hot reload keeps member values**; a new top-level variable gets its initial value, a
   removed one is dropped, `_ready` does not run again (it is not re-run on reload).
 
+## Export hints, `extends`, `class_name`
+
+Plain top-level variables are exported (editable on the node as `ScriptProps`); a name starting
+with `_` is private and not listed. Comment annotations directly above a variable add editor hints:
+
+```
+// @export_range(0, 10, 0.5)
+// @tooltip Metres per second
+speed = 5;
+// @export_enum("easy", "hard")     (a string default stores the text, an int default the index)
+mode = "easy";
+// @export_color                    ([r, g, b(, a)])
+tint = [1, 0, 0];
+// @export_file("*.ruspy")
+next = "";
+```
+
+The editor shows a slider, a combo box, a colour picker, a file field and the tooltip.
+`script.props {script | entity}` lists them (`name`, `default`, `hint`, `tooltip`);
+`scripting::script_props(world, path)` is the same in Rust.
+
+Inheritance uses header comments (before the first code line): `// extends base.ruspy` and
+`// class_name Enemy`. The base file is spliced in before the derived one in the same module:
+derived top-level assignments run after the base's, so they override its defaults, and a derived
+function replaces the base function of the same name (the base's own calls reach the override).
+`super_call("fn", args...)` calls the next version up the chain (resolved when the file loads: the
+name must be a string literal). `is_class([node,] "Enemy")` is true for the class and every base;
+`attach_script(node, "Enemy")` takes a `class_name` as well as a path. Editing a base reloads its
+derived scripts. Error line numbers count from the start of the spliced text (bases first).
+
 ## Signals
 
 ```
@@ -398,6 +428,13 @@ Property values at the end of a step are exactly `to`. Each frame costs a few fl
 per active step (reflect paths go through the registry and cost more: use `position`, `scale`,
 `color`, `member:` for hot tweens). Callback arguments keep numbers as floats. A step whose
 target node was freed is skipped; a property that cannot be read or set goes to the diagnostics.
+
+### Introspection
+
+`script.api` (control command) and `scripting::api_catalogue()` list every host function with
+signature and one line of doc (`src/scripting/catalogue.rs`; a test keeps it complete and checks
+the docs mention each name). `is_class([node,] class)` and `super_call(name, args...)`: see
+"Export hints, `extends`, `class_name`".
 
 ### Math
 
