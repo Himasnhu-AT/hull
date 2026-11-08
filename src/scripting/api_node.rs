@@ -272,6 +272,23 @@ fn render(e: &mut Engine) {
         let (t, _) = split(w, a, 0, "is_visible([node])")?;
         Ok(RV::Bool(w.get::<Visibility>(t).is_none_or(|v| *v != Visibility::Hidden)))
     });
+    #[cfg(feature = "level")]
+    e.register("add_primitive", |c, a| {
+        use crate::level::{Primitive, PrimitiveShape};
+        let w = world(c)?;
+        let (t, r) = split(w, a, 3, "add_primitive([node,] shape, size, color)")?;
+        let shape = match s(&r[0], "shape")? {
+            "box" | "cuboid" => PrimitiveShape::Cuboid,
+            "sphere" => PrimitiveShape::Sphere,
+            "cylinder" => PrimitiveShape::Cylinder,
+            "capsule" => PrimitiveShape::Capsule,
+            "plane" => PrimitiveShape::Plane,
+            o => return Err(format!("add_primitive: unknown shape \"{o}\" (box, sphere, cylinder, capsule, plane)")),
+        };
+        let p = Primitive { shape, size: v3(&r[1], "size")?, color: color_of(&r[2])?, ..default() };
+        w.entity_mut(t).insert(p);
+        Ok(RV::Void)
+    });
     e.register("set_color", |c, a| {
         let w = world(c)?;
         let (t, r) = split(w, a, 1, "set_color([node,] [r, g, b(, a)])")?;

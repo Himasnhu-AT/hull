@@ -12,6 +12,7 @@
 //! | `apply_impulse([n,] v)` | velocity change of `v / mass` |
 //! | `set_gravity_scale([n,] x)` | `GravityScale` |
 //! | `set_collision_layer([n,] mask)`, `set_collision_mask([n,] mask)`, `get_collision_layer([n])`, `get_collision_mask([n])` | `CollisionLayers` |
+//! | `add_body([n,] kind, shape, size)` | collider + body from script: kind `static kinematic dynamic sensor`, shape `box sphere capsule cylinder`, `size` = full extents like `Primitive` |
 //! | `move_and_slide([n,] velocity)` | slide a [`CharacterBody`] by `velocity * physics_delta`; returns the new velocity |
 //! | `is_on_floor([n])`, `is_on_wall([n])`, `is_on_ceiling([n])`, `get_floor_normal([n])` | state after the last `move_and_slide` |
 
@@ -207,7 +208,36 @@ fn state<T>(w: &World, a: &[RV], usage: &str, get: impl Fn(&CharacterBody) -> T)
     Ok(w.get::<CharacterBody>(t).map(&get).unwrap_or_else(|| get(&CharacterBody::default())))
 }
 
+fn collider_of(shape: &str, size: Vec3) -> Result<Collider, String> {
+    Ok(match shape {
+        "box" | "cuboid" => Collider::cuboid(size.x, size.y, size.z),
+        "sphere" => Collider::sphere(size.x * 0.5),
+        "capsule" => {
+            let r = size.x * 0.5;
+            Collider::capsule(r, (size.y - 2.0 * r).max(0.01))
+        }
+        "cylinder" => Collider::cylinder(size.x * 0.5, size.y),
+        o => return Err(format!("add_body: unknown shape \"{o}\" (box, sphere, capsule, cylinder)")),
+    })
+}
+
 pub(super) fn register(e: &mut Engine) {
+    e.register("add_body", |c, a| {
+        let w = world(c)?;
+        let (t, r) = split(w, a, 3, "add_body([n,] kind, shape, size)")?;
+        let kind = super::api::s(&r[0], "kind")?.to_string();
+        let col = collider_of(super::api::s(&r[1], "shape")?, v3(&r[2], "size")?)?;
+        let mut em = w.entity_mut(t);
+        em.insert((col, CollisionEventsEnabled));
+        match kind.as_str() {
+            "static" => em.insert(RigidBody::Static),
+            "kinematic" => em.insert(RigidBody::Kinematic),
+            "dynamic" => em.insert(RigidBody::Dynamic),
+            "sensor" => em.insert((RigidBody::Static, Sensor)),
+            o => return Err(format!("add_body: unknown kind \"{o}\" (static, kinematic, dynamic, sensor)")),
+        };
+        Ok(RV::Void)
+    });
     e.register("raycast", |c, a| {
         let w = world(c)?;
         if a.len() < 2 || a.len() > 3 {

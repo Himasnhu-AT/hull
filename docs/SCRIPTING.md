@@ -344,7 +344,7 @@ function acts on `self`. Errors in a host call become a diagnostic with the scri
 
 ### Render
 
-`set_visible([n,] b)`, `is_visible([n])`, `set_color([n,] [r, g, b(, a)])` (the node's
+`add_primitive([n,] shape, size, color)` (box, sphere, cylinder, capsule, plane: a visible `Primitive`, so a node built from script has a look), `set_visible([n,] b)`, `is_visible([n])`, `set_color([n,] [r, g, b(, a)])` (the node's
 `Primitive` colour: shared meshes and materials are kept, see GAME_GUIDE).
 
 ### Groups
@@ -400,6 +400,7 @@ Feature `physics` (`src/scripting/api_physics.rs`). Layers and masks are Godot-s
 | `overlap_sphere(center, radius)` | entities inside a sphere |
 | `get_velocity([n])`, `set_velocity([n,] v)`, `apply_impulse([n,] v)`, `set_gravity_scale([n,] x)` | `LinearVelocity`, impulse = `v / mass`, `GravityScale` |
 | `set_collision_layer([n,] m)`, `set_collision_mask([n,] m)`, `get_collision_layer([n])`, `get_collision_mask([n])` | `CollisionLayers` memberships / filters |
+| `add_body([n,] kind, shape, size)` | collider + body from script: kind `static kinematic dynamic sensor` (sensor = static + `Sensor`), shape `box sphere capsule cylinder`, `size` = full extents like `Primitive`; also enables collision events |
 | `move_and_slide([n,] velocity)` | Godot `CharacterBody3D`: sweeps the node's `Collider` by `velocity * physics_delta`, slides up to 4 times, returns the new velocity |
 | `is_on_floor([n])`, `is_on_wall([n])`, `is_on_ceiling([n])`, `get_floor_normal([n])` | state of the last `move_and_slide` |
 
