@@ -10,13 +10,15 @@ ttl = 9.0;
 glow_time = 2.5;
 flame = null;
 game = null;
-cold = [0.35, 0.3, 0.2];
-dying = [0.8, 0.25, 0.15];
-hot = [1.0, 0.78, 0.25];
+cold = [0.8, 0.42, 0.15];
+dying = [1.4, 0.35, 0.12];
+hot = [3.5, 1.3, 0.25];
+light = null;
 
 fn _ready() {
     add_to_group("lanterns");
     flame = get_node("Flame");
+    light = get_node("Light");
     game = get_node("/Game");
 }
 
@@ -53,6 +55,7 @@ fn _on_body_entered(other) {
     lit = true;
     age = 0.0;
     set_color(flame, hot);
+    set_visible(light, true);
     emit_signal("lit", points);
 }
 
@@ -65,5 +68,6 @@ fn reset() {
     warned = false;
     age = 0.0;
     set_color(flame, cold);
+    set_visible(light, false);
     set_position([lerp(-10.0, 10.0, randf()), 0.5, lerp(-9.0, 9.0, randf())]);
 }

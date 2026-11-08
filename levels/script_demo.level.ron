@@ -1,7 +1,134 @@
 (
   version: 1,
   world: None,
-  look: Some(Preset("dusk")),
+  look: Some(Inline((
+    name: "lantern_night",
+    sun: (
+      enabled: true,
+      azimuth_deg: 215.0,
+      elevation_deg: 42.0,
+      illuminance: 90.0,
+      color: (0.55, 0.68, 1.0),
+      shadows: false,
+      shadow_distance: 120.0,
+      cascades: 4,
+      first_cascade: 8.0,
+      disk_size_deg: 0.53,
+      disk_intensity: 0.0,
+      soft_shadow_size: 10.0,
+    ),
+    sky: (
+      mode: gradient,
+      zenith: (0.02, 0.04, 0.16),
+      horizon: (0.22, 0.28, 0.5),
+      ground: (0.03, 0.04, 0.07),
+      brightness: 55.0,
+      sun_glow: 0.1,
+      stars: 1.0,
+      cubemap: "",
+      diffuse_map: "",
+      specular_map: "",
+    ),
+    ambient: (
+      color: (0.5, 0.6, 1.0),
+      brightness: 6.0,
+      env_intensity: 1.0,
+    ),
+    fog: (
+      mode: exponential,
+      color: (0.14, 0.19, 0.36),
+      sun_color: (0.2, 0.25, 0.4),
+      sun_exponent: 30.0,
+      sun_amount: 0.2,
+      start: 30.0,
+      end: 400.0,
+      visibility: 110.0,
+      extinction: (0.35, 0.5, 0.66),
+    ),
+    volumetric: (
+      enabled: false,
+      density: 0.03,
+      color: (1.0, 1.0, 1.0),
+      absorption: 0.05,
+      scattering: 0.3,
+      asymmetry: 0.6,
+      light_intensity: 1.0,
+      ambient_intensity: 0.0,
+      size: (80.0, 24.0, 80.0),
+      center: (0.0, 8.0, 0.0),
+      follow_camera: true,
+      sun_shafts: true,
+    ),
+    exposure: (
+      ev100: 4.0,
+      auto: false,
+      auto_min: -4.0,
+      auto_max: 4.0,
+      speed_brighten: 3.0,
+      speed_darken: 1.0,
+      compensation: -1.0,
+    ),
+    tonemapping: agx,
+    grading: (
+      exposure: 0.0,
+      temperature: -0.08,
+      tint: 0.0,
+      hue: 0.0,
+      post_saturation: 0.8,
+      shadows: (
+        saturation: 1.0,
+        contrast: 1.0,
+        gamma: 1.0,
+        gain: 1.0,
+        lift: 0.0,
+      ),
+      midtones: (
+        saturation: 1.0,
+        contrast: 1.0,
+        gamma: 1.0,
+        gain: 1.0,
+        lift: 0.0,
+      ),
+      highlights: (
+        saturation: 1.0,
+        contrast: 1.0,
+        gamma: 1.0,
+        gain: 1.0,
+        lift: 0.0,
+      ),
+    ),
+    bloom: (
+      intensity: 0.4,
+      low_frequency_boost: 0.7,
+      low_frequency_boost_curvature: 0.95,
+      high_pass_frequency: 1.0,
+      threshold: 0.0,
+      threshold_softness: 0.0,
+      additive: false,
+    ),
+    lens: (
+      dof: (
+        enabled: false,
+        focal_distance: 8.0,
+        aperture_f_stops: 2.8,
+        max_blur_px: 48.0,
+      ),
+      motion_blur: (
+        enabled: false,
+        shutter_angle: 0.5,
+        samples: 2,
+      ),
+      chromatic_aberration: 0.0,
+      vignette: (
+        intensity: 0.35,
+        radius: 0.75,
+        smoothness: 3.0,
+        color: (0.0, 0.0, 0.0),
+      ),
+      distortion: 0.0,
+      film_grain: 0.0,
+    ),
+  ))),
   entities: (
     resources: {},
     entities: {
@@ -19,10 +146,10 @@
           ),
           "engine::level::primitive::Primitive": (
             shape: Plane,
-            size: (30.0, 0.0, 30.0),
+            size: (160.0, 0.0, 160.0),
             color: Srgba((
               red: 0.16,
-              green: 0.2,
+              green: 0.25,
               blue: 0.17,
               alpha: 1.0,
             )),
@@ -38,13 +165,13 @@
           "bevy_ecs::name::Name": "Sun",
           "bevy_light::directional_light::DirectionalLight": (
             color: Srgba((
-              red: 0.7,
-              green: 0.75,
+              red: 0.6,
+              green: 0.7,
               blue: 1.0,
               alpha: 1.0,
             )),
-            illuminance: 2500.0,
-            shadow_maps_enabled: true,
+            illuminance: 1.0,
+            shadow_maps_enabled: false,
             contact_shadows_enabled: false,
             affects_lightmapped_mesh_diffuse: true,
             shadow_depth_bias: 0.02,
@@ -65,7 +192,7 @@
           "bevy_camera::visibility::Visibility": Inherited,
           "bevy_ecs::name::Name": "Player",
           "bevy_transform::components::transform::Transform": (
-            translation: (0.0, 0.3, 0.0),
+            translation: (0.0, 0.5, 0.0),
             rotation: (0.0, 0.0, 0.0, 1.0),
             scale: (1.0, 1.0, 1.0),
           ),
@@ -73,12 +200,12 @@
             id: (3),
           ),
           "engine::level::primitive::Primitive": (
-            shape: Cuboid,
-            size: (0.6, 0.6, 0.6),
+            shape: Capsule,
+            size: (0.5, 1.0, 0.5),
             color: Srgba((
-              red: 1.0,
-              green: 0.9,
-              blue: 0.6,
+              red: 0.7,
+              green: 0.55,
+              blue: 0.38,
               alpha: 1.0,
             )),
             metallic: 0.0,
@@ -88,9 +215,10 @@
           "engine::scripting::Script": (
             path: "player.ruspy",
             priority: 0,
+            process_mode: Inherit,
           ),
           "script_demo::PhysicsBox": (
-            size: (0.6, 0.6, 0.6),
+            size: (0.6, 1.0, 0.6),
             sensor: false,
           ),
         },
@@ -103,12 +231,12 @@
           "bevy_light::point_light::PointLight": (
             color: Srgba((
               red: 1.0,
-              green: 0.8,
+              green: 0.78,
               blue: 0.5,
               alpha: 1.0,
             )),
-            intensity: 300000.0,
-            range: 9.0,
+            intensity: 28000.0,
+            range: 7.0,
             radius: 0.0,
             shadow_maps_enabled: false,
             contact_shadows_enabled: false,
@@ -118,7 +246,7 @@
             shadow_map_near_z: 0.1,
           ),
           "bevy_transform::components::transform::Transform": (
-            translation: (0.0, 1.2, 0.0),
+            translation: (0.0, 1.8, 0.0),
             rotation: (0.0, 0.0, 0.0, 1.0),
             scale: (1.0, 1.0, 1.0),
           ),
@@ -136,12 +264,18 @@
           "engine::scripting::Script": (
             path: "hud.ruspy",
             priority: 0,
+            process_mode: Inherit,
           ),
         },
       ),
       4294967289: (
         components: {
           "bevy_ecs::name::Name": "Spawner",
+          "bevy_transform::components::transform::Transform": (
+            translation: (0.0, 0.0, 0.0),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.0, 1.0, 1.0),
+          ),
           "engine::level::LevelEntity": (
             id: (6),
           ),
@@ -158,12 +292,3470 @@
           "engine::scripting::Script": (
             path: "spawner.ruspy",
             priority: 0,
+            process_mode: Inherit,
           ),
           "engine::scripting::ScriptTimer": (
             wait_time: 1.6,
             one_shot: false,
             autostart: false,
           ),
+        },
+      ),
+      4294967288: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::hierarchy::ChildOf": (4294967292),
+          "bevy_ecs::name::Name": "Lamp",
+          "bevy_transform::components::transform::Transform": (
+            translation: (0.34, 0.15, 0.2),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.0, 1.0, 1.0),
+          ),
+          "engine::level::LevelEntity": (
+            id: (7),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Sphere,
+            size: (0.22, 0.22, 0.22),
+            color: Srgba((
+              red: 2.5,
+              green: 1.5,
+              blue: 0.5,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Actor": (),
+        },
+      ),
+      4294967194: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Trunk",
+          "bevy_transform::components::transform::Transform": (
+            translation: (20.345396, 1.3396394, 2.1691341),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.217854, 1.217854, 1.217854),
+          ),
+          "engine::level::LevelEntity": (
+            id: (101),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Cylinder,
+            size: (0.4, 2.2, 0.0),
+            color: Srgba((
+              red: 0.3,
+              green: 0.2,
+              blue: 0.14,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967193: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Crown",
+          "bevy_transform::components::transform::Transform": (
+            translation: (20.345396, 3.2882059, 2.1691341),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.217854, 1.4005321, 1.217854),
+          ),
+          "engine::level::LevelEntity": (
+            id: (102),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Sphere,
+            size: (1.9, 1.9, 1.9),
+            color: Srgba((
+              red: 0.1,
+              green: 0.3,
+              blue: 0.2,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967192: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Trunk",
+          "bevy_transform::components::transform::Transform": (
+            translation: (18.479507, 1.5461236, 3.490194),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.4055669, 1.4055669, 1.4055669),
+          ),
+          "engine::level::LevelEntity": (
+            id: (103),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Cylinder,
+            size: (0.4, 2.2, 0.0),
+            color: Srgba((
+              red: 0.3,
+              green: 0.2,
+              blue: 0.14,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967191: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Crown",
+          "bevy_transform::components::transform::Transform": (
+            translation: (18.479507, 3.7950308, 3.490194),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.4055669, 1.6164019, 1.4055669),
+          ),
+          "engine::level::LevelEntity": (
+            id: (104),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Sphere,
+            size: (1.9, 1.9, 1.9),
+            color: Srgba((
+              red: 0.1,
+              green: 0.3,
+              blue: 0.2,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967190: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Trunk",
+          "bevy_transform::components::transform::Transform": (
+            translation: (19.736, 1.1875148, 6.7107034),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.0795588, 1.0795588, 1.0795588),
+          ),
+          "engine::level::LevelEntity": (
+            id: (105),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Cylinder,
+            size: (0.4, 2.2, 0.0),
+            color: Srgba((
+              red: 0.3,
+              green: 0.2,
+              blue: 0.14,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967189: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Crown",
+          "bevy_transform::components::transform::Transform": (
+            translation: (19.736, 2.914809, 6.7107034),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.0795588, 1.2414926, 1.0795588),
+          ),
+          "engine::level::LevelEntity": (
+            id: (106),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Sphere,
+            size: (1.9, 1.9, 1.9),
+            color: Srgba((
+              red: 0.14,
+              green: 0.36,
+              blue: 0.2,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967188: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Trunk",
+          "bevy_transform::components::transform::Transform": (
+            translation: (19.071985, 1.5050384, 9.763656),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.3682166, 1.3682166, 1.3682166),
+          ),
+          "engine::level::LevelEntity": (
+            id: (107),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Cylinder,
+            size: (0.4, 2.2, 0.0),
+            color: Srgba((
+              red: 0.3,
+              green: 0.2,
+              blue: 0.14,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967187: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Crown",
+          "bevy_transform::components::transform::Transform": (
+            translation: (19.071985, 3.694185, 9.763656),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.3682166, 1.5734491, 1.3682166),
+          ),
+          "engine::level::LevelEntity": (
+            id: (108),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Sphere,
+            size: (1.9, 1.9, 1.9),
+            color: Srgba((
+              red: 0.14,
+              green: 0.36,
+              blue: 0.2,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967186: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Trunk",
+          "bevy_transform::components::transform::Transform": (
+            translation: (14.097418, 1.3183746, 10.477351),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.1985223, 1.1985223, 1.1985223),
+          ),
+          "engine::level::LevelEntity": (
+            id: (109),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Cylinder,
+            size: (0.4, 2.2, 0.0),
+            color: Srgba((
+              red: 0.3,
+              green: 0.2,
+              blue: 0.14,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967185: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Crown",
+          "bevy_transform::components::transform::Transform": (
+            translation: (14.097418, 3.2360103, 10.477351),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.1985223, 1.3783007, 1.1985223),
+          ),
+          "engine::level::LevelEntity": (
+            id: (110),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Sphere,
+            size: (1.9, 1.9, 1.9),
+            color: Srgba((
+              red: 0.1,
+              green: 0.3,
+              blue: 0.2,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967184: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Trunk",
+          "bevy_transform::components::transform::Transform": (
+            translation: (14.950128, 1.463734, 15.582858),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.3306673, 1.3306673, 1.3306673),
+          ),
+          "engine::level::LevelEntity": (
+            id: (111),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Cylinder,
+            size: (0.4, 2.2, 0.0),
+            color: Srgba((
+              red: 0.3,
+              green: 0.2,
+              blue: 0.14,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967183: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Crown",
+          "bevy_transform::components::transform::Transform": (
+            translation: (14.950128, 3.5928016, 15.582858),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.3306673, 1.5302674, 1.3306673),
+          ),
+          "engine::level::LevelEntity": (
+            id: (112),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Sphere,
+            size: (1.9, 1.9, 1.9),
+            color: Srgba((
+              red: 0.1,
+              green: 0.3,
+              blue: 0.2,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967182: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Trunk",
+          "bevy_transform::components::transform::Transform": (
+            translation: (13.512484, 1.5988545, 15.734717),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.4535041, 1.4535041, 1.4535041),
+          ),
+          "engine::level::LevelEntity": (
+            id: (113),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Cylinder,
+            size: (0.4, 2.2, 0.0),
+            color: Srgba((
+              red: 0.3,
+              green: 0.2,
+              blue: 0.14,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967181: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Crown",
+          "bevy_transform::components::transform::Transform": (
+            translation: (13.512484, 3.9244611, 15.734717),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.4535041, 1.6715297, 1.4535041),
+          ),
+          "engine::level::LevelEntity": (
+            id: (114),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Sphere,
+            size: (1.9, 1.9, 1.9),
+            color: Srgba((
+              red: 0.1,
+              green: 0.3,
+              blue: 0.2,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967180: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Trunk",
+          "bevy_transform::components::transform::Transform": (
+            translation: (10.906526, 1.1294554, 21.253075),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.0267776, 1.0267776, 1.0267776),
+          ),
+          "engine::level::LevelEntity": (
+            id: (115),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Cylinder,
+            size: (0.4, 2.2, 0.0),
+            color: Srgba((
+              red: 0.3,
+              green: 0.2,
+              blue: 0.14,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967179: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Crown",
+          "bevy_transform::components::transform::Transform": (
+            translation: (10.906526, 2.7722995, 21.253075),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.0267776, 1.1807942, 1.0267776),
+          ),
+          "engine::level::LevelEntity": (
+            id: (116),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Sphere,
+            size: (1.9, 1.9, 1.9),
+            color: Srgba((
+              red: 0.1,
+              green: 0.3,
+              blue: 0.2,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967178: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Trunk",
+          "bevy_transform::components::transform::Transform": (
+            translation: (9.459144, 1.5741769, 21.588491),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.4310699, 1.4310699, 1.4310699),
+          ),
+          "engine::level::LevelEntity": (
+            id: (117),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Cylinder,
+            size: (0.4, 2.2, 0.0),
+            color: Srgba((
+              red: 0.3,
+              green: 0.2,
+              blue: 0.14,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967177: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Crown",
+          "bevy_transform::components::transform::Transform": (
+            translation: (9.459144, 3.8638887, 21.588491),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.4310699, 1.6457303, 1.4310699),
+          ),
+          "engine::level::LevelEntity": (
+            id: (118),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Sphere,
+            size: (1.9, 1.9, 1.9),
+            color: Srgba((
+              red: 0.14,
+              green: 0.36,
+              blue: 0.2,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967176: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Trunk",
+          "bevy_transform::components::transform::Transform": (
+            translation: (3.747571, 0.94753665, 18.039253),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (0.8613969, 0.8613969, 0.8613969),
+          ),
+          "engine::level::LevelEntity": (
+            id: (119),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Cylinder,
+            size: (0.4, 2.2, 0.0),
+            color: Srgba((
+              red: 0.3,
+              green: 0.2,
+              blue: 0.14,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967175: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Crown",
+          "bevy_transform::components::transform::Transform": (
+            translation: (3.747571, 2.3257718, 18.039253),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (0.8613969, 0.9906064, 0.8613969),
+          ),
+          "engine::level::LevelEntity": (
+            id: (120),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Sphere,
+            size: (1.9, 1.9, 1.9),
+            color: Srgba((
+              red: 0.14,
+              green: 0.36,
+              blue: 0.2,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967174: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Trunk",
+          "bevy_transform::components::transform::Transform": (
+            translation: (1.5175287, 0.96293646, 18.589827),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (0.8753968, 0.8753968, 0.8753968),
+          ),
+          "engine::level::LevelEntity": (
+            id: (121),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Cylinder,
+            size: (0.4, 2.2, 0.0),
+            color: Srgba((
+              red: 0.3,
+              green: 0.2,
+              blue: 0.14,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967173: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Crown",
+          "bevy_transform::components::transform::Transform": (
+            translation: (1.5175287, 2.3635714, 18.589827),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (0.8753968, 1.0067062, 0.8753968),
+          ),
+          "engine::level::LevelEntity": (
+            id: (122),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Sphere,
+            size: (1.9, 1.9, 1.9),
+            color: Srgba((
+              red: 0.1,
+              green: 0.3,
+              blue: 0.2,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967172: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Trunk",
+          "bevy_transform::components::transform::Transform": (
+            translation: (-2.150033, 1.0802482, 22.121105),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (0.9820438, 0.9820438, 0.9820438),
+          ),
+          "engine::level::LevelEntity": (
+            id: (123),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Cylinder,
+            size: (0.4, 2.2, 0.0),
+            color: Srgba((
+              red: 0.3,
+              green: 0.2,
+              blue: 0.14,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967171: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Crown",
+          "bevy_transform::components::transform::Transform": (
+            translation: (-2.150033, 2.6515183, 22.121105),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (0.9820438, 1.1293503, 0.9820438),
+          ),
+          "engine::level::LevelEntity": (
+            id: (124),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Sphere,
+            size: (1.9, 1.9, 1.9),
+            color: Srgba((
+              red: 0.1,
+              green: 0.3,
+              blue: 0.2,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967170: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Trunk",
+          "bevy_transform::components::transform::Transform": (
+            translation: (-5.980674, 1.3550106, 23.119417),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.2318279, 1.2318279, 1.2318279),
+          ),
+          "engine::level::LevelEntity": (
+            id: (125),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Cylinder,
+            size: (0.4, 2.2, 0.0),
+            color: Srgba((
+              red: 0.3,
+              green: 0.2,
+              blue: 0.14,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967169: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Crown",
+          "bevy_transform::components::transform::Transform": (
+            translation: (-5.980674, 3.3259354, 23.119417),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.2318279, 1.416602, 1.2318279),
+          ),
+          "engine::level::LevelEntity": (
+            id: (126),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Sphere,
+            size: (1.9, 1.9, 1.9),
+            color: Srgba((
+              red: 0.1,
+              green: 0.3,
+              blue: 0.2,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967168: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Trunk",
+          "bevy_transform::components::transform::Transform": (
+            translation: (-7.7398887, 1.58877, 20.74373),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.4443364, 1.4443364, 1.4443364),
+          ),
+          "engine::level::LevelEntity": (
+            id: (127),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Cylinder,
+            size: (0.4, 2.2, 0.0),
+            color: Srgba((
+              red: 0.3,
+              green: 0.2,
+              blue: 0.14,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967167: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Crown",
+          "bevy_transform::components::transform::Transform": (
+            translation: (-7.7398887, 3.8997083, 20.74373),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.4443364, 1.6609869, 1.4443364),
+          ),
+          "engine::level::LevelEntity": (
+            id: (128),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Sphere,
+            size: (1.9, 1.9, 1.9),
+            color: Srgba((
+              red: 0.1,
+              green: 0.3,
+              blue: 0.2,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967166: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Trunk",
+          "bevy_transform::components::transform::Transform": (
+            translation: (-8.313506, 1.4125937, 16.97486),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.2841761, 1.2841761, 1.2841761),
+          ),
+          "engine::level::LevelEntity": (
+            id: (129),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Cylinder,
+            size: (0.4, 2.2, 0.0),
+            color: Srgba((
+              red: 0.3,
+              green: 0.2,
+              blue: 0.14,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967165: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Crown",
+          "bevy_transform::components::transform::Transform": (
+            translation: (-8.313506, 3.4672756, 16.97486),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.2841761, 1.4768025, 1.2841761),
+          ),
+          "engine::level::LevelEntity": (
+            id: (130),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Sphere,
+            size: (1.9, 1.9, 1.9),
+            color: Srgba((
+              red: 0.14,
+              green: 0.36,
+              blue: 0.2,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967164: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Trunk",
+          "bevy_transform::components::transform::Transform": (
+            translation: (-9.955545, 1.5082892, 14.189947),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.371172, 1.371172, 1.371172),
+          ),
+          "engine::level::LevelEntity": (
+            id: (131),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Cylinder,
+            size: (0.4, 2.2, 0.0),
+            color: Srgba((
+              red: 0.3,
+              green: 0.2,
+              blue: 0.14,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967163: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Crown",
+          "bevy_transform::components::transform::Transform": (
+            translation: (-9.955545, 3.7021644, 14.189947),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.371172, 1.5768477, 1.371172),
+          ),
+          "engine::level::LevelEntity": (
+            id: (132),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Sphere,
+            size: (1.9, 1.9, 1.9),
+            color: Srgba((
+              red: 0.1,
+              green: 0.3,
+              blue: 0.2,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967162: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Trunk",
+          "bevy_transform::components::transform::Transform": (
+            translation: (-12.436106, 0.9743583, 11.776893),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (0.8857803, 0.8857803, 0.8857803),
+          ),
+          "engine::level::LevelEntity": (
+            id: (133),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Cylinder,
+            size: (0.4, 2.2, 0.0),
+            color: Srgba((
+              red: 0.3,
+              green: 0.2,
+              blue: 0.14,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967161: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Crown",
+          "bevy_transform::components::transform::Transform": (
+            translation: (-12.436106, 2.3916068, 11.776893),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (0.8857803, 1.0186473, 0.8857803),
+          ),
+          "engine::level::LevelEntity": (
+            id: (134),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Sphere,
+            size: (1.9, 1.9, 1.9),
+            color: Srgba((
+              red: 0.14,
+              green: 0.36,
+              blue: 0.2,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967160: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Trunk",
+          "bevy_transform::components::transform::Transform": (
+            translation: (-13.806095, 1.4362217, 10.477967),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.3056561, 1.3056561, 1.3056561),
+          ),
+          "engine::level::LevelEntity": (
+            id: (135),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Cylinder,
+            size: (0.4, 2.2, 0.0),
+            color: Srgba((
+              red: 0.3,
+              green: 0.2,
+              blue: 0.14,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967159: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Crown",
+          "bevy_transform::components::transform::Transform": (
+            translation: (-13.806095, 3.5252714, 10.477967),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.3056561, 1.5015044, 1.3056561),
+          ),
+          "engine::level::LevelEntity": (
+            id: (136),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Sphere,
+            size: (1.9, 1.9, 1.9),
+            color: Srgba((
+              red: 0.1,
+              green: 0.3,
+              blue: 0.2,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967158: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Trunk",
+          "bevy_transform::components::transform::Transform": (
+            translation: (-18.367937, 0.9727392, 10.825),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (0.88430834, 0.88430834, 0.88430834),
+          ),
+          "engine::level::LevelEntity": (
+            id: (137),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Cylinder,
+            size: (0.4, 2.2, 0.0),
+            color: Srgba((
+              red: 0.3,
+              green: 0.2,
+              blue: 0.14,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967157: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Crown",
+          "bevy_transform::components::transform::Transform": (
+            translation: (-18.367937, 2.3876326, 10.825),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (0.88430834, 1.0169545, 0.88430834),
+          ),
+          "engine::level::LevelEntity": (
+            id: (138),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Sphere,
+            size: (1.9, 1.9, 1.9),
+            color: Srgba((
+              red: 0.1,
+              green: 0.3,
+              blue: 0.2,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967156: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Trunk",
+          "bevy_transform::components::transform::Transform": (
+            translation: (-21.132906, 1.1635617, 8.108752),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.0577834, 1.0577834, 1.0577834),
+          ),
+          "engine::level::LevelEntity": (
+            id: (139),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Cylinder,
+            size: (0.4, 2.2, 0.0),
+            color: Srgba((
+              red: 0.3,
+              green: 0.2,
+              blue: 0.14,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967155: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Crown",
+          "bevy_transform::components::transform::Transform": (
+            translation: (-21.132906, 2.8560152, 8.108752),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.0577834, 1.2164508, 1.0577834),
+          ),
+          "engine::level::LevelEntity": (
+            id: (140),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Sphere,
+            size: (1.9, 1.9, 1.9),
+            color: Srgba((
+              red: 0.1,
+              green: 0.3,
+              blue: 0.2,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967154: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Trunk",
+          "bevy_transform::components::transform::Transform": (
+            translation: (-15.361673, 1.4743445, 3.3949604),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.3403132, 1.3403132, 1.3403132),
+          ),
+          "engine::level::LevelEntity": (
+            id: (141),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Cylinder,
+            size: (0.4, 2.2, 0.0),
+            color: Srgba((
+              red: 0.3,
+              green: 0.2,
+              blue: 0.14,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967153: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Crown",
+          "bevy_transform::components::transform::Transform": (
+            translation: (-15.361673, 3.6188457, 3.3949604),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.3403132, 1.5413601, 1.3403132),
+          ),
+          "engine::level::LevelEntity": (
+            id: (142),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Sphere,
+            size: (1.9, 1.9, 1.9),
+            color: Srgba((
+              red: 0.1,
+              green: 0.3,
+              blue: 0.2,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967152: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Trunk",
+          "bevy_transform::components::transform::Transform": (
+            translation: (-23.759472, 1.5893528, 2.517464),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.4448662, 1.4448662, 1.4448662),
+          ),
+          "engine::level::LevelEntity": (
+            id: (143),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Cylinder,
+            size: (0.4, 2.2, 0.0),
+            color: Srgba((
+              red: 0.3,
+              green: 0.2,
+              blue: 0.14,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967151: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Crown",
+          "bevy_transform::components::transform::Transform": (
+            translation: (-23.759472, 3.9011388, 2.517464),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.4448662, 1.6615961, 1.4448662),
+          ),
+          "engine::level::LevelEntity": (
+            id: (144),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Sphere,
+            size: (1.9, 1.9, 1.9),
+            color: Srgba((
+              red: 0.1,
+              green: 0.3,
+              blue: 0.2,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967150: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Trunk",
+          "bevy_transform::components::transform::Transform": (
+            translation: (-21.66959, 0.9234907, -2.4820523),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (0.83953696, 0.83953696, 0.83953696),
+          ),
+          "engine::level::LevelEntity": (
+            id: (145),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Cylinder,
+            size: (0.4, 2.2, 0.0),
+            color: Srgba((
+              red: 0.3,
+              green: 0.2,
+              blue: 0.14,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967149: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Crown",
+          "bevy_transform::components::transform::Transform": (
+            translation: (-21.66959, 2.2667499, -2.4820523),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (0.83953696, 0.9654675, 0.83953696),
+          ),
+          "engine::level::LevelEntity": (
+            id: (146),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Sphere,
+            size: (1.9, 1.9, 1.9),
+            color: Srgba((
+              red: 0.1,
+              green: 0.3,
+              blue: 0.2,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967148: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Trunk",
+          "bevy_transform::components::transform::Transform": (
+            translation: (-19.01289, 0.9082862, -4.910826),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (0.8257147, 0.8257147, 0.8257147),
+          ),
+          "engine::level::LevelEntity": (
+            id: (147),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Cylinder,
+            size: (0.4, 2.2, 0.0),
+            color: Srgba((
+              red: 0.3,
+              green: 0.2,
+              blue: 0.14,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967147: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Crown",
+          "bevy_transform::components::transform::Transform": (
+            translation: (-19.01289, 2.2294297, -4.910826),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (0.8257147, 0.9495719, 0.8257147),
+          ),
+          "engine::level::LevelEntity": (
+            id: (148),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Sphere,
+            size: (1.9, 1.9, 1.9),
+            color: Srgba((
+              red: 0.14,
+              green: 0.36,
+              blue: 0.2,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967146: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Trunk",
+          "bevy_transform::components::transform::Transform": (
+            translation: (-18.647394, 1.208862, -5.595274),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.0989654, 1.0989654, 1.0989654),
+          ),
+          "engine::level::LevelEntity": (
+            id: (149),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Cylinder,
+            size: (0.4, 2.2, 0.0),
+            color: Srgba((
+              red: 0.3,
+              green: 0.2,
+              blue: 0.14,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967145: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Crown",
+          "bevy_transform::components::transform::Transform": (
+            translation: (-18.647394, 2.9672067, -5.595274),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.0989654, 1.2638102, 1.0989654),
+          ),
+          "engine::level::LevelEntity": (
+            id: (150),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Sphere,
+            size: (1.9, 1.9, 1.9),
+            color: Srgba((
+              red: 0.1,
+              green: 0.3,
+              blue: 0.2,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967144: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Trunk",
+          "bevy_transform::components::transform::Transform": (
+            translation: (-14.329636, 1.2414234, -8.349248),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.1285666, 1.1285666, 1.1285666),
+          ),
+          "engine::level::LevelEntity": (
+            id: (151),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Cylinder,
+            size: (0.4, 2.2, 0.0),
+            color: Srgba((
+              red: 0.3,
+              green: 0.2,
+              blue: 0.14,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967143: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Crown",
+          "bevy_transform::components::transform::Transform": (
+            translation: (-14.329636, 3.0471299, -8.349248),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.1285666, 1.2978516, 1.1285666),
+          ),
+          "engine::level::LevelEntity": (
+            id: (152),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Sphere,
+            size: (1.9, 1.9, 1.9),
+            color: Srgba((
+              red: 0.14,
+              green: 0.36,
+              blue: 0.2,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967142: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Trunk",
+          "bevy_transform::components::transform::Transform": (
+            translation: (-17.570263, 1.6132962, -13.089156),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.4666328, 1.4666328, 1.4666328),
+          ),
+          "engine::level::LevelEntity": (
+            id: (153),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Cylinder,
+            size: (0.4, 2.2, 0.0),
+            color: Srgba((
+              red: 0.3,
+              green: 0.2,
+              blue: 0.14,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967141: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Crown",
+          "bevy_transform::components::transform::Transform": (
+            translation: (-17.570263, 3.9599087, -13.089156),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.4666328, 1.6866277, 1.4666328),
+          ),
+          "engine::level::LevelEntity": (
+            id: (154),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Sphere,
+            size: (1.9, 1.9, 1.9),
+            color: Srgba((
+              red: 0.1,
+              green: 0.3,
+              blue: 0.2,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967140: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Trunk",
+          "bevy_transform::components::transform::Transform": (
+            translation: (-14.670211, 1.0700437, -15.712388),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (0.972767, 0.972767, 0.972767),
+          ),
+          "engine::level::LevelEntity": (
+            id: (155),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Cylinder,
+            size: (0.4, 2.2, 0.0),
+            color: Srgba((
+              red: 0.3,
+              green: 0.2,
+              blue: 0.14,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967139: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Crown",
+          "bevy_transform::components::transform::Transform": (
+            translation: (-14.670211, 2.626471, -15.712388),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (0.972767, 1.118682, 0.972767),
+          ),
+          "engine::level::LevelEntity": (
+            id: (156),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Sphere,
+            size: (1.9, 1.9, 1.9),
+            color: Srgba((
+              red: 0.1,
+              green: 0.3,
+              blue: 0.2,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967138: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Trunk",
+          "bevy_transform::components::transform::Transform": (
+            translation: (-9.544019, 0.89669514, -12.873676),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (0.8151774, 0.8151774, 0.8151774),
+          ),
+          "engine::level::LevelEntity": (
+            id: (157),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Cylinder,
+            size: (0.4, 2.2, 0.0),
+            color: Srgba((
+              red: 0.3,
+              green: 0.2,
+              blue: 0.14,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967137: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Crown",
+          "bevy_transform::components::transform::Transform": (
+            translation: (-9.544019, 2.200979, -12.873676),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (0.8151774, 0.937454, 0.8151774),
+          ),
+          "engine::level::LevelEntity": (
+            id: (158),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Sphere,
+            size: (1.9, 1.9, 1.9),
+            color: Srgba((
+              red: 0.1,
+              green: 0.3,
+              blue: 0.2,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967136: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Trunk",
+          "bevy_transform::components::transform::Transform": (
+            translation: (-7.7390604, 1.1926172, -13.546479),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.0841974, 1.0841974, 1.0841974),
+          ),
+          "engine::level::LevelEntity": (
+            id: (159),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Cylinder,
+            size: (0.4, 2.2, 0.0),
+            color: Srgba((
+              red: 0.3,
+              green: 0.2,
+              blue: 0.14,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967135: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Crown",
+          "bevy_transform::components::transform::Transform": (
+            translation: (-7.7390604, 2.927333, -13.546479),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.0841974, 1.246827, 1.0841974),
+          ),
+          "engine::level::LevelEntity": (
+            id: (160),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Sphere,
+            size: (1.9, 1.9, 1.9),
+            color: Srgba((
+              red: 0.1,
+              green: 0.3,
+              blue: 0.2,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967134: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Trunk",
+          "bevy_transform::components::transform::Transform": (
+            translation: (-7.796499, 1.3520589, -18.795528),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.2291445, 1.2291445, 1.2291445),
+          ),
+          "engine::level::LevelEntity": (
+            id: (161),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Cylinder,
+            size: (0.4, 2.2, 0.0),
+            color: Srgba((
+              red: 0.3,
+              green: 0.2,
+              blue: 0.14,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967133: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Crown",
+          "bevy_transform::components::transform::Transform": (
+            translation: (-7.796499, 3.31869, -18.795528),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.2291445, 1.413516, 1.2291445),
+          ),
+          "engine::level::LevelEntity": (
+            id: (162),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Sphere,
+            size: (1.9, 1.9, 1.9),
+            color: Srgba((
+              red: 0.1,
+              green: 0.3,
+              blue: 0.2,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967132: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Trunk",
+          "bevy_transform::components::transform::Transform": (
+            translation: (-3.6058893, 1.1049019, -19.248175),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.0044563, 1.0044563, 1.0044563),
+          ),
+          "engine::level::LevelEntity": (
+            id: (163),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Cylinder,
+            size: (0.4, 2.2, 0.0),
+            color: Srgba((
+              red: 0.3,
+              green: 0.2,
+              blue: 0.14,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967131: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Crown",
+          "bevy_transform::components::transform::Transform": (
+            translation: (-3.6058893, 2.712032, -19.248175),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.0044563, 1.1551247, 1.0044563),
+          ),
+          "engine::level::LevelEntity": (
+            id: (164),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Sphere,
+            size: (1.9, 1.9, 1.9),
+            color: Srgba((
+              red: 0.1,
+              green: 0.3,
+              blue: 0.2,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967130: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Trunk",
+          "bevy_transform::components::transform::Transform": (
+            translation: (-1.5084606, 0.9746468, -17.504398),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (0.88604254, 0.88604254, 0.88604254),
+          ),
+          "engine::level::LevelEntity": (
+            id: (165),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Cylinder,
+            size: (0.4, 2.2, 0.0),
+            color: Srgba((
+              red: 0.3,
+              green: 0.2,
+              blue: 0.14,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967129: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Crown",
+          "bevy_transform::components::transform::Transform": (
+            translation: (-1.5084606, 2.392315, -17.504398),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (0.88604254, 1.0189489, 0.88604254),
+          ),
+          "engine::level::LevelEntity": (
+            id: (166),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Sphere,
+            size: (1.9, 1.9, 1.9),
+            color: Srgba((
+              red: 0.1,
+              green: 0.3,
+              blue: 0.2,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967128: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Trunk",
+          "bevy_transform::components::transform::Transform": (
+            translation: (0.63803166, 1.203167, -24.120316),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.0937881, 1.0937881, 1.0937881),
+          ),
+          "engine::level::LevelEntity": (
+            id: (167),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Cylinder,
+            size: (0.4, 2.2, 0.0),
+            color: Srgba((
+              red: 0.3,
+              green: 0.2,
+              blue: 0.14,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967127: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Crown",
+          "bevy_transform::components::transform::Transform": (
+            translation: (0.63803166, 2.953228, -24.120316),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.0937881, 1.2578564, 1.0937881),
+          ),
+          "engine::level::LevelEntity": (
+            id: (168),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Sphere,
+            size: (1.9, 1.9, 1.9),
+            color: Srgba((
+              red: 0.14,
+              green: 0.36,
+              blue: 0.2,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967126: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Trunk",
+          "bevy_transform::components::transform::Transform": (
+            translation: (3.5983107, 1.4642621, -22.330055),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.3311473, 1.3311473, 1.3311473),
+          ),
+          "engine::level::LevelEntity": (
+            id: (169),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Cylinder,
+            size: (0.4, 2.2, 0.0),
+            color: Srgba((
+              red: 0.3,
+              green: 0.2,
+              blue: 0.14,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967125: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Crown",
+          "bevy_transform::components::transform::Transform": (
+            translation: (3.5983107, 3.5940979, -22.330055),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.3311473, 1.5308194, 1.3311473),
+          ),
+          "engine::level::LevelEntity": (
+            id: (170),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Sphere,
+            size: (1.9, 1.9, 1.9),
+            color: Srgba((
+              red: 0.1,
+              green: 0.3,
+              blue: 0.2,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967124: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Trunk",
+          "bevy_transform::components::transform::Transform": (
+            translation: (7.029886, 1.57054, -18.767036),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.4277636, 1.4277636, 1.4277636),
+          ),
+          "engine::level::LevelEntity": (
+            id: (171),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Cylinder,
+            size: (0.4, 2.2, 0.0),
+            color: Srgba((
+              red: 0.3,
+              green: 0.2,
+              blue: 0.14,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967123: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Crown",
+          "bevy_transform::components::transform::Transform": (
+            translation: (7.029886, 3.8549616, -18.767036),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.4277636, 1.6419281, 1.4277636),
+          ),
+          "engine::level::LevelEntity": (
+            id: (172),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Sphere,
+            size: (1.9, 1.9, 1.9),
+            color: Srgba((
+              red: 0.14,
+              green: 0.36,
+              blue: 0.2,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967122: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Trunk",
+          "bevy_transform::components::transform::Transform": (
+            translation: (8.198567, 1.2606621, -14.095262),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.1460564, 1.1460564, 1.1460564),
+          ),
+          "engine::level::LevelEntity": (
+            id: (173),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Cylinder,
+            size: (0.4, 2.2, 0.0),
+            color: Srgba((
+              red: 0.3,
+              green: 0.2,
+              blue: 0.14,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967121: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Crown",
+          "bevy_transform::components::transform::Transform": (
+            translation: (8.198567, 3.0943525, -14.095262),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.1460564, 1.3179648, 1.1460564),
+          ),
+          "engine::level::LevelEntity": (
+            id: (174),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Sphere,
+            size: (1.9, 1.9, 1.9),
+            color: Srgba((
+              red: 0.14,
+              green: 0.36,
+              blue: 0.2,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967120: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Trunk",
+          "bevy_transform::components::transform::Transform": (
+            translation: (11.400621, 1.1964794, -16.32137),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.0877086, 1.0877086, 1.0877086),
+          ),
+          "engine::level::LevelEntity": (
+            id: (175),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Cylinder,
+            size: (0.4, 2.2, 0.0),
+            color: Srgba((
+              red: 0.3,
+              green: 0.2,
+              blue: 0.14,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967119: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Crown",
+          "bevy_transform::components::transform::Transform": (
+            translation: (11.400621, 2.9368134, -16.32137),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.0877086, 1.2508649, 1.0877086),
+          ),
+          "engine::level::LevelEntity": (
+            id: (176),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Sphere,
+            size: (1.9, 1.9, 1.9),
+            color: Srgba((
+              red: 0.14,
+              green: 0.36,
+              blue: 0.2,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967118: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Trunk",
+          "bevy_transform::components::transform::Transform": (
+            translation: (16.271315, 1.3320937, -16.999111),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.2109942, 1.2109942, 1.2109942),
+          ),
+          "engine::level::LevelEntity": (
+            id: (177),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Cylinder,
+            size: (0.4, 2.2, 0.0),
+            color: Srgba((
+              red: 0.3,
+              green: 0.2,
+              blue: 0.14,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967117: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Crown",
+          "bevy_transform::components::transform::Transform": (
+            translation: (16.271315, 3.2696846, -16.999111),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.2109942, 1.3926433, 1.2109942),
+          ),
+          "engine::level::LevelEntity": (
+            id: (178),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Sphere,
+            size: (1.9, 1.9, 1.9),
+            color: Srgba((
+              red: 0.1,
+              green: 0.3,
+              blue: 0.2,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967116: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Trunk",
+          "bevy_transform::components::transform::Transform": (
+            translation: (14.044601, 1.4793731, -10.18576),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.3448846, 1.3448846, 1.3448846),
+          ),
+          "engine::level::LevelEntity": (
+            id: (179),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Cylinder,
+            size: (0.4, 2.2, 0.0),
+            color: Srgba((
+              red: 0.3,
+              green: 0.2,
+              blue: 0.14,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967115: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Crown",
+          "bevy_transform::components::transform::Transform": (
+            translation: (14.044601, 3.6311886, -10.18576),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.3448846, 1.5466173, 1.3448846),
+          ),
+          "engine::level::LevelEntity": (
+            id: (180),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Sphere,
+            size: (1.9, 1.9, 1.9),
+            color: Srgba((
+              red: 0.1,
+              green: 0.3,
+              blue: 0.2,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967114: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Trunk",
+          "bevy_transform::components::transform::Transform": (
+            translation: (18.148561, 1.3869536, -10.655476),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.2608669, 1.2608669, 1.2608669),
+          ),
+          "engine::level::LevelEntity": (
+            id: (181),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Cylinder,
+            size: (0.4, 2.2, 0.0),
+            color: Srgba((
+              red: 0.3,
+              green: 0.2,
+              blue: 0.14,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967113: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Crown",
+          "bevy_transform::components::transform::Transform": (
+            translation: (18.148561, 3.4043407, -10.655476),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.2608669, 1.4499968, 1.2608669),
+          ),
+          "engine::level::LevelEntity": (
+            id: (182),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Sphere,
+            size: (1.9, 1.9, 1.9),
+            color: Srgba((
+              red: 0.1,
+              green: 0.3,
+              blue: 0.2,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967112: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Trunk",
+          "bevy_transform::components::transform::Transform": (
+            translation: (17.31863, 0.9222597, -7.3185472),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (0.8384179, 0.8384179, 0.8384179),
+          ),
+          "engine::level::LevelEntity": (
+            id: (183),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Cylinder,
+            size: (0.4, 2.2, 0.0),
+            color: Srgba((
+              red: 0.3,
+              green: 0.2,
+              blue: 0.14,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967111: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Crown",
+          "bevy_transform::components::transform::Transform": (
+            translation: (17.31863, 2.2637284, -7.3185472),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (0.8384179, 0.9641805, 0.8384179),
+          ),
+          "engine::level::LevelEntity": (
+            id: (184),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Sphere,
+            size: (1.9, 1.9, 1.9),
+            color: Srgba((
+              red: 0.14,
+              green: 0.36,
+              blue: 0.2,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967110: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Trunk",
+          "bevy_transform::components::transform::Transform": (
+            translation: (16.5438, 1.1385725, -2.831401),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.0350659, 1.0350659, 1.0350659),
+          ),
+          "engine::level::LevelEntity": (
+            id: (185),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Cylinder,
+            size: (0.4, 2.2, 0.0),
+            color: Srgba((
+              red: 0.3,
+              green: 0.2,
+              blue: 0.14,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967109: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Crown",
+          "bevy_transform::components::transform::Transform": (
+            translation: (16.5438, 2.794678, -2.831401),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.0350659, 1.1903257, 1.0350659),
+          ),
+          "engine::level::LevelEntity": (
+            id: (186),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Sphere,
+            size: (1.9, 1.9, 1.9),
+            color: Srgba((
+              red: 0.14,
+              green: 0.36,
+              blue: 0.2,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967108: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Trunk",
+          "bevy_transform::components::transform::Transform": (
+            translation: (21.856445, 1.0416777, -1.2060388),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (0.94697976, 0.94697976, 0.94697976),
+          ),
+          "engine::level::LevelEntity": (
+            id: (187),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Cylinder,
+            size: (0.4, 2.2, 0.0),
+            color: Srgba((
+              red: 0.3,
+              green: 0.2,
+              blue: 0.14,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967107: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Crown",
+          "bevy_transform::components::transform::Transform": (
+            translation: (21.856445, 2.5568454, -1.2060388),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (0.94697976, 1.0890267, 0.94697976),
+          ),
+          "engine::level::LevelEntity": (
+            id: (188),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Sphere,
+            size: (1.9, 1.9, 1.9),
+            color: Srgba((
+              red: 0.14,
+              green: 0.36,
+              blue: 0.2,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967106: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Rock",
+          "bevy_transform::components::transform::Transform": (
+            translation: (-2.4273758, 0.0664624, 5.0869484),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (0.7200093, 0.33231202, 0.55385333),
+          ),
+          "engine::level::LevelEntity": (
+            id: (189),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Sphere,
+            size: (1.0, 1.0, 1.0),
+            color: Srgba((
+              red: 0.22,
+              green: 0.23,
+              blue: 0.27,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967105: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Rock",
+          "bevy_transform::components::transform::Transform": (
+            translation: (-1.0762482, 0.094779395, -9.100771),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.0267768, 0.473897, 0.7898283),
+          ),
+          "engine::level::LevelEntity": (
+            id: (190),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Sphere,
+            size: (1.0, 1.0, 1.0),
+            color: Srgba((
+              red: 0.22,
+              green: 0.23,
+              blue: 0.27,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967104: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Rock",
+          "bevy_transform::components::transform::Transform": (
+            translation: (-7.239113, 0.08728661, -3.5577097),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (0.94560486, 0.43643305, 0.7273884),
+          ),
+          "engine::level::LevelEntity": (
+            id: (191),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Sphere,
+            size: (1.0, 1.0, 1.0),
+            color: Srgba((
+              red: 0.22,
+              green: 0.23,
+              blue: 0.27,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967103: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Rock",
+          "bevy_transform::components::transform::Transform": (
+            translation: (7.278557, 0.10884202, -3.0180473),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.1791219, 0.54421014, 0.9070169),
+          ),
+          "engine::level::LevelEntity": (
+            id: (192),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Sphere,
+            size: (1.0, 1.0, 1.0),
+            color: Srgba((
+              red: 0.22,
+              green: 0.23,
+              blue: 0.27,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967102: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Rock",
+          "bevy_transform::components::transform::Transform": (
+            translation: (0.5000639, 0.07684984, -12.990173),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (0.83254, 0.38424924, 0.6404154),
+          ),
+          "engine::level::LevelEntity": (
+            id: (193),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Sphere,
+            size: (1.0, 1.0, 1.0),
+            color: Srgba((
+              red: 0.22,
+              green: 0.23,
+              blue: 0.27,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967101: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Rock",
+          "bevy_transform::components::transform::Transform": (
+            translation: (2.1514883, 0.061233055, -1.1750298),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (0.6633581, 0.3061653, 0.5102755),
+          ),
+          "engine::level::LevelEntity": (
+            id: (194),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Sphere,
+            size: (1.0, 1.0, 1.0),
+            color: Srgba((
+              red: 0.22,
+              green: 0.23,
+              blue: 0.27,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967100: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Rock",
+          "bevy_transform::components::transform::Transform": (
+            translation: (-3.4478207, 0.06413336, 3.1842842),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (0.6947781, 0.32066682, 0.5344447),
+          ),
+          "engine::level::LevelEntity": (
+            id: (195),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Sphere,
+            size: (1.0, 1.0, 1.0),
+            color: Srgba((
+              red: 0.22,
+              green: 0.23,
+              blue: 0.27,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967099: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Rock",
+          "bevy_transform::components::transform::Transform": (
+            translation: (6.732418, 0.065793306, -1.9361153),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (0.7127608, 0.32896656, 0.54827756),
+          ),
+          "engine::level::LevelEntity": (
+            id: (196),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Sphere,
+            size: (1.0, 1.0, 1.0),
+            color: Srgba((
+              red: 0.22,
+              green: 0.23,
+              blue: 0.27,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967098: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Rock",
+          "bevy_transform::components::transform::Transform": (
+            translation: (-10.926642, 0.07895576, -11.878805),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (0.8553541, 0.39477885, 0.6579647),
+          ),
+          "engine::level::LevelEntity": (
+            id: (197),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Sphere,
+            size: (1.0, 1.0, 1.0),
+            color: Srgba((
+              red: 0.22,
+              green: 0.23,
+              blue: 0.27,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967097: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Rock",
+          "bevy_transform::components::transform::Transform": (
+            translation: (-9.878495, 0.116454676, 3.0232677),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.2615923, 0.5822734, 0.97045565),
+          ),
+          "engine::level::LevelEntity": (
+            id: (198),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Sphere,
+            size: (1.0, 1.0, 1.0),
+            color: Srgba((
+              red: 0.22,
+              green: 0.23,
+              blue: 0.27,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967096: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Rock",
+          "bevy_transform::components::transform::Transform": (
+            translation: (-12.9029255, 0.06608345, 12.185068),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (0.7159041, 0.3304173, 0.5506955),
+          ),
+          "engine::level::LevelEntity": (
+            id: (199),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Sphere,
+            size: (1.0, 1.0, 1.0),
+            color: Srgba((
+              red: 0.22,
+              green: 0.23,
+              blue: 0.27,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967095: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Rock",
+          "bevy_transform::components::transform::Transform": (
+            translation: (12.181871, 0.07130657, 1.5377417),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (0.7724878, 0.35653287, 0.5942214),
+          ),
+          "engine::level::LevelEntity": (
+            id: (200),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Sphere,
+            size: (1.0, 1.0, 1.0),
+            color: Srgba((
+              red: 0.22,
+              green: 0.23,
+              blue: 0.27,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967094: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Rock",
+          "bevy_transform::components::transform::Transform": (
+            translation: (11.174158, 0.05608381, 0.98241425),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (0.6075746, 0.28041905, 0.4673651),
+          ),
+          "engine::level::LevelEntity": (
+            id: (201),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Sphere,
+            size: (1.0, 1.0, 1.0),
+            color: Srgba((
+              red: 0.22,
+              green: 0.23,
+              blue: 0.27,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967093: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Rock",
+          "bevy_transform::components::transform::Transform": (
+            translation: (-10.921051, 0.06490167, -12.815794),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (0.70310146, 0.3245084, 0.5408473),
+          ),
+          "engine::level::LevelEntity": (
+            id: (202),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Sphere,
+            size: (1.0, 1.0, 1.0),
+            color: Srgba((
+              red: 0.22,
+              green: 0.23,
+              blue: 0.27,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967092: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Rock",
+          "bevy_transform::components::transform::Transform": (
+            translation: (12.218163, 0.08465847, 10.236235),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (0.9171334, 0.42329237, 0.70548725),
+          ),
+          "engine::level::LevelEntity": (
+            id: (203),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Sphere,
+            size: (1.0, 1.0, 1.0),
+            color: Srgba((
+              red: 0.22,
+              green: 0.23,
+              blue: 0.27,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967091: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Rock",
+          "bevy_transform::components::transform::Transform": (
+            translation: (-2.8794851, 0.09715949, 3.0324154),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.0525612, 0.4857975, 0.80966246),
+          ),
+          "engine::level::LevelEntity": (
+            id: (204),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Sphere,
+            size: (1.0, 1.0, 1.0),
+            color: Srgba((
+              red: 0.22,
+              green: 0.23,
+              blue: 0.27,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967090: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Moss",
+          "bevy_transform::components::transform::Transform": (
+            translation: (-7.6255703, 0.012, -13.088419),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (4.1399207, 1.0, 2.8979445),
+          ),
+          "engine::level::LevelEntity": (
+            id: (205),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Cylinder,
+            size: (1.0, 0.02, 0.0),
+            color: Srgba((
+              red: 0.2,
+              green: 0.33,
+              blue: 0.2,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967089: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Moss",
+          "bevy_transform::components::transform::Transform": (
+            translation: (6.8545666, 0.013, -4.1819286),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (3.9446416, 1.0, 2.761249),
+          ),
+          "engine::level::LevelEntity": (
+            id: (206),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Cylinder,
+            size: (1.0, 0.02, 0.0),
+            color: Srgba((
+              red: 0.27,
+              green: 0.32,
+              blue: 0.17,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967088: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Moss",
+          "bevy_transform::components::transform::Transform": (
+            translation: (5.667328, 0.014, -6.7408786),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (4.74715, 1.0, 3.323005),
+          ),
+          "engine::level::LevelEntity": (
+            id: (207),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Cylinder,
+            size: (1.0, 0.02, 0.0),
+            color: Srgba((
+              red: 0.2,
+              green: 0.33,
+              blue: 0.2,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967087: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Moss",
+          "bevy_transform::components::transform::Transform": (
+            translation: (7.9322376, 0.015000001, -11.267481),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (3.5664024, 1.0, 2.4964817),
+          ),
+          "engine::level::LevelEntity": (
+            id: (208),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Cylinder,
+            size: (1.0, 0.02, 0.0),
+            color: Srgba((
+              red: 0.27,
+              green: 0.32,
+              blue: 0.17,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967086: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Moss",
+          "bevy_transform::components::transform::Transform": (
+            translation: (12.760143, 0.016, -9.503384),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (3.3584006, 1.0, 2.3508804),
+          ),
+          "engine::level::LevelEntity": (
+            id: (209),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Cylinder,
+            size: (1.0, 0.02, 0.0),
+            color: Srgba((
+              red: 0.2,
+              green: 0.33,
+              blue: 0.2,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967085: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Moss",
+          "bevy_transform::components::transform::Transform": (
+            translation: (9.68338, 0.017, 8.117132),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (4.5473075, 1.0, 3.1831152),
+          ),
+          "engine::level::LevelEntity": (
+            id: (210),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Cylinder,
+            size: (1.0, 0.02, 0.0),
+            color: Srgba((
+              red: 0.27,
+              green: 0.32,
+              blue: 0.17,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967084: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Moss",
+          "bevy_transform::components::transform::Transform": (
+            translation: (11.819353, 0.018, 3.9083118),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (4.4910445, 1.0, 3.143731),
+          ),
+          "engine::level::LevelEntity": (
+            id: (211),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Cylinder,
+            size: (1.0, 0.02, 0.0),
+            color: Srgba((
+              red: 0.2,
+              green: 0.33,
+              blue: 0.2,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967083: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Moss",
+          "bevy_transform::components::transform::Transform": (
+            translation: (13.067745, 0.019000001, -7.3191695),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (5.3085775, 1.0, 3.7160041),
+          ),
+          "engine::level::LevelEntity": (
+            id: (212),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Cylinder,
+            size: (1.0, 0.02, 0.0),
+            color: Srgba((
+              red: 0.27,
+              green: 0.32,
+              blue: 0.17,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967082: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Moss",
+          "bevy_transform::components::transform::Transform": (
+            translation: (-8.673351, 0.02, -5.439622),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (5.570468, 1.0, 3.8993275),
+          ),
+          "engine::level::LevelEntity": (
+            id: (213),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Cylinder,
+            size: (1.0, 0.02, 0.0),
+            color: Srgba((
+              red: 0.2,
+              green: 0.33,
+              blue: 0.2,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967081: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Moss",
+          "bevy_transform::components::transform::Transform": (
+            translation: (10.660658, 0.021000002, -5.686842),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (3.5658941, 1.0, 2.496126),
+          ),
+          "engine::level::LevelEntity": (
+            id: (214),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Cylinder,
+            size: (1.0, 0.02, 0.0),
+            color: Srgba((
+              red: 0.27,
+              green: 0.32,
+              blue: 0.17,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967080: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Moss",
+          "bevy_transform::components::transform::Transform": (
+            translation: (11.77796, 0.022, 12.509172),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (4.888812, 1.0, 3.4221685),
+          ),
+          "engine::level::LevelEntity": (
+            id: (215),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Cylinder,
+            size: (1.0, 0.02, 0.0),
+            color: Srgba((
+              red: 0.2,
+              green: 0.33,
+              blue: 0.2,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967079: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Moss",
+          "bevy_transform::components::transform::Transform": (
+            translation: (7.7785645, 0.023000002, 3.7594814),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (5.686863, 1.0, 3.980804),
+          ),
+          "engine::level::LevelEntity": (
+            id: (216),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Cylinder,
+            size: (1.0, 0.02, 0.0),
+            color: Srgba((
+              red: 0.27,
+              green: 0.32,
+              blue: 0.17,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967078: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Moss",
+          "bevy_transform::components::transform::Transform": (
+            translation: (3.3172092, 0.024, 13.442547),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (3.5943415, 1.0, 2.5160391),
+          ),
+          "engine::level::LevelEntity": (
+            id: (217),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Cylinder,
+            size: (1.0, 0.02, 0.0),
+            color: Srgba((
+              red: 0.2,
+              green: 0.33,
+              blue: 0.2,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967077: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Moss",
+          "bevy_transform::components::transform::Transform": (
+            translation: (6.85161, 0.025, 4.4135857),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (5.009944, 1.0, 3.5069606),
+          ),
+          "engine::level::LevelEntity": (
+            id: (218),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Cylinder,
+            size: (1.0, 0.02, 0.0),
+            color: Srgba((
+              red: 0.27,
+              green: 0.32,
+              blue: 0.17,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967076: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Stone",
+          "bevy_transform::components::transform::Transform": (
+            translation: (-12.0, 0.025, 0.0),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.0, 1.0, 1.0),
+          ),
+          "engine::level::LevelEntity": (
+            id: (219),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Cylinder,
+            size: (0.9, 0.05, 0.0),
+            color: Srgba((
+              red: 0.34,
+              green: 0.3,
+              blue: 0.26,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967075: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Stone",
+          "bevy_transform::components::transform::Transform": (
+            translation: (-9.0, 0.025, 1.1749904),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.0, 1.0, 1.0),
+          ),
+          "engine::level::LevelEntity": (
+            id: (220),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Cylinder,
+            size: (0.9, 0.05, 0.0),
+            color: Srgba((
+              red: 0.34,
+              green: 0.3,
+              blue: 0.26,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967074: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Stone",
+          "bevy_transform::components::transform::Transform": (
+            translation: (-6.0, 0.025, 1.4607714),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.0, 1.0, 1.0),
+          ),
+          "engine::level::LevelEntity": (
+            id: (221),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Cylinder,
+            size: (0.9, 0.05, 0.0),
+            color: Srgba((
+              red: 0.34,
+              green: 0.3,
+              blue: 0.26,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967073: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Stone",
+          "bevy_transform::components::transform::Transform": (
+            translation: (-3.0, 0.025, 0.64107007),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.0, 1.0, 1.0),
+          ),
+          "engine::level::LevelEntity": (
+            id: (222),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Cylinder,
+            size: (0.9, 0.05, 0.0),
+            color: Srgba((
+              red: 0.34,
+              green: 0.3,
+              blue: 0.26,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967072: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Stone",
+          "bevy_transform::components::transform::Transform": (
+            translation: (0.0, 0.025, -0.6637805),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.0, 1.0, 1.0),
+          ),
+          "engine::level::LevelEntity": (
+            id: (223),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Cylinder,
+            size: (0.9, 0.05, 0.0),
+            color: Srgba((
+              red: 0.34,
+              green: 0.3,
+              blue: 0.26,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967071: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Stone",
+          "bevy_transform::components::transform::Transform": (
+            translation: (3.0, 0.025, -1.4662952),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.0, 1.0, 1.0),
+          ),
+          "engine::level::LevelEntity": (
+            id: (224),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Cylinder,
+            size: (0.9, 0.05, 0.0),
+            color: Srgba((
+              red: 0.34,
+              green: 0.3,
+              blue: 0.26,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967070: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Stone",
+          "bevy_transform::components::transform::Transform": (
+            translation: (6.0, 0.025, -1.1591471),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.0, 1.0, 1.0),
+          ),
+          "engine::level::LevelEntity": (
+            id: (225),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Cylinder,
+            size: (0.9, 0.05, 0.0),
+            color: Srgba((
+              red: 0.34,
+              green: 0.3,
+              blue: 0.26,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967069: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Stone",
+          "bevy_transform::components::transform::Transform": (
+            translation: (9.0, 0.025, 0.025220424),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.0, 1.0, 1.0),
+          ),
+          "engine::level::LevelEntity": (
+            id: (226),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Cylinder,
+            size: (0.9, 0.05, 0.0),
+            color: Srgba((
+              red: 0.34,
+              green: 0.3,
+              blue: 0.26,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967068: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Stone",
+          "bevy_transform::components::transform::Transform": (
+            translation: (12.0, 0.025, 1.1905016),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.0, 1.0, 1.0),
+          ),
+          "engine::level::LevelEntity": (
+            id: (227),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Cylinder,
+            size: (0.9, 0.05, 0.0),
+            color: Srgba((
+              red: 0.34,
+              green: 0.3,
+              blue: 0.26,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
         },
       ),
     },
