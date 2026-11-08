@@ -72,26 +72,7 @@ pub fn append_stub(src: &str, method: &str, params: &[String]) -> Option<String>
     Some(out)
 }
 
-/// `name = literal;` lines at the top level: `(name, literal text)`. Non-literal right-hand sides
-/// give an empty default.
-pub fn scan_defaults(src: &str) -> Vec<(String, String)> {
-    src.lines()
-        .filter_map(|l| {
-            if l.starts_with(char::is_whitespace) || l.starts_with("//") {
-                return None;
-            }
-            let (name, rhs) = l.split_once('=')?;
-            let name = name.trim();
-            if name.is_empty() || !name.chars().all(|c| c.is_alphanumeric() || c == '_') || rhs.starts_with('=') {
-                return None;
-            }
-            let rhs = rhs.split("//").next().unwrap_or("").trim().trim_end_matches(';').trim();
-            let literal = rhs.starts_with(|c: char| c.is_ascii_digit() || matches!(c, '-' | '"' | '\'' | '['))
-                || matches!(rhs, "true" | "false" | "null" | "nil" | "None");
-            Some((name.to_string(), if literal { rhs.to_string() } else { String::new() }))
-        })
-        .collect()
-}
+pub use crate::scripting::meta::scan_defaults;
 
 /// Names given to `signal("name")` anywhere in the source (comments skipped).
 pub fn scan_signals(src: &str) -> Vec<String> {
@@ -152,6 +133,17 @@ fn read_script(world: &World, path: &str) -> Option<String> {
     std::fs::read_to_string(root(world).ok()?.join(key_of(path))).ok()
 }
 
+fn member_hint(h: crate::scripting::meta::ExportHint) -> MemberHint {
+    use crate::scripting::meta::ExportHint as H;
+    match h {
+        H::None => MemberHint::None,
+        H::Range { min, max, step } => MemberHint::Range { min, max, step },
+        H::Enum { options } => MemberHint::Enum { options },
+        H::Color => MemberHint::Color,
+        H::File { filter } => MemberHint::File { filter },
+    }
+}
+
 fn fns_of(src: &str) -> Vec<ScriptFn> {
     ruspy::embed::outline(src).fns.into_iter().map(|(name, params)| ScriptFn { name, params }).collect()
 }
@@ -164,11 +156,9 @@ impl WorldBackend<'_> {
         let mut info = ScriptInfo { path, found: src.is_some(), signals: builtin_signals(self.world, e), ..default() };
         if let Some(src) = &src {
             let outline = ruspy::embed::outline(src);
-            let defaults = scan_defaults(src);
-            info.members = outline
-                .vars
-                .iter()
-                .map(|n| ScriptMember { name: n.clone(), default: defaults.iter().find(|(d, _)| d == n).map(|(_, v)| v.clone()).unwrap_or_default() })
+            info.members = crate::scripting::meta::scan_props(src, &outline.vars)
+                .into_iter()
+                .map(|p| ScriptMember { name: p.name, default: p.default, hint: member_hint(p.hint), tooltip: p.tooltip })
                 .collect();
             info.fns = fns_of(src);
             let mut declared = scan_signals(src);

@@ -8,7 +8,7 @@
 //! node path of a target, and the method stub appended to the target's script file.
 
 use ashlar_ui::tokens;
-use editor_proto::{ComponentDoc, EntityId, LogicFile, Op, ScriptFn, ScriptInfo, StableOrId, TypeSchema};
+use editor_proto::{ComponentDoc, EntityId, LogicFile, MemberHint, Op, ScriptFn, ScriptInfo, StableOrId, TypeSchema};
 use egui::{RichText, Ui};
 use serde_json::{Value, json};
 
@@ -265,42 +265,95 @@ fn members(ui: &mut Ui, st: &mut ScriptState, v: &View<'_>, reqs: &mut Vec<Req>)
     let list = overrides(props);
     let pty = type_path(v.comps, v.types, "ScriptProps");
     for m in &info.members {
+        if m.name.starts_with('_') {
+            continue;
+        }
         let current = list.iter().find(|(n, _)| *n == m.name).map(|(_, x)| x.clone());
         let editing = st.editing.as_ref().filter(|(n, _)| *n == m.name).map(|(_, x)| x.clone());
         let mut text = editing.clone().or_else(|| current.clone()).unwrap_or_default();
         let invalid = !text.trim().is_empty() && serde_json::from_str::<Value>(&text).is_err();
         ui.horizontal(|ui| {
             let label = ui.label(RichText::new(&m.name).color(if current.is_some() { t.text.primary } else { t.text.secondary }));
-            label.on_hover_text(if m.default.is_empty() { "No literal default".to_owned() } else { format!("Default: {}", m.default) });
-            let hint = if m.default.is_empty() { "JSON".to_owned() } else { m.default.clone() };
-            let mut edit_box = egui::TextEdit::singleline(&mut text).hint_text(hint).desired_width(140.0);
-            if invalid {
-                edit_box = edit_box.text_color(t.status.danger);
-            }
-            let r = ui.add_enabled(v.editable && pty.is_some(), edit_box);
-            r.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::TextEdit, true, format!("member {}", m.name)));
-            if r.changed() {
-                st.editing = Some((m.name.clone(), text.clone()));
-            }
-            if r.lost_focus() {
-                st.editing = None;
-                let esc = ui.input(|i| i.key_pressed(egui::Key::Escape));
-                let committed = text.trim().to_owned();
-                if !esc && committed != current.clone().unwrap_or_default() && !invalid {
-                    let mut next = list.clone();
-                    next.retain(|(n, _)| *n != m.name);
-                    if !committed.is_empty() {
-                        // Keep the JSON text as typed, normalised to compact form.
-                        let norm = serde_json::from_str::<Value>(&committed).map_or(committed.clone(), |j| j.to_string());
-                        next.push((m.name.clone(), norm));
+            let default_tip = if m.default.is_empty() { "No literal default".to_owned() } else { format!("Default: {}", m.default) };
+            label.on_hover_text(if m.tooltip.is_empty() { default_tip } else { format!("{}\n{default_tip}", m.tooltip) });
+            // The JSON text to store when a widget changes the value (empty clears the override).
+            let mut commit: Option<String> = None;
+            let can_edit = v.editable && pty.is_some();
+            let shown = current.clone().unwrap_or_else(|| m.default.clone());
+            let widget_id = format!("member {}", m.name);
+            match &m.hint {
+                MemberHint::Range { min, max, step } => {
+                    let mut x = serde_json::from_str::<f64>(&shown).unwrap_or(*min);
+                    let mut s = egui::Slider::new(&mut x, *min..=*max);
+                    if *step > 0.0 {
+                        s = s.step_by(*step);
                     }
-                    if let Some(pty) = &pty {
-                        edit(reqs, v, pty, props.map(|d| d.value.clone()), Some(props_value(&next)), &format!("Set {}", m.name), Some(format!("script.member.{}", m.name)));
+                    let r = ui.add_enabled(can_edit, s);
+                    r.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Slider, true, widget_id.clone()));
+                    if r.changed() && !r.dragged() || r.drag_stopped() {
+                        commit = Some(json!(x).to_string());
+                    }
+                }
+                MemberHint::Enum { options } => {
+                    // A string default stores the option text, an int default the index.
+                    let by_name = !shown.trim().starts_with(|c: char| c.is_ascii_digit());
+                    let selected = if by_name { serde_json::from_str::<String>(&shown).ok() } else { serde_json::from_str::<usize>(&shown).ok().and_then(|i| options.get(i).cloned()) };
+                    ui.add_enabled_ui(can_edit, |ui| {
+                        egui::ComboBox::from_id_salt(&widget_id).selected_text(selected.clone().unwrap_or_else(|| "(none)".into())).show_ui(ui, |ui| {
+                            for (i, o) in options.iter().enumerate() {
+                                if ui.selectable_label(selected.as_deref() == Some(o), o).clicked() {
+                                    commit = Some(if by_name { json!(o).to_string() } else { json!(i).to_string() });
+                                }
+                            }
+                        });
+                    });
+                }
+                MemberHint::Color => {
+                    let c: Vec<f32> = serde_json::from_str(&shown).unwrap_or_else(|_| vec![1.0, 1.0, 1.0, 1.0]);
+                    let mut rgba = [c.first().copied().unwrap_or(1.0), c.get(1).copied().unwrap_or(1.0), c.get(2).copied().unwrap_or(1.0), c.get(3).copied().unwrap_or(1.0)];
+                    let r = ui.add_enabled(can_edit, |ui: &mut Ui| ui.color_edit_button_rgba_unmultiplied(&mut rgba));
+                    if r.changed() {
+                        commit = Some(if c.len() == 3 { json!(rgba[..3]) } else { json!(rgba) }.to_string());
+                    }
+                }
+                other => {
+                    let hint = match other {
+                        MemberHint::File { filter } if !filter.is_empty() => format!("file {filter}"),
+                        _ if m.default.is_empty() => "JSON".to_owned(),
+                        _ => m.default.clone(),
+                    };
+                    let mut edit_box = egui::TextEdit::singleline(&mut text).hint_text(hint).desired_width(140.0);
+                    if invalid {
+                        edit_box = edit_box.text_color(t.status.danger);
+                    }
+                    let r = ui.add_enabled(can_edit, edit_box);
+                    r.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::TextEdit, true, widget_id.clone()));
+                    if r.changed() {
+                        st.editing = Some((m.name.clone(), text.clone()));
+                    }
+                    if r.lost_focus() {
+                        st.editing = None;
+                        let esc = ui.input(|i| i.key_pressed(egui::Key::Escape));
+                        let committed = text.trim().to_owned();
+                        if !esc && committed != current.clone().unwrap_or_default() && !invalid {
+                            // Keep the JSON text as typed, normalised to compact form.
+                            commit = Some(serde_json::from_str::<Value>(&committed).map_or(committed.clone(), |j| j.to_string()));
+                        }
+                    }
+                    if invalid {
+                        ui.label(RichText::new("not valid JSON").small().color(t.status.danger));
                     }
                 }
             }
-            if invalid {
-                ui.label(RichText::new("not valid JSON").small().color(t.status.danger));
+            if let Some(c) = commit
+                && let Some(pty) = &pty
+            {
+                let mut next = list.clone();
+                next.retain(|(n, _)| *n != m.name);
+                if !c.is_empty() {
+                    next.push((m.name.clone(), c));
+                }
+                edit(reqs, v, pty, props.map(|d| d.value.clone()), Some(props_value(&next)), &format!("Set {}", m.name), Some(format!("script.member.{}", m.name)));
             }
             if current.is_some() && v.editable && ui.small_button("\u{21BA}").on_hover_text("Reset to the script's default").clicked() {
                 let mut next = list.clone();

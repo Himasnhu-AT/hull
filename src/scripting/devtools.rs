@@ -29,6 +29,8 @@ pub(super) fn register(app: &mut App) {
             params(&[("entity", "string", "entity id or name"), ("signal", "string", "signal name"), ("args", "array", "arguments")]),
             emit,
         )
+        .add_control_command("script.props", "Exported variables of a script with hints: {script: path} or {entity}", params(&[("script", "string", "script path, or use entity"), ("entity", "string", "entity id or name")]), props)
+        .add_control_command("script.api", "Every host function with signature and one-line doc", params(&[]), api)
         .add_control_command("script.reload", "Reload every node script from disk (members are kept)", params(&[]), reload)
         .add_control_command("script.stats", "Script call counts and timing", params(&[]), stats);
 }
@@ -118,4 +120,20 @@ fn stats(world: &mut World, _: Json) -> Result<Json, String> {
     let s = world.resource::<ScriptStats>().clone();
     Ok(json!({"calls": s.calls, "call_us": s.call_us, "last_frame_us": s.last_frame_us, "max_frame_us": s.max_frame_us,
               "instances": s.instances, "signals": s.signals, "reloads": s.reloads}))
+}
+
+fn props(world: &mut World, p: Json) -> Result<Json, String> {
+    let path = match p.get("script").and_then(|s| s.as_str()) {
+        Some(s) => s.to_string(),
+        None => {
+            let e = entity_param(world, &p)?;
+            world.get::<Script>(e).map(|s| s.path.clone()).ok_or("entity has no script")?
+        }
+    };
+    let list = script_props(world, &path)?;
+    Ok(json!({"script": path, "props": list}))
+}
+
+fn api(_: &mut World, _: Json) -> Result<Json, String> {
+    Ok(json!({"functions": api_catalogue()}))
 }

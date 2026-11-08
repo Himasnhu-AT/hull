@@ -142,7 +142,10 @@ fn tree(e: &mut Engine) {
     e.register("attach_script", |c, a| {
         let w = world(c)?;
         let (t, r) = split(w, a, 1, "attach_script([node,] path)")?;
-        w.entity_mut(t).insert(Script::new(s(&r[0], "path")?));
+        let p = s(&r[0], "path")?;
+        // A `class_name` instead of a path.
+        let path = if !p.contains(['/', '.']) { super::resolve_class(w, p).ok_or_else(|| format!("attach_script: no class_name `{p}`"))? } else { p.to_string() };
+        w.entity_mut(t).insert(Script::new(path));
         Ok(RV::Void)
     });
     e.register("instantiate", |c, a| {
