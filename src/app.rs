@@ -302,6 +302,8 @@ impl Plugin for EnginePlugin {
         app.add_plugins(crate::pcg::PcgPlugin);
         #[cfg(feature = "logic")]
         app.add_plugins(crate::logic::LogicPlugin);
+        #[cfg(feature = "scripting")]
+        app.add_plugins(crate::scripting::ScriptingPlugin);
         #[cfg(feature = "ai")]
         app.add_plugins(crate::ai::AiPlugin);
         #[cfg(feature = "sound")]

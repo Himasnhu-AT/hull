@@ -53,7 +53,7 @@ fn key_of(file: &str) -> String {
     if file.contains('/') { file.to_string() } else { format!("scripts/{file}") }
 }
 
-fn rv_of(v: &Value) -> RV {
+pub(crate) fn rv_of(v: &Value) -> RV {
     match v {
         Value::Null => RV::Null,
         Value::Bool(b) => RV::Bool(*b),
@@ -81,7 +81,7 @@ fn rv_of_json(j: &serde_json::Value) -> RV {
     }
 }
 
-fn json_of_rv(v: &RV) -> Result<serde_json::Value, String> {
+pub(crate) fn json_of_rv(v: &RV) -> Result<serde_json::Value, String> {
     use serde_json::Value as J;
     Ok(match v {
         RV::Int(i) => J::from(*i),
@@ -95,7 +95,7 @@ fn json_of_rv(v: &RV) -> Result<serde_json::Value, String> {
     })
 }
 
-fn value_of_rv(v: &RV) -> Result<Value, String> {
+pub(crate) fn value_of_rv(v: &RV) -> Result<Value, String> {
     Ok(match v {
         RV::Int(i) => Value::Num(*i as f64),
         RV::Float(f) => Value::Num(*f),
@@ -126,7 +126,7 @@ fn str_arg<'a>(a: &'a [RV], i: usize, what: &str) -> Result<&'a str, String> {
 }
 
 /// The entity named `name` (first match).
-pub(super) fn find_named(w: &mut World, name: &str) -> Option<Entity> {
+pub(crate) fn find_named(w: &mut World, name: &str) -> Option<Entity> {
     let mut q = w.query::<(Entity, &Name)>();
     q.iter(w).find(|(_, n)| n.as_str() == name).map(|(e, _)| e)
 }

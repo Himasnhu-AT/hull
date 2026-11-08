@@ -64,6 +64,7 @@ default = [
     "level",
     "spline",
     "logic",
+    "scripting",
 ]
 # AI-friendly dev loop: ECS inspector commands, scenario test kit, perf assertions, scope
 # profiling, JSON hot reload, save slots, asset checks (docs/DEVKIT.md).
@@ -114,6 +115,8 @@ level = ["dep:ron"]
 spline = []
 # Game logic as node graphs (assets/logic/*.logic.ron) and ruspy scripts (assets/scripts/*.ruspy): src/logic, docs/LOGIC.md.
 logic = ["dep:logic-core", "dep:ruspy"]
+# Godot-style node scripts in ruspy (Script component, lifecycle, signals, node paths, UI): src/scripting, docs/SCRIPTING.md.
+scripting = ["logic"]
 # Multiplayer: transports, channels, replication, prediction (not in default: many games are single-player).
 net = ["dep:postcard"]
 # The level editor: `--editor` opens the game's own binary as an Unreal-style editor (src/editor, docs/EDITOR.md).

@@ -15,10 +15,10 @@
 //! - **Scripts**: `assets/scripts/*.ruspy`, run by `Script` nodes; reloaded when the file
 //!   changes. Errors never panic; they land in [`LogicDiagnostics`] with file, line and column.
 
-mod access;
+pub(crate) mod access;
 #[cfg(feature = "devtools")]
 mod devtools;
-mod script;
+pub(crate) mod script;
 
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
