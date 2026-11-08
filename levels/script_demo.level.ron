@@ -1,0 +1,171 @@
+(
+  version: 1,
+  world: None,
+  look: Some(Preset("dusk")),
+  entities: (
+    resources: {},
+    entities: {
+      4294967294: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Ground",
+          "bevy_transform::components::transform::Transform": (
+            translation: (0.0, 0.0, 0.0),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.0, 1.0, 1.0),
+          ),
+          "engine::level::LevelEntity": (
+            id: (1),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Plane,
+            size: (30.0, 0.0, 30.0),
+            color: Srgba((
+              red: 0.16,
+              green: 0.2,
+              blue: 0.17,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Scenery": (),
+        },
+      ),
+      4294967293: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Sun",
+          "bevy_light::directional_light::DirectionalLight": (
+            color: Srgba((
+              red: 0.7,
+              green: 0.75,
+              blue: 1.0,
+              alpha: 1.0,
+            )),
+            illuminance: 2500.0,
+            shadow_maps_enabled: true,
+            contact_shadows_enabled: false,
+            affects_lightmapped_mesh_diffuse: true,
+            shadow_depth_bias: 0.02,
+            shadow_normal_bias: 1.8,
+          ),
+          "bevy_transform::components::transform::Transform": (
+            translation: (4.0, 9.0, 3.0),
+            rotation: (-0.45358884, 0.38544035, 0.22679439, 0.7708807),
+            scale: (1.0, 1.0, 1.0),
+          ),
+          "engine::level::LevelEntity": (
+            id: (2),
+          ),
+        },
+      ),
+      4294967292: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::name::Name": "Player",
+          "bevy_transform::components::transform::Transform": (
+            translation: (0.0, 0.3, 0.0),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.0, 1.0, 1.0),
+          ),
+          "engine::level::LevelEntity": (
+            id: (3),
+          ),
+          "engine::level::primitive::Primitive": (
+            shape: Cuboid,
+            size: (0.6, 0.6, 0.6),
+            color: Srgba((
+              red: 1.0,
+              green: 0.9,
+              blue: 0.6,
+              alpha: 1.0,
+            )),
+            metallic: 0.0,
+            roughness: 0.6,
+          ),
+          "engine::render_budget::Actor": (),
+          "engine::scripting::Script": (
+            path: "player.ruspy",
+            priority: 0,
+          ),
+          "script_demo::PhysicsBox": (
+            size: (0.6, 0.6, 0.6),
+            sensor: false,
+          ),
+        },
+      ),
+      4294967291: (
+        components: {
+          "bevy_camera::visibility::Visibility": Inherited,
+          "bevy_ecs::hierarchy::ChildOf": (4294967292),
+          "bevy_ecs::name::Name": "Glow",
+          "bevy_light::point_light::PointLight": (
+            color: Srgba((
+              red: 1.0,
+              green: 0.8,
+              blue: 0.5,
+              alpha: 1.0,
+            )),
+            intensity: 300000.0,
+            range: 9.0,
+            radius: 0.0,
+            shadow_maps_enabled: false,
+            contact_shadows_enabled: false,
+            affects_lightmapped_mesh_diffuse: true,
+            shadow_depth_bias: 0.08,
+            shadow_normal_bias: 0.6,
+            shadow_map_near_z: 0.1,
+          ),
+          "bevy_transform::components::transform::Transform": (
+            translation: (0.0, 1.2, 0.0),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (1.0, 1.0, 1.0),
+          ),
+          "engine::level::LevelEntity": (
+            id: (4),
+          ),
+        },
+      ),
+      4294967290: (
+        components: {
+          "bevy_ecs::name::Name": "HUD",
+          "engine::level::LevelEntity": (
+            id: (5),
+          ),
+          "engine::scripting::Script": (
+            path: "hud.ruspy",
+            priority: 0,
+          ),
+        },
+      ),
+      4294967289: (
+        components: {
+          "bevy_ecs::name::Name": "Spawner",
+          "engine::level::LevelEntity": (
+            id: (6),
+          ),
+          "engine::scripting::Connections": ([
+            (
+              signal: "timeout",
+              target: ".",
+              method: "_on_timeout",
+              binds: [],
+              deferred: false,
+              one_shot: false,
+            ),
+          ]),
+          "engine::scripting::Script": (
+            path: "spawner.ruspy",
+            priority: 0,
+          ),
+          "engine::scripting::ScriptTimer": (
+            wait_time: 1.6,
+            one_shot: false,
+            autostart: false,
+          ),
+        },
+      ),
+    },
+  ),
+)

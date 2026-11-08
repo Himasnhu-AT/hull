@@ -1,0 +1,68 @@
+// The whole UI, built from script. It listens to Game's signals; it never reads Game inside
+// a signal handler (Game is mid-call then), only polls the clock from _process.
+game = null;
+score_label = null;
+time_label = null;
+best_label = null;
+menu = null;
+title = null;
+result = null;
+shown_time = -1;
+
+fn _ready() {
+    game = get_node("/Game");
+
+    bar = ui_hbox();
+    ui_set(bar, "anchor", "top");
+    ui_set(bar, "padding", 12);
+    ui_set(bar, "gap", 28);
+    score_label = ui_label(bar, "Score 0");
+    time_label = ui_label(bar, "Time 30");
+    best_label = ui_label(bar, "Best 0");
+    set_font_size(score_label, 26);
+    set_font_size(time_label, 26);
+    set_font_size(best_label, 26);
+
+    menu = ui_panel();
+    ui_set(menu, "anchor", "center");
+    ui_set(menu, "padding", 28);
+    ui_set(menu, "bg", [0.04, 0.05, 0.08, 0.85]);
+    col = ui_vbox(menu);
+    ui_set(col, "gap", 14);
+    ui_set(col, "align", "center");
+    title = ui_label(col, "Lantern Keeper");
+    set_font_size(title, 40);
+    result = ui_label(col, "Walk into lanterns before they go out. WASD / arrows.");
+    button = ui_button(col, "Play");
+
+    connect(button, "pressed", self(), "on_button");
+    connect(game, "score_changed", self(), "on_score");
+    connect(game, "state_changed", self(), "on_state");
+}
+
+fn on_button() {
+    call_deferred(game, "start");
+}
+
+fn on_score(score) {
+    set_text(score_label, "Score " + score);
+}
+
+fn on_state(state, score, best) {
+    set_text(best_label, "Best " + best);
+    if state == "playing" {
+        ui_set(menu, "visible", false);
+    } else {
+        ui_set(menu, "visible", true);
+        set_text(title, "Time's up");
+        set_text(result, "You scored " + score + ". Best: " + best);
+    }
+}
+
+fn _process(dt) {
+    t = ceil(get_var(game, "time_left"));
+    if t != shown_time {
+        shown_time = t;
+        set_text(time_label, "Time " + t);
+    }
+}
