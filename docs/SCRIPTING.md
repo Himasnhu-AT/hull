@@ -216,9 +216,57 @@ disconnect(btn, "pressed", self(), "on_button");
 `find(name)` is the first entity with that `Name` anywhere (slow: scans the world; call it in
 `_ready`, not every frame). Names are not unique: name things you look up.
 
+## GDScript-style access
+
+Nodes are **object handles** (`Value::Object`): `get_node`, `self`, `get_parent`, signal and
+`call` arguments all give handles. A handle prints as `Node#<id>`, compares by id (`a == b`),
+and `is_null(h)` is false for it. Plain int entity ids (older scripts) are still accepted
+everywhere a node is. Handles read and write through the object hooks in
+`src/scripting/api_obj.rs`:
+
+```
+kid = get_node("Kid");
+kid.position = [1, 2, 3];          # set_position(kid, ..)
+kid.position = [kid.position[0] + 1, 2, 3];
+kid.visible = false;               # set_visible
+kid.hp -= 1;                       # a script member of kid (get_var / set_var)
+kid.get_node("Grandkid");          # get_node(kid, "Grandkid")
+kid.queue_free();                  # queue_free(kid)
+kid.emit_signal("hit", 3);         # emit_signal(kid, ..): emits from kid
+kid.add_to_group("enemies");
+kid.connect("hit", self, "on_hit");
+kid.take_damage(3);                # kid's script function (like call(kid, "take_damage", 3))
+self.hp += 1;                      # own members and functions, see below
+```
+
+**Properties** (a table, `api_obj::PROPS`): `position` (`get_position`/`set_position`),
+`global_position` (read-only), `rotation`, `scale`, `visible` (`is_visible`/`set_visible`),
+`name`, `text` (UI nodes), and read-only `parent`, `children`, `path`. Any other name is the
+node's script member; a missing one is a located error. A read-only property assigned is an error.
+
+**Methods** `node.f(args)`: the node's script function `f` if it has one, else the host function
+`f` with the node prepended (so every `[n,]` function works as a method). Neither: an error.
+A script that is running (on the call stack) can't be entered again: member access to it errors
+and methods error like `call` (use `call_deferred`).
+
+**`self`** is a bare name for the running instance's handle (`self()` still works).
+`self.x` / `self.x = v` / `self.f()` use the script's own variables and functions directly (no
+host call, so they work while the instance is running); `self.position` and the other
+properties go through the table. In a function, a local named like a member shadows it, so
+`self.hp` is the explicit form.
+
+**Dictionaries**: `d = {"a": 1, "b": [2, 3]}`, `d["a"]`, `d["a"] = 5`, `d.a` (same as `d["a"]`
+for string keys), `len(d)`, `d.keys()`, `d.values()`, `d.has(k)`, `d.erase(k)`,
+`d.get(k, default)`, `d.clear()`, `for k in d`. Keys are str, int, bool or char; insertion order
+is kept; dicts are shared by reference like arrays. They convert to and from JSON objects
+(arguments, return values, `ScriptProps`, `get`/`set`, signal arguments): a JSON object arrives
+as a dict and a dict leaves as a JSON object (key order is then sorted, since JSON objects are).
+The VM does not compile dicts or member assignment: such files run in the interpreter (the
+fallback is automatic).
+
 ## Host functions
 
-Entities are ints, vectors are `[x, y, z]`. `[n,]` is an optional leading node; without it the
+Nodes are object handles (ints are accepted), vectors are `[x, y, z]`. `[n,]` is an optional leading node; without it the
 function acts on `self`. Errors in a host call become a diagnostic with the script's
 `file:line:col`.
 
@@ -401,10 +449,10 @@ Still to measure (release):
   use `call_deferred`.
 - **Pause follows `process_mode`** (see above). `_physics_process` does not tick while paused
   in any mode (it rides `FixedUpdate`, which rides virtual time).
-- The VM falls back to the interpreter for arrays and method calls (see Performance).
-- No maps, closures or classes in ruspy: structured data is arrays or JSON text; there is no
+- The VM falls back to the interpreter for arrays, dicts, method calls and member assignment (see Performance).
+- No closures or classes in ruspy: structured data is arrays and dicts; there is no
   `@export` metadata (types, ranges) yet, so the editor shows members as plain values.
-- Node references are ints with no ownership: a stale one is detected with `is_valid`, not by a type.
+- Node references are handles with no ownership: a stale one is detected with `is_valid`; using one errors with "no longer exists".
 - `instantiate` clones a level file: its entities carry `LevelEntity` (the editor will save
   them with the level that holds them); use `change_scene` for whole levels.
 - Physics signals need a physics step: `body_entered` arrives a frame after the contact, and
