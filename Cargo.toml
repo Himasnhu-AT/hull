@@ -35,7 +35,7 @@ pcg-core = { path = "crates/pcg-core", optional = true }
 asset-pipe = { path = "crates/asset-pipe", default-features = false, optional = true }
 logic-core = { path = "crates/logic-core", optional = true }
 # ruspy (the user's language), branch `embed` pinned by rev; bump when ruspy changes.
-ruspy = { git = "https://github.com/Himasnhu-AT/ruspy", rev = "982b759423b5984e0112c891a1c6f3868f8d3de1", default-features = false, optional = true }
+ruspy = { git = "https://github.com/Himasnhu-AT/ruspy", rev = "f6b206ed3f9a23b7b3882e9330371ff744ad7962", default-features = false, optional = true }
 png = { version = "0.18", default-features = false, optional = true }
 # net: compact serde wire format for replicated components / messages (pulls only cobs + serde).
 postcard = { version = "1", default-features = false, features = ["alloc"], optional = true }
