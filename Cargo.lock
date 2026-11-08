@@ -494,6 +494,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "asset-pipe"
+version = "0.1.0"
+dependencies = [
+ "glam",
+ "image",
+ "ron",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "async-broadcast"
 version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3384,6 +3395,7 @@ dependencies = [
  "ashlar-control",
  "ashlar-mcp",
  "ashlar-trace",
+ "asset-pipe",
  "avian3d",
  "bevy",
  "bevy_egui",

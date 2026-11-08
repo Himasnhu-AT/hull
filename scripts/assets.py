@@ -8,6 +8,13 @@
   python3 -I scripts/assets.py check          # exit 1 on a missing entry / forbidden licence
   python3 -I scripts/assets.py cook           # textures -> KTX2 with tools/cook
 
+Shared store (several games, one download; docs/ASSETS.md "Shared store"):
+  assets.py add <catalog-name|group|kind/name|zip|dir>... [--store DIR] [import flags]
+  assets.py lock                  # assets.manifest.json -> assets.lock.json (hashes)
+  assets.py sync [--copy] [--force]   # lock -> assets/library (symlinks by default), ATTRIBUTION.md
+  assets.py store [list|path]
+Store dir: --store DIR, else $ENGINE_ASSET_STORE, else ~/codes/game/asset-store.
+
 Layout: assets/library/<kind>/<name>/... plus assets/library/LICENSES.json, keyed "<kind>/<name>"
 (docs/ASSETS.md). Everything downloaded is untrusted data: it is unpacked into a fresh temp
 directory (zip paths checked), only glTF/GLB, images and licence text are copied out, and
@@ -15,10 +22,12 @@ nothing from it is executed. Standard library only.
 """
 import datetime, json, os, shutil, ssl, subprocess, sys, tempfile, urllib.error, urllib.parse, urllib.request, zipfile
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+SCRIPT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ROOT = os.environ.get("ENGINE_ASSETS_ROOT") or SCRIPT_ROOT  # the game root (manifest, lock, library)
 LIB = os.path.join(ROOT, "assets", "library")
 LICENSES = os.path.join(LIB, "LICENSES.json")
-CATALOG = os.path.join(ROOT, "scripts", "assets_catalog.json")
+CATALOG = os.path.join(SCRIPT_ROOT, "scripts", "assets_catalog.json")
+DEFAULT_STORE = os.path.expanduser("~/codes/game/asset-store")
 UA = "Mozilla/5.0 (engine assets.py)"
 
 ALLOWED = {"CC0-1.0", "CC-BY-4.0", "CC-BY-3.0", "CC-BY-SA-4.0", "MIT", "Apache-2.0", "OFL-1.1",
@@ -51,6 +60,8 @@ def ssl_context():
 
 
 def http(url, referer=None, headers=None):
+    if os.environ.get("ENGINE_ASSETS_OFFLINE"):
+        die("network disabled (ENGINE_ASSETS_OFFLINE)")
     h = {"User-Agent": UA}
     if referer:
         h["Referer"] = referer
@@ -452,12 +463,313 @@ def cmd_cook(_):
     sys.exit(subprocess.run(cmd, cwd=ROOT).returncode)
 
 
+# ------------------------------------------------------------------ shared store
+import contextlib, hashlib
+
+STORE = None
+
+
+def store_dir():
+    return os.path.abspath(STORE or os.environ.get("ENGINE_ASSET_STORE") or DEFAULT_STORE)
+
+
+def pop_flag(args, name):
+    """Remove `name VALUE` from args; return the value (or None)."""
+    if name in args:
+        i = args.index(name)
+        if i + 1 >= len(args):
+            die(f"{name} needs a value")
+        v = args[i + 1]
+        del args[i:i + 2]
+        return v
+    return None
+
+
+def file_hash(path):
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def tree_hash(root):
+    """sha256 over sorted "relpath\\0filehash" lines of every file (LICENSES.json excluded)."""
+    lines = []
+    for f in walk_files(root):
+        if os.path.basename(f) == "LICENSES.json":
+            continue
+        rel = os.path.relpath(f, root).replace(os.sep, "/")
+        lines.append(f"{rel}\0{file_hash(f)}")
+    return hashlib.sha256("\n".join(sorted(lines)).encode()).hexdigest()
+
+
+def copy_tree(src, dst):
+    for f in walk_files(src):
+        out = os.path.join(dst, os.path.relpath(f, src))
+        os.makedirs(os.path.dirname(out), exist_ok=True)
+        shutil.copy2(f, out)
+    os.makedirs(dst, exist_ok=True)
+
+
+def read_index():
+    p = os.path.join(store_dir(), "index.json")
+    if not os.path.exists(p):
+        return {}
+    with open(p) as f:
+        return json.load(f)
+
+
+def write_index(d):
+    os.makedirs(store_dir(), exist_ok=True)
+    p = os.path.join(store_dir(), "index.json")
+    with open(p + ".tmp", "w") as f:
+        json.dump(dict(sorted(d.items())), f, indent=2, sort_keys=True)
+        f.write("\n")
+    os.replace(p + ".tmp", p)
+
+
+def cas_path(h):
+    return os.path.join(store_dir(), "cas", h)
+
+
+@contextlib.contextmanager
+def staging():
+    """Point LIB / LICENSES at a fresh temp dir so fetch/import write there; yield its path."""
+    global LIB, LICENSES
+    old = LIB, LICENSES
+    tmp = tempfile.mkdtemp(prefix="assets_stage_")
+    LIB = os.path.join(tmp, "library")
+    LICENSES = os.path.join(LIB, "LICENSES.json")
+    try:
+        yield LIB
+    finally:
+        LIB, LICENSES = old
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def ingest(stage_lib):
+    """Move every item staged under stage_lib into cas/ and the index. Returns the keys."""
+    lic = {}
+    p = os.path.join(stage_lib, "LICENSES.json")
+    if os.path.exists(p):
+        lic = json.load(open(p))
+    index = read_index()
+    keys = []
+    for kind in sorted(os.listdir(stage_lib)) if os.path.isdir(stage_lib) else []:
+        kd = os.path.join(stage_lib, kind)
+        if not os.path.isdir(kd):
+            continue
+        for name in sorted(os.listdir(kd)):
+            src = os.path.join(kd, name)
+            if not os.path.isdir(src):
+                continue
+            key = f"{kind}/{name}"
+            entry = lic.get(key)
+            if not entry:
+                die(f"{key}: staged without a licence entry; refusing")
+            check_license_arg(entry.get("license", ""))
+            h = tree_hash(src)
+            dst = cas_path(h)
+            if os.path.isdir(dst):
+                print(f"  store: {key} already present ({h[:12]})")
+            else:
+                os.makedirs(os.path.dirname(dst), exist_ok=True)
+                tmp = dst + ".tmp"
+                shutil.rmtree(tmp, ignore_errors=True)
+                copy_tree(src, tmp)
+                os.rename(tmp, dst)
+                print(f"  store: {key} -> cas/{h[:12]}")
+            cur = index.get(key, {})
+            hist = list(cur.get("history", []))
+            for x in (cur.get("current"), h):
+                if x and x not in hist:
+                    hist.append(x)
+            index[key] = {"current": h, "history": hist, "entry": entry}
+            keys.append(key)
+    write_index(index)
+    return keys
+
+
+def manifest_path():
+    return os.path.join(ROOT, "assets.manifest.json")
+
+
+def lock_path():
+    return os.path.join(ROOT, "assets.lock.json")
+
+
+def read_manifest():
+    if not os.path.exists(manifest_path()):
+        return []
+    return json.load(open(manifest_path())).get("items", [])
+
+
+def write_json(path, obj):
+    with open(path, "w") as f:
+        json.dump(obj, f, indent=2, sort_keys=True)
+        f.write("\n")
+
+
+def cmd_add(args):
+    args = list(args)
+    valued = {"--source", "--license", "--url", "--author", "--kind", "--name"}
+    targets, flags, i = [], [], 0
+    while i < len(args):
+        if args[i] in valued:
+            flags += args[i:i + 2]
+            i += 2
+        elif args[i].startswith("--"):
+            flags.append(args[i])
+            i += 1
+        else:
+            targets.append(args[i])
+            i += 1
+    if not targets:
+        die("usage: assets.py add <catalog-name|group|kind/name|zip|dir>... [--store DIR] [import flags]")
+    cat = json.load(open(CATALOG))
+    index = read_index()
+    keys = []
+    for t in targets:
+        names = cat["groups"].get(t) if t in cat["groups"] else ([t] if t in cat["kits"] else None)
+        if names is not None:
+            for n in names:
+                e = cat["kits"].get(n)
+                if not e:
+                    die(f"unknown kit `{n}`")
+                key = f"{e['kind']}/{n}"
+                if key in index:
+                    print(f"{key}: already in the store, no download")
+                else:
+                    with staging() as lib:
+                        cmd_fetch([n])
+                        ingest(lib)
+                keys.append(key)
+        elif os.path.exists(t):
+            with staging() as lib:
+                cmd_import([t] + flags)
+                keys += ingest(lib)
+        elif "/" in t and t.split("/", 1)[0] in KINDS:
+            if t not in index:
+                die(f"{t} is not in the store ({store_dir()}); add it from a catalog name, zip or dir first")
+            print(f"{t}: already in the store")
+            keys.append(t)
+        else:
+            die(f"`{t}` is not a catalog name, group, store key, zip or directory")
+    m = sorted(set(read_manifest()) | set(keys))
+    write_json(manifest_path(), {"items": m})
+    print(f"manifest: {len(m)} item(s) in assets.manifest.json")
+
+
+def cmd_lock(_):
+    index = read_index()
+    out = {}
+    for key in sorted(set(read_manifest())):
+        ent = index.get(key)
+        if not ent:
+            die(f"{key} is in assets.manifest.json but not in the store ({store_dir()}); run `assets.py add {key}`")
+        e = ent["entry"]
+        check_license_arg(e.get("license", ""))
+        h = ent["current"]
+        if not os.path.isdir(cas_path(h)):
+            die(f"{key}: store is missing cas/{h}")
+        out[key] = {"hash": h, "license": e.get("license"), "author": e.get("author"),
+                    "url": e.get("url"), "source": e.get("source")}
+    write_json(lock_path(), {"items": out})
+    print(f"locked {len(out)} item(s) -> assets.lock.json")
+
+
+def read_lock():
+    if not os.path.exists(lock_path()):
+        die("no assets.lock.json; run `assets.py lock`")
+    return json.load(open(lock_path())).get("items", {})
+
+
+def write_attribution(lock):
+    lines = ["# Asset attribution", "", "Generated by `scripts/assets.py sync` from assets.lock.json. Do not edit.", "",
+             "| Item | Author | Licence | URL |", "|---|---|---|---|"]
+    for key, e in sorted(lock.items()):
+        lines.append(f"| {key} | {e.get('author', '')} | {e.get('license', '')} | {e.get('url', '')} |")
+    by = [(k, e) for k, e in sorted(lock.items()) if str(e.get("license", "")).startswith("CC-BY")]
+    if by:
+        lines += [""]
+        for k, e in by:
+            lines.append(f"- {k}: credit is required ({e['license']}): credit {e.get('author', '')}, {e.get('url', '')}")
+    with open(os.path.join(ROOT, "ATTRIBUTION.md"), "w") as f:
+        f.write("\n".join(lines) + "\n")
+
+
+def cmd_sync(args):
+    copy, force = "--copy" in args, "--force" in args
+    lock = read_lock()
+    index = read_index()
+    lic = read_licenses()
+    synced = 0
+    for key, e in sorted(lock.items()):
+        h = e["hash"]
+        check_license_arg(e.get("license", ""))
+        src = cas_path(h)
+        if not os.path.isdir(src):
+            die(f"{key}: store item cas/{h} is missing from {store_dir()}")
+        dest = os.path.join(LIB, key)
+        if os.path.islink(dest):
+            os.unlink(dest)
+        elif os.path.exists(dest):
+            if not force:
+                print(f"{key}: real directory in assets/library, left alone (use --force to replace)")
+                continue
+            shutil.rmtree(dest)
+        os.makedirs(os.path.dirname(dest), exist_ok=True)
+        if copy:
+            copy_tree(src, dest)
+            got = tree_hash(dest)
+        else:
+            got = tree_hash(src)
+            if got == h:
+                os.symlink(src, dest)
+        if got != h:
+            if copy:
+                shutil.rmtree(dest, ignore_errors=True)
+            die(f"{key}: hash mismatch (lock {h[:12]}, store has {got[:12]}); the store item was modified or corrupt")
+        ent = dict(index.get(key, {}).get("entry") or {})
+        ent.update({k: e.get(k) for k in ("source", "url", "author", "license")})
+        ent.setdefault("fetched", datetime.date.today().isoformat())
+        lic[key] = ent
+        synced += 1
+        print(f"{key}: {'copied' if copy else 'linked'} ({h[:12]})")
+    write_licenses(lic)
+    write_attribution(lock)
+    print(f"synced {synced}/{len(lock)} item(s); wrote ATTRIBUTION.md")
+
+
+def cmd_store(args):
+    sub = args[0] if args else "list"
+    if sub == "path":
+        print(store_dir())
+        return
+    if sub != "list":
+        die("usage: assets.py store [list|path]")
+    rows = [("ITEM", "HASH", "LICENSE", "SIZE")]
+    for key, ent in sorted(read_index().items()):
+        p = cas_path(ent["current"])
+        size = du(p)[0] if os.path.isdir(p) else 0
+        rows.append((key, ent["current"][:12], ent["entry"].get("license", "?"),
+                     f"{size / 1e6:.1f} MB" if os.path.isdir(p) else "MISSING"))
+    w = [max(len(r[i]) for r in rows) for i in range(4)]
+    for r in rows:
+        print("  ".join(c.ljust(w[i]) for i, c in enumerate(r)))
+
+
 def main():
-    if len(sys.argv) < 2 or sys.argv[1] not in ("fetch", "import", "list", "check", "cook"):
+    if len(sys.argv) < 2 or sys.argv[1] not in ("fetch", "import", "list", "check", "cook", "add", "lock", "sync", "store"):
         print(__doc__)
         sys.exit(2)
+    global STORE
+    rest = sys.argv[2:]
+    if sys.argv[1] in ("add", "lock", "sync", "store"):
+        STORE = pop_flag(rest, "--store")
     try:
-        globals()["cmd_" + sys.argv[1]](sys.argv[2:])
+        globals()["cmd_" + sys.argv[1]](rest)
     except (urllib.error.URLError, OSError, zipfile.BadZipFile, KeyError, ValueError) as e:
         die(f"{type(e).__name__}: {e}")
 

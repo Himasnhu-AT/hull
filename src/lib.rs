@@ -81,6 +81,8 @@ pub mod trace;
 pub mod vfx;
 #[cfg(feature = "pcg")]
 pub mod pcg;
+#[cfg(feature = "assets")]
+pub mod assets;
 #[cfg(feature = "spline")]
 pub mod spline;
 #[cfg(feature = "logic")]
