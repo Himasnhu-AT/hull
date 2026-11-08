@@ -69,7 +69,7 @@ fn num(n: f64) -> RV {
     if n.fract() == 0.0 && n.abs() < 9.0e15 { RV::Int(n as i64) } else { RV::Float(n) }
 }
 
-fn rv_of_json(j: &serde_json::Value) -> RV {
+pub(crate) fn rv_of_json(j: &serde_json::Value) -> RV {
     use serde_json::Value as J;
     match j {
         J::Null => RV::Null,
