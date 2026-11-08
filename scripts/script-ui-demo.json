@@ -1,0 +1,17 @@
+[
+  {"sleep": 1.5},
+  {"shot": "form-game"},
+  {"cmd": "input.key", "params": {"key": "Tab", "action": "down"}},
+  {"cmd": "input.key", "params": {"key": "Tab", "action": "up"}},
+  {"sleep": 0.2},
+  {"cmd": "input.key", "params": {"key": "Enter", "action": "down"}},
+  {"cmd": "input.key", "params": {"key": "Enter", "action": "up"}},
+  {"sleep": 0.4},
+  {"shot": "form-dropdown"},
+  {"cmd": "script.call", "params": {"entity": "Form", "method": "show_tab", "args": [1]}},
+  {"sleep": 0.4},
+  {"shot": "form-audio"},
+  {"cmd": "script.call", "params": {"entity": "Form", "method": "show_tab", "args": [2]}},
+  {"sleep": 0.4},
+  {"shot": "form-account"}
+]

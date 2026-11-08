@@ -1,0 +1,86 @@
+// A settings-like form with every script widget. Signals update the status line.
+status = null;
+volume_label = null;
+quality = null;
+tabs_node = null;
+
+fn _ready() {
+    root = ui_vbox(self());
+    ui_set(root, "anchor", "full");
+    ui_set(root, "padding", 40);
+
+    panel = ui_panel(root);
+    ui_set(panel, "width", 760);
+    ui_set(panel, "anchor", "center");
+    ui_set(panel, "padding", 28);
+    ui_set(panel, "gap", 14);
+
+    head = ui_hbox(panel);
+    ui_set(head, "gap", 14);
+    icon = ui_texture_rect(head, "ui_demo_icon.png");
+    ui_set(icon, "width", 40);
+    ui_set(icon, "height", 40);
+    title = ui_label(head, "Settings");
+    set_font_size(title, 34);
+
+    tabs = ui_tabs(panel, ["Game", "Audio", "Account"]);
+    tabs_node = tabs;
+    connect(tabs, "tab_changed", self(), "on_tab");
+
+    // Page 0: game
+    g = ui_margin(tabs, 8);
+    form = ui_grid(g, 2);
+    ui_set(form, "gap", 14);
+    ui_label(form, "Fullscreen");
+    fs = ui_checkbox(form, "Enabled", true);
+    connect(fs, "toggled", self(), "on_fullscreen");
+    ui_label(form, "Quality");
+    quality = ui_option_button(form, ["Low", "Medium", "High", "Ultra"]);
+    select(quality, 2);
+    connect(quality, "item_selected", self(), "on_quality");
+    set_tooltip(quality, "Rendering quality preset");
+    ui_label(form, "Player name");
+    name = ui_line_edit(form, "type a name...");
+    connect(name, "text_changed", self(), "on_name");
+    connect(name, "text_submitted", self(), "on_submit");
+
+    // Page 1: audio
+    a = ui_margin(tabs, 8);
+    arow = ui_grid(a, 2);
+    ui_set(arow, "gap", 14);
+    ui_label(arow, "Master volume");
+    vb = ui_hbox(arow);
+    vs = ui_slider(vb, 0, 100, 70, 5);
+    volume_label = ui_label(vb, "70");
+    connect(vs, "value_changed", self(), "on_volume");
+    ui_label(arow, "Music");
+    ms = ui_slider(arow, 0, 100, 40, 5);
+    ui_label(arow, "Loading");
+    ui_progress(arow, 0.6);
+
+    // Page 2: scrolling list
+    s = ui_scroll(tabs);
+    ui_set(s, "height", 140);
+    ui_set(s, "padding", 8);
+    for i in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] {
+        ui_label(s, "Account entry " + tostr(i));
+    }
+
+    status = ui_label(panel, "Ready");
+    set_text_color(status, [0.58, 0.62, 0.69]);
+    foot = ui_hbox(panel);
+    ok = ui_button(foot, "Apply");
+    ui_button(foot, "Cancel");
+    connect(ok, "pressed", self(), "on_apply");
+    grab_focus(fs);
+}
+
+fn on_tab(i) { set_text(status, "tab " + tostr(i)); }
+fn on_fullscreen(on) { set_text(status, "fullscreen " + tostr(on)); }
+fn on_quality(i) { set_text(status, "quality " + tostr(i)); }
+fn on_name(t) { set_text(status, "name: " + t); }
+fn on_submit(t) { set_text(status, "hello, " + t); }
+fn on_volume(v) { set_text(volume_label, tostr(v)); }
+fn on_apply() { set_text(status, "applied"); }
+
+fn show_tab(i) { set_current_tab(tabs_node, i); }
