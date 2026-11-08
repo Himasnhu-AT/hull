@@ -87,6 +87,14 @@ pub mod scripting;
 pub mod props;
 #[cfg(feature = "sound")]
 pub mod sound;
+#[cfg(feature = "daytime")]
+pub mod daytime;
+#[cfg(feature = "camera_rigs")]
+pub mod camera_rigs;
+#[cfg(feature = "spray")]
+pub mod spray;
+#[cfg(feature = "foliage")]
+pub mod foliage;
 
 pub use app::{EngineOptions, GameInfo, app, app_with};
 

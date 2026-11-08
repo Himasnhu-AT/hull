@@ -65,6 +65,10 @@ default = [
     "spline",
     "logic",
     "scripting",
+    "daytime",
+    "camera_rigs",
+    "spray",
+    "foliage",
 ]
 # AI-friendly dev loop: ECS inspector commands, scenario test kit, perf assertions, scope
 # profiling, JSON hot reload, save slots, asset checks (docs/DEVKIT.md).
@@ -117,6 +121,14 @@ spline = []
 logic = ["dep:logic-core", "dep:ruspy"]
 # Godot-style node scripts in ruspy (Script component, lifecycle, signals, node paths, UI): src/scripting, docs/SCRIPTING.md.
 scripting = ["logic"]
+# Day clock, solar sun + moon, stars, cloud dome + cloud shadows, night lights; drives the Look (src/daytime, docs/ENVIRONMENT.md).
+daytime = ["look"]
+# Camera rigs: spring-arm chase, mounted, orbit, free/photo + speed feel (src/camera_rigs, docs/ENVIRONMENT.md).
+camera_rigs = []
+# Surface spray (dust, mud, snow, water, chips) from wheels or any emitter, on vfx (src/spray, docs/ENVIRONMENT.md).
+spray = ["vfx"]
+# Runtime impostor rendering and LOD switching for distant trees (src/foliage, docs/ENVIRONMENT.md).
+foliage = []
 # Multiplayer: transports, channels, replication, prediction (not in default: many games are single-player).
 net = ["dep:postcard"]
 # The level editor: `--editor` opens the game's own binary as an Unreal-style editor (src/editor, docs/EDITOR.md).
@@ -133,6 +145,10 @@ debug = "line-tables-only"
 [profile.dev.package."*"]
 opt-level = 3
 debug = false
+
+[[example]]
+name = "environment_demo"
+required-features = ["daytime", "camera_rigs", "spray", "foliage"]
 
 [[example]]
 name = "spline_road"

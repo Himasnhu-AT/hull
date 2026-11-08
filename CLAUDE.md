@@ -42,6 +42,7 @@ The rules that matter most, so you don't skip them:
 | docs/PCG.md | Procedural content: node graphs, cells, catalog, scalability |
 | docs/LOGIC.md | Logic graphs (events, flow, commands) and ruspy scripts |
 | docs/SCRIPTING.md | Godot-style node scripts in ruspy: lifecycle, signals, groups, node paths, UI, host functions |
+| docs/ENVIRONMENT.md | Day clock + sun / moon / stars / clouds / night lights (`daytime`), camera rigs, surface spray, foliage impostors |
 | docs/NET.md | Multiplayer (feature `net`) |
 
 ## Shared build cache
