@@ -294,10 +294,18 @@ impl Plugin for EnginePlugin {
             ));
         #[cfg(feature = "look")]
         app.add_plugins(crate::look::LookPlugin);
+        #[cfg(feature = "daytime")]
+        app.add_plugins(crate::daytime::DaytimePlugin);
+        #[cfg(feature = "camera_rigs")]
+        app.add_plugins(crate::camera_rigs::CameraRigsPlugin);
+        #[cfg(feature = "foliage")]
+        app.add_plugins(crate::foliage::FoliagePlugin);
         #[cfg(feature = "anim")]
         app.add_plugins(crate::anim::AnimPlugin);
         #[cfg(feature = "vfx")]
         app.add_plugins(crate::vfx::VfxPlugin);
+        #[cfg(feature = "spray")]
+        app.add_plugins(crate::spray::SprayPlugin);
         #[cfg(feature = "pcg")]
         app.add_plugins(crate::pcg::PcgPlugin);
         #[cfg(feature = "logic")]

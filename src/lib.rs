@@ -95,6 +95,14 @@ pub mod sound;
 pub mod photo;
 #[cfg(feature = "weather")]
 pub mod weather;
+#[cfg(feature = "daytime")]
+pub mod daytime;
+#[cfg(feature = "camera_rigs")]
+pub mod camera_rigs;
+#[cfg(feature = "spray")]
+pub mod spray;
+#[cfg(feature = "foliage")]
+pub mod foliage;
 
 pub use app::{EngineOptions, GameInfo, app, app_with};
 

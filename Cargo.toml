@@ -68,6 +68,10 @@ default = [
     "scripting",
     "photo",
     "weather",
+    "daytime",
+    "camera_rigs",
+    "spray",
+    "foliage",
 ]
 # AI-friendly dev loop: ECS inspector commands, scenario test kit, perf assertions, scope
 # profiling, JSON hot reload, save slots, asset checks (docs/DEVKIT.md).
@@ -126,6 +130,14 @@ scripting = ["logic"]
 photo = ["look", "physics", "dep:png"]
 # Weather state machine (data + seeded schedule) driving look, rain/snow, wetness, wind (src/weather, docs/WEATHER.md).
 weather = ["look", "vfx"]
+# Day clock, solar sun + moon, stars, cloud dome + cloud shadows, night lights; drives the Look (src/daytime, docs/ENVIRONMENT.md).
+daytime = ["look"]
+# Camera rigs: spring-arm chase, mounted, orbit, free/photo + speed feel (src/camera_rigs, docs/ENVIRONMENT.md).
+camera_rigs = []
+# Surface spray (dust, mud, snow, water, chips) from wheels or any emitter, on vfx (src/spray, docs/ENVIRONMENT.md).
+spray = ["vfx"]
+# Runtime impostor rendering and LOD switching for distant trees (src/foliage, docs/ENVIRONMENT.md).
+foliage = []
 # React-style UI library on bevy_ui: tokens, components, declarative assets/ui/*.ui.ron screens, spatial focus, transitions, data binding (src/ui2, docs/UI2.md).
 ui2 = ["dep:ron", "actions"]
 # Multiplayer: transports, channels, replication, prediction (not in default: many games are single-player).
@@ -144,6 +156,10 @@ debug = "line-tables-only"
 [profile.dev.package."*"]
 opt-level = 3
 debug = false
+
+[[example]]
+name = "environment_demo"
+required-features = ["daytime", "camera_rigs", "spray", "foliage"]
 
 [[example]]
 name = "spline_road"
