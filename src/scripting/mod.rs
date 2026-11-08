@@ -64,6 +64,8 @@ mod tests_engine;
 mod tests_tween;
 #[cfg(test)]
 mod tests_meta;
+#[cfg(test)]
+mod tests_callable;
 
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
@@ -677,16 +679,40 @@ pub fn call(world: &mut World, e: Entity, f: &str, args: &[Value]) -> Result<Val
     call_rv(world, e, f, rv).and_then(|v| value_of_rv(&v))
 }
 
+/// Godot Callables: a method name that is no script function on the target is a host function
+/// called with the target node first (`queue_free`, `set_visible`, `hide` / `show`, ...). Every
+/// call path (signals, timers, tweens, groups, `call`, `call_deferred`) goes through `call_rv`.
+fn host_fallback(world: &mut World, e: Entity, f: &str, args: Vec<RV>) -> Option<Result<RV, String>> {
+    let (name, extra) = match f {
+        "hide" => ("set_visible", Some(RV::Bool(false))),
+        "show" => ("set_visible", Some(RV::Bool(true))),
+        o => (o, None),
+    };
+    let eng = world.get_non_send::<ScriptRuntime>()?.base.fork();
+    if !eng.has_host(name) || world.get_entity(e).is_err() {
+        return None;
+    }
+    let mut a = Vec::with_capacity(args.len() + 2);
+    a.push(RV::Int(e.to_bits() as i64));
+    a.extend(extra);
+    a.extend(args);
+    world.resource_mut::<ScriptCtx>().stack.push(e);
+    let r = eng.call_host(name, &a, world);
+    world.resource_mut::<ScriptCtx>().stack.pop();
+    Some(r)
+}
+
 pub(crate) fn call_rv(world: &mut World, e: Entity, f: &str, args: Vec<RV>) -> Result<RV, String> {
-    let inst = world
-        .get_non_send::<ScriptRuntime>()
-        .and_then(|rt| rt.instances.get(&e).cloned())
-        .ok_or_else(|| format!("entity {e} has no script"))?;
+    let Some(inst) = world.get_non_send::<ScriptRuntime>().and_then(|rt| rt.instances.get(&e).cloned()) else {
+        return host_fallback(world, e, f, args).unwrap_or_else(|| Err(format!("entity {e} has no script")));
+    };
     let Ok(mut i) = inst.try_borrow_mut() else {
         return Err(format!("entity {e}'s script is already running (re-entrant call to `{f}`); use call_deferred"));
     };
     if !i.has(f) {
-        return Err(format!("{} has no function `{f}`", i.key));
+        let key = i.key.clone();
+        drop(i);
+        return host_fallback(world, e, f, args).unwrap_or_else(|| Err(format!("{key} has no function `{f}`")));
     }
     if world.resource::<ScriptCtx>().stack.len() >= 32 {
         return Err("script calls nested deeper than 32".into());
@@ -729,6 +755,14 @@ pub fn call_if(world: &mut World, e: Entity, f: &str, args: Vec<RV>) {
         .unwrap_or(false);
     if has {
         let _ = call_rv(world, e, f, args);
+    }
+}
+
+/// Would `call_rv(e, f)` find something: a script function, or a host function (Callable fallback)?
+pub(crate) fn can_call(world: &World, e: Entity, f: &str) -> bool {
+    has_method(world, e, f) || {
+        let name = if matches!(f, "hide" | "show") { "set_visible" } else { f };
+        world.get_non_send::<ScriptRuntime>().is_some_and(|rt| rt.base.has_host(name)) && world.get_entity(e).is_ok()
     }
 }
 

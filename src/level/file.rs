@@ -194,7 +194,13 @@ fn ephemeral<A: Asset>(h: &Handle<A>) -> bool {
 
 /// Extracts every [`LevelEntity`] (and only those) into a [`DynamicWorld`] keyed by stable id.
 pub fn extract(world: &mut World, extra_deny: &[TypeId]) -> Result<(DynamicWorld, SaveReport), LevelError> {
-    let mut ents: Vec<(Entity, StableId)> = world.query::<(Entity, &LevelEntity)>().iter(world).map(|(e, l)| (e, l.id)).collect();
+    let ents: Vec<(Entity, StableId)> = world.query::<(Entity, &LevelEntity)>().iter(world).map(|(e, l)| (e, l.id)).collect();
+    extract_set(world, ents, extra_deny)
+}
+
+/// [`extract`] for an explicit set of `(entity, stable id)` pairs (parents outside the set are
+/// dropped, so a subtree becomes a self-contained file).
+pub fn extract_set(world: &mut World, mut ents: Vec<(Entity, StableId)>, extra_deny: &[TypeId]) -> Result<(DynamicWorld, SaveReport), LevelError> {
     ents.sort_by_key(|(_, id)| *id);
     let mut to_stable: EntityHashMap<Entity> = EntityHashMap::default();
     for w in ents.windows(2) {
@@ -277,9 +283,33 @@ impl Serialize for LevelOut<'_> {
 /// The text of the level file for the entities currently in `world`.
 pub fn to_text(world: &mut World, header: &LevelHeader, extra_deny: &[TypeId]) -> Result<(String, SaveReport), LevelError> {
     let (dw, report) = extract(world, extra_deny)?;
+    serialize_dw(world, header, &dw, report)
+}
+
+/// The text of an instance file (Godot `PackedScene.pack`) for `root` and its descendants, ids
+/// numbered from 1 in tree order; load it with `instantiate` / `spawn_instance`.
+pub fn subtree_text(world: &mut World, root: Entity, extra_deny: &[TypeId]) -> Result<(String, SaveReport), LevelError> {
+    let mut all = vec![root];
+    let mut stack = vec![root];
+    while let Some(e) = stack.pop() {
+        if let Some(ch) = world.get::<Children>(e) {
+            let kids: Vec<Entity> = ch.iter().collect();
+            for k in kids.iter().rev() {
+                stack.push(*k);
+            }
+            all.extend(kids);
+        }
+    }
+    let ents = all.into_iter().enumerate().map(|(i, e)| (e, StableId(i as u64 + 1))).collect();
+    let (dw, report) = extract_set(world, ents, extra_deny)?;
+    let header = LevelHeader { world: None, look: None };
+    serialize_dw(world, &header, &dw, report)
+}
+
+fn serialize_dw(world: &mut World, header: &LevelHeader, dw: &DynamicWorld, report: SaveReport) -> Result<(String, SaveReport), LevelError> {
     let registry = world.resource::<AppTypeRegistry>().clone();
     let reg = registry.read();
-    let out = LevelOut { header, entities: DynamicWorldSerializer::new(&dw, &reg) };
+    let out = LevelOut { header, entities: DynamicWorldSerializer::new(dw, &reg) };
     let cfg = ron::ser::PrettyConfig::default().indentor("  ".to_string()).new_line("\n".to_string());
     let text = ron::ser::to_string_pretty(&out, cfg).map_err(|e| LevelError::Serialize(e.to_string()))?;
     Ok((text, report))
