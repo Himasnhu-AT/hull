@@ -78,6 +78,13 @@ Ranked: **fixed** items have a commit on `physics`; the rest are open.
 12. `vx = v[0]` style array reads and `n.position = [..]` work well; `if !flag` and `a != null`
     worked first time; dictionary `stats.stomps += 1` and `stats["shards"] += 1` both fine.
 
+## After the vec/await merges
+
+`main.ruspy` now uses `await wait(0.2); count();` instead of `start_timer(0.2, "count")`: it worked
+first time, steps file still green, no friction. Not converted: `player.ruspy`'s `invulnerable`
+counter (it is read every frame, so a coroutine would add a second state). Position arrays still
+work unchanged since host functions accept both arrays and vectors.
+
 ## What worked well
 
 Handles with dot access (`b.take_hit(x)`, `pl.ground == self`, `get_node("/Game").on_stomp()`),
