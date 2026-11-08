@@ -51,6 +51,8 @@ mod tests_lang;
 mod bench;
 #[cfg(test)]
 mod tests_pause;
+#[cfg(test)]
+mod tests_dogfood;
 #[cfg(all(test, feature = "physics"))]
 mod tests_physics;
 #[cfg(test)]
@@ -864,6 +866,14 @@ pub(crate) fn emit_signal_rv(world: &mut World, src: Entity, signal: &str, args:
     let mut n = 0;
     for c in fire {
         let Some(target) = resolve_path(world, src, &c.target) else {
+            // A runtime connection to a node that was freed goes away with it (Godot disconnects
+            // on free); only path targets can be genuinely wrong.
+            if c.target.starts_with('#') {
+                if let Some(mut cs) = world.get_mut::<Connections>(src) {
+                    cs.0.retain(|x| !(x.signal == c.signal && x.target == c.target && x.method == c.method));
+                }
+                continue;
+            }
             let msg = format!("signal `{signal}` of {src}: target `{}` not found", c.target);
             diag(world, "signals", 0, 0, msg);
             continue;

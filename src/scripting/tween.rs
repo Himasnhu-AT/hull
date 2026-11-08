@@ -502,6 +502,12 @@ fn run(world: &mut World, e: Entity, method: &str, args: Vec<RV>) {
     } else if let Err(err) = call_rv(world, e, method, args)
         && !err.contains(".ruspy:")
     {
+        // Godot's `tween_callback(queue_free)`: the node's own host function when the script has
+        // no function of that name.
+        if method == "queue_free" && err.contains("has no function") {
+            world.resource_mut::<super::ScriptQueue>().free.push(e);
+            return;
+        }
         diag(world, "tween", 0, 0, format!("{e}.{method}: {err}"));
     }
 }
