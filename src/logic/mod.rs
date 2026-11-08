@@ -220,6 +220,10 @@ struct GraphSlot {
     runner: Option<Runner>,
 }
 
+/// Script files referenced by `Script` nodes of loaded graphs.
+#[derive(Resource, Default)]
+pub(crate) struct ScriptRefs(pub Vec<String>);
+
 #[derive(Resource, Default)]
 struct LogicGraphs {
     slots: HashMap<Arc<str>, GraphSlot>,
@@ -290,6 +294,7 @@ impl Plugin for LogicPlugin {
             .register_type::<Logic>()
             .add_message::<LogicMessage>()
             .init_resource::<LogicGraphs>()
+            .init_resource::<ScriptRefs>()
             .init_resource::<LogicQueue>()
             .init_resource::<LogicOutbox>()
             .init_resource::<LogicDelays>()
@@ -337,6 +342,7 @@ fn sync_graphs(
     assets: Res<Assets<LogicGraphAsset>>,
     mut graphs: ResMut<LogicGraphs>,
     mut diags: ResMut<LogicDiagnostics>,
+    mut script_refs: ResMut<ScriptRefs>,
     mut states: Query<&mut LogicState>,
 ) {
     let mut touched: Vec<AssetId<LogicGraphAsset>> = Vec::new();
@@ -364,6 +370,19 @@ fn sync_graphs(
     }
     if changed {
         graphs.generation = graphs.generation.wrapping_add(1).max(1);
+        // Scripts the graphs call: loaded (and watched) before their first call, so their
+        // errors show at once.
+        let mut refs: Vec<String> = vec![];
+        for c in graphs.slots.values().filter_map(|s| s.compiled.as_ref()) {
+            for n in &c.nodes {
+                if let logic_core::NodeKind::Script { file, .. } = &n.kind
+                    && !refs.contains(file)
+                {
+                    refs.push(file.clone());
+                }
+            }
+        }
+        script_refs.0 = refs;
     }
     let generation = graphs.generation;
     for mut st in &mut states {

@@ -287,7 +287,10 @@ pub(super) fn poll_scripts(world: &mut World) {
         return;
     }
     let root = world.get_resource::<AssetsDir>().map(|a| a.0.clone()).unwrap_or_else(|| PathBuf::from("assets"));
-    let mut stale: Vec<String> = Vec::new();
+    let mut stale: Vec<String> = world
+        .get_resource::<super::ScriptRefs>()
+        .map(|r| r.0.iter().map(|f| key_of(f)).filter(|k| !world.non_send::<ScriptHost>().modules.contains_key(k)).collect())
+        .unwrap_or_default();
     {
         let host = world.non_send::<ScriptHost>();
         if let Ok(dir) = std::fs::read_dir(root.join("scripts")) {
@@ -299,7 +302,9 @@ pub(super) fn poll_scripts(world: &mut World) {
                 let Some(name) = p.file_name().and_then(|n| n.to_str()) else { continue };
                 let key = format!("scripts/{name}");
                 let mtime = f.metadata().and_then(|m| m.modified()).ok();
-                if host.modules.get(&key).is_none_or(|e| e.mtime != mtime) {
+                // Only scripts graphs use are watched: node scripts (src/scripting) share the folder
+                // and need host functions this engine does not have.
+                if host.modules.get(&key).is_some_and(|e| e.mtime != mtime) && !stale.contains(&key) {
                     stale.push(key);
                 }
             }

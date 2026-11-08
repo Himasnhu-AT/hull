@@ -169,8 +169,10 @@ script globals: a reload resets globals.
 
 Each call has a step limit (200 000 interpreter steps); runaway loops stop with
 `E0307 execution budget exceeded`. Scripts are polled every 0.5 s: a changed file reloads, a
-file with errors keeps the previous version running and reports line:col. All of
-`assets/scripts/*.ruspy` is loaded at startup, so syntax errors show before the script runs.
+file with errors keeps the previous version running and reports line:col. Scripts that loaded
+graphs reference are loaded as soon as the graph loads, so their errors show before the first
+call; other files in the folder are left alone (it also holds node scripts, `docs/SCRIPTING.md`,
+which use other host functions).
 A script that runs a command that runs another script gets "script engine is busy" (no
 re-entrancy).
 
