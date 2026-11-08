@@ -1,0 +1,5 @@
+// Design tokens: any field you leave out keeps its default (see src/ui2/tokens.rs). Hot reloaded.
+(
+    colors: (accent: (1.0, 0.78, 0.16, 1.0)),
+    motion: (focus_scale: 1.045, stagger: 0.045),
+)

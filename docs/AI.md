@@ -165,6 +165,45 @@ Text`, with typed getters and `to_json`.
   and sense. Entries are forgotten `memory_secs` after they were last sensed. Helpers: `sees(e)`,
   `last_known(e)`, `visible()`, `most_recent()`.
 
+## Acoustic perception (`ai::acoustic`)
+A dB model next to the radius-based `Noise`. Anything emits a `NoiseEvent { pos, loudness_db, kind,
+source }` (level at 1 m: footstep 45, shutter 55, talking 60, engine 65 idle to 90 flat out, horn
+105). `NoiseKind` is `Engine | Horn | Footstep | Shutter | Voice | Impact | Other(u16)`.
+
+- **Propagation** (`received_db`): `loudness - 20·log10(max(d, 1)) - absorption·d/100 + wind_bias`.
+  `AcousticEnv::wind` (m/s) biases by `wind_gain_db_per_mps` (0.7) times the wind component from
+  source toward listener: downwind carries further, upwind less. `ambient_db` is the background
+  level (rain and wind mask quiet sounds). `max_audible_distance` is the cheap prefilter, so only
+  noises that could be heard cost a ray.
+- **Occlusion**: one avian ray from source to ear; a hit costs `occlusion_db` (14). Extra losses
+  (foliage, a game's own zones) go in `AcousticEnv::losses`, closures `Fn(from, to) -> dB`.
+- **Listeners**: `Hearing { threshold_db (25), gain_db, ear_height }`. A listener that gets a
+  noise above `max(threshold - gain, ambient)` receives `Heard { listener, source, kind, pos,
+  level_db, margin_db, direction, uncertainty_m }`. If it also has a `Perception`, the same
+  stimulus is written as a `Sense::Hearing` percept (so BT/utility code that reads
+  `Perception::most_recent()` works unchanged).
+- `NoiseEmitter { kind, loudness_db, interval }` on an entity emits repeatedly (engine: set
+  `loudness_db = engine_noise_db(rpm01, idle, full)` from game state).
+- **Scent**: `ScentSource { strength, kind }` and `Smell { sensitivity }`. `scent_intensity`
+  makes a small round cloud in still air (a fifth of `strength`) that a steady wind (3+ m/s)
+  stretches downwind to the full `strength` and pulls off upwind noses. Checked every
+  `scent_interval` (0.5 s), brute force over sources × smellers. `Smelled { listener, source,
+  kind, intensity, pos }`; also a `Sense::Smell` percept.
+- **`Startle`** (needs `Hearing`): `Calm → Alert → Fleeing`. A noise with margin ≥
+  `alert_margin_db` (4) alerts; ≥ `flee_margin_db` (25) bolts at once; a second stimulus while
+  alert bolts; `alert_secs` / `flee_secs` calm it down. With a `NavAgent` it sets a path target
+  `flee_distance` away from the threat and raises `max_speed` to `flee_speed` (needs a navmesh);
+  without one it runs straight away. Read `Startle::state`/`threat` from BTs, or listen for
+  `StartleChanged { entity, from, to, threat }`. Smell above `smell_alert` alerts, never bolts.
+- Systems run in `AiSet::Sense` (after `update_perception`) and `AiSet::Think` (startle).
+- The weather module (`feature weather`) feeds wind and ambient level into `AcousticEnv` unless
+  `WeatherConfig::drive_acoustics` is off.
+- Control: `ai.acoustic.noise {pos, loudness_db, kind}` (queues an event; reports the best-case
+  audible distance), `ai.acoustic.state` (env + every Hearing/Startle entity).
+- Tests (`cargo test --lib ai::acoustic`): falloff is 6 dB per doubling; wind shifts range both
+  ways; a wall costs 14 dB; thresholds and distance decide who hears; alert → flee → calm;
+  scent only reaches downwind noses.
+
 ## Debug
 `AiDebug { navmesh, paths, agents, perception, agent_type }` turns on gizmos:
 - poly outlines with a diagonal, and off-mesh links as orange arcs;
@@ -189,6 +228,8 @@ them. Example: `cargo run --example ai_crowd -- --play --ai-debug [--agents 300]
 | `ai.bt` | `entity?` (first BT agent if omitted) | `bt` (tree JSON + active path), `utility`, `blackboard` |
 | `ai.perception` | `entity` | known percepts |
 | `ai.noise` | `pos`, `radius?` | emits a `Noise` |
+| `ai.acoustic.noise` | `pos`, `loudness_db?`, `kind?` | queues a `NoiseEvent` (dB model) |
+| `ai.acoustic.state` | — | `AcousticEnv` and every Hearing / Startle entity |
 | `ai.stats` | — | `AiStats` (per-frame µs and counts) |
 
 `scripts/ai-crowd.json` drives the example: it takes screenshots with debug off and on, makes a
@@ -258,8 +299,11 @@ Going from 0 to 100 agents adds about 1.3 ms. That is the rendering and render-b
   obstacle carving without rebaking (moving sources rebake their tiles instead).
 - The behaviour tree has no blackboard observers or event-driven aborts beyond `reactive_*` and
   `guard`, and actions get no `on_halt` callback. Keep action state in the blackboard.
+- Acoustic: occlusion is a single ray with one flat loss (no material, no diffraction around
+  corners), sound doesn't bounce, scent is a lobe not a simulated plume, and `Startle` flees
+  in a straight line (with a `NavAgent`: to the closest reachable point).
 - Perception: no peripheral or vision-strength falloff, no team attitudes beyond "same team is
-  ignored", and hearing isn't occluded.
+  ignored". The radius-based `Noise` isn't occluded; `NoiseEvent` is (one ray, one hit).
 - New geometry below the mesh's lowest point (`origin_y`) rebakes every tile of that agent type,
   not just the dirty ones: on rolling streamed terrain that can mean repeated full bakes.
 - A bake job snapshots all sources overlapping the dirty tiles on the main thread. That is cheap

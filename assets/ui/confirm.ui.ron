@@ -1,0 +1,11 @@
+Screen(
+    root: Modal(
+        id: "confirm",
+        title: "Reset options?",
+        body: "Every option goes back to its default. This cannot be undone.",
+        buttons: [
+            ModalButton(id: "cancel", label: "Cancel", action: Back),
+            ModalButton(id: "reset", label: "Reset", primary: true, action: Back),
+        ],
+    ),
+)

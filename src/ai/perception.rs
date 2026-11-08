@@ -64,6 +64,8 @@ pub struct Noise {
 pub enum Sense {
     Sight,
     Hearing,
+    /// Scent carried on the wind (see `acoustic`).
+    Smell,
 }
 
 /// One remembered stimulus.
@@ -103,7 +105,7 @@ impl Perception {
     pub fn most_recent(&self) -> Option<&Percept> {
         self.known.iter().max_by(|a, b| (a.visible, a.last_time).partial_cmp(&(b.visible, b.last_time)).unwrap_or(std::cmp::Ordering::Equal))
     }
-    fn entry(&mut self, e: Option<Entity>, sense: Sense) -> &mut Percept {
+    pub(crate) fn entry(&mut self, e: Option<Entity>, sense: Sense) -> &mut Percept {
         let i = match self.known.iter().position(|p| p.entity == e && (e.is_some() || p.sense == sense)) {
             Some(i) => i,
             None => {

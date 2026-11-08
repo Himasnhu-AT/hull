@@ -294,20 +294,36 @@ impl Plugin for EnginePlugin {
             ));
         #[cfg(feature = "look")]
         app.add_plugins(crate::look::LookPlugin);
+        #[cfg(feature = "daytime")]
+        app.add_plugins(crate::daytime::DaytimePlugin);
+        #[cfg(feature = "camera_rigs")]
+        app.add_plugins(crate::camera_rigs::CameraRigsPlugin);
+        #[cfg(feature = "foliage")]
+        app.add_plugins(crate::foliage::FoliagePlugin);
         #[cfg(feature = "anim")]
         app.add_plugins(crate::anim::AnimPlugin);
         #[cfg(feature = "vfx")]
         app.add_plugins(crate::vfx::VfxPlugin);
+        #[cfg(feature = "spray")]
+        app.add_plugins(crate::spray::SprayPlugin);
         #[cfg(feature = "pcg")]
         app.add_plugins(crate::pcg::PcgPlugin);
         #[cfg(feature = "logic")]
         app.add_plugins(crate::logic::LogicPlugin);
+        #[cfg(feature = "ui2")]
+        app.add_plugins(crate::ui2::Ui2Plugin);
         #[cfg(feature = "scripting")]
         app.add_plugins(crate::scripting::ScriptingPlugin);
         #[cfg(feature = "ai")]
         app.add_plugins(crate::ai::AiPlugin);
+        #[cfg(feature = "vehicle")]
+        app.add_plugins(crate::vehicle::VehiclePlugin);
         #[cfg(feature = "sound")]
         app.add_plugins(crate::sound::SoundPlugin);
+        #[cfg(feature = "photo")]
+        app.add_plugins(crate::photo::PhotoPlugin);
+        #[cfg(feature = "weather")]
+        app.add_plugins(crate::weather::WeatherPlugin);
         #[cfg(feature = "world")]
         app.add_plugins(crate::world::WorldPlugin);
         #[cfg(feature = "spline")]

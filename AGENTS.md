@@ -42,7 +42,9 @@ from the shell.
 | `tools/cook/` | texture cook (KTX2 BC7/BC5 + `color.avg`), standalone crate |
 | `src/vfx/` | particle effects, presets, budgets (`vfx.*`): **docs/VFX.md** |
 | `src/props/` | breakable props (topple, debris), swaying plants: **docs/PROPS.md** |
-| `src/ai/` | navmesh baking, paths, crowds, behaviour trees, utility AI, perception (`ai.*`): **docs/AI.md** |
+| `src/ai/` | navmesh baking, paths, crowds, behaviour trees, utility AI, perception, acoustic perception (`ai.*`): **docs/AI.md** |
+| `src/photo/` | physical camera + photos, feature `photo`: lens/aperture/shutter/ISO, autofocus, `PhotoTaken` with subject metadata, PNG sink (`photo.*`): **docs/PHOTO.md** |
+| `src/weather/` | weather state machine, feature `weather`: seeded schedule, look + rain/snow, wetness/traction, wind (`weather.*`): **docs/WEATHER.md** |
 | `src/sound/`, `src/audio.rs` | mixer buses, snapshots, ducking, cues, 3D, occlusion, music, captions (`sound.*`): **docs/SOUND.md** |
 | `src/world/` | terrain, scatter, cell streaming, HLOD, floating origin, worlds as data (`world.*`): **docs/WORLD.md** |
 | `src/actions/`, `src/l10n/` | action mapping, gamepad, rebinding, accessibility; localization (`actions.*`, `l10n.*`): **docs/ACTIONS.md**, **docs/L10N.md** |
@@ -51,6 +53,9 @@ from the shell.
 | `src/spline/` | splines: points with width/bank/tags, Catmull-Rom, arc length, fast `nearest`, road ribbon, gizmos (`spline.*`): **docs/SPLINES.md** |
 | `src/logic/`, `crates/logic-core/` | game logic as node graphs (`assets/logic/*.logic.ron`) + ruspy scripts (`assets/scripts/*.ruspy`) (`logic.*`): **docs/LOGIC.md** |
 | `src/scripting/` | Godot-style node scripts: `Script` per entity, `_ready/_process/_input`, signals, groups, node paths, script UI (`script.*`); example `examples/script_demo.rs`: **docs/SCRIPTING.md** |
+| `src/vehicle/` | wheeled vehicles on avian, feature `vehicle`: ray / sphere suspension, tyre trait, surface map, drivetrain with 2H/4H/4L and diffs, winch / tow ropes, telemetry (`vehicle.*`): **docs/VEHICLE.md** |
+| `src/daytime/`, `src/camera_rigs/`, `src/spray/`, `src/foliage/` | day clock + solar sun/moon/stars/cloud dome + cloud shadows + night lights driving the `Look` (`day.*`); camera rigs: spring-arm chase, mounted, orbit, free + speed feel (`camera.rig`); surface spray on vfx (`spray.*`); impostor foliage LOD (`foliage.*`); example `examples/environment_demo.rs`: **docs/ENVIRONMENT.md** |
+| `src/ui2/` | React-style UI library, feature `ui2`: tokens, components (Tile, TabBar, Header, KeyHints, Modal, Grid), `assets/ui/*.ui.ron` screens with hot reload, spatial focus, transitions, `UiData` binding (`ui2.*`): **docs/UI2.md** |
 | `src/net/` | multiplayer, feature `net` (off by default; test with `--features net`) (`net.*`): **docs/NET.md** |
 | `assets/library/`, `scripts/assets.py` | licence-tracked CC0 / Fab models, textures, HDRIs, fetched on demand (`assets.py fetch\|import\|list\|check`): **docs/ASSETS.md** |
 | `docs/PORTING.md` | conventions, devtools, metrics, ship builds, render budget measurements |
