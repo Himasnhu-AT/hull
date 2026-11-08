@@ -87,6 +87,8 @@ pub mod scripting;
 pub mod props;
 #[cfg(feature = "sound")]
 pub mod sound;
+#[cfg(feature = "platform")]
+pub mod platform;
 
 pub use app::{EngineOptions, GameInfo, app, app_with};
 

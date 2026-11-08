@@ -584,6 +584,20 @@ signature and one line of doc (`src/scripting/catalogue.rs`; a test keeps it com
 the docs mention each name). `is_class([node,] class)` and `super_call(name, args...)`: see
 "Export hints, `extends`, `class_name`".
 
+### OS integration
+
+Needs feature `platform` (docs/PLATFORM.md). Headless and offscreen runs use a null OS.
+
+| Function | Does |
+|---|---|
+| `user_dir(name)`, `game_dir(name)` | OS folder (`pictures`, `documents`, `saved_games`, `home`, `desktop`, `videos`) / the game's subfolder in it (created) |
+| `open_path(path)`, `open_url(url)` | show in the file browser / open with the default app |
+| `clipboard_get()`, `clipboard_set(text)`, `notify(title [, body])` | clipboard text, OS notification |
+| `get_glyph(action)`, `get_glyph_icon(action)`, `hint_bar([[action, label], ...])` | prompt text / icon id for the device in use; `[Space] Jump   [E] Use` |
+| `save_screenshot(name [, [k, v, ...]])` | PNG in Pictures/<game> with the key/values embedded |
+| `set_window_mode(name)`, `get_window_mode()`, `set_cursor_mode(name)` | `windowed` / `borderless` / `fullscreen`; `auto` / `free` / `hidden` / `locked` / `confined` |
+| `text_get([n])`, `text_set([n,] s)`, `text_focus([n])` | a `TextInput` node |
+
 ### Math
 
 `vec3(x, y, z)`, `vadd`, `vsub`, `vscale(v, k)`, `vlen`, `vnorm`, `vdot`, `vcross`,

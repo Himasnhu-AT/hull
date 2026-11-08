@@ -318,6 +318,8 @@ impl Plugin for EnginePlugin {
         app.add_plugins(crate::actions::ActionsPlugin);
         #[cfg(feature = "l10n")]
         app.add_plugins(crate::l10n::L10nPlugin);
+        #[cfg(feature = "platform")]
+        app.add_plugins(crate::platform::PlatformPlugin::default());
         if !o.headless {
             // Avoids a pipelined-rendering deadlock on exit (see `exit.rs`).
             app.add_plugins(crate::exit::CleanExitPlugin);

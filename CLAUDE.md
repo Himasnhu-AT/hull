@@ -43,6 +43,7 @@ The rules that matter most, so you don't skip them:
 | docs/LOGIC.md | Logic graphs (events, flow, commands) and ruspy scripts |
 | docs/SCRIPTING.md | Godot-style node scripts in ruspy: lifecycle, signals, groups, node paths, UI, host functions |
 | docs/NET.md | Multiplayer (feature `net`) |
+| docs/PLATFORM.md | OS integration: user folders, PNG metadata, clipboard, dialogs, window settings, IME, prompts, single instance |
 
 ## Shared build cache
 - `engine/target` is the one Cargo target dir for the engine and every game (shroud, pacenote, courier, worktrees): each repo's `.cargo/config.toml` points here, so Bevy compiles once. Don't set another `CARGO_TARGET_DIR`.

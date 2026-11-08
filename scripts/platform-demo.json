@@ -1,0 +1,12 @@
+[
+  {"sleep": 1.5},
+  {"cmd": "platform.info", "expect": {"result.implementation": "null", "result.game_folder_name": "Platform Demo"}},
+  {"cmd": "platform.clipboard", "params": {"text": "hello from the demo"}, "expect": {"result.text": "hello from the demo"}},
+  {"cmd": "platform.glyph", "params": {"action": "pause", "device": "pad", "family": "ps"}, "expect": {"result.device": "pad"}},
+  {"cmd": "platform.window", "params": {"cursor": "Hidden"}, "expect": {"result.cursor": "Hidden"}},
+  {"shot": "info"},
+  {"cmd": "platform.screenshot", "params": {"name": "demo", "meta": {"seed": "42", "place": "ridge"}}},
+  {"sleep": 1.0},
+  {"cmd": "platform.info"},
+  {"shot": "after-save"}
+]
