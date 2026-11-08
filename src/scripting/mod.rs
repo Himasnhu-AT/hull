@@ -20,6 +20,12 @@
 mod api;
 mod api_engine;
 mod api_actions;
+#[cfg(feature = "camera_rigs")]
+mod api_camera_rig;
+#[cfg(feature = "daytime")]
+mod api_daytime;
+#[cfg(feature = "photo")]
+mod api_photo;
 #[cfg(feature = "platform")]
 mod api_platform;
 mod api_ui2;
@@ -33,6 +39,8 @@ mod api_pause;
 mod api_physics;
 #[cfg(feature = "vehicle")]
 mod api_vehicle;
+#[cfg(feature = "weather")]
+mod api_weather;
 #[cfg(feature = "physics")]
 pub use api_physics::CharacterBody;
 mod tween;
@@ -69,6 +77,8 @@ mod tests_dogfood;
 mod tests_physics;
 #[cfg(all(test, feature = "vehicle"))]
 mod tests_vehicle;
+#[cfg(all(test, feature = "photo", feature = "weather", feature = "daytime", feature = "camera_rigs"))]
+mod tests_env;
 #[cfg(test)]
 mod tests_engine;
 #[cfg(test)]
@@ -548,6 +558,8 @@ impl Plugin for ScriptingPlugin {
         app.add_systems(bevy::app::RunFixedMainLoop, api_actions::latch_edges.in_set(bevy::app::RunFixedMainLoopSystems::BeforeFixedMainLoop));
         #[cfg(feature = "ui2")]
         api_ui2::plugin(app);
+        #[cfg(feature = "photo")]
+        api_photo::plugin(app);
         tree::plugin(app);
         ui::plugin(app);
         ui_widgets::plugin(app);

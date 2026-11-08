@@ -36,7 +36,7 @@ use bevy::prelude::*;
 
 pub use rope::{Rope, RopeEnd};
 pub use spec::{AxleSpec, BrakeSpec, Diff, EngineSpec, GearboxSpec, Probe, SpringSpec, SteerSpec, TransferMode, TyreSpec, VehicleSpec, WheelSpec};
-pub use surface::{Surface, SurfaceId, SurfaceMap, SurfaceMapRes, SurfaceQuery, SurfaceTag, Surfaces, TagSurfaceMap, Wetness};
+pub use surface::{FnSurfaceMap, Surface, SurfaceId, SurfaceMap, SurfaceMapRes, SurfaceProbe, SurfaceQuery, SurfaceTag, Surfaces, TagSurfaceMap, Wetness};
 pub use tyre::{SlipCircleTyre, TyreInput, TyreModel};
 
 const GRAVITY: f32 = 9.81;
@@ -298,7 +298,7 @@ fn vehicle_step(
             if !c.grounded {
                 continue;
             }
-            let id = map.0.surface(&SurfaceQuery { point: c.point, normal: c.normal, collider: c.collider.unwrap(), tag: c.collider.and_then(|e| tags.get(e).ok()).map(|t| t.0) });
+            let id = map.0.surface(&SurfaceProbe { point: c.point, normal: c.normal, collider: c.collider, tag: c.collider.and_then(|e| tags.get(e).ok()).map(|t| t.0) });
             let s = surfaces.get(id);
             surf_id[i] = id;
             // Lower pressure: bigger patch (grip up on soft ground, down a touch on hard) and

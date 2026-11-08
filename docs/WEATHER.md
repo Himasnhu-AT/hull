@@ -59,6 +59,16 @@ Wetness integrates over local frames, so it can differ by small amounts between 
   some rain thickens fog (`visibility` is multiplied by `fog_min_visibility_frac ^ thickness`, 3% at full thickness: a fog-preset day with 2500 m base visibility sees ~125 m), tints it grey,
   boosts volumetric density. `drive_exposure` (off by default) also lowers EV100 under cloud: leave
   it off with a `PhotoCamera` or auto exposure.
+- **With `daytime`** (feature on, `DayClock` present, `DayConfig::drive_look`, `WeatherConfig::drive_daytime`):
+  weather writes `params.cloud` (rounded to 0.01) into `DayWeather.overcast`, so the cloud dome,
+  cloud shadows and the day's own sun / fog dimming use the same value. Weather then stops dimming
+  sun, disk, shadow softness and ambient itself (`cloud_dims_look` is bypassed), so the sun is dimmed
+  once; sky greying, saturation, fog thickness from `fog` / rain and wind stay weather's. Order:
+  `DaySet::Look` runs before `WeatherSet::Apply`, so weather adopts the day's fresh look as its base.
+  Without a clock weather dims the sun alone. Test: `weather::tests::daytime_gets_the_cloud_and_the_sun_is_dimmed_once`.
+- **Surfaces**: `Wetness` is the shared `crate::surface::Wetness`; `vehicle` reads the same resource
+  for its `wet_grip` / `wet_rolling`, so rain slicks the road with no glue. Per-region wetness
+  (`SurfaceQuery::wetness_at`) is weather-only; vehicles see the open-ground value.
 - **Particles**: `rain` / `snow` presets from `vfx` (camera-local). Effect entities are spawned on
   the first precipitation, then `emitting` and `rate_scale` follow `precip`. Needs the vfx plugin.
 - **Wetness**: `Wetness(f32)` for open ground, rising at `wet_rate · precip` (0.02/s) and falling at

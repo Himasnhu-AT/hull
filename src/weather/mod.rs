@@ -55,11 +55,17 @@ pub struct WeatherConfig {
     pub wet_traction: f32,
     /// Fog visibility (m) is multiplied by `frac^thickness`: this fraction at full thickness.
     pub fog_min_visibility_frac: f32,
+    /// Cloud lowers sun illuminance / disk, softens shadows and dims ambient in the `Look`.
+    /// Cleared automatically while a live `daytime` clock drives the look (it does this itself
+    /// from `DayWeather`, which weather feeds): the sun is dimmed once, not twice.
+    pub cloud_dims_look: bool,
+    /// With feature `daytime` and a live `DayClock`: write `params.cloud` into `DayWeather.overcast`.
+    pub drive_daytime: bool,
 }
 
 impl Default for WeatherConfig {
     fn default() -> Self {
-        WeatherConfig { drive_look: true, drive_exposure: false, drive_acoustics: true, particles: true, wet_rate: 0.02, dry_rate: 0.004, wet_traction: 0.55, fog_min_visibility_frac: 0.03 }
+        WeatherConfig { drive_look: true, drive_exposure: false, drive_acoustics: true, particles: true, wet_rate: 0.02, dry_rate: 0.004, wet_traction: 0.55, fog_min_visibility_frac: 0.03, cloud_dims_look: true, drive_daytime: true }
     }
 }
 
@@ -217,9 +223,8 @@ impl Wind {
     }
 }
 
-/// How wet the open ground is, 0 (dry) .. 1 (soaked).
-#[derive(Resource, Clone, Copy, Debug, Default)]
-pub struct Wetness(pub f32);
+/// How wet the open ground is, 0 (dry) .. 1 (soaked). Shared with `vehicle` (`crate::surface`).
+pub use crate::surface::Wetness;
 
 /// A patch of ground with its own wetting rules: under a canopy, a stream bank, a muddy hollow.
 /// The smallest region containing a point decides its wetness.
@@ -295,10 +300,12 @@ pub fn look_for(base: &Look, p: &WeatherParams, cfg: &WeatherConfig) -> Look {
     let mut l = base.clone();
     let c = p.cloud.clamp(0.0, 1.0);
     let grey = |v: Rgb, g: f32, t: f32| Rgb::from_linear(v.linear().lerp(Vec3::splat(g), t));
-    l.sun.illuminance *= 1.0 - 0.8 * c;
-    l.sun.disk_intensity *= 1.0 - c;
-    l.sun.soft_shadow_size *= 1.0 + 3.0 * c;
-    l.ambient.brightness *= 1.0 - 0.25 * c;
+    if cfg.cloud_dims_look {
+        l.sun.illuminance *= 1.0 - 0.8 * c;
+        l.sun.disk_intensity *= 1.0 - c;
+        l.sun.soft_shadow_size *= 1.0 + 3.0 * c;
+        l.ambient.brightness *= 1.0 - 0.25 * c;
+    }
     if l.sky.mode == SkyMode::Gradient {
         let g = |v: Rgb| grey(v, (v.linear().element_sum() / 3.0 * 0.85).max(0.2), c * 0.8);
         l.sky.zenith = g(l.sky.zenith);
@@ -362,6 +369,10 @@ impl Plugin for WeatherPlugin {
         #[cfg(feature = "photo")]
         app.configure_sets(Update, WeatherSet::Apply.before(crate::photo::PhotoSet::Lens));
         app.configure_sets(Update, WeatherSet::Apply.before(crate::look::apply::apply_look));
+        // With daytime: cloud goes to `DayWeather`, and the day writes the look before weather adopts it.
+        #[cfg(feature = "daytime")]
+        app.add_systems(Update, link_daytime.in_set(WeatherSet::Advance).after(wetness))
+            .configure_sets(Update, crate::daytime::DaySet::Look.before(WeatherSet::Apply));
         #[cfg(feature = "devtools")]
         control::register(app);
     }
@@ -419,19 +430,55 @@ fn others_eq(a: &Look, b: &Look, cfg: &WeatherConfig) -> bool {
     a.lens == b.lens && a.bloom == b.bloom && a.tonemapping == b.tonemapping && a.name == b.name && (cfg.drive_exposure || a.exposure == b.exposure)
 }
 
-fn drive_look(cfg: Res<WeatherConfig>, w: Res<Weather>, mut st: ResMut<WeatherLook>, mut look: ResMut<Look>) {
+/// True while `daytime` owns the look's sun (so weather leaves cloud dimming to it).
+#[cfg(feature = "daytime")]
+fn day_owns_sun(cfg: &WeatherConfig, clock: Option<&crate::daytime::DayClock>, day: Option<&crate::daytime::DayConfig>) -> bool {
+    cfg.drive_daytime && clock.is_some() && day.is_some_and(|d| d.drive_look)
+}
+
+/// Feeds the cloud value to `daytime` so both agree (quantised: a blend does not rewrite the
+/// look every frame).
+#[cfg(feature = "daytime")]
+fn link_daytime(cfg: Res<WeatherConfig>, w: Res<Weather>, clock: Option<Res<crate::daytime::DayClock>>, day: Option<Res<crate::daytime::DayConfig>>, dw: Option<ResMut<crate::daytime::DayWeather>>) {
+    let Some(mut dw) = dw else { return };
+    if !day_owns_sun(&cfg, clock.as_deref(), day.as_deref()) {
+        return;
+    }
+    let c = (w.params.cloud.clamp(0.0, 1.0) * 100.0).round() / 100.0;
+    if (dw.overcast - c).abs() > 1e-4 {
+        dw.overcast = c;
+    }
+}
+
+fn drive_look(
+    cfg: Res<WeatherConfig>,
+    w: Res<Weather>,
+    mut st: ResMut<WeatherLook>,
+    mut look: ResMut<Look>,
+    #[cfg(feature = "daytime")] clock: Option<Res<crate::daytime::DayClock>>,
+    #[cfg(feature = "daytime")] day: Option<Res<crate::daytime::DayConfig>>,
+) {
     if !cfg.drive_look {
         return;
     }
+    #[cfg(feature = "daytime")]
+    let cfg = if day_owns_sun(&cfg, clock.as_deref(), day.as_deref()) && cfg.cloud_dims_look {
+        let mut c = cfg.clone();
+        c.cloud_dims_look = false;
+        std::borrow::Cow::Owned(c)
+    } else {
+        std::borrow::Cow::Borrowed(&*cfg)
+    };
+    let cfg: &WeatherConfig = &cfg;
     // Someone else (a timeline, a transition) rewrote a group weather owns: build on it. Other
     // writers touching other groups (the photo lens every frame) must not rebase, or weather
     // would be applied on top of itself.
-    let foreign = st.base.is_none() || st.written.as_ref().is_none_or(|wr| !owned_eq(wr, &look, &cfg));
+    let foreign = st.base.is_none() || st.written.as_ref().is_none_or(|wr| !owned_eq(wr, &look, cfg));
     if foreign {
         st.base = Some(look.clone());
     }
     let moved = st.applied.as_ref().is_none_or(|a| a.max_delta(&w.params) > 1e-3);
-    if !foreign && !moved && st.written.as_ref().is_some_and(|wr| others_eq(wr, &look, &cfg)) {
+    if !foreign && !moved && st.written.as_ref().is_some_and(|wr| others_eq(wr, &look, cfg)) {
         return;
     }
     let Some(base) = st.base.as_mut() else { return };
@@ -445,7 +492,7 @@ fn drive_look(cfg: Res<WeatherConfig>, w: Res<Weather>, mut st: ResMut<WeatherLo
             base.exposure = look.exposure.clone();
         }
     }
-    let next = look_for(base, &w.params, &cfg);
+    let next = look_for(base, &w.params, cfg);
     if next != *look {
         *look = next.clone();
     }
@@ -659,5 +706,50 @@ mod tests {
         app.world_mut().spawn((WeatherRegion { radius: 4.0, ..default() }, RegionWetness(0.9), GlobalTransform::default()));
         let out = app.world_mut().run_system_once(|q: SurfaceQuery| (q.wetness_at(Vec3::new(1.0, 0.0, 0.0)), q.wetness_at(Vec3::new(10.0, 0.0, 0.0)), q.wetness_at(Vec3::new(99.0, 0.0, 0.0)))).unwrap();
         assert_eq!(out, (0.9, 0.2, 0.5));
+    }
+
+    /// Both plugins on: one cloud value reaches `DayWeather`, and the sun is dimmed once.
+    #[cfg(feature = "daytime")]
+    #[test]
+    fn daytime_gets_the_cloud_and_the_sun_is_dimmed_once() {
+        use crate::daytime::{DayClock, DayConfig, DayWeather, DaytimePlugin, astro, keys};
+        let mut a = App::new();
+        a.add_plugins(MinimalPlugins)
+            .insert_resource(bevy::time::TimeUpdateStrategy::ManualDuration(Duration::from_millis(100)))
+            .insert_resource(WeatherConfig { particles: false, ..default() })
+            .insert_resource(Look::clear_day())
+            .insert_resource(DayClock { hours: 12.0, running: false, ..default() })
+            .add_plugins((WeatherPlugin, DaytimePlugin));
+        for _ in 0..3 {
+            a.update();
+        }
+        let lib = a.world().resource::<WeatherLibrary>().clone();
+        a.world_mut().resource_mut::<Weather>().force(&lib, "overcast", 0.0);
+        for _ in 0..6 {
+            a.update();
+        }
+        let cloud = a.world().resource::<Weather>().params.cloud;
+        assert!(cloud > 0.5, "overcast preset has cloud: {cloud}");
+        let over = a.world().resource::<DayWeather>().overcast;
+        assert!((over - cloud).abs() < 0.006, "same cloud value: {over} vs {cloud}");
+        // The expected sun: the day's look at that overcast, nothing more.
+        let (clock, cfg) = (*a.world().resource::<DayClock>(), a.world().resource::<DayConfig>().clone());
+        let (az, el) = clock.sun();
+        let want = keys::day_look(&cfg, &DayWeather { overcast: over, ..default() }, az, el, &astro::moon(clock.latitude, clock.day, clock.hours, clock.solar_noon, clock.new_moon_day), String::new());
+        let got = a.world().resource::<Look>().sun.illuminance;
+        assert!((got - want.sun.illuminance).abs() < want.sun.illuminance * 1e-3, "dimmed once: {got} vs {}", want.sun.illuminance);
+        // Stays put over many frames (no compounding on the day's 1 Hz rewrites).
+        for _ in 0..60 {
+            a.update();
+        }
+        let later = a.world().resource::<Look>().sun.illuminance;
+        assert!((later - got).abs() < got * 1e-3, "{later} vs {got}");
+        // Without a clock, weather dims the sun itself again.
+        a.world_mut().remove_resource::<DayClock>();
+        a.world_mut().resource_mut::<Look>().sun.illuminance = 100_000.0;
+        for _ in 0..3 {
+            a.update();
+        }
+        assert!(a.world().resource::<Look>().sun.illuminance < 60_000.0);
     }
 }
