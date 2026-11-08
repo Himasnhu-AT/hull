@@ -18,9 +18,12 @@
 //! - `queue_free` despawns at the end of the frame, after `_exit_tree`.
 
 mod api;
+mod api_engine;
 mod api_input;
 mod api_node;
+mod api_obj;
 mod api_pause;
+mod tween;
 #[cfg(feature = "devtools")]
 mod devtools;
 pub mod tree;
@@ -36,9 +39,15 @@ mod tests_ui;
 #[cfg(test)]
 mod tests_api;
 #[cfg(test)]
+mod tests_lang;
+#[cfg(test)]
 mod bench;
 #[cfg(test)]
 mod tests_pause;
+#[cfg(test)]
+mod tests_engine;
+#[cfg(test)]
+mod tests_tween;
 
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
@@ -440,10 +449,13 @@ impl Plugin for ScriptingPlugin {
             .add_systems(FixedUpdate, physics_process.run_if(scripts_active));
         #[cfg(feature = "physics")]
         app.add_systems(Update, physics_signals.after(timers).before(ui_signals).in_set(ScriptSet::Events));
+        #[cfg(feature = "ai")]
+        app.add_systems(Update, api_engine::nav_signals.after(timers).before(ui_signals).in_set(ScriptSet::Events));
         tree::plugin(app);
         ui::plugin(app);
         ui_widgets::plugin(app);
         input_events::plugin(app);
+        tween::plugin(app);
         #[cfg(feature = "devtools")]
         devtools::register(app);
     }
@@ -519,6 +531,7 @@ fn instantiate(world: &mut World, e: Entity, script: &Script, keep: Option<Vec<(
     let src = rt.sources.get(&key).and_then(|s| s.text.clone());
     let interp = rt.sources.get(&key).is_some_and(|s| s.interp);
     let mut engine = rt.base.fork();
+    engine.set_self_handle(Some(e.to_bits()));
     let seq = rt.next_seq;
     rt.next_seq += 1;
     // The top level may call host functions (on reload the old instance is still in the map).
@@ -803,6 +816,7 @@ pub(crate) fn rv_of_json_exact(j: &serde_json::Value) -> RV {
         J::Number(n) if n.is_f64() => RV::Float(n.as_f64().unwrap_or(0.0)),
         J::Number(n) => n.as_i64().map_or_else(|| RV::Float(n.as_f64().unwrap_or(0.0)), RV::Int),
         J::Array(a) => RV::array(a.iter().map(rv_of_json_exact).collect()),
+        J::Object(m) => RV::dict(m.iter().map(|(k, v)| (RV::Str(k.clone()), rv_of_json_exact(v))).collect()),
         other => rv_of(&Value::from_json(other)),
     }
 }

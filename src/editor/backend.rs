@@ -792,6 +792,23 @@ impl EditorBackend for WorldBackend<'_> {
         self.world.get_resource_mut::<EditorState>().map(|mut s| s.take_recorded()).unwrap_or_default()
     }
 
+    #[cfg(feature = "scripting")]
+    fn script_info(&mut self, id: EntityId) -> ScriptInfo {
+        self.script_info_impl(id)
+    }
+    #[cfg(feature = "scripting")]
+    fn script_create(&mut self, name: &str, template: &str) -> Result<String, String> {
+        self.script_create_impl(name, template)
+    }
+    #[cfg(feature = "scripting")]
+    fn script_node_path(&mut self, from: EntityId, to: EntityId) -> Result<String, String> {
+        self.script_node_path_impl(from, to)
+    }
+    #[cfg(feature = "scripting")]
+    fn script_add_stub(&mut self, target: EntityId, method: &str, params: &[String]) -> Result<String, String> {
+        self.script_add_stub_impl(target, method, params)
+    }
+
     fn logic_list(&mut self) -> Vec<LogicFile> {
         self.logic_list_impl()
     }

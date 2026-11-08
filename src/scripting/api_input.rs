@@ -212,6 +212,7 @@ fn live_entity(w: &World, bits: i64) -> Option<Entity> {
 fn timer_args(w: &World, a: &[RV]) -> Result<(Entity, Option<f32>), String> {
     match a {
         [] => Ok((super::api::me(w)?, None)),
+        [RV::Object(i)] if live_entity(w, *i as i64).is_some() => Ok((live_entity(w, *i as i64).unwrap_or(Entity::PLACEHOLDER), None)),
         [RV::Int(i)] if live_entity(w, *i).is_some() => Ok((live_entity(w, *i).unwrap_or(Entity::PLACEHOLDER), None)),
         // The VM may hand ints over as floats.
         [RV::Float(x)] if x.fract() == 0.0 && live_entity(w, *x as i64).is_some() => {

@@ -35,34 +35,34 @@ fn _ready() {
     result = ui_label(col, "Walk into lanterns before they go out. WASD / arrows.");
     button = ui_button(col, "Play");
 
-    connect(button, "pressed", self(), "on_button");
-    connect(game, "score_changed", self(), "on_score");
-    connect(game, "state_changed", self(), "on_state");
+    button.connect("pressed", self, "on_button");
+    game.connect("score_changed", self, "on_score");
+    game.connect("state_changed", self, "on_state");
 }
 
 fn on_button() {
-    call_deferred(game, "start");
+    game.call_deferred("start");
 }
 
 fn on_score(score) {
-    set_text(score_label, "Score " + score);
+    score_label.text = "Score " + score;
 }
 
 fn on_state(state, score, best) {
-    set_text(best_label, "Best " + best);
+    best_label.text = "Best " + best;
     if state == "playing" {
         ui_set(menu, "visible", false);
     } else {
         ui_set(menu, "visible", true);
-        set_text(title, "Time's up");
-        set_text(result, "You scored " + score + ". Best: " + best);
+        title.text = "Time's up";
+        result.text = "You scored " + score + ". Best: " + best;
     }
 }
 
 fn _process(dt) {
-    t = ceil(get_var(game, "time_left"));
+    t = ceil(game.time_left);
     if t != shown_time {
         shown_time = t;
-        set_text(time_label, "Time " + t);
+        time_label.text = "Time " + t;
     }
 }

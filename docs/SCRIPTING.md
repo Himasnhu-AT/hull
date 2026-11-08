@@ -216,9 +216,57 @@ disconnect(btn, "pressed", self(), "on_button");
 `find(name)` is the first entity with that `Name` anywhere (slow: scans the world; call it in
 `_ready`, not every frame). Names are not unique: name things you look up.
 
+## GDScript-style access
+
+Nodes are **object handles** (`Value::Object`): `get_node`, `self`, `get_parent`, signal and
+`call` arguments all give handles. A handle prints as `Node#<id>`, compares by id (`a == b`),
+and `is_null(h)` is false for it. Plain int entity ids (older scripts) are still accepted
+everywhere a node is. Handles read and write through the object hooks in
+`src/scripting/api_obj.rs`:
+
+```
+kid = get_node("Kid");
+kid.position = [1, 2, 3];          # set_position(kid, ..)
+kid.position = [kid.position[0] + 1, 2, 3];
+kid.visible = false;               # set_visible
+kid.hp -= 1;                       # a script member of kid (get_var / set_var)
+kid.get_node("Grandkid");          # get_node(kid, "Grandkid")
+kid.queue_free();                  # queue_free(kid)
+kid.emit_signal("hit", 3);         # emit_signal(kid, ..): emits from kid
+kid.add_to_group("enemies");
+kid.connect("hit", self, "on_hit");
+kid.take_damage(3);                # kid's script function (like call(kid, "take_damage", 3))
+self.hp += 1;                      # own members and functions, see below
+```
+
+**Properties** (a table, `api_obj::PROPS`): `position` (`get_position`/`set_position`),
+`global_position` (read-only), `rotation`, `scale`, `visible` (`is_visible`/`set_visible`),
+`name`, `text` (UI nodes), and read-only `parent`, `children`, `path`. Any other name is the
+node's script member; a missing one is a located error. A read-only property assigned is an error.
+
+**Methods** `node.f(args)`: the node's script function `f` if it has one, else the host function
+`f` with the node prepended (so every `[n,]` function works as a method). Neither: an error.
+A script that is running (on the call stack) can't be entered again: member access to it errors
+and methods error like `call` (use `call_deferred`).
+
+**`self`** is a bare name for the running instance's handle (`self()` still works).
+`self.x` / `self.x = v` / `self.f()` use the script's own variables and functions directly (no
+host call, so they work while the instance is running); `self.position` and the other
+properties go through the table. In a function, a local named like a member shadows it, so
+`self.hp` is the explicit form.
+
+**Dictionaries**: `d = {"a": 1, "b": [2, 3]}`, `d["a"]`, `d["a"] = 5`, `d.a` (same as `d["a"]`
+for string keys), `len(d)`, `d.keys()`, `d.values()`, `d.has(k)`, `d.erase(k)`,
+`d.get(k, default)`, `d.clear()`, `for k in d`. Keys are str, int, bool or char; insertion order
+is kept; dicts are shared by reference like arrays. They convert to and from JSON objects
+(arguments, return values, `ScriptProps`, `get`/`set`, signal arguments): a JSON object arrives
+as a dict and a dict leaves as a JSON object (key order is then sorted, since JSON objects are).
+The VM does not compile dicts or member assignment: such files run in the interpreter (the
+fallback is automatic).
+
 ## Host functions
 
-Entities are ints, vectors are `[x, y, z]`. `[n,]` is an optional leading node; without it the
+Nodes are object handles (ints are accepted), vectors are `[x, y, z]`. `[n,]` is an optional leading node; without it the
 function acts on `self`. Errors in a host call become a diagnostic with the script's
 `file:line:col`.
 
@@ -308,6 +356,70 @@ Resources: `UiCapture { keyboard, pointer }`, `ScriptMouse { mode, delta }`.
 `delta()`, `physics_delta()`, `time()` (seconds since start), `start_timer(secs, method [, repeat])`
 returns an id, `stop_timer(id)`; `timer_start([n] [, secs])`, `timer_stop([n])`,
 `timer_left([n])` drive an entity's `ScriptTimer`.
+
+### Engine subsystems
+
+Bound in `api_engine.rs`; each group needs its cargo feature, and a call into a subsystem the app
+did not install is an error ("sound is not set up in this app"). `[n,]` is the optional node.
+
+| Function | Does |
+|---|---|
+| `play_sound(cue [, [x,y,z]])` -> voice | play a cue (2D, or 3D at a position) |
+| `play_sound_at([n,] cue)` -> voice | 3D cue that follows a node |
+| `stop_sound(voice_or_cue [, fade])` | stop a voice (int) or every voice of a cue (str) |
+| `play_music(name [, fade_in])`, `stop_music([fade])`, `set_music_intensity(x)` | music tracks |
+| `set_bus_volume(bus, linear)`, `set_bus_volume_db(bus, db)`, `get_bus_volume(bus)`, `set_bus_mute(bus, b)` | mixer buses |
+| `spawn_vfx(preset, [x,y,z])`, `spawn_vfx_at([n,] preset)` | particle effect, returns the entity (null if the budget refuses) |
+| `anim_set([n,] param, v)`, `anim_get([n,] param)`, `anim_trigger([n,] param)`, `anim_play([n,] state [, fade])`, `anim_state([n])` | `Animator` parameters and states (layer 0) |
+| `toast(text [, body])` | UI toast |
+| `get_setting(key)`, `set_setting(key, v)` | registered settings rows (floats; toggles 0/1) |
+| `tr(key)` | localized string; the key when unknown |
+| `set_time_scale(x)` (0..8), `get_time_scale()`, `get_fps()`, `quit()` | engine |
+| `push_error(msg)`, `push_warning(msg)`, `assert(cond [, msg])` | Output panel (file of the running script); a failed assert raises an error |
+| `nav_goto([n,] [x,y,z])`, `nav_stop([n])`, `nav_is_done([n])`, `nav_status([n])`, `nav_target([n])` | `NavAgent` control |
+
+A `NavAgent` node emits `navigation_finished` on arrival and `navigation_failed` when no path
+exists.
+
+### Tween
+
+Godot's `Tween` (`src/scripting/tween.rs`). A tween is bound to a node (`tween()` is `self`,
+`tween(n)` is `n`), dies with it, and follows its process mode: a paused game freezes
+pausable tweens, `Always` tweens keep going. Steps run in order; `tween_parallel(id)` makes the
+next step run together with the previous one. Defaults like Godot: ease `in_out`, trans `linear`;
+`tween_set_ease` / `tween_set_trans` apply to the steps added after them.
+
+| Function | |
+|---|---|
+| `tween([n])` | new tween id |
+| `tween_property(id, [node,] prop, to, secs)` | `prop`: `position`, `rotation` (euler), `scale`, `color` (as `set_color`), `bg`, `text_color`, `alpha`, `member:<name>` (script member), or a reflect path `"Transform.translation.y"` / `"PointLight.intensity"`; `to` is a number, `[x,y,z]` or `[r,g,b(,a)]` |
+| `tween_from(id, from)` | start value of the last property step (default: the current value when the step starts) |
+| `tween_interval(id, secs)`, `tween_callback(id, method [, args...])` | wait; call a method on the bound node |
+| `tween_parallel(id)`, `tween_chain(id)` | next step joins the previous / goes back to sequential |
+| `tween_set_ease(id, "in"/"out"/"in_out"/"out_in")`, `tween_set_trans(id, ...)` | `linear sine quad cubic quart quint expo circ back elastic bounce` |
+| `tween_set_loops(id, n)` | repeat the whole tween `n` times, `0` = forever |
+| `tween_on_finished(id, method)` | sugar: calls `method(id)` when done |
+| `tween_pause(id)`, `tween_play(id)`, `tween_kill(id)`, `tween_is_running(id)`, `tween_owner(id)` | control |
+
+When a tween ends it emits `tween_finished(id)` from the bound node:
+`connect("tween_finished", self(), "on_done")`. A looping tween never finishes.
+
+```
+fn _ready() {
+    t = tween();
+    tween_set_trans(t, "back"); tween_set_ease(t, "out");
+    tween_property(t, "scale", [1.2, 1.2, 1.2], 0.2);
+    tween_parallel(t);
+    tween_property(t, "color", [1, 0.4, 0.4], 0.2);   // together with the scale
+    tween_interval(t, 0.5);
+    tween_callback(t, "flash_done");
+}
+```
+
+Property values at the end of a step are exactly `to`. Each frame costs a few float operations
+per active step (reflect paths go through the registry and cost more: use `position`, `scale`,
+`color`, `member:` for hot tweens). Callback arguments keep numbers as floats. A step whose
+target node was freed is skipped; a property that cannot be read or set goes to the diagnostics.
 
 ### Math
 
@@ -460,10 +572,10 @@ Still to measure (release):
   use `call_deferred`.
 - **Pause follows `process_mode`** (see above). `_physics_process` does not tick while paused
   in any mode (it rides `FixedUpdate`, which rides virtual time).
-- The VM falls back to the interpreter for arrays and method calls (see Performance).
-- No maps, closures or classes in ruspy: structured data is arrays or JSON text; there is no
+- The VM falls back to the interpreter for arrays, dicts, method calls and member assignment (see Performance).
+- No closures or classes in ruspy: structured data is arrays and dicts; there is no
   `@export` metadata (types, ranges) yet, so the editor shows members as plain values.
-- Node references are ints with no ownership: a stale one is detected with `is_valid`, not by a type.
+- Node references are handles with no ownership: a stale one is detected with `is_valid`; using one errors with "no longer exists".
 - `instantiate` clones a level file: its entities carry `LevelEntity` (the editor will save
   them with the level that holds them); use `change_scene` for whole levels.
 - Physics signals need a physics step: `body_entered` arrives a frame after the contact, and

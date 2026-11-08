@@ -17,6 +17,7 @@ mod docs;
 pub mod logic;
 mod model;
 mod modes;
+mod node_script;
 mod outliner;
 mod output;
 mod place;
@@ -215,6 +216,8 @@ pub struct EditorUi {
     diagnostics: Vec<Diagnostic>,
     diag_cursor: u64,
     logic_files: Vec<editor_proto::LogicFile>,
+    /// Script data of the first selected entity (Details Script section, Signals).
+    script_info: Option<editor_proto::ScriptInfo>,
     level: editor_proto::LevelInfo,
     play: PlayState,
     view: ViewInfo,
@@ -289,6 +292,7 @@ impl EditorUi {
             diagnostics: Vec::new(),
             diag_cursor: 0,
             logic_files: Vec::new(),
+            script_info: None,
             level: Default::default(),
             play: PlayState::Editing,
             view: ViewInfo::default(),
@@ -692,6 +696,11 @@ impl EditorUi {
                         }
                         Panel::Details => {
                             let id = self.selection.first().copied();
+                            let targets: Vec<(EntityId, String)> = if self.details.connect_open() {
+                                self.nodes.order.iter().filter_map(|i| self.nodes.info.get(i).map(|n| (*i, n.name.clone()))).collect()
+                            } else {
+                                Vec::new()
+                            };
                             let v = details::View {
                                 id,
                                 info: id.and_then(|i| self.nodes.info.get(&i)),
@@ -699,6 +708,8 @@ impl EditorUi {
                                 components: &self.components,
                                 types: &self.types,
                                 logic: &self.logic_files,
+                                script: self.script_info.as_ref(),
+                                targets: &targets,
                             };
                             details::show(ui, &mut self.details, &v, &mut reqs);
                         }
@@ -850,6 +861,7 @@ impl EditorUi {
                 self.logic_files = backend.logic_list();
             }
             if first != self.comp_for || self.dirty_components || due {
+                self.script_info = first.map(|id| backend.script_info(id));
                 self.components = match first {
                     Some(id) => backend.components(id),
                     None => Ok(Vec::new()),
@@ -1161,6 +1173,51 @@ impl EditorUi {
                     }
                     Err(e) => self.say_error(format!("Add Logic: {e}")),
                 },
+                Req::ScriptNew { entity, eref, name, template, script_type, before } => match backend.script_create(&name, &template) {
+                    Ok(path) => {
+                        let op = Op::SetComponent { entity: eref, type_path: script_type, before, after: Some(serde_json::json!({ "path": path, "priority": 0 })) };
+                        self.edit(backend, op, &format!("Add script {name}"), None, true);
+                        self.logic_files = backend.logic_list();
+                        self.open_logic_tab(&path);
+                        let _ = entity;
+                        self.say_success(format!("Created {path}"));
+                    }
+                    Err(e) => self.say_error(format!("Attach script: {e}")),
+                },
+                Req::ScriptPick { from, to } => {
+                    let source = self.nodes.info.get(&from).map(|n| n.name.clone()).unwrap_or_default();
+                    let pick = backend.script_node_path(from, to).map(|path| {
+                        let info = backend.script_info(to);
+                        node_script::TargetPick {
+                            id: to,
+                            name: self.nodes.info.get(&to).map(|n| n.name.clone()).unwrap_or_default(),
+                            path,
+                            script: info.path,
+                            fns: info.fns,
+                        }
+                    });
+                    self.details.set_connect_target(pick, &source);
+                }
+                Req::ScriptConnect { eref, conns_type, before, conn, stub } => {
+                    let method = conn.get("method").and_then(|m| m.as_str()).unwrap_or("").to_owned();
+                    let signal = conn.get("signal").and_then(|m| m.as_str()).unwrap_or("").to_owned();
+                    if let Some((target, params)) = stub {
+                        match backend.script_add_stub(target, &method, &params) {
+                            Ok(path) => {
+                                self.logic_files = backend.logic_list();
+                                self.say_info(format!("Added `{method}` to {path}"));
+                            }
+                            Err(e) => {
+                                self.say_error(format!("Connect: {e}"));
+                                continue;
+                            }
+                        }
+                    }
+                    let mut list = before.as_ref().and_then(|b| b.as_array().cloned()).unwrap_or_default();
+                    list.push(conn);
+                    let op = Op::SetComponent { entity: eref, type_path: conns_type, before, after: Some(serde_json::Value::Array(list)) };
+                    self.edit(backend, op, &format!("Connect {signal}"), None, true);
+                }
                 Req::HistoryJump(target) => {
                     for _ in 0..=MAX_JUMP {
                         let now = self.undo.len();

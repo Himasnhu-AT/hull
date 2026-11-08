@@ -1,5 +1,5 @@
-//! Host functions for node scripts, named like Godot's API. Entities are ints
-//! (`Entity::to_bits`), vectors are `[x, y, z]` arrays. Functions acting on a node take it as an
+//! Host functions for node scripts, named like Godot's API. Nodes are object handles
+//! (`Value::Object(Entity::to_bits)`; plain ints are still accepted), vectors are `[x, y, z]` arrays. Functions acting on a node take it as an
 //! optional first argument: `set_visible(false)` is `self`, `set_visible(e, false)` is `e`.
 //!
 //! The full catalogue is in `docs/SCRIPTING.md`; keep both in sync.
@@ -26,13 +26,19 @@ pub(crate) fn me(w: &World) -> Result<Entity, String> {
 
 pub(crate) fn ent(v: &RV) -> Result<Entity, String> {
     match v {
+        RV::Object(i) => Entity::try_from_bits(*i).ok_or_else(|| format!("bad entity {i}")),
         RV::Int(i) => {
             let e = Entity::try_from_bits(*i as u64).ok_or_else(|| format!("bad entity {i}"))?;
             Ok(e)
         }
         RV::Null => Err("entity is null (node not found?)".into()),
-        other => Err(format!("expected an entity (int), got {}", other.type_name())),
+        other => Err(format!("expected a node, got {}", other.type_name())),
     }
+}
+
+/// Is `v` a node handle (an `Object`, or an int entity id from older scripts)?
+pub(crate) fn is_node(v: Option<&RV>) -> bool {
+    matches!(v, Some(RV::Object(_) | RV::Int(_)))
 }
 
 pub(crate) fn live(w: &World, e: Entity) -> Result<Entity, String> {
@@ -87,7 +93,7 @@ pub(crate) fn rv3(v: Vec3) -> RV {
 }
 
 pub(crate) fn rent(e: Entity) -> RV {
-    RV::Int(e.to_bits() as i64)
+    RV::Object(e.to_bits())
 }
 
 pub(crate) fn ropt(e: Option<Entity>) -> RV {
@@ -97,7 +103,7 @@ pub(crate) fn ropt(e: Option<Entity>) -> RV {
 /// `(source, rest)` of a connection call: a leading int is the source entity, else `self`.
 fn conn_args<'a>(w: &World, a: &'a [RV], usage: &str) -> Result<(Entity, &'a [RV]), String> {
     match a.first() {
-        Some(RV::Int(_)) => Ok((live(w, ent(&a[0])?)?, &a[1..])),
+        Some(RV::Int(_) | RV::Object(_)) => Ok((live(w, ent(&a[0])?)?, &a[1..])),
         Some(_) => Ok((me(w)?, a)),
         None => Err(format!("usage: {usage}")),
     }
@@ -121,6 +127,9 @@ pub(super) fn register(e: &mut Engine) {
     super::api_node::register(e);
     super::api_input::register(e);
     super::api_pause::register(e);
+    super::api_engine::register(e);
+    super::tween::register(e);
+    super::api_obj::register(e);
 }
 
 fn core(e: &mut Engine) {
@@ -185,7 +194,7 @@ fn core(e: &mut Engine) {
     });
     e.register("is_valid", |c, a| {
         let w = world(c)?;
-        Ok(RV::Bool(matches!(a.first(), Some(RV::Int(_))) && ent(&a[0]).is_ok_and(|e| w.get_entity(e).is_ok())))
+        Ok(RV::Bool(is_node(a.first()) && ent(&a[0]).is_ok_and(|e| w.get_entity(e).is_ok())))
     });
     e.register("queue_free", |c, a| {
         let w = world(c)?;
@@ -207,8 +216,9 @@ fn core(e: &mut Engine) {
     });
     e.register("emit_signal", |c, a| {
         let w = world(c)?;
-        let name = s(a.first().ok_or("emit_signal(name, args...)")?, "name")?.to_string();
-        let src = me(w)?;
+        // emit_signal([source,] name, args...): a node handle first emits from that node.
+        let (src, a) = if is_node(a.first()) { (live(w, ent(&a[0])?)?, &a[1..]) } else { (me(w)?, a) };
+        let name = s(a.first().ok_or("emit_signal([node,] name, args...)")?, "name")?.to_string();
         Ok(RV::Int(super::emit_signal_rv(w, src, &name, a[1..].to_vec()) as i64))
     });
     // connect([source,] signal, target, method [, flags]): `source` is an int entity (told
@@ -286,7 +296,7 @@ fn core(e: &mut Engine) {
     e.register("call_deferred", |c, a| {
         let w = world(c)?;
         let (t, rest) = match a.first() {
-            Some(RV::Int(_)) => (live(w, ent(&a[0])?)?, &a[1..]),
+            Some(RV::Int(_) | RV::Object(_)) => (live(w, ent(&a[0])?)?, &a[1..]),
             _ => (me(w)?, a),
         };
         let m = s(rest.first().ok_or("usage: call_deferred([node,] method, args...)")?, "method")?.to_string();

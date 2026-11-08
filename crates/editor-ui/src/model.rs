@@ -125,6 +125,26 @@ pub(crate) enum Req {
     },
     /// Open a `.logic.ron` in the Logic tab.
     OpenLogic(String),
+    /// Create a node script from a template and attach it (`Script` component), then open it.
+    ScriptNew {
+        entity: EntityId,
+        eref: StableOrId,
+        name: String,
+        template: String,
+        script_type: String,
+        before: Option<serde_json::Value>,
+    },
+    /// Pick the target of the open Connect panel: resolves its node path and script functions.
+    ScriptPick { from: EntityId, to: EntityId },
+    /// Add a connection (and the method stub in the target's script when `stub` is set).
+    ScriptConnect {
+        eref: StableOrId,
+        conns_type: String,
+        before: Option<serde_json::Value>,
+        conn: serde_json::Value,
+        /// `(target entity, parameter names)`.
+        stub: Option<(EntityId, Vec<String>)>,
+    },
     /// Undo or redo until this many steps are applied (History panel).
     HistoryJump(usize),
 }
