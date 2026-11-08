@@ -99,12 +99,7 @@ fn sensor_signals_fire_for_scripted_sensor() {
     // Static sensor zone at the origin; a kinematic body passes through it.
     let zone = app.world_mut().spawn((Script::new("s.ruspy"), Connections::default().to("body_entered", ".", "body_entered").to("body_exited", ".", "body_exited"), RigidBody::Static, Sensor, Collider::cuboid(2.0, 2.0, 2.0), Transform::default())).id();
     let mover = app.world_mut().spawn((RigidBody::Kinematic, Collider::sphere(0.3), Transform::from_xyz(-5.0, 0.0, 0.0), LinearVelocity(Vec3::new(5.0, 0.0, 0.0)))).id();
-    let mut seen = 0;
-    for _ in 0..200 {
-        app.update();
-        seen += app.world().resource::<Messages<CollisionStart>>().len();
-    }
-    eprintln!("DEBUG seen={seen} mover={:?} has_ev={}", app.world().get::<Transform>(mover).unwrap().translation, app.world().entity(zone).contains::<CollisionEventsEnabled>());
+    steps(&mut app, 200);
     assert!(errors(&app).is_empty(), "{:?}", errors(&app));
     assert_eq!(num(&app, zone, "hits"), 1.0);
     assert_eq!(num(&app, zone, "left"), 1.0);

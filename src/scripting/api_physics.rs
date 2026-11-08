@@ -43,7 +43,7 @@ pub struct CharacterBody {
 
 impl Default for CharacterBody {
     fn default() -> Self {
-        CharacterBody { up: Vec3::Y, floor_max_angle: 0.785_398, snap: 0.1, on_floor: false, on_wall: false, on_ceiling: false, floor_normal: Vec3::ZERO }
+        CharacterBody { up: Vec3::Y, floor_max_angle: std::f32::consts::FRAC_PI_4, snap: 0.1, on_floor: false, on_wall: false, on_ceiling: false, floor_normal: Vec3::ZERO }
     }
 }
 

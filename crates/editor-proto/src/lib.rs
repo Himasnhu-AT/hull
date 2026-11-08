@@ -615,5 +615,53 @@ pub struct LogicTrace {
     pub log: Vec<String>,
 }
 
+/// A top-level `fn` of a node script.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct ScriptFn {
+    pub name: String,
+    pub params: Vec<String>,
+}
+
+/// A top-level variable of a node script (Godot exported property): its name and the literal
+/// default text when the script assigns a literal (`speed = 5`), else empty.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct ScriptMember {
+    pub name: String,
+    pub default: String,
+}
+
+/// A signal an entity can emit.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct SignalDoc {
+    pub name: String,
+    /// Engine-provided (`pressed`, `body_entered` ...) rather than declared by the script.
+    pub builtin: bool,
+    pub doc: String,
+}
+
+/// What the Details Script section and the Signals panel need about one entity, computed by the
+/// backend (the components themselves come from `components`).
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct ScriptInfo {
+    /// The attached script (`Script.path`), empty when none.
+    pub path: String,
+    /// The script file exists and was read.
+    pub found: bool,
+    pub members: Vec<ScriptMember>,
+    pub fns: Vec<ScriptFn>,
+    pub signals: Vec<SignalDoc>,
+    /// One entry per `Connections` item, in order.
+    pub connections: Vec<ConnectionInfo>,
+}
+
+/// How one stored connection resolves.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct ConnectionInfo {
+    /// The target entity's name; `None` when the node path does not resolve.
+    pub target_name: Option<String>,
+    /// `Some(false)` when the target has a script without that method.
+    pub method_found: Option<bool>,
+}
+
 #[cfg(test)]
 mod tests;

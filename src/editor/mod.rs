@@ -46,6 +46,8 @@ mod logic_control;
 mod picking;
 mod play;
 mod settings_backend;
+#[cfg(feature = "scripting")]
+mod scripting_backend;
 mod fade;
 pub mod tools;
 pub mod schema;
