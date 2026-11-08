@@ -22,6 +22,7 @@ mod api_engine;
 mod api_actions;
 #[cfg(feature = "platform")]
 mod api_platform;
+mod api_ui2;
 mod api_input;
 mod api_node;
 mod api_obj;
@@ -29,6 +30,8 @@ mod coroutines;
 mod api_pause;
 #[cfg(feature = "physics")]
 mod api_physics;
+#[cfg(feature = "vehicle")]
+mod api_vehicle;
 #[cfg(feature = "physics")]
 pub use api_physics::CharacterBody;
 mod tween;
@@ -43,6 +46,8 @@ pub mod ui_widgets;
 pub mod input_events;
 #[cfg(test)]
 mod tests_widgets;
+#[cfg(all(test, feature = "ui2"))]
+mod tests_ui2;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
@@ -61,6 +66,8 @@ mod tests_pause;
 mod tests_dogfood;
 #[cfg(all(test, feature = "physics"))]
 mod tests_physics;
+#[cfg(all(test, feature = "vehicle"))]
+mod tests_vehicle;
 #[cfg(test)]
 mod tests_engine;
 #[cfg(test)]
@@ -538,6 +545,8 @@ impl Plugin for ScriptingPlugin {
         app.add_systems(Update, api_engine::nav_signals.after(timers).before(ui_signals).in_set(ScriptSet::Events));
         #[cfg(feature = "actions")]
         app.add_systems(bevy::app::RunFixedMainLoop, api_actions::latch_edges.in_set(bevy::app::RunFixedMainLoopSystems::BeforeFixedMainLoop));
+        #[cfg(feature = "ui2")]
+        api_ui2::plugin(app);
         tree::plugin(app);
         ui::plugin(app);
         ui_widgets::plugin(app);

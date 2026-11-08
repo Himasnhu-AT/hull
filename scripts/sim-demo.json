@@ -1,0 +1,157 @@
+[
+ {
+  "sleep": 4
+ },
+ {
+  "cmd": "weather.state",
+  "expect": {
+   "result.name": "clear"
+  }
+ },
+ {
+  "cmd": "photo.state"
+ },
+ {
+  "shot": "sim-clear"
+ },
+ {
+  "cmd": "photo.subjects"
+ },
+ {
+  "cmd": "photo.shoot",
+  "params": {
+   "width": 1920,
+   "height": 1080
+  }
+ },
+ {
+  "sleep": 2
+ },
+ {
+  "cmd": "photo.state",
+  "expect": {
+   "result.taken": 1
+  }
+ },
+ {
+  "cmd": "photo.set",
+  "params": {
+   "aperture": 1.4,
+   "focal_mm": 200
+  }
+ },
+ {
+  "sleep": 2
+ },
+ {
+  "shot": "sim-dof-wide-open"
+ },
+ {
+  "cmd": "photo.set",
+  "params": {
+   "aperture": 16,
+   "focal_mm": 35
+  }
+ },
+ {
+  "sleep": 2
+ },
+ {
+  "shot": "sim-dof-stopped-down"
+ },
+ {
+  "cmd": "photo.set",
+  "params": {
+   "aperture": 2.8,
+   "focal_mm": 85
+  }
+ },
+ {
+  "cmd": "weather.set",
+  "params": {
+   "name": "overcast",
+   "blend": 2
+  },
+  "expect": {
+   "result.forced": "overcast"
+  }
+ },
+ {
+  "sleep": 4
+ },
+ {
+  "shot": "sim-overcast"
+ },
+ {
+  "cmd": "weather.set",
+  "params": {
+   "name": "rain",
+   "blend": 3
+  }
+ },
+ {
+  "sleep": 14
+ },
+ {
+  "shot": "sim-rain"
+ },
+ {
+  "cmd": "weather.state"
+ },
+ {
+  "cmd": "ai.acoustic.noise",
+  "params": {
+   "pos": [
+    0,
+    1.2,
+    4
+   ],
+   "loudness_db": 105,
+   "kind": "horn"
+  }
+ },
+ {
+  "sleep": 1.5
+ },
+ {
+  "cmd": "ai.acoustic.state"
+ },
+ {
+  "shot": "sim-horn-flee-start"
+ },
+ {
+  "sleep": 4
+ },
+ {
+  "shot": "sim-horn-flee"
+ },
+ {
+  "cmd": "weather.set",
+  "params": {
+   "name": "fog",
+   "blend": 3
+  }
+ },
+ {
+  "sleep": 8
+ },
+ {
+  "shot": "sim-fog"
+ },
+ {
+  "cmd": "weather.set",
+  "params": {
+   "name": "storm",
+   "blend": 3
+  }
+ },
+ {
+  "sleep": 6
+ },
+ {
+  "shot": "sim-storm"
+ },
+ {
+  "cmd": "perf.stats"
+ }
+]

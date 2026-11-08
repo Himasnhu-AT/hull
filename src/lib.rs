@@ -61,6 +61,8 @@ pub mod devtools;
 pub mod l10n;
 #[cfg(feature = "fps")]
 pub mod fps;
+#[cfg(feature = "vehicle")]
+pub mod vehicle;
 #[cfg(feature = "level")]
 pub mod level;
 #[cfg(feature = "editor")]
@@ -71,6 +73,8 @@ pub mod look;
 pub mod world;
 #[cfg(feature = "net")]
 pub mod net;
+#[cfg(feature = "voice")]
+pub mod voice;
 #[cfg(feature = "trace")]
 pub mod trace;
 #[cfg(feature = "vfx")]
@@ -81,6 +85,8 @@ pub mod pcg;
 pub mod spline;
 #[cfg(feature = "logic")]
 pub mod logic;
+#[cfg(feature = "ui2")]
+pub mod ui2;
 #[cfg(feature = "scripting")]
 pub mod scripting;
 #[cfg(feature = "props")]
@@ -89,6 +95,18 @@ pub mod props;
 pub mod sound;
 #[cfg(feature = "platform")]
 pub mod platform;
+#[cfg(feature = "photo")]
+pub mod photo;
+#[cfg(feature = "weather")]
+pub mod weather;
+#[cfg(feature = "daytime")]
+pub mod daytime;
+#[cfg(feature = "camera_rigs")]
+pub mod camera_rigs;
+#[cfg(feature = "spray")]
+pub mod spray;
+#[cfg(feature = "foliage")]
+pub mod foliage;
 
 pub use app::{EngineOptions, GameInfo, app, app_with};
 

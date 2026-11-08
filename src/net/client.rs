@@ -67,6 +67,13 @@ impl ClientRepl {
     }
 }
 
+impl ClientRepl {
+    /// Forgets every mirrored entity without despawning it (host migration promotes them).
+    pub(crate) fn take_mirrors(&mut self) -> Vec<(NetId, Entity)> {
+        self.map.drain().map(|(id, r)| (id, r.entity)).collect()
+    }
+}
+
 /// Despawn every mirrored entity (disconnect).
 pub(crate) fn despawn_remotes(world: &mut World, repl: &mut ClientRepl) {
     for (_, r) in repl.map.drain() {
@@ -102,6 +109,7 @@ pub(crate) fn receive(world: &mut World) {
         }
         ClientStatus::Disconnected(reason) => {
             info!("net: disconnected ({reason:?})");
+            super::session::host_lost(world, &mut client.repl, reason);
             despawn_remotes(world, &mut client.repl);
             world.write_message(NetEvent::Disconnected(reason));
             world.resource_mut::<NextState<NetState>>().set(NetState::Disconnected);

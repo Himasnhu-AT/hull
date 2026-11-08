@@ -441,6 +441,12 @@ events skip it. `set_mouse_mode("captured")` locks the cursor and turns pointer 
 free-look camera keeps receiving motion. `_input_event` always sees everything (Godot's `_input`).
 Resources: `UiCapture { keyboard, pointer }`, `ScriptMouse { mode, delta }`.
 
+### ui2 (feature `ui2`)
+
+`ui_open(name)`, `ui_back()`, `ui_data_set(key, value)`, `ui_data_get(key)`, `ui_on(event_id, method)`
+drive the React-style screens of `docs/UI2.md`: open `assets/ui/<name>.ui.ron`, set the data keys they bind to
+(`{player.credits}`), and get `method(kind, arg)` calls when a component fires.
+
 ### Time and timers
 
 `delta()`, `physics_delta()`, `time()` (seconds since start), `start_timer(secs, method [, repeat])`
@@ -829,3 +835,7 @@ no instance (the older model); a node script can fire a graph with `send_message
 (a `Message` node), and a graph can call into a node script with `emit` + a connection or
 `command("script.call", ...)`. Prefer node scripts for new gameplay code; keep graphs where a
 designer needs to see and tweak the wiring.
+
+### Vehicles
+
+Feature `vehicle` (`src/scripting/api_vehicle.rs`, `docs/VEHICLE.md`): `vehicle_drive`, `vehicle_handbrake`, `vehicle_park`, `vehicle_set_mode`, `vehicle_diff_lock`, `vehicle_shift`, `vehicle_set_pressure`, `vehicle_get`, `vehicle_wheel`, `winch_attach`, `tow_strap`, `rope_reel`, `rope_tension`, `rope_length`, `rope_release`.

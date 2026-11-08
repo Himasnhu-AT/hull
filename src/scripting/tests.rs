@@ -207,6 +207,7 @@ fn props_take_the_members_shape() {
 }
 
 /// A headless app whose assets folder is the repo's real `assets/` (for kit tests).
+#[allow(dead_code)] // used by kit tests (docs/KITS.md) once kits land
 pub(crate) fn repo_app() -> App {
     let mut app = App::new();
     app.add_plugins(MinimalPlugins);

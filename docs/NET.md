@@ -139,6 +139,87 @@ add latency, jitter, loss, duplication and forced reordering to this peer's outg
   addresses can't connect; replies are never larger than requests), protocol id check, server
   full, keepalive (0.25 s), timeout (5 s), disconnect reasons (sent 3× on close).
 
+## Sessions: friends co-op with invite codes (`net::session`)
+
+On top of the server-authoritative layer: **one player hosts, friends join with a six-letter
+code**, no dedicated server to run (a tiny relay is the only infrastructure). The host is a
+listen server, so everything above (replication, prediction, messages) works unchanged.
+
+```rust
+use engine::net::session::{Session, SessionConfig, SessionEvent};
+
+let mut cfg = SessionConfig::new("relay.example.com:7788".parse()?);
+cfg.world_seed = rand::random();          // every peer builds the same world from this
+cfg.game_version = 3;                     // different versions can't join each other
+Session::host(world, cfg)?;               // SessionEvent::Hosting { code } -> show it to the player
+// friend:
+Session::join(world, cfg, "ABC234")?;     // SessionEvent::Joined { info, my_id, route }
+Session::leave(world);                    // guest: at once; host: hands over first (see migration)
+```
+
+Add `NetConfig { drive_app_state: false, .. }` for session games (a lost host would otherwise
+bounce clients to the main menu while they migrate). `Session` (resource) holds `phase`
+(`Registering → Hosting`, `Joining → Punching → Connecting → InSession`, `Migrating`, `Leaving`,
+`Failed`, `Closed`), `code`, `info` (`SessionInfo { game_version, world_seed }`), `route`
+(`Direct` / `Relayed`), `my_id`, `peers` (host first), `error`. Events: `MessageReader<SessionEvent>`
+(`Hosting`, `Joined`, `PeerJoined`, `PeerLeft { graceful }`, `HostLeaving`, `Migrating`,
+`HostMigrated`, `Left`, `Failed(SessionError)`).
+
+**Relay and connection path** (`src/net/session/{proto,relay,route}.rs`, binary `src/bin/relay.rs`:
+`cargo run --features net --bin relay -- [0.0.0.0:7788]`). The relay is ~200 lines of std UDP, no
+threads: hosts `Register` and get a code + secret token; a guest `Join`s, and the relay
+*introduces* both sides (tells each the other's public address). Both then send `Punch` packets
+at each other, which opens their NATs; the first `Punch` that arrives proves a direct path and
+all game packets use it. If nothing arrives within `punch_timeout_s` (1.5 s) the guest falls back
+to the relay, which forwards the packets (`RelayUp` / `RelayTo`; ~150 B overhead-free, but the
+relay sees traffic volume). The same UDP socket serves control and game packets, so the NAT
+mapping the relay saw is the one peers punch through. `SessionTransport` hides all this from
+the net layer: a guest calls its host `VIRT_HOST`; a host sees relayed guests under virtual
+`198.18.x.y` addresses. Run the relay anywhere both players can reach (a small VPS); it has no
+authentication, rate limiting or encryption.
+
+**Shared seed handshake.** The host sends a reliable `Hello { info, your_id, code, token }` as
+soon as the net handshake completes; `SessionEvent::Joined` carries the `SessionInfo`, so a guest
+builds its local world from `world_seed` (see `examples/coop_demo.rs`: pillars from the seed,
+players replicated). The game version is mixed into the net protocol id, so a different build is
+refused at the handshake (`SessionError::VersionMismatch`). Unknown code: `NoSuchRoom`; no
+answer: `Timeout`; full: `HostFull`.
+
+**Join in progress.** A joiner always receives the full current replicated state (the server
+snapshots everything new to a client). For state that is not replicated implement
+`SessionHooks::welcome` (host: blob for the new peer) / `apply_welcome` (guest) and insert
+`SessionHooksRes(Box::new(MyHooks))`.
+
+**Leave and host migration (partial).** A guest leaves with `Session::leave`; the host sees
+`PeerLeft { graceful }` and everyone's `peers` shrinks. If the host leaves (`Session::leave`
+broadcasts `HostLeaving`, waits `leave_grace_s`, then shuts down) or vanishes (timeout, about 5 s):
+each guest elects the same successor from the last peer list (lowest `ClientId` other than the
+host; a later round picks the next one if it never shows). The successor runs
+`SessionHooks::promote(world, mirrors)` (default `promote_mirrors`: the entities it was showing
+become authoritative `Replicated` entities), opens a new socket, re-registers with the relay
+under the **same invite code** using the secret token (every peer got it in the `Hello`: friends
+co-op trust model), and hosts. The other guests wait `migration_delay_s` and rejoin through the
+relay; they despawn their old mirrors on disconnect and receive the new host's world.
+`SessionEvent::Migrating { i_am_successor }` then `HostMigrated { i_am_host }`.
+Done: election, takeover, rejoin, state continuity of replicated entities. **Not done:**
+`NetOwner` / `ClientId`s change (the new host assigns fresh ids), game resources are not
+transferred automatically (use your own message after `HostMigrated`), components with
+`NetHistory` stay on promoted entities, predicted state resets, in-flight reliable messages are
+lost, and two simultaneous host losses are not coordinated beyond the retry rounds.
+
+**Testing tools.** `SimNat` wraps any `Transport` as a NAT: `PortRestricted` (drops packets from
+addresses it hasn't sent to; punching works) or `Strict` (only the relay may talk to it; the
+relay path is forced); `SessionConfig::simulate_nat`, `force_relay`, and `socket` (a factory, so
+tests put the session on a `LoopbackNet`). `tests/coop.rs` runs host + guests as apps on a
+loopback with a manually polled `Relay`, so every timer uses the simulated clock.
+
+Control commands (feature `devtools`): `session.status`, `session.host {relay, name?, seed?,
+version?}`, `session.join {relay, code, name?, version?}`, `session.leave`.
+`scripts/coop_play.py scripts/coop-demo.json` builds `coop_demo` and `relay`, starts a relay, a host and a
+guest and screenshots both.
+
+Voice chat rides the same unreliable channel: see [VOICE.md](VOICE.md).
+
 ## Control commands (feature `devtools`)
 
 | Command | Params | Result |
@@ -224,7 +305,8 @@ clients, snapshot, send); "updates" = entity updates written in one pass across 
 - Lag compensation rewinds `Transform` only (sphere ray tests built in; other shapes via
   `transform_at`).
 - Owner-only components already on a client are not cleared when ownership moves away.
-- No encryption or authentication beyond the address-proving challenge; no NAT punch-through,
-  relays, matchmaking or host migration.
+- No encryption or authentication beyond the address-proving challenge. NAT punch-through,
+  relay and invite-code sessions exist (above); no matchmaking, accounts or encryption, and host
+  migration is a skeleton (what it does and does not carry is listed in the Sessions section).
 - The server is single-threaded (the snapshot pass costs ~9 ns per clean and ~100 ns per
   written entity×client in dev builds); one `ServerEndpoint` per process.
