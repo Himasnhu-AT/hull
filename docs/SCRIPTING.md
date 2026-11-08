@@ -110,9 +110,14 @@ A script that defines neither costs nothing for input; likewise for `_process` a
 `_physics_process` (hooks are detected from the file's outline).
 
 Signals are **synchronous**: `emit_signal` calls the connected methods before it returns.
+Exception: if the target script is currently running (a child emits to its parent while the
+parent's `_process` is calling the child), the call is delivered at the end of the frame
+instead of failing.
 `one_shot` connections are removed before the call; `deferred` ones run in Flush.
 
 ## Members and ScriptProps
+
+Values passed between scripts (`call`, `get_var`, signal arguments) keep int vs float.
 
 Top-level assignments are members, created when the script is attached and readable and
 writable from the outside (`get_var(node, "hp")`, `set_var(node, "hp", 5)`, `script.vars`,
@@ -121,11 +126,11 @@ writable from the outside (`get_var(node, "hp")`, `set_var(node, "hp", 5)`, `scr
 - The top level runs **once per instance**; other top-level statements may call host functions
   (`signal(...)`, `add_to_group(...)`) but cannot assume `_ready` order.
 - `ScriptProps { values: [(name, json)] }` overrides members after the top level and before
-  `_ready` (Godot's exported properties stored in the scene). `ScriptProps::default().with("speed", json!(9.0))`.
+  `_ready` (Godot's exported properties stored in the scene). JSON `5.0` stays a float, `5` an int. `ScriptProps::default().with("speed", json!(9.0))`.
   Values are JSON: numbers, strings, bools, arrays.
 - A member holding a node is just an int; `is_valid(n)` tells whether it still exists.
 - **Hot reload keeps member values**; a new top-level variable gets its initial value, a
-  removed one is dropped, `_ready` does not run again.
+  removed one is dropped, `_ready` does not run again (it is not re-run on reload).
 
 ## Signals
 
