@@ -391,9 +391,9 @@ or `ev["type"]`):
 | `type` | other fields |
 |---|---|
 | `"key"` | `keycode` (Bevy `KeyCode` name: `"KeyW"`, `"Space"`, `"ArrowLeft"`), `pressed`, `echo` (key repeat) |
-| `"mouse_button"` | `button` (`"Left"`, `"Right"`, `"Middle"`, `"Back"`, `"Forward"`), `pressed`, `position` `[x, y]` (window pixels) |
-| `"mouse_motion"` | `position` `[x, y]`, `relative` `[dx, dy]` |
-| `"mouse_wheel"` | `delta` `[dx, dy]` (notches for a wheel, pixels for a trackpad; `dy > 0` is up) |
+| `"mouse_button"` | `button` (`"Left"`, `"Right"`, `"Middle"`, `"Back"`, `"Forward"`), `pressed`, `position` (Vec2, window pixels) |
+| `"mouse_motion"` | `position`, `relative` (Vec2) |
+| `"mouse_wheel"` | `delta` (Vec2; notches for a wheel, pixels for a trackpad; `dy > 0` is up) |
 
 GUI gets first refusal: while a line edit has focus keyboard events skip `_unhandled_input_event`
 (and `_unhandled_input`); while the pointer is over a button or widget (or a `ui_scroll`) mouse
