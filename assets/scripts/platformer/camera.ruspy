@@ -1,0 +1,19 @@
+// Side-on follow camera: eases toward the player along X, fixed height and distance.
+offset = [0.0, 3.5, 13.0];
+follow = 4.0;
+player = null;
+
+fn _process(dt) {
+    if is_null(player) {
+        player = get_first_node_in_group("player");
+        if is_null(player) {
+            return;
+        }
+    }
+    t = player.global_position;
+    p = self.position;
+    k = clampf(follow * dt, 0.0, 1.0);
+    np = [lerp(p[0], t[0] + 2.0, k), lerp(p[1], t[1] + offset[1], k), offset[2]];
+    self.position = np;
+    look_at([np[0], np[1] - 1.5, 0.0]);
+}

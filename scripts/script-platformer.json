@@ -1,0 +1,47 @@
+[
+ {
+  "sleep": 2.0
+ },
+ {
+  "cmd": "script.vars",
+  "params": {
+   "entity": "Game"
+  },
+  "expect": {
+   "result.state": "playing",
+   "result.hp": 3
+  }
+ },
+ {
+  "cmd": "logic.diagnostics"
+ },
+ {
+  "shot": "start"
+ },
+ {
+  "cmd": "input.key",
+  "params": {
+   "key": "d",
+   "action": "down"
+  }
+ },
+ {
+  "sleep": 1.2
+ },
+ {
+  "cmd": "input.key",
+  "params": {
+   "key": "d",
+   "action": "up"
+  }
+ },
+ {
+  "cmd": "script.vars",
+  "params": {
+   "entity": "Player"
+  }
+ },
+ {
+  "shot": "running"
+ }
+]
