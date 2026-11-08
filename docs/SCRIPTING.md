@@ -287,6 +287,30 @@ Actions are the engine's (`ActionDef`, rebinding, gamepad: `docs/ACTIONS.md`); p
 returns an id, `stop_timer(id)`; `timer_start([n] [, secs])`, `timer_stop([n])`,
 `timer_left([n])` drive an entity's `ScriptTimer`.
 
+### Engine subsystems
+
+Bound in `api_engine.rs`; each group needs its cargo feature, and a call into a subsystem the app
+did not install is an error ("sound is not set up in this app"). `[n,]` is the optional node.
+
+| Function | Does |
+|---|---|
+| `play_sound(cue [, [x,y,z]])` -> voice | play a cue (2D, or 3D at a position) |
+| `play_sound_at([n,] cue)` -> voice | 3D cue that follows a node |
+| `stop_sound(voice_or_cue [, fade])` | stop a voice (int) or every voice of a cue (str) |
+| `play_music(name [, fade_in])`, `stop_music([fade])`, `set_music_intensity(x)` | music tracks |
+| `set_bus_volume(bus, linear)`, `set_bus_volume_db(bus, db)`, `get_bus_volume(bus)`, `set_bus_mute(bus, b)` | mixer buses |
+| `spawn_vfx(preset, [x,y,z])`, `spawn_vfx_at([n,] preset)` | particle effect, returns the entity (null if the budget refuses) |
+| `anim_set([n,] param, v)`, `anim_get([n,] param)`, `anim_trigger([n,] param)`, `anim_play([n,] state [, fade])`, `anim_state([n])` | `Animator` parameters and states (layer 0) |
+| `toast(text [, body])` | UI toast |
+| `get_setting(key)`, `set_setting(key, v)` | registered settings rows (floats; toggles 0/1) |
+| `tr(key)` | localized string; the key when unknown |
+| `set_time_scale(x)` (0..8), `get_time_scale()`, `get_fps()`, `quit()` | engine |
+| `push_error(msg)`, `push_warning(msg)`, `assert(cond [, msg])` | Output panel (file of the running script); a failed assert raises an error |
+| `nav_goto([n,] [x,y,z])`, `nav_stop([n])`, `nav_is_done([n])`, `nav_status([n])`, `nav_target([n])` | `NavAgent` control |
+
+A `NavAgent` node emits `navigation_finished` on arrival and `navigation_failed` when no path
+exists.
+
 ### Math
 
 `vec3(x, y, z)`, `vadd`, `vsub`, `vscale(v, k)`, `vlen`, `vnorm`, `vdot`, `vcross`,
