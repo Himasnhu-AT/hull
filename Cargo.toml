@@ -32,6 +32,7 @@ image = { version = "0.25", default-features = false, features = ["png"], option
 # world: RON world descriptions and 16-bit PNG heightmaps (both already in Bevy's tree; no new features).
 ron = { version = "0.12", default-features = false, optional = true }
 pcg-core = { path = "crates/pcg-core", optional = true }
+asset-pipe = { path = "crates/asset-pipe", default-features = false, optional = true }
 logic-core = { path = "crates/logic-core", optional = true }
 # ruspy (the user's language), branch `embed` pinned by rev; bump when ruspy changes.
 ruspy = { git = "https://github.com/Himasnhu-AT/ruspy", rev = "982b759423b5984e0112c891a1c6f3868f8d3de1", default-features = false, optional = true }
@@ -72,6 +73,7 @@ default = [
     "camera_rigs",
     "spray",
     "foliage",
+    "assets",
 ]
 # AI-friendly dev loop: ECS inspector commands, scenario test kit, perf assertions, scope
 # profiling, JSON hot reload, save slots, asset checks (docs/DEVKIT.md).
@@ -104,6 +106,9 @@ look_clustered_decals = ["look", "bevy/pbr_clustered_decals"]
 anim = []
 # Particles / visual effects (src/vfx, docs/VFX.md).
 vfx = ["dep:bytemuck"]
+# Cooked 3D assets at runtime (LOD / collider / impostor spawn, src/assets): docs/ASSETS.md. `asset_tools` adds the offline pipeline for examples and tests.
+assets = ["dep:asset-pipe", "foliage"]
+asset_tools = ["assets", "asset-pipe/pipeline"]
 # Procedural content generation: pcg-core graphs evaluated per cell, spawned as scenery (docs/PCG.md).
 pcg = ["dep:pcg-core"]
 # Navigation (tiled navmesh baking, paths, crowds), behaviour trees, utility AI, perception.
@@ -244,3 +249,7 @@ required-features = ["editor"]
 [[example]]
 name = "world_editor_demo"
 required-features = ["editor"]
+
+[[example]]
+name = "asset_pipeline_demo"
+required-features = ["asset_tools"]

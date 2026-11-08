@@ -44,16 +44,23 @@ pub enum ColliderDesc {
     Trimesh { lod: usize },
 }
 
+/// An impostor atlas: the fields mirror the engine's `foliage::ImpostorParams` (so a cooked asset
+/// converts to a runtime `ImpostorAtlas` field by field) plus the atlas file and a draw limit.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ImpostorDesc {
-    /// Atlas PNG: `views` cells side by side, view `i` seen from `i / views` of a turn around +Y
-    /// (cell 0 from +Z).
+    /// Atlas PNG next to the sidecar.
     pub atlas: String,
-    pub views: u32,
-    /// The camera-facing quad: width and height in metres, bottom at `y_min` (local space).
-    pub width: f32,
-    pub height: f32,
-    pub y_min: f32,
+    /// Atlas grid (columns, rows); frames fill it row by row from the top left.
+    pub grid: [u32; 2],
+    /// Views in the ring: frame `i` is the model seen from azimuth `i / frames` of a turn, from
+    /// +Z towards +X in the model's own frame (frame 0 from the +Z side).
+    pub frames: u32,
+    /// Half width of a frame in metres at scale 1, and its bottom / top above the origin.
+    pub half_width: f32,
+    pub y0: f32,
+    pub y1: f32,
+    /// Alpha cutoff of the pictures.
+    pub cutoff: f32,
     /// Farthest distance the impostor is drawn (None: the render budget's view distance).
     pub max_distance: Option<f32>,
 }
@@ -84,7 +91,7 @@ mod tests {
             bounds: ([-1.0, 0.0, -1.0], [1.0, 6.0, 1.0]),
             lods: vec![LodDesc { mesh: "pine.lod0.glb".into(), distance: 30.0, triangles: 900 }],
             collider: ColliderDesc::Capsule { center: [0.0, 3.0, 0.0], radius: 1.0, half_height: 2.0 },
-            impostor: Some(ImpostorDesc { atlas: "pine.impostor.png".into(), views: 8, width: 2.0, height: 6.0, y_min: 0.0, max_distance: None }),
+            impostor: Some(ImpostorDesc { atlas: "pine.impostor.png".into(), grid: [8, 1], frames: 8, half_width: 1.0, y0: 0.0, y1: 6.0, cutoff: 0.5, max_distance: None }),
             tags: vec!["tree".into()],
             cooked_textures: None,
         };

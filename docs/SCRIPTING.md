@@ -583,6 +583,9 @@ instance file (Godot `PackedScene.pack`; relative paths go under the assets fold
 entity count; `instantiate(path [, parent])` brings it back. Build a scene with `spawn_node` /
 `add_body` / `add_primitive`, save it once, and reuse the file instead of hand-writing RON.
 
+`spawn_asset(path [, position [, parent]])` spawns a cooked 3D asset (docs/ASSETS.md, "3D pipeline": LODs, collider,
+impostor) and returns its root node.
+
 ### Introspection
 
 `script.api` (control command) and `scripting::api_catalogue()` list every host function with

@@ -145,6 +145,7 @@ pub(super) fn register(e: &mut Engine) {
     super::api_engine::register(e);
     super::tween::register(e);
     super::api_meta::register(e);
+    super::api_assets::register(e);
     super::api_obj::register(e);
     super::coroutines::register(e);
 }

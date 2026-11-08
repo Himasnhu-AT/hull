@@ -1,0 +1,13 @@
+[
+  {"sleep": 4.0},
+  {"cmd": "assets.list", "expect": {"result.parts.lod0": 1}},
+  {"shot": "near"},
+  {"cmd": "demo.cam", "params": {"name": "side"}},
+  {"sleep": 1.0},
+  {"cmd": "assets.list"},
+  {"shot": "side"},
+  {"cmd": "demo.cam", "params": {"name": "far"}},
+  {"sleep": 1.0},
+  {"cmd": "assets.list"},
+  {"shot": "far"}
+]

@@ -509,7 +509,7 @@ impl Stage for Emit {
         let impostor = match &a.impostor {
             Some(imp) => {
                 let atlas = write(format!("{}.impostor.png", a.name), impostor::encode_png(imp)?, &mut outputs)?;
-                Some(ImpostorDesc { atlas, views: imp.views, width: imp.quad_w, height: imp.quad_h, y_min: imp.y_min, max_distance: ctx.config.impostor_max_distance })
+                Some(ImpostorDesc { atlas, grid: [imp.views, 1], frames: imp.views, half_width: imp.quad_w / 2.0, y0: imp.y_min, y1: imp.y_min + imp.quad_h, cutoff: 0.5, max_distance: ctx.config.impostor_max_distance })
             }
             None => None,
         };
@@ -597,7 +597,7 @@ mod tests {
         assert!(d.lods[0].triangles > d.lods[1].triangles && d.lods[1].triangles > d.lods[2].triangles, "{:?}", d.lods);
         assert!(d.lods[0].distance < d.lods[1].distance && d.lods[1].distance < d.lods[2].distance);
         assert!(matches!(d.collider, ColliderDesc::Convex { .. }));
-        assert_eq!(d.impostor.as_ref().unwrap().views, 4);
+        assert_eq!(d.impostor.as_ref().unwrap().frames, 4);
         for f in ["pine.lod0.glb", "pine.lod1.glb", "pine.lod2.glb", "pine.impostor.png", "pine.asset.ron"] {
             assert!(dir.join(f).exists(), "{f}");
         }

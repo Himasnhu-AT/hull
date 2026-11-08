@@ -308,6 +308,8 @@ impl Plugin for EnginePlugin {
         app.add_plugins(crate::spray::SprayPlugin);
         #[cfg(feature = "pcg")]
         app.add_plugins(crate::pcg::PcgPlugin);
+        #[cfg(feature = "assets")]
+        app.add_plugins(crate::assets::AssetsPlugin);
         #[cfg(feature = "logic")]
         app.add_plugins(crate::logic::LogicPlugin);
         #[cfg(feature = "ui2")]

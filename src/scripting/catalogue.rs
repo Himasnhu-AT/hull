@@ -240,4 +240,5 @@ pub const CATALOGUE: &[(&str, &str, &str)] = &[
     (r#"ui_data_set"#, r#"ui_data_set(key, value)"#, r#"Set a ui2 data key screens bind to (number, bool, str, null)."#),
     (r#"ui_data_get"#, r#"ui_data_get(key)"#, r#"Read a ui2 data key (null when unset)."#),
     (r#"ui_on"#, r#"ui_on(event_id, method)"#, r#"Call method(kind, arg) on this script when a ui2 component fires ("*" = any)."#),
+    (r#"spawn_asset"#, r#"spawn_asset(path [, position [, parent]])"#, r#"Spawn a cooked 3D asset (LODs, collider, impostor); returns its root."#),
 ];

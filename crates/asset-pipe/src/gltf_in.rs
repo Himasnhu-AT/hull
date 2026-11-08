@@ -342,3 +342,75 @@ fn read_primitive(j: &Value, buffers: &[Vec<u8>], prim: &Value) -> Result<MeshDa
     }
     Ok(me)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn b64(bytes: &[u8]) -> String {
+        const T: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+        let mut out = String::new();
+        for c in bytes.chunks(3) {
+            let n = (c[0] as u32) << 16 | (*c.get(1).unwrap_or(&0) as u32) << 8 | *c.get(2).unwrap_or(&0) as u32;
+            for k in 0..4 {
+                if k <= c.len() {
+                    out.push(T[(n >> (18 - 6 * k) & 63) as usize] as char);
+                } else {
+                    out.push('=');
+                }
+            }
+        }
+        out
+    }
+
+    /// One triangle with interleaved POSITION+UV (stride 20), u16 indices, a translated and scaled
+    /// parent node, a data-URI buffer and no normals.
+    fn gltf() -> String {
+        let mut buf = vec![];
+        for (p, uv) in [([0.0f32, 0.0, 0.0], [0.0f32, 0.0]), ([1.0, 0.0, 0.0], [1.0, 0.0]), ([0.0, 1.0, 0.0], [0.0, 1.0])] {
+            for v in p.into_iter().chain(uv) {
+                buf.extend(v.to_le_bytes());
+            }
+        }
+        let idx_off = buf.len();
+        for i in [0u16, 1, 2, 0] {
+            buf.extend(i.to_le_bytes());
+        }
+        format!(
+            r#"{{"asset":{{"version":"2.0"}},"scene":0,"scenes":[{{"nodes":[0]}}],
+            "nodes":[{{"translation":[10,0,0],"scale":[2,2,2],"children":[1]}},{{"mesh":0}}],
+            "meshes":[{{"primitives":[{{"attributes":{{"POSITION":0,"TEXCOORD_0":1}},"indices":2}}]}}],
+            "buffers":[{{"byteLength":{len},"uri":"data:application/octet-stream;base64,{data}"}}],
+            "bufferViews":[{{"buffer":0,"byteLength":60,"byteStride":20}},{{"buffer":0,"byteOffset":{io},"byteLength":6}}],
+            "accessors":[{{"bufferView":0,"componentType":5126,"count":3,"type":"VEC3"}},
+                         {{"bufferView":0,"byteOffset":12,"componentType":5126,"count":3,"type":"VEC2"}},
+                         {{"bufferView":1,"componentType":5123,"count":3,"type":"SCALAR"}}]}}"#,
+            len = buf.len(),
+            data = b64(&buf),
+            io = idx_off
+        )
+    }
+
+    #[test]
+    fn reads_strided_accessors_u16_indices_data_uris_and_node_transforms() {
+        let (m, rep) = read_bytes(gltf().as_bytes(), None, "tri").unwrap();
+        assert!(rep.warnings.is_empty());
+        assert_eq!(m.meshes.len(), 1);
+        let me = &m.meshes[0];
+        assert_eq!(me.indices, vec![0, 1, 2]);
+        assert_eq!(me.positions[1], [12.0, 0.0, 0.0], "translated by 10, scaled by 2");
+        assert_eq!(me.uvs[2], [0.0, 1.0]);
+        assert!((me.normals[0][2] - 1.0).abs() < 1e-5, "normals computed when missing: {:?}", me.normals[0]);
+        assert_eq!(m.materials.len(), 1, "default material added");
+    }
+
+    #[test]
+    fn refuses_sparse_extensions_and_paths_that_escape() {
+        let sparse = gltf().replace(r#""count":3,"type":"SCALAR"}"#, r#""count":3,"type":"SCALAR","sparse":{}}"#);
+        assert!(read_bytes(sparse.as_bytes(), None, "x").unwrap_err().contains("sparse"));
+        let ext = gltf().replace(r#""asset":"#, r#""extensionsRequired":["KHR_draco_mesh_compression"],"asset":"#);
+        assert!(read_bytes(ext.as_bytes(), None, "x").unwrap_err().contains("KHR_draco"));
+        assert!(read_uri("../secret.bin", Some(Path::new("."))).is_err());
+        assert!(read_uri("/etc/passwd", None).is_err());
+    }
+}

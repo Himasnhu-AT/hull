@@ -23,6 +23,7 @@ mod api_actions;
 mod api_ui2;
 mod api_input;
 mod api_node;
+mod api_assets;
 mod api_obj;
 mod coroutines;
 mod api_pause;
