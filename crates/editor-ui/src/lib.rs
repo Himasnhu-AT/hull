@@ -1163,6 +1163,10 @@ impl EditorUi {
                 Req::TreeFilterChanged => self.dirty_tree = true,
                 Req::Copy(text) => ctx.copy_text(text),
                 Req::OpenLogic(path) => self.open_logic_tab(&path),
+                Req::OpenScriptAt { path, line } => {
+                    self.docs.open(&path);
+                    self.logic.open_at(&path, line);
+                }
                 Req::AddLogic { entity, eref, name, template, logic_type, before } => match backend.logic_create(&name, &template) {
                     Ok(path) => {
                         let op = Op::SetComponent { entity: eref, type_path: logic_type, before, after: Some(serde_json::json!({ "graph": path })) };

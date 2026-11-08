@@ -416,6 +416,25 @@ pub struct ScriptDoc {
     pub last_poll: f64,
     pub changed_on_disk: bool,
     pub jump_to: Option<usize>,
+    /// Host functions (for completion and hover), fetched once.
+    pub api: Vec<editor_proto::ApiFn>,
+    pub api_loaded: bool,
+    /// Top-level names of `outline_of`, refreshed when the text changes.
+    pub outline: editor_proto::ScriptOutline,
+    pub outline_of: String,
+    /// Caret as a char index (from the last frame).
+    pub cursor: usize,
+    /// Move the caret here before the next frame's edit.
+    pub set_cursor: Option<usize>,
+    pub popup: Option<Popup>,
+}
+
+/// The open completion list.
+pub struct Popup {
+    /// Char index where the typed word starts.
+    pub start: usize,
+    pub items: Vec<super::complete::Cand>,
+    pub sel: usize,
 }
 
 impl ScriptDoc {

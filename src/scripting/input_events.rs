@@ -4,15 +4,14 @@
 //! `set_input_as_handled()`. Then, unless the GUI consumed it (a focused line edit takes the
 //! keyboard, a hovered button / widget takes the pointer, see [`UiCapture`]), `_unhandled_input_event(ev)`.
 //!
-//! `ev` is an array `[type, ...]` (ruspy has no maps yet; the layout is fixed so it can become a
-//! dictionary with the same field names later):
+//! `ev` is a dictionary (`ev.type` or `ev["type"]`):
 //!
-//! | type | layout | fields |
-//! |---|---|---|
-//! | key | `["key", code, pressed, echo]` | `code` is a Bevy `KeyCode` name (`"KeyW"`, `"Space"`, `"ArrowLeft"`); `echo` is key repeat |
-//! | mouse button | `["mouse_button", button, pressed, [x, y]]` | `button` is `"Left"`, `"Right"`, `"Middle"`, `"Back"`, `"Forward"`; position in window pixels |
-//! | mouse motion | `["mouse_motion", [x, y], [dx, dy]]` | position, then relative motion |
-//! | mouse wheel | `["mouse_wheel", [dx, dy]]` | notches (lines) for a wheel, pixels for a trackpad; `dy > 0` is up |
+//! | `type` | other fields |
+//! |---|---|
+//! | `"key"` | `keycode` (Bevy `KeyCode` name: `"KeyW"`, `"Space"`, `"ArrowLeft"`), `pressed`, `echo` (key repeat) |
+//! | `"mouse_button"` | `button` (`"Left"`, `"Right"`, `"Middle"`, `"Back"`, `"Forward"`), `pressed`, `position` `[x, y]` in window pixels |
+//! | `"mouse_motion"` | `position` `[x, y]`, `relative` `[dx, dy]` |
+//! | `"mouse_wheel"` | `delta` `[dx, dy]` (notches for a wheel, pixels for a trackpad; `dy > 0` is up) |
 //!
 //! Also: `get_mouse_delta()` (motion summed over the last frame), `set_mouse_mode("visible" |
 //! "hidden" | "captured")`, `get_mouse_mode()`, `is_mouse_button_pressed("Left")`.
@@ -74,6 +73,13 @@ fn rv2(x: f32, y: f32) -> RV {
     RV::Vec2([x as f64, y as f64])
 }
 
+/// An event dictionary: `type` plus the fields of that type.
+fn ev(ty: &str, fields: Vec<(&str, RV)>) -> RV {
+    let mut pairs = vec![(RV::Str("type".into()), RV::Str(ty.into()))];
+    pairs.extend(fields.into_iter().map(|(k, v)| (RV::Str(k.into()), v)));
+    RV::dict(pairs)
+}
+
 fn cursor(world: &mut World) -> Vec2 {
     let mut q = world.query_filtered::<&Window, With<PrimaryWindow>>();
     q.iter(world).next().and_then(|w| w.cursor_position()).unwrap_or(Vec2::ZERO)
@@ -93,30 +99,31 @@ fn deliver(world: &mut World, mut cur: Local<Cursors>) {
     {
         if let Some(m) = world.get_resource::<Messages<KeyboardInput>>() {
             for k in cur.key.read(m) {
-                let ev = RV::array(vec![
-                    RV::Str("key".into()),
-                    RV::Str(format!("{:?}", k.key_code)),
-                    RV::Bool(k.state == ButtonState::Pressed),
-                    RV::Bool(k.repeat),
-                ]);
-                events.push((Kind::Key, ev));
+                let e = ev(
+                    "key",
+                    vec![("keycode", RV::Str(format!("{:?}", k.key_code))), ("pressed", RV::Bool(k.state == ButtonState::Pressed)), ("echo", RV::Bool(k.repeat))],
+                );
+                events.push((Kind::Key, e));
             }
         }
         if let Some(m) = world.get_resource::<Messages<MouseButtonInput>>() {
             for b in cur.button.read(m) {
-                let ev = RV::array(vec![RV::Str("mouse_button".into()), RV::Str(format!("{:?}", b.button)), RV::Bool(b.state == ButtonState::Pressed), rv2(pos.x, pos.y)]);
-                events.push((Kind::Pointer, ev));
+                let e = ev(
+                    "mouse_button",
+                    vec![("button", RV::Str(format!("{:?}", b.button))), ("pressed", RV::Bool(b.state == ButtonState::Pressed)), ("position", rv2(pos.x, pos.y))],
+                );
+                events.push((Kind::Pointer, e));
             }
         }
         if let Some(m) = world.get_resource::<Messages<MouseMotion>>() {
             for mo in cur.motion.read(m) {
                 delta += mo.delta;
-                events.push((Kind::Pointer, RV::array(vec![RV::Str("mouse_motion".into()), rv2(pos.x, pos.y), rv2(mo.delta.x, mo.delta.y)])));
+                events.push((Kind::Pointer, ev("mouse_motion", vec![("position", rv2(pos.x, pos.y)), ("relative", rv2(mo.delta.x, mo.delta.y))])));
             }
         }
         if let Some(m) = world.get_resource::<Messages<MouseWheel>>() {
             for wh in cur.wheel.read(m) {
-                events.push((Kind::Pointer, RV::array(vec![RV::Str("mouse_wheel".into()), rv2(wh.x, wh.y)])));
+                events.push((Kind::Pointer, ev("mouse_wheel", vec![("delta", rv2(wh.x, wh.y))])));
             }
         }
     }

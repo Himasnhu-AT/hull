@@ -286,3 +286,29 @@ fn creating_a_graph_opens_an_empty_tab() {
     assert!(graph(&h).nodes.is_empty());
     assert!(h.state().backend.files.contains_key("logic/fresh.logic.ron"));
 }
+
+#[test]
+fn script_tab_completes_host_and_own_functions() {
+    let mut h = harness_with(&[("scripts/a.ruspy", "speed = 1;\nfn get_speed(s) { return speed; }\n\n")], "scripts/a.ruspy");
+    // The caret starts at 0; focus the editor and type a prefix.
+    let edit = h.get_by_role(egui::accesskit::Role::MultilineTextInput);
+    edit.click();
+    h.run_steps(2);
+    h.get_by_role(egui::accesskit::Role::MultilineTextInput).type_text("get_");
+    h.run_steps(4);
+    assert!(h.query_all_by_label_contains("get_node").count() > 0, "host function offered");
+    assert!(h.query_all_by_label_contains("get_speed").count() > 0, "own function offered");
+    // Tab accepts the first (the script's own function) and adds the paren.
+    h.key_press(egui::Key::Tab);
+    h.run_steps(4);
+    let text = h.state().tab.active_text().unwrap_or_default();
+    assert!(text.ends_with("\n\nget_speed("), "{text:?}");
+}
+
+#[test]
+fn a_diagnostic_click_opens_the_script_at_its_line() {
+    let mut h = harness_with(&[("scripts/a.ruspy", "a = 1;\nb = 2;\nc = 3;\n")], "scripts/a.ruspy");
+    h.state_mut().tab.open_at("scripts/a.ruspy", 2);
+    h.run_steps(4);
+    assert!(h.state().tab.active_path().is_some_and(|p| p.ends_with("a.ruspy")));
+}
