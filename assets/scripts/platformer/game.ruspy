@@ -10,6 +10,13 @@ max_hp = 3;
 hp = 3;
 stats = {"stomps": 0, "shards": 0, "hurt": 0};
 
+// The pause key keeps working while paused: its own always-on input context.
+fn _ready() {
+    add_action("pf_pause", "pf_ui");
+    action_add_key("pf_pause", "KeyP");
+    push_input_context("pf_ui");
+}
+
 fn set_total(n) {
     total = n;
     emit_signal("score_changed", score, total);

@@ -50,6 +50,14 @@ fn axis2d(_: &World, _: &str) -> Vec2 {
 
 #[cfg(feature = "actions")]
 fn flag(w: &World, name: &str, which: u8) -> bool {
+    // Inside `_physics_process` edges come from the latch: each is seen by exactly one fixed step.
+    if which > 0
+        && let Some(e) = w.get_resource::<super::api_actions::PhysicsEdges>()
+        && e.active
+    {
+        let list = if which == 1 { &e.pressed } else { &e.released };
+        return list.iter().any(|n| n == name);
+    }
     w.get_resource::<crate::actions::ActionState>().is_some_and(|st| match which {
         0 => st.pressed(name),
         1 => st.just_pressed(name),
