@@ -125,6 +125,7 @@ fn host_join_direct_punch_late_joiner_and_graceful_leave() {
     w.run_until(&mut [&mut h], "invite code", 2.0, |x| phase(x[0]) == Some(SessionPhase::Hosting));
     let code = code_of(&h);
     assert_eq!(code.len(), 6);
+    w.step(&mut [&mut h]); // the event reaches the log a frame later
     assert!(matches!(events(&h)[0], SessionEvent::Hosting { .. }));
 
     let nat_a = w.cfg("anna", Some(NatKind::PortRestricted));

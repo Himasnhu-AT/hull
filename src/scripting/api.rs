@@ -137,8 +137,11 @@ pub(super) fn register(e: &mut Engine) {
     super::api_input::register(e);
     super::api_pause::register(e);
     super::api_actions::register(e);
+    super::api_ui2::register(e);
     #[cfg(feature = "physics")]
     super::api_physics::register(e);
+    #[cfg(feature = "vehicle")]
+    super::api_vehicle::register(e);
     super::api_engine::register(e);
     super::tween::register(e);
     super::api_meta::register(e);

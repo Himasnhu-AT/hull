@@ -1,0 +1,15 @@
+// A page opened from a tile action: toggles and sliders bound to UiData keys.
+Screen(
+    root: Column(gap: 18, children: [
+        Text(text: "Options", size: Display, upper: true),
+        Toggle(id: "vsync", label: "Vertical sync", key: "opt.vsync", initial: true),
+        Toggle(id: "assist", label: "Driving assist", key: "opt.assist"),
+        Slider(id: "volume", label: "Master volume", key: "opt.volume", min: 0, max: 100, step: 5, initial: 70),
+        Row(gap: 14, children: [
+            Button(id: "open_confirm", label: "Reset", action: Open("confirm")),
+            Button(id: "back", label: "Done", primary: true, action: Back),
+        ]),
+        Spacer(0),
+        KeyHints(hints: [Hint(action: "confirm", label: "Select"), Hint(action: "back", label: "Back")]),
+    ]),
+)
