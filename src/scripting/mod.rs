@@ -18,6 +18,7 @@
 //! - `queue_free` despawns at the end of the frame, after `_exit_tree`.
 
 mod api;
+mod api_engine;
 mod api_input;
 mod api_node;
 mod api_pause;
@@ -35,6 +36,8 @@ mod tests_api;
 mod bench;
 #[cfg(test)]
 mod tests_pause;
+#[cfg(test)]
+mod tests_engine;
 
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
@@ -434,6 +437,8 @@ impl Plugin for ScriptingPlugin {
             .add_systems(FixedUpdate, physics_process.run_if(scripts_active));
         #[cfg(feature = "physics")]
         app.add_systems(Update, physics_signals.after(timers).before(ui_signals).in_set(ScriptSet::Events));
+        #[cfg(feature = "ai")]
+        app.add_systems(Update, api_engine::nav_signals.after(timers).before(ui_signals).in_set(ScriptSet::Events));
         tree::plugin(app);
         ui::plugin(app);
         #[cfg(feature = "devtools")]
