@@ -103,6 +103,10 @@ impl Script {
     }
 }
 
+/// Process mode of a node that has no `Script` (set by `set_process_mode`); children inherit it.
+#[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
+pub struct NodeProcessMode(pub ProcessMode);
+
 /// Godot `Node.process_mode`: whether a script's `_process`, input, timers, UI signals and
 /// deferred calls run while the game is paused (`Paused`, `get_tree_paused()`).
 #[derive(Reflect, Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -184,6 +188,11 @@ pub fn effective_mode(world: &World, mut e: Entity) -> ProcessMode {
             && s.process_mode != ProcessMode::Inherit
         {
             return s.process_mode;
+        }
+        if let Some(m) = world.get::<NodeProcessMode>(e)
+            && m.0 != ProcessMode::Inherit
+        {
+            return m.0;
         }
         match world.get::<ChildOf>(e) {
             Some(p) => e = p.parent(),
@@ -403,9 +412,42 @@ pub struct ScriptCtx {
     pub rng: u64,
 }
 
+/// Marks the autoload roots; whatever hangs under one survives `change_scene`.
+#[derive(Component)]
+pub struct Autoload;
+
+/// Created by a script while a scene was running (`spawn_node`, `instantiate`, `spawn_vfx`):
+/// `change_scene` frees it with the level.
+#[derive(Component)]
+pub struct SceneOwned;
+
+/// Is `e` an autoload or under one?
+pub(crate) fn under_autoload(world: &World, mut e: Entity) -> bool {
+    for _ in 0..256 {
+        if world.get::<Autoload>(e).is_some() {
+            return true;
+        }
+        match world.get::<ChildOf>(e) {
+            Some(p) => e = p.parent(),
+            None => return false,
+        }
+    }
+    false
+}
+
+/// Should something created now by the running script (or under `parent`) go with the scene?
+pub(crate) fn scene_owned(world: &World, parent: Option<Entity>) -> bool {
+    match parent.or_else(|| world.resource::<ScriptCtx>().stack.last().copied()) {
+        Some(a) => !under_autoload(world, a),
+        None => true,
+    }
+}
+
 /// Work queued for the end of the frame.
 #[derive(Resource, Default)]
 pub struct ScriptQueue {
+    /// Sound voices started by scene scripts, stopped by `change_scene`.
+    pub scene_voices: Vec<u32>,
     /// `call_deferred` and deferred connections: (entity, method, args).
     pub calls: Vec<(Entity, String, Vec<Value>)>,
     /// `queue_free`d entities.
@@ -515,7 +557,7 @@ fn scripts_active() -> bool {
 
 fn spawn_autoloads(mut commands: Commands, autoloads: Res<Autoloads>) {
     for (name, path) in &autoloads.0 {
-        commands.spawn((Name::new(name.clone()), Script::new(path.clone()), Transform::default()));
+        commands.spawn((Name::new(name.clone()), Script::new(path.clone()), Transform::default(), Autoload));
     }
 }
 
@@ -1531,9 +1573,37 @@ fn flush(world: &mut World) {
         }
     }
     #[cfg(feature = "level")]
-    if let Some(path) = world.resource_mut::<ScriptQueue>().change_scene.take()
-        && let Err(e) = crate::level::load_level(world, &path)
-    {
-        diag(world, "change_scene", 0, 0, format!("change_scene({path}): {e}"));
+    if let Some(path) = world.resource_mut::<ScriptQueue>().change_scene.take() {
+        free_scene(world);
+        if let Err(e) = crate::level::load_level(world, &path) {
+            diag(world, "change_scene", 0, 0, format!("change_scene({path}): {e}"));
+        }
     }
+}
+
+/// `change_scene`: everything the old scene's scripts made at run time goes with it (nodes,
+/// effects, sounds). Autoloads and what hangs under them stay.
+#[cfg(feature = "level")]
+fn free_scene(world: &mut World) {
+    let owned: Vec<Entity> = world.query_filtered::<Entity, With<SceneOwned>>().iter(world).collect();
+    for e in owned {
+        let mut sub = vec![];
+        tree::descendants(world, e, &mut sub);
+        for &x in sub.iter().rev() {
+            drop_instance(world, x, true);
+        }
+        drop_instance(world, e, true);
+        if let Ok(em) = world.get_entity_mut(e) {
+            em.despawn();
+        }
+    }
+    let voices = std::mem::take(&mut world.resource_mut::<ScriptQueue>().scene_voices);
+    #[cfg(feature = "sound")]
+    if let Some(mut ctl) = world.get_resource_mut::<crate::sound::SoundCtl>() {
+        for v in voices {
+            ctl.stop(crate::sound::VoiceId(v), 0.0);
+        }
+    }
+    #[cfg(not(feature = "sound"))]
+    let _ = voices;
 }

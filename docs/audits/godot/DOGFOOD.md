@@ -34,6 +34,17 @@ Ranked: **fixed** items have a commit on `physics`; the rest are open.
    functions. `queue_free` now falls back to the host function (only that one; see open item 3).
 5. Physics catalogue rows duplicated after merging two branches (test caught it).
 
+## Round 7 status
+
+- #1 fixed: `get_slide_collision_count` / `get_slide_collision(i)` (`[collider, point, normal]`); the
+  platformer's layer workaround is gone (player stomps / gets hurt from its slide collisions, enemies
+  hurt the player they walk into). Static sensors against kinematic bodies already worked (test).
+- #4 fixed: `NodeProcessMode` component; `set_process_mode` works on any node.
+- #5 fixed: `SceneOwned` on nodes created by scene scripts; `change_scene` frees them, autoload
+  children stay.
+- #9 fixed: vfx entities are `SceneOwned`; sounds a scene started are stopped on `change_scene`
+  (the unknown-preset message still does not list the names).
+
 ## Open, ranked
 
 1. **Collision layers are mandatory knowledge for a kinematic player vs kinematic enemy.** With
@@ -77,6 +88,13 @@ Ranked: **fixed** items have a commit on `physics`; the rest are open.
     runs twice in one frame (the jump tap worked in the steps file, offscreen at 60 fps).
 12. `vx = v[0]` style array reads and `n.position = [..]` work well; `if !flag` and `a != null`
     worked first time; dictionary `stats.stomps += 1` and `stats["shards"] += 1` both fine.
+
+## After the vec/await merges
+
+`main.ruspy` now uses `await wait(0.2); count();` instead of `start_timer(0.2, "count")`: it worked
+first time, steps file still green, no friction. Not converted: `player.ruspy`'s `invulnerable`
+counter (it is read every frame, so a coroutine would add a second state). Position arrays still
+work unchanged since host functions accept both arrays and vectors.
 
 ## What worked well
 

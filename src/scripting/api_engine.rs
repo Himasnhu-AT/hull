@@ -88,11 +88,15 @@ fn sound(e: &mut Engine) {
         let w = world(c)?;
         let cue = s(a.first().ok_or("usage: play_sound(cue [, position])")?, "cue")?.to_string();
         let at = a.get(1).map(|p| v3(p, "position")).transpose()?;
+        let owned = super::scene_owned(w, None);
         let mut ctl = ctl(w)?;
         let id = match at {
             Some(p) => ctl.play_at(cue, p),
             None => ctl.play(cue),
         };
+        if owned {
+            w.resource_mut::<super::ScriptQueue>().scene_voices.push(id.0);
+        }
         Ok(RV::Int(id.0 as i64))
     });
     e.register("play_sound_at", |c, a| {
@@ -184,7 +188,13 @@ fn vfx(e: &mut Engine) {
         if !lib.contains(preset) {
             return Err(format!("unknown vfx preset `{preset}`"));
         }
-        Ok(super::api::ropt(crate::vfx::play_world(w, preset, at, None)))
+        let id = crate::vfx::play_world(w, preset, at, None);
+        if let Some(e) = id
+            && super::scene_owned(w, None)
+        {
+            w.entity_mut(e).insert(super::SceneOwned);
+        }
+        Ok(super::api::ropt(id))
     }
     e.register("spawn_vfx", |c, a| {
         let w = world(c)?;

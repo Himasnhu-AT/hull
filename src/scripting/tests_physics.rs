@@ -106,3 +106,54 @@ fn sensor_signals_fire_for_scripted_sensor() {
     assert_eq!(num(&app, zone, "left"), 1.0);
     let _ = mover;
 }
+
+#[test]
+fn slide_collisions_report_the_wall_and_floor() {
+    let src = "vx = 6.0; vy = 0.0; hit = 0; floor_n = 0.0; wall_n = 0.0;\n\
+        fn _physics_process(dt) { v = move_and_slide([vx, vy, 0]); vy = v[1] - 20.0 * dt; n = get_slide_collision_count(); i = 0; \
+        while i < n { c = get_slide_collision(i); if c[2][0] < -0.5 { wall_n = c[2][0]; hit = c[0]; } if c[2][1] > 0.5 { floor_n = c[2][1]; } i += 1; } }\n";
+    let mut app = physics_app("slidecol", &[("c.ruspy", src)]);
+    ground(&mut app);
+    let wall = app.world_mut().spawn((RigidBody::Static, Collider::cuboid(1.0, 4.0, 10.0), Transform::from_xyz(3.5, 2.0, 0.0))).id();
+    let e = app.world_mut().spawn((Script::new("c.ruspy"), Collider::capsule(0.4, 1.0), Transform::from_xyz(0.0, 2.0, 0.0))).id();
+    steps(&mut app, 120);
+    assert!(errors(&app).is_empty(), "{:?}", errors(&app));
+    assert!(num(&app, e, "wall_n") < -0.9);
+    assert!(num(&app, e, "floor_n") > 0.9);
+    assert!(matches!(get_member(app.world(), e, "hit"), Some(Value::Entity(b)) if b == wall.to_bits()), "{:?}", get_member(app.world(), e, "hit"));
+}
+
+#[test]
+fn process_mode_works_on_nodes_without_a_script() {
+    let src = "fn go(n) { set_process_mode(n, \"always\"); }\nfn get(n) { return get_process_mode(n); }\n";
+    let mut app = physics_app("pmode", &[("p.ruspy", src)]);
+    let e = app.world_mut().spawn(Script::new("p.ruspy")).id();
+    let bare = app.world_mut().spawn(Transform::default()).id();
+    let kid = app.world_mut().spawn((Script::new("p.ruspy"), ChildOf(bare))).id();
+    app.update();
+    call(app.world_mut(), e, "go", &[Value::Entity(bare.to_bits())]).unwrap();
+    assert!(errors(&app).is_empty(), "{:?}", errors(&app));
+    assert_eq!(call(app.world_mut(), e, "get", &[Value::Entity(bare.to_bits())]).unwrap(), Value::text("always"));
+    assert_eq!(effective_mode(app.world(), kid), ProcessMode::Always, "children inherit it");
+}
+
+#[test]
+fn change_scene_frees_script_made_nodes_but_not_autoload_children() {
+    let src = "fn mk() { n = spawn_node(\"Made\"); return n; }\nfn mk_under(p) { return spawn_node(\"Kept\", p); }\n";
+    let mut app = physics_app("sceneown", &[("m.ruspy", src)]);
+    let scene = app.world_mut().spawn(Script::new("m.ruspy")).id();
+    let auto = app.world_mut().spawn((Script::new("m.ruspy"), Autoload)).id();
+    app.update();
+    let made = match call(app.world_mut(), scene, "mk", &[]).unwrap() {
+        Value::Entity(b) => Entity::from_bits(b),
+        o => panic!("{o:?}"),
+    };
+    let kept = match call(app.world_mut(), auto, "mk_under", &[Value::Entity(auto.to_bits())]).unwrap() {
+        Value::Entity(b) => Entity::from_bits(b),
+        o => panic!("{o:?}"),
+    };
+    assert!(app.world().get::<SceneOwned>(made).is_some() && app.world().get::<SceneOwned>(kept).is_none());
+    free_scene(app.world_mut());
+    assert!(app.world().get_entity(made).is_err(), "scene node freed");
+    assert!(app.world().get_entity(kept).is_ok(), "autoload child stays");
+}

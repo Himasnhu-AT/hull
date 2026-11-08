@@ -137,6 +137,8 @@ pub const CATALOGUE: &[(&str, &str, &str)] = &[
     (r#"get_collision_layer"#, r#"get_collision_layer([node])"#, r#"Layer bitmask."#),
     (r#"get_collision_mask"#, r#"get_collision_mask([node])"#, r#"Mask bitmask."#),
     (r#"move_and_slide"#, r#"move_and_slide([node,] velocity)"#, r#"Kinematic move with sliding; returns the new velocity."#),
+    (r#"get_slide_collision_count"#, r#"get_slide_collision_count([node])"#, r#"Number of contacts in the last move_and_slide."#),
+    (r#"get_slide_collision"#, r#"get_slide_collision([node,] i)"#, r#"Contact i of the last move_and_slide as [collider, point, normal]."#),
     (r#"is_on_floor"#, r#"is_on_floor([node])"#, r#"On a floor after the last move_and_slide."#),
     (r#"is_on_wall"#, r#"is_on_wall([node])"#, r#"Touching a wall after the last move_and_slide."#),
     (r#"is_on_ceiling"#, r#"is_on_ceiling([node])"#, r#"Touching a ceiling after the last move_and_slide."#),
