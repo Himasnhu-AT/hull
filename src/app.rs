@@ -310,6 +310,10 @@ impl Plugin for EnginePlugin {
         app.add_plugins(crate::ai::AiPlugin);
         #[cfg(feature = "sound")]
         app.add_plugins(crate::sound::SoundPlugin);
+        #[cfg(feature = "photo")]
+        app.add_plugins(crate::photo::PhotoPlugin);
+        #[cfg(feature = "weather")]
+        app.add_plugins(crate::weather::WeatherPlugin);
         #[cfg(feature = "world")]
         app.add_plugins(crate::world::WorldPlugin);
         #[cfg(feature = "spline")]

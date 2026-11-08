@@ -34,7 +34,9 @@ The rules that matter most, so you don't skip them:
 | docs/VFX.md | Particles, budgets, near-camera fade |
 | docs/PROPS.md | Breakable props (topple, debris), plants that sway |
 | docs/ANIM.md | Animation state machines, blend spaces, root motion, IK |
-| docs/AI.md | Navmesh, agents, behaviour trees, utility AI, perception |
+| docs/AI.md | Navmesh, agents, behaviour trees, utility AI, perception, acoustic perception (noise dB, wind, scent, startle) |
+| docs/PHOTO.md | Physical camera: lens, aperture/DoF, shutter, ISO, autofocus, photos with subject metadata |
+| docs/WEATHER.md | Seeded weather state machine: look, rain/snow, wetness + traction, wind |
 | docs/SOUND.md | Cues, mixer, 3D sound, music, captions |
 | docs/ACTIONS.md | Input actions, rebinding, gamepad, accessibility |
 | docs/L10N.md | Localization |
