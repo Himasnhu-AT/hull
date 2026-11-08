@@ -65,6 +65,8 @@ default = [
     "spline",
     "logic",
     "scripting",
+    "photo",
+    "weather",
 ]
 # AI-friendly dev loop: ECS inspector commands, scenario test kit, perf assertions, scope
 # profiling, JSON hot reload, save slots, asset checks (docs/DEVKIT.md).
@@ -117,6 +119,10 @@ spline = []
 logic = ["dep:logic-core", "dep:ruspy"]
 # Godot-style node scripts in ruspy (Script component, lifecycle, signals, node paths, UI): src/scripting, docs/SCRIPTING.md.
 scripting = ["logic"]
+# Physical camera: lens / aperture / shutter / ISO, autofocus, photos with subject metadata (src/photo, docs/PHOTO.md).
+photo = ["look", "physics", "dep:png"]
+# Weather state machine (data + seeded schedule) driving look, rain/snow, wetness, wind (src/weather, docs/WEATHER.md).
+weather = ["look", "vfx"]
 # Multiplayer: transports, channels, replication, prediction (not in default: many games are single-player).
 net = ["dep:postcard"]
 # The level editor: `--editor` opens the game's own binary as an Unreal-style editor (src/editor, docs/EDITOR.md).
@@ -193,6 +199,10 @@ required-features = ["world", "devtools"]
 [[example]]
 name = "logic_demo"
 required-features = ["logic", "devtools", "physics"]
+
+[[example]]
+name = "sim_demo"
+required-features = ["photo", "weather", "ai", "devtools"]
 
 [[example]]
 name = "net_demo"

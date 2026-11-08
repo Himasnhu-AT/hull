@@ -7,6 +7,7 @@
 //! - [`agent`]: crowds — path following, arrive, separation, ORCA avoidance, wall sliding.
 //! - [`bt`] + [`blackboard`] + [`utility`]: behaviour trees with closures, utility scoring.
 //! - [`perception`]: sight cones with budgeted line-of-sight rays, hearing, memory.
+//! - [`acoustic`]: dB noise events with falloff / wind / occlusion, scent on the wind, `Startle`.
 //! - [`debug`]: gizmos; `ai.*` control commands (devtools).
 //!
 //! ```ignore
@@ -16,6 +17,7 @@
 //! Systems run in `Update` in [`AiSet`] order (`Sense → Think → Path → Steer`), gated by
 //! `not_paused`; baking runs in `PostUpdate` after transform propagation.
 
+pub mod acoustic;
 pub mod agent;
 pub mod blackboard;
 pub mod bt;
@@ -37,6 +39,7 @@ pub use debug::AiDebug;
 pub use nav::paths::{NavPathQueue, PathReady, PathTicket};
 pub use nav::sources::{NavIgnore, NavLink, NavMeshChanged, NavMeshes, NavSource};
 pub use nav::{NavGeometry, NavMesh, NavMeshSettings, NavPath, NavQuery, OffMeshLink, PathPoint};
+pub use acoustic::{AcousticEnv, Hearing, Heard, NoiseEmitter, NoiseEvent, NoiseKind, ScentSource, Smell, Smelled, Startle, StartleChanged, StartleState};
 pub use perception::{Noise, Perceivable, Perceiver, Perception};
 pub use utility::{Consideration, Curve, UtilityAi, UtilityOption};
 
@@ -157,9 +160,11 @@ impl Plugin for AiPlugin {
                     .run_if(nav::sources::nav_wanted),
             )
             .add_systems(PostUpdate, debug::draw_debug.run_if(debug::debug_enabled).after(NavBakeSet));
+        acoustic::plugin(app);
         #[cfg(feature = "devtools")]
         {
             control::register(app);
+            acoustic::register_control(app);
             app.add_systems(Last, record_metrics);
         }
     }

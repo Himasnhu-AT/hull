@@ -42,7 +42,9 @@ from the shell.
 | `tools/cook/` | texture cook (KTX2 BC7/BC5 + `color.avg`), standalone crate |
 | `src/vfx/` | particle effects, presets, budgets (`vfx.*`): **docs/VFX.md** |
 | `src/props/` | breakable props (topple, debris), swaying plants: **docs/PROPS.md** |
-| `src/ai/` | navmesh baking, paths, crowds, behaviour trees, utility AI, perception (`ai.*`): **docs/AI.md** |
+| `src/ai/` | navmesh baking, paths, crowds, behaviour trees, utility AI, perception, acoustic perception (`ai.*`): **docs/AI.md** |
+| `src/photo/` | physical camera + photos, feature `photo`: lens/aperture/shutter/ISO, autofocus, `PhotoTaken` with subject metadata, PNG sink (`photo.*`): **docs/PHOTO.md** |
+| `src/weather/` | weather state machine, feature `weather`: seeded schedule, look + rain/snow, wetness/traction, wind (`weather.*`): **docs/WEATHER.md** |
 | `src/sound/`, `src/audio.rs` | mixer buses, snapshots, ducking, cues, 3D, occlusion, music, captions (`sound.*`): **docs/SOUND.md** |
 | `src/world/` | terrain, scatter, cell streaming, HLOD, floating origin, worlds as data (`world.*`): **docs/WORLD.md** |
 | `src/actions/`, `src/l10n/` | action mapping, gamepad, rebinding, accessibility; localization (`actions.*`, `l10n.*`): **docs/ACTIONS.md**, **docs/L10N.md** |

@@ -87,6 +87,10 @@ pub mod scripting;
 pub mod props;
 #[cfg(feature = "sound")]
 pub mod sound;
+#[cfg(feature = "photo")]
+pub mod photo;
+#[cfg(feature = "weather")]
+pub mod weather;
 
 pub use app::{EngineOptions, GameInfo, app, app_with};
 
