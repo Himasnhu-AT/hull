@@ -5,7 +5,6 @@
 //! The full catalogue is in `docs/SCRIPTING.md`; keep both in sync.
 
 use bevy::prelude::*;
-use logic_core::Value;
 use ruspy::embed::{Ctx, Engine};
 use ruspy::value::Value as RV;
 
@@ -95,8 +94,21 @@ pub(crate) fn ropt(e: Option<Entity>) -> RV {
     e.map_or(RV::Null, rent)
 }
 
-pub(crate) fn vals(a: &[RV]) -> Result<Vec<Value>, String> {
-    a.iter().map(value_of_rv).collect()
+/// `(source, rest)` of a connection call: a leading int is the source entity, else `self`.
+fn conn_args<'a>(w: &World, a: &'a [RV], usage: &str) -> Result<(Entity, &'a [RV]), String> {
+    match a.first() {
+        Some(RV::Int(_)) => Ok((live(w, ent(&a[0])?)?, &a[1..])),
+        Some(_) => Ok((me(w)?, a)),
+        None => Err(format!("usage: {usage}")),
+    }
+}
+
+/// A connection target: a node path as is, an entity as `#bits`.
+fn target_of(v: &RV) -> Result<String, String> {
+    match v {
+        RV::Str(p) => Ok(p.clone()),
+        other => Ok(format!("#{}", ent(other)?.to_bits())),
+    }
 }
 
 // ---------------------------------------------------------------- registration
@@ -106,6 +118,7 @@ pub(super) fn register(e: &mut Engine) {
     super::ui::register(e);
     super::api_node::register(e);
     super::api_input::register(e);
+    super::api_pause::register(e);
 }
 
 fn core(e: &mut Engine) {
@@ -196,30 +209,61 @@ fn core(e: &mut Engine) {
         let src = me(w)?;
         Ok(RV::Int(super::emit_signal_rv(w, src, &name, a[1..].to_vec()) as i64))
     });
-    // connect(signal, target, method) on self, or connect(source, signal, target, method).
-    // `target` is an entity or a node path from the source.
+    // connect([source,] signal, target, method [, flags]): `source` is an int entity (told
+    // apart by type, not by argument count), else `self`. `target` is an entity or a node path
+    // from the source. `flags` is Godot's bitmask: CONNECT_DEFERRED = 1, CONNECT_ONE_SHOT = 4
+    // (other bits ignored); `connect_flags.DEFERRED` / `.ONE_SHOT` and `CONNECT_DEFERRED()` /
+    // `CONNECT_ONE_SHOT()` give the values.
     e.register("connect", |c, a| {
         let w = world(c)?;
-        let (src, r) = split(w, a, 3, "connect([source,] signal, target, method)")?;
-        let target = match &r[1] {
-            RV::Str(p) => p.clone(),
-            other => format!("#{}", ent(other)?.to_bits()),
+        let (src, r) = conn_args(w, a, "connect([source,] signal, target, method [, flags])")?;
+        if r.len() != 3 && r.len() != 4 {
+            return Err("usage: connect([source,] signal, target, method [, flags])".into());
+        }
+        let flags = match r.get(3) {
+            None => 0,
+            Some(RV::Int(i)) => *i,
+            Some(RV::Float(x)) if x.fract() == 0.0 => *x as i64,
+            Some(other) => return Err(format!("flags must be an int bitmask, got {}", other.type_name())),
         };
-        super::connect(w, src, s(&r[0], "signal")?, &target, s(&r[2], "method")?, false, false);
+        let target = target_of(&r[1])?;
+        super::connect(
+            w,
+            src,
+            s(&r[0], "signal")?,
+            &target,
+            s(&r[2], "method")?,
+            flags & super::CONNECT_ONE_SHOT != 0,
+            flags & super::CONNECT_DEFERRED != 0,
+        );
         Ok(RV::Void)
     });
+    e.register("connect_flags.DEFERRED", |_, _| Ok(RV::Int(super::CONNECT_DEFERRED)));
+    e.register("connect_flags.ONE_SHOT", |_, _| Ok(RV::Int(super::CONNECT_ONE_SHOT)));
+    e.register("CONNECT_DEFERRED", |_, _| Ok(RV::Int(super::CONNECT_DEFERRED)));
+    e.register("CONNECT_ONE_SHOT", |_, _| Ok(RV::Int(super::CONNECT_ONE_SHOT)));
     e.register("disconnect", |c, a| {
         let w = world(c)?;
-        let (src, r) = split(w, a, 3, "disconnect([source,] signal, target, method)")?;
-        let target = match &r[1] {
-            RV::Str(p) => p.clone(),
-            other => format!("#{}", ent(other)?.to_bits()),
-        };
+        let (src, r) = conn_args(w, a, "disconnect([source,] signal, target, method)")?;
+        if r.len() != 3 {
+            return Err("usage: disconnect([source,] signal, target, method)".into());
+        }
+        let target = target_of(&r[1])?;
         let (sig, m) = (s(&r[0], "signal")?.to_string(), s(&r[2], "method")?.to_string());
         if let Some(mut cs) = w.get_mut::<super::Connections>(src) {
             cs.0.retain(|x| !(x.signal == sig && x.target == target && x.method == m));
         }
         Ok(RV::Void)
+    });
+    e.register("is_connected", |c, a| {
+        let w = world(c)?;
+        let (src, r) = conn_args(w, a, "is_connected([source,] signal, target, method)")?;
+        if r.len() != 3 {
+            return Err("usage: is_connected([source,] signal, target, method)".into());
+        }
+        let target = target_of(&r[1])?;
+        let (sig, m) = (s(&r[0], "signal")?, s(&r[2], "method")?);
+        Ok(RV::Bool(w.get::<super::Connections>(src).is_some_and(|cs| cs.0.iter().any(|x| x.signal == sig && x.target == target && x.method == m))))
     });
     // call(node, method, args...): synchronous call into another entity's script.
     e.register("call", |c, a| {

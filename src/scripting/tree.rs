@@ -10,6 +10,8 @@
 //! | `%Name` | the first entity named `Name` under this entity's root (Godot scene-unique name), else anywhere |
 //! | `#<bits>` | an entity by id (`Entity::to_bits`), what `connect()` stores for runtime targets |
 
+use std::collections::HashMap;
+
 use bevy::prelude::*;
 
 /// Resolves `path` from `from`; `None` if any segment is missing.
@@ -21,12 +23,15 @@ pub fn resolve_path(world: &World, from: Entity, path: &str) -> Option<Entity> {
     }
     if let Some(name) = path.strip_prefix('%') {
         let root = root_of(world, from);
-        let mut sub = vec![];
-        descendants(world, root, &mut sub);
-        if let Some(e) = sub.into_iter().find(|e| name_of(world, *e) == Some(name)) {
-            return Some(e);
+        // Same scene root first (an entity under `root`, or `root` itself), else anywhere.
+        let mut first = None;
+        for e in named(world, name) {
+            if e != root && root_of(world, e) == root {
+                return Some(e);
+            }
+            first.get_or_insert(e);
         }
-        return find_named(world, name);
+        return first;
     }
     let (mut cur, rest) = match path.strip_prefix('/') {
         Some(rest) => {
@@ -92,22 +97,79 @@ pub fn root_of(world: &World, mut e: Entity) -> Entity {
     e
 }
 
+/// `Name` → entities carrying it, kept up to date by observers (`%Name`, `find`, `/Root` used
+/// to scan every entity per call). Within a name, entities are in insertion order.
+#[derive(Resource, Default)]
+pub struct NameIndex {
+    map: HashMap<String, Vec<Entity>>,
+}
+
+impl NameIndex {
+    pub fn get(&self, name: &str) -> &[Entity] {
+        self.map.get(name).map_or(&[], |v| v.as_slice())
+    }
+    fn add(&mut self, name: &str, e: Entity) {
+        let v = self.map.entry(name.to_string()).or_default();
+        if !v.contains(&e) {
+            v.push(e);
+        }
+    }
+    fn remove(&mut self, name: &str, e: Entity) {
+        if let Some(v) = self.map.get_mut(name) {
+            v.retain(|x| *x != e);
+            if v.is_empty() {
+                self.map.remove(name);
+            }
+        }
+    }
+}
+
+/// Registers [`NameIndex`] and its observers, indexing the entities that already exist.
+pub(super) fn plugin(app: &mut App) {
+    let mut idx = NameIndex::default();
+    {
+        let world = app.world_mut();
+        let mut q = world.query::<(Entity, &Name)>();
+        for (e, n) in q.iter(world) {
+            idx.add(n.as_str(), e);
+        }
+    }
+    app.insert_resource(idx);
+    app.add_observer(|ev: On<Insert<Name>>, names: Query<&Name>, mut idx: ResMut<NameIndex>| {
+        if let Ok(n) = names.get(ev.entity) {
+            idx.add(n.as_str(), ev.entity);
+        }
+    });
+    // Runs before the old value goes away, for a replace as well as a removal or despawn.
+    app.add_observer(|ev: On<Discard<Name>>, names: Query<&Name>, mut idx: ResMut<NameIndex>| {
+        if let Ok(n) = names.get(ev.entity) {
+            idx.remove(n.as_str(), ev.entity);
+        }
+    });
+}
+
+/// Entities named `name`, from the index (or a scan when the plugin is not installed).
+fn named<'w>(world: &'w World, name: &'w str) -> Box<dyn Iterator<Item = Entity> + 'w> {
+    match world.get_resource::<NameIndex>() {
+        Some(idx) => Box::new(idx.get(name).iter().copied().filter(move |e| name_of(world, *e) == Some(name))),
+        None => Box::new(world.iter_entities().filter(move |e| e.get::<Name>().is_some_and(|n| n.as_str() == name)).map(|e| e.id())),
+    }
+}
+
 fn find_root(world: &World, name: &str) -> Option<Entity> {
     let mut found = None;
-    for e in world.iter_entities() {
-        if e.get::<Name>().is_some_and(|n| n.as_str() == name) {
-            if !e.contains::<ChildOf>() {
-                return Some(e.id());
-            }
-            found.get_or_insert(e.id());
+    for e in named(world, name) {
+        if !world.entity(e).contains::<ChildOf>() {
+            return Some(e);
         }
+        found.get_or_insert(e);
     }
     found
 }
 
-/// The first entity named `name` anywhere.
+/// The first entity named `name` anywhere (indexed: no scan of the world).
 pub fn find_named(world: &World, name: &str) -> Option<Entity> {
-    world.iter_entities().find(|e| e.get::<Name>().is_some_and(|n| n.as_str() == name)).map(|e| e.id())
+    named(world, name).next()
 }
 
 /// Every descendant of `e`, parents before children (pre-order).
