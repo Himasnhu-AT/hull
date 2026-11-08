@@ -125,6 +125,8 @@ pub(super) fn register(e: &mut Engine) {
     super::api_node::register(e);
     super::api_input::register(e);
     super::api_pause::register(e);
+    #[cfg(feature = "physics")]
+    super::api_physics::register(e);
     super::api_engine::register(e);
     super::tween::register(e);
     super::api_obj::register(e);

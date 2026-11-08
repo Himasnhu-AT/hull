@@ -6407,6 +6407,7 @@ dependencies = [
 [[package]]
 name = "ruspy"
 version = "0.1.0"
+source = "git+https://github.com/Himasnhu-AT/ruspy?rev=982b759423b5984e0112c891a1c6f3868f8d3de1#982b759423b5984e0112c891a1c6f3868f8d3de1"
 dependencies = [
  "log",
  "serde",
