@@ -358,6 +358,8 @@ pub struct ScriptRuntime {
     deferred: Vec<(Entity, String, Vec<RV>)>,
     /// Suspended `await` coroutines of all instances.
     pub(crate) coroutines: Vec<coroutines::Co>,
+    /// The latest runtime error (with its stack) per entity, for `script.list`.
+    pub(crate) last_errors: HashMap<Entity, String>,
 }
 
 impl Default for ScriptRuntime {
@@ -378,6 +380,7 @@ impl Default for ScriptRuntime {
             scratch: vec![],
             deferred: vec![],
             coroutines: vec![],
+            last_errors: HashMap::new(),
         }
     }
 }
@@ -699,9 +702,12 @@ pub(crate) fn call_rv(world: &mut World, e: Entity, f: &str, args: Vec<RV>) -> R
         Err(x) => {
             let key = i.key.clone();
             drop(i);
-            let msg = format!("[{}] {}", x.code, x.message);
-            diag(world, &key, x.line, x.col, msg);
-            Err(format!("{key}:{}:{}: {}", x.line, x.col, x.message))
+            let trace = x.trace_text();
+            let tail = if trace.is_empty() { String::new() } else { format!("\n{trace}") };
+            diag(world, &key, x.line, x.col, format!("[{}] {}{tail}", x.code, x.message));
+            let text = format!("{key}:{}:{}: {}{tail}", x.line, x.col, x.message);
+            world.non_send_mut::<ScriptRuntime>().last_errors.insert(e, text.clone());
+            Err(text)
         }
     }
 }
