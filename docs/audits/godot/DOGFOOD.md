@@ -47,7 +47,7 @@ Ranked: **fixed** items have a commit on `physics`; the rest are open.
    inactive, so `is_action_just_pressed("pf_pause")` stayed false until Rust called
    `InputContexts::push("pf_ui")` (`script_platformer.rs:38`). No script function for either.
    Suggest `define_action(name, keys)` and `push_input_context(name)`, or an "always" context default.
-3. **Host functions are not callable as callbacks / signal targets.** Only script functions are:
+3. **(Fixed on `tween`: host fallback in `call_rv`, `hide`/`show` sugar.) Host functions are not callable as callbacks / signal targets.** Only script functions are:
    `tween_callback(t, "queue_free")`, `connect(btn, "pressed", n, "queue_free")`, `call_deferred`
    with a host name all fail with "has no function". Godot code does this constantly
    (`tween.tween_callback(queue_free)`). Needs a host-call fallback in `call_rv` (needs a `Ctx`).
@@ -63,13 +63,13 @@ Ranked: **fixed** items have a commit on `physics`; the rest are open.
    warn once per call site, or `/` on two ints could be float (breaking).
 7. **UI under a non-UI parent is invisible without any message.** `ui_panel(self)` where `self` is a
    plain node produced a game with no HUD. A diagnostic ("parent has no Node") would save the hunt.
-8. **`attach_script` cannot pass properties**: the new instance exists next frame, so `set_var` right
+8. **(Fixed on `tween`: `attach_script(n, path, {props})`.) `attach_script` cannot pass properties**: the new instance exists next frame, so `set_var` right
    after attaching fails and `call_deferred` of a setup method is too early. Shards had to read their
    own position in `_ready` instead of taking a parameter. Suggest `attach_script(n, path, {props})`
    now that dictionaries exist.
 9. **`spawn_vfx` effects are not level entities either**: after a restart the sparks of the previous
    run were still in the air. Also `unknown vfx preset sparkle` does not list the valid names.
-10. **Level files are hostile to hand-writing**: `ScriptProps` values are JSON text inside RON
+10. **(Partly fixed on `tween`: `save_scene(node, path)` writes a built subtree as an instance file; no terser text form yet.) Level files are hostile to hand-writing**: `ScriptProps` values are JSON text inside RON
     (`value: "[23.0, 1.2, 0.0]"`), every entity needs a `LevelEntity` id and a fake Entity key. I
     generated `platformer.level.ron` with a script. A `ruspy`-readable scene format or an editor
     export-only note would help.

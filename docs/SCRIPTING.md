@@ -542,6 +542,23 @@ per active step (reflect paths go through the registry and cost more: use `posit
 `color`, `member:` for hot tweens). Callback arguments keep numbers as floats. A step whose
 target node was freed is skipped; a property that cannot be read or set goes to the diagnostics.
 
+### Host functions as callbacks, `attach_script` props, `save_scene`
+
+A method name that is not a script function on the target falls back to the host function of
+that name with the target node prepended (Godot Callables): `connect(btn, "pressed", panel,
+"queue_free")`, `tween_callback(t, "queue_free")`, `start_timer(2, "queue_free")`,
+`call_deferred(n, "hide")`, `call_group("coins", "queue_free")`. `hide` / `show` are sugar for
+`set_visible(n, false/true)`. One resolver (`call_rv`) serves every call path, and the target
+needs no script. A script function of the same name wins.
+
+`attach_script(n, path_or_class [, {"hp": 7}])` sets members before `_ready` (they go into the node's
+`ScriptProps`, merged with existing ones).
+
+`save_scene(node, path)` (feature `level`) writes the node and its descendants as a `.level.ron`
+instance file (Godot `PackedScene.pack`; relative paths go under the assets folder) and returns the
+entity count; `instantiate(path [, parent])` brings it back. Build a scene with `spawn_node` /
+`add_body` / `add_primitive`, save it once, and reuse the file instead of hand-writing RON.
+
 ### Introspection
 
 `script.api` (control command) and `scripting::api_catalogue()` list every host function with

@@ -106,7 +106,7 @@ pub const CATALOGUE: &[(&str, &str, &str)] = &[
     (r#"add_child"#, r#"add_child(parent, child)"#, r#"Make child a child of parent."#),
     (r#"reparent"#, r#"reparent(child, new_parent)"#, r#"Change the parent."#),
     (r#"set_name"#, r#"set_name([node,] name)"#, r#"Rename the node."#),
-    (r#"attach_script"#, r#"attach_script([node,] path)"#, r#"Attach a script by path or class_name."#),
+    (r#"attach_script"#, r#"attach_script([node,] path_or_class [, props_dict])"#, r#"Attach a script by path or class_name; the optional dict sets members before _ready."#),
     (r#"instantiate"#, r#"instantiate(scene_path [, parent])"#, r#"Spawn a .level.ron as entities."#),
     (r#"change_scene"#, r#"change_scene(path)"#, r#"Load a level at the end of the frame."#),
     (r#"get_position"#, r#"get_position([node])"#, r#"Local position."#),
@@ -210,4 +210,5 @@ pub const CATALOGUE: &[(&str, &str, &str)] = &[
     (r#"wait"#, r#"wait(seconds)"#, r#"Use as `await wait(s)`. Awaitable: resume the coroutine after game time (respects pause / process mode)."#),
     (r#"next_frame"#, r#"next_frame()"#, r#"Use as `await next_frame()`. Awaitable: resume on the next frame."#),
     (r#"signal_of"#, r#"signal_of([node,] "signal")"#, r#"Use as `await signal_of(n, "s")`. Awaitable: resume when the node emits the signal; evaluates to its argument(s)."#),
+    (r#"save_scene"#, r#"save_scene(node, path)"#, r#"Write a node and its descendants as a .level.ron instance file for instantiate."#),
 ];

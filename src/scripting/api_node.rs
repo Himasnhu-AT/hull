@@ -151,12 +151,58 @@ fn tree(e: &mut Engine) {
     });
     e.register("attach_script", |c, a| {
         let w = world(c)?;
-        let (t, r) = split(w, a, 1, "attach_script([node,] path)")?;
+        let usage = "attach_script([node,] path_or_class [, props_dict])";
+        // A trailing dict is the initial member values, applied before `_ready`.
+        let (a, props) = match a.last() {
+            Some(RV::Dict(_)) => (&a[..a.len() - 1], a.last()),
+            _ => (a, None),
+        };
+        let (t, r) = split(w, a, 1, usage)?;
         let p = s(&r[0], "path")?;
         // A `class_name` instead of a path.
         let path = if !p.contains(['/', '.']) { super::resolve_class(w, p).ok_or_else(|| format!("attach_script: no class_name `{p}`"))? } else { p.to_string() };
+        let mut sp = w.get::<super::ScriptProps>(t).cloned().unwrap_or_default();
+        if let Some(RV::Dict(d)) = props {
+            let j = crate::logic::script::json_of_rv(&RV::Dict(d.clone()))?;
+            for (k, v) in j.as_object().into_iter().flatten() {
+                sp.set(k, v.clone());
+            }
+        }
         w.entity_mut(t).insert(Script::new(path));
+        if !sp.values.is_empty() {
+            w.entity_mut(t).insert(sp);
+        }
         Ok(RV::Void)
+    });
+    e.register("save_scene", |c, a| {
+        let w = world(c)?;
+        if a.len() != 2 {
+            return Err("usage: save_scene(node, path)".into());
+        }
+        let node = live(w, ent(&a[0])?)?;
+        let path = s(&a[1], "path")?.to_string();
+        #[cfg(feature = "level")]
+        {
+            // Relative paths land under the assets folder (where `instantiate` finds them).
+            let mut p = crate::level::resolve(w, std::path::Path::new(&path));
+            if p.is_relative()
+                && !p.exists()
+                && let Some(a) = w.get_resource::<crate::paths::AssetsDir>()
+            {
+                p = a.0.join(&p);
+            }
+            let (text, report) = crate::level::file::subtree_text(w, node, &[]).map_err(|e| format!("save_scene {path}: {e}"))?;
+            if let Some(dir) = p.parent() {
+                let _ = std::fs::create_dir_all(dir);
+            }
+            std::fs::write(&p, text).map_err(|e| format!("save_scene: {}: {e}", p.display()))?;
+            Ok(RV::Int(report.entities as i64))
+        }
+        #[cfg(not(feature = "level"))]
+        {
+            let _ = (node, path);
+            Err("save_scene needs the `level` feature".into())
+        }
     });
     e.register("instantiate", |c, a| {
         let w = world(c)?;
