@@ -294,6 +294,25 @@ as a dict and a dict leaves as a JSON object (key order is then sorted, since JS
 The VM does not compile dicts or member assignment: such files run in the interpreter (the
 fallback is automatic).
 
+## Language additions: vectors, strings, const / enum / match
+
+Full reference in ruspy's `ruspy.md`; what matters for the engine:
+
+- **Vectors**: `vec2(x, y)`, `vec3(x, y, z)`, `Color(r, g, b [, a])`; `+ - * /`, `==`, `.x .y .z`
+  (`.r .g .b .a`), `v[i]`, writes `v.x = 1` / `v.x += 1` on a variable, methods `length()
+  normalized() dot() cross() distance_to() lerp() abs()`. Host functions now **return**
+  `Vec3` (`get_position`, `get_scale`, ...) and `Vec2` (`get_vector`, mouse positions), and
+  **accept** vectors or `[x, y, z]` arrays (positions, scales, colors, tween values, `lerp`).
+  `v[0]` on a returned vector still works. To the game, a `Vec3` is `Value::Vec3` and `Vec2` /
+  `Color` are JSON arrays; JSON arrays arriving in scripts stay arrays (index them, or wrap with
+  `vec3(arr)`).
+- **Strings**: `split join strip upper lower replace find contains begins_with ends_with substr
+  to_int to_float len`, `s[i]`, `fmt("{} {}", a, b)`, `"%s %d %.2f" % [a, b, c]`.
+- **Arrays** add `append insert remove sort reverse has find slice join`.
+- **`const NAME = v;`**, **`enum State { A, B = 5 }`** (`State.A`, a read-only dict; it is a
+  script member, so it appears in the inspector), **`match x { 1 | 2 => { .. } _ => { .. } }`**.
+- Files using these run in the interpreter (the VM falls back automatically).
+
 ## Host functions
 
 Nodes are object handles (ints are accepted), vectors are `[x, y, z]`. `[n,]` is an optional leading node; without it the
