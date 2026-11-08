@@ -144,6 +144,14 @@ pub(super) fn register(e: &mut Engine) {
     super::api_physics::register(e);
     #[cfg(feature = "vehicle")]
     super::api_vehicle::register(e);
+    #[cfg(feature = "photo")]
+    super::api_photo::register(e);
+    #[cfg(feature = "weather")]
+    super::api_weather::register(e);
+    #[cfg(feature = "daytime")]
+    super::api_daytime::register(e);
+    #[cfg(feature = "camera_rigs")]
+    super::api_camera_rig::register(e);
     super::api_engine::register(e);
     super::tween::register(e);
     super::api_meta::register(e);

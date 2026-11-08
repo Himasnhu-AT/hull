@@ -839,6 +839,18 @@ no instance (the older model); a node script can fire a graph with `send_message
 `command("script.call", ...)`. Prefer node scripts for new gameplay code; keep graphs where a
 designer needs to see and tweak the wiring.
 
+### Photo, weather, day clock, camera rigs
+
+Each group is behind its feature and needs that module's plugin or resource in the app. `[cam,]` / `[rig,]` is an optional leading node; without it the first `PhotoCamera` / `CameraRig` is used.
+
+Feature `photo` (`src/scripting/api_photo.rs`, `docs/PHOTO.md`): `photo_set_lens(focal_mm, aperture, shutter_s, iso)`, `photo_get_lens()` (dict), `photo_set_focus(metres)` (turns autofocus off), `photo_get_focus()`, `photo_set_autofocus(bool)`, `photo_take()`, `photo_last()` (dict with `id position lens subjects path`, or null). Signals from the camera node: `photo_taken(id, path)`, `photo_failed(reason)`.
+
+Feature `weather` (`src/scripting/api_weather.rs`, `docs/WEATHER.md`): `weather_get()` (dict), `weather_force(name, blend_secs)`, `weather_release(blend_secs)`, `weather_set_time(secs)`, `weather_wetness([pos])`, `weather_wind()`.
+
+Feature `daytime` (`src/scripting/api_daytime.rs`, `docs/ENVIRONMENT.md`): `daytime_get_time`, `daytime_set_time(hours)`, `daytime_get_speed`, `daytime_set_speed(x)`, `daytime_sun_elevation` (degrees), `daytime_is_night`.
+
+Feature `camera_rigs` (`src/scripting/api_camera_rig.rs`, `docs/ENVIRONMENT.md`): `camera_rig_set_mode(mode)` (`"chase"`, `"mounted"`, `"orbit"`, `"free"`), `camera_rig_get_mode`, `camera_rig_set_target(node)`, `camera_rig_set_chase(arm_length, height)`.
+
 ### Vehicles
 
 Feature `vehicle` (`src/scripting/api_vehicle.rs`, `docs/VEHICLE.md`): `vehicle_drive`, `vehicle_handbrake`, `vehicle_park`, `vehicle_set_mode`, `vehicle_diff_lock`, `vehicle_shift`, `vehicle_set_pressure`, `vehicle_get`, `vehicle_wheel`, `winch_attach`, `tow_strap`, `rope_reel`, `rope_tension`, `rope_length`, `rope_release`.
