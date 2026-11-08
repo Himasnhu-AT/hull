@@ -20,6 +20,8 @@
 mod api;
 mod api_engine;
 mod api_actions;
+#[cfg(feature = "platform")]
+mod api_platform;
 mod api_ui2;
 mod api_input;
 mod api_node;

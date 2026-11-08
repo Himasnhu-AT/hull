@@ -95,6 +95,8 @@ pub mod scripting;
 pub mod props;
 #[cfg(feature = "sound")]
 pub mod sound;
+#[cfg(feature = "platform")]
+pub mod platform;
 #[cfg(feature = "photo")]
 pub mod photo;
 #[cfg(feature = "weather")]

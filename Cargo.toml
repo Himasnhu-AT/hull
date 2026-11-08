@@ -69,6 +69,7 @@ default = [
     "spline",
     "logic",
     "scripting",
+    "platform",
     "photo",
     "weather",
     "daytime",
@@ -80,6 +81,8 @@ default = [
 # AI-friendly dev loop: ECS inspector commands, scenario test kit, perf assertions, scope
 # profiling, JSON hot reload, save slots, asset checks (docs/DEVKIT.md).
 devkit = ["dep:image"]
+# OS integration skeleton: user folders, PNG metadata, clipboard, notifications, window settings, IME, glyphs (src/platform, docs/PLATFORM.md). Only std + the already-built `image`.
+platform = ["dep:image"]
 # Tracy profiling through Bevy (`bevy/trace_tracy`). Optional: recompiles Bevy, never in default.
 profile = ["bevy/trace_tracy"]
 # Asset hot reload through Bevy's file watcher (`bevy/file_watcher`). Optional: recompiles Bevy.
@@ -254,6 +257,10 @@ required-features = ["level"]
 name = "relay"
 path = "src/bin/relay.rs"
 required-features = ["net"]
+
+[[example]]
+name = "platform_demo"
+required-features = ["platform"]
 
 [[example]]
 name = "editor_demo"

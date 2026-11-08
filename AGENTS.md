@@ -54,6 +54,8 @@ from the shell.
 | `src/spline/` | splines: points with width/bank/tags, Catmull-Rom, arc length, fast `nearest`, road ribbon, gizmos (`spline.*`): **docs/SPLINES.md** |
 | `src/logic/`, `crates/logic-core/` | game logic as node graphs (`assets/logic/*.logic.ron`) + ruspy scripts (`assets/scripts/*.ruspy`) (`logic.*`): **docs/LOGIC.md** |
 | `src/scripting/` | Godot-style node scripts: `Script` per entity, `_ready/_process/_input`, signals, groups, node paths, script UI (`script.*`); example `examples/script_demo.rs`: **docs/SCRIPTING.md** |
+| `src/platform/` | OS integration skeleton, feature `platform`: Pictures/Documents/Saved Games folders, PNG/JPEG metadata, clipboard / dialogs / notifications behind `OsServices`, `WindowSettings`, `TextInput` + IME, action glyphs, focus pause, single instance (`platform.*`): **docs/PLATFORM.md** |
+| `src/net/` | multiplayer, feature `net` (off by default; test with `--features net`) (`net.*`): **docs/NET.md** |
 | `src/net/` | multiplayer, feature `net` (off by default; test with `--features net`) (`net.*`): **docs/NET.md** (sessions: `src/net/session/`, relay bin `src/bin/relay.rs`, `session.*`) |
 | `src/voice/` | voice chat over a session, feature `voice` (cpal capture, ADPCM, jitter buffer, proximity) (`voice.*`): **docs/VOICE.md** |
 | `src/vehicle/` | wheeled vehicles on avian, feature `vehicle`: ray / sphere suspension, tyre trait, surface map, drivetrain with 2H/4H/4L and diffs, winch / tow ropes, telemetry (`vehicle.*`): **docs/VEHICLE.md** |

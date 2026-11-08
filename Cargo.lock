@@ -3400,7 +3400,6 @@ dependencies = [
  "bevy",
  "bevy_egui",
  "bytemuck",
- "cpal",
  "directories",
  "editor-proto",
  "editor-ui",
