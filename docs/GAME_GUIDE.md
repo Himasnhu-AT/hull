@@ -309,3 +309,11 @@ All in LOOK.md; the short version:
 | Governor frozen while the game is slow | Another window (metrics) focused | Fixed: any app window counts |
 | `perf.stats` passes empty | Apple GPUs: no timestamps inside passes | Use `xctrace` |
 | Numbers changed but nothing should have | Different binary / assets / governor on | Same-binary A/B, governor off |
+
+## Scripting
+
+Gameplay objects, rules and HUD can be written as Godot-style ruspy node scripts (`Script` per
+entity, signals, groups, `instantiate`, script UI) instead of Rust systems: **docs/SCRIPTING.md**,
+example `examples/script_demo.rs` (Lantern Keeper). Keep per-frame work over hundreds of entities in
+Rust; scripts are for events and sparse per-object logic. Logic graphs (`docs/LOGIC.md`) stay for
+designer-wired triggers.

@@ -1,0 +1,69 @@
+// One lantern (levels/lantern.level.ron: post + "Flame" child + sensor collider).
+// Touch it with the player to light it. Quick touches (age < 3 s) are worth 2 points.
+// Unlit lanterns gutter out after `ttl` seconds; lit ones fade after a short glow.
+signal("lit");     // (points): connected to /Game add_score by the level file
+
+lit = false;
+warned = false;
+age = 0.0;
+ttl = 9.0;
+glow_time = 2.5;
+flame = null;
+game = null;
+cold = [0.35, 0.3, 0.2];
+dying = [0.8, 0.25, 0.15];
+hot = [1.0, 0.78, 0.25];
+
+fn _ready() {
+    add_to_group("lanterns");
+    flame = get_node("Flame");
+    game = get_node("/Game");
+}
+
+fn _process(dt) {
+    if get_var(game, "state") != "playing" {
+        return;
+    }
+    age = age + dt;
+    if lit {
+        if age > glow_time {
+            queue_free();
+        }
+    } else if age > ttl {
+        queue_free();
+    } else if !warned && age > ttl - 3.0 {
+        warned = true;
+        set_color(flame, dying);
+    }
+}
+
+// Physics sensor overlap: the built-in `body_entered` signal, connected to this method in
+// lantern.level.ron (`body_entered -> . _on_body_entered`).
+fn _on_body_entered(other) {
+    if lit || !is_in_group(other, "player") {
+        return;
+    }
+    if get_var(game, "state") != "playing" {
+        return;
+    }
+    points = 1;
+    if age < 3.0 {
+        points = 2;
+    }
+    lit = true;
+    age = 0.0;
+    set_color(flame, hot);
+    emit_signal("lit", points);
+}
+
+// Group call on restart: call_group("lanterns", "reset").
+fn reset() {
+    if is_null(flame) {
+        return;
+    }
+    lit = false;
+    warned = false;
+    age = 0.0;
+    set_color(flame, cold);
+    set_position([lerp(-10.0, 10.0, randf()), 0.5, lerp(-9.0, 9.0, randf())]);
+}
