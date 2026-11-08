@@ -43,12 +43,21 @@ pub struct MockBackend {
     pub defaults: BTreeMap<String, Value>,
     /// Settings groups the mock offers (`settings()`); `set_settings` merges into `value`.
     pub settings_groups: Vec<SettingsGroup>,
+    /// Node script sources by asset path (`scripts/x.ruspy`), and stubs `script_add_stub` appended.
+    pub script_files: BTreeMap<String, String>,
+    pub stubs: Vec<(EntityId, String, Vec<String>)>,
+    /// Built-in signals per entity (`pressed` for a button ...).
+    pub signal_hints: BTreeMap<EntityId, Vec<String>>,
 }
 
 pub const TRANSFORM: &str = "bevy_transform::components::transform::Transform";
 pub const LIGHT: &str = "bevy_light::PointLight";
 pub const HEALTH: &str = "game::Health";
 pub const LOGIC: &str = "engine::logic::Logic";
+pub const SCRIPT: &str = "engine::scripting::Script";
+pub const SCRIPT_PROPS: &str = "engine::scripting::ScriptProps";
+pub const GROUPS: &str = "engine::scripting::Groups";
+pub const CONNECTIONS: &str = "engine::scripting::Connections";
 
 fn transform_schema() -> TypeSchema {
     TypeSchema::Struct {
@@ -151,7 +160,84 @@ impl MockBackend {
             recorded: Vec::new(),
             placeable_docs: Vec::new(),
             settings_groups: Vec::new(),
+            script_files: BTreeMap::new(),
+            stubs: Vec::new(),
+            signal_hints: BTreeMap::new(),
         }
+    }
+
+    /// Registers the scripting components (`Script`, `ScriptProps`, `Groups`, `Connections`) so
+    /// the Details Script section can attach and edit them.
+    pub fn with_scripting(mut self) -> Self {
+        let s = |fields: Vec<(&str, TypeSchema)>| TypeSchema::Struct { fields: fields.into_iter().map(|(k, v)| (k.to_owned(), v)).collect() };
+        self.schemas.insert(SCRIPT.into(), s(vec![("path", TypeSchema::String), ("priority", TypeSchema::Int { min: None, max: None })]));
+        self.schemas.insert(SCRIPT_PROPS.into(), s(vec![("values", TypeSchema::List(Box::new(s(vec![("name", TypeSchema::String), ("value", TypeSchema::String)]))))]));
+        self.schemas.insert(GROUPS.into(), TypeSchema::List(Box::new(TypeSchema::String)));
+        self.schemas.insert(
+            CONNECTIONS.into(),
+            TypeSchema::List(Box::new(s(vec![
+                ("signal", TypeSchema::String),
+                ("target", TypeSchema::String),
+                ("method", TypeSchema::String),
+                ("binds", TypeSchema::List(Box::new(TypeSchema::String))),
+                ("deferred", TypeSchema::Bool),
+                ("one_shot", TypeSchema::Bool),
+            ]))),
+        );
+        self
+    }
+
+    fn chain(&self, mut id: EntityId) -> Vec<EntityId> {
+        let mut v = vec![id];
+        while let Some(p) = self.ents.get(&id).and_then(|e| e.parent) {
+            v.push(p);
+            id = p;
+        }
+        v.reverse();
+        v
+    }
+
+    fn rel_path(&self, from: EntityId, to: EntityId) -> Result<String, String> {
+        let (a, b) = (self.chain(from), self.chain(to));
+        let common = a.iter().zip(&b).take_while(|(x, y)| x == y).count();
+        let name = |i: &EntityId| self.ents.get(i).map(|e| e.name.clone()).ok_or_else(|| format!("no entity {i}"));
+        if common == 0 {
+            let n: Result<Vec<_>, _> = b.iter().map(name).collect();
+            return Ok(format!("/{}", n?.join("/")));
+        }
+        let mut parts: Vec<String> = vec!["..".into(); a.len() - common];
+        for i in &b[common..] {
+            parts.push(name(i)?);
+        }
+        Ok(if parts.is_empty() { ".".into() } else { parts.join("/") })
+    }
+
+    fn resolve_rel(&self, from: EntityId, path: &str) -> Option<EntityId> {
+        let mut cur = from;
+        if let Some(rest) = path.strip_prefix('/') {
+            let mut it = rest.split('/');
+            cur = *self.ents.iter().find(|(_, e)| e.parent.is_none() && Some(e.name.as_str()) == it.next()).map(|(i, _)| i)?;
+            for seg in it {
+                cur = *self.ents.iter().find(|(_, e)| e.parent == Some(cur) && e.name == seg).map(|(i, _)| i)?;
+            }
+            return Some(cur);
+        }
+        for seg in path.split('/') {
+            match seg {
+                "" | "." => {}
+                ".." => cur = self.ents.get(&cur)?.parent?,
+                n => cur = *self.ents.iter().find(|(_, e)| e.parent == Some(cur) && e.name == n).map(|(i, _)| i)?,
+            }
+        }
+        Some(cur)
+    }
+
+    fn script_path_of(&self, id: EntityId) -> String {
+        self.component(id, SCRIPT).and_then(|v| v.get("path")).and_then(Value::as_str).unwrap_or("").to_owned()
+    }
+
+    fn script_src(&self, path: &str) -> Option<&String> {
+        self.script_files.get(&if path.contains('/') { path.to_owned() } else { format!("scripts/{path}") })
     }
 
     /// A small level: Sun, Ground, a Crate with a child, a generated Skybox.
@@ -626,6 +712,70 @@ impl EditorBackend for MockBackend {
         }
         self.logic_files.push(LogicFile { path: path.clone(), name: name.to_owned(), errors: Vec::new() });
         self.logic_created.push((name.to_owned(), template.to_owned()));
+        Ok(path)
+    }
+
+    fn script_info(&mut self, id: EntityId) -> ScriptInfo {
+        let path = self.script_path_of(id);
+        let mut info = ScriptInfo { path: path.clone(), ..Default::default() };
+        info.signals = self.signal_hints.get(&id).cloned().unwrap_or_default().into_iter().map(|n| SignalDoc { name: n, builtin: true, doc: String::new() }).collect();
+        if let Some(src) = self.script_src(&path).cloned() {
+            info.found = true;
+            for l in src.lines() {
+                if let Some(rest) = l.strip_prefix("fn ") {
+                    let (n, a) = rest.split_once('(').unwrap_or((rest, ""));
+                    let params = a.split(')').next().unwrap_or("").split(',').map(|p| p.trim().to_owned()).filter(|p| !p.is_empty()).collect();
+                    info.fns.push(ScriptFn { name: n.trim().to_owned(), params });
+                } else if let Some((n, rhs)) = l.split_once('=')
+                    && !l.starts_with(' ')
+                    && !n.contains('(')
+                {
+                    info.members.push(ScriptMember { name: n.trim().to_owned(), default: rhs.trim().trim_end_matches(';').to_owned() });
+                } else if let Some(rest) = l.strip_prefix("signal(\"") {
+                    info.signals.push(SignalDoc { name: rest.split('"').next().unwrap_or("").to_owned(), builtin: false, doc: String::new() });
+                }
+            }
+        }
+        let conns = self.component(id, CONNECTIONS).and_then(Value::as_array).cloned().unwrap_or_default();
+        info.connections = conns
+            .iter()
+            .map(|c| {
+                let t = self.resolve_rel(id, c.get("target").and_then(Value::as_str).unwrap_or(""));
+                let method = c.get("method").and_then(Value::as_str).unwrap_or("");
+                let method_found = t.and_then(|t| self.script_src(&self.script_path_of(t))).map(|s| s.lines().any(|l| l.starts_with(&format!("fn {method}("))));
+                ConnectionInfo { target_name: t.and_then(|t| self.name_of(t).map(str::to_owned)), method_found }
+            })
+            .collect();
+        info
+    }
+
+    fn script_create(&mut self, name: &str, template: &str) -> Result<String, String> {
+        if name.trim().is_empty() {
+            return Err("give the script a name".into());
+        }
+        let path = format!("scripts/{name}.ruspy");
+        if self.script_files.contains_key(&path) {
+            return Err(format!("{path} already exists"));
+        }
+        let text = if template == "empty" { format!("// {name}\n") } else { format!("// {name}\nfn _ready() {{\n}}\nfn _process(delta) {{\n}}\n") };
+        self.script_files.insert(path.clone(), text);
+        self.logic_files.push(LogicFile { path: path.clone(), name: name.to_owned(), errors: Vec::new() });
+        Ok(path)
+    }
+
+    fn script_node_path(&mut self, from: EntityId, to: EntityId) -> Result<String, String> {
+        self.rel_path(from, to)
+    }
+
+    fn script_add_stub(&mut self, target: EntityId, method: &str, params: &[String]) -> Result<String, String> {
+        let path = self.script_path_of(target);
+        if path.is_empty() {
+            return Err("the target has no script".into());
+        }
+        let key = if path.contains('/') { path.clone() } else { format!("scripts/{path}") };
+        let src = self.script_files.get_mut(&key).ok_or("script file missing")?;
+        src.push_str(&format!("\nfn {method}({}) {{\n}}\n", params.join(", ")));
+        self.stubs.push((target, method.to_owned(), params.to_vec()));
         Ok(path)
     }
 }

@@ -226,6 +226,34 @@ syntax fixed after the ruspy spike): `self()`, `get(path)`, `set(path, value)`,
 `command(id, params)`, `emit(message, value)`, `log(text)`. Step limit per call; syntax and
 runtime errors → diagnostics with line/col; hot reload.
 
+## Node scripts (Godot-style, `src/scripting/`)
+
+Details of the selected entity, after the Logic section (`crates/editor-ui/src/node_script.rs`):
+
+| Section | What it does |
+|---|---|
+| Script | Shows the attached `Script.path`, with **Open** (the ruspy text tab, same as logic scripts) and **Detach** (removes `Script`; the file stays). With no script: **Attach script** opens a panel: new script from a template (`Node` = header comment, `speed = 1;`, `_ready()`, `_process(delta)`; or `Empty`) named after the entity, or pick an existing `scripts/*.ruspy`. |
+| Script members | One row per top-level variable (`ruspy::embed::outline`, parse only, nothing runs). The hint is the literal default (`speed = 5;` → `5`, empty if the right side is not a literal). Typing JSON and Enter / leaving the field writes a `ScriptProps` override; invalid JSON is flagged and not saved; the reset arrow removes the override. |
+| Signals | The Node dock: built-ins by components (`pressed` for `ui_widgets::Button`, `mouse_entered` / `mouse_exited` for `Hovered`, `body_entered` / `body_exited` for a physics `Collider`, `timeout` for `ScriptTimer`) plus `signal("x")` found in the source (and `declared_signals` when running). Existing `Connections` are listed as `signal → Target.method` with one-shot / deferred flags; a broken target or a missing method turns amber. **Connect…** opens the flow: pick a target from the entity list (its node path from the source is computed, e.g. `../HUD`), a method (type a name or choose from **Existing**, the target script's functions), flags one-shot / deferred. A new name on a target with a script appends `fn name(params) { }` to that file (default `_on_<Source>_<signal>`, params `other` for `body_*`), like Godot. **Disconnect** removes the item. |
+| Groups | Chips with × and an add field (`Groups`). |
+
+All edits are `SetComponent` ops through the usual undo stack and are saved in the level. The
+stub appended to a script file is a file edit and is **not** undone with the connection.
+
+Protocol (`editor-proto`): `ScriptInfo { path, found, members, fns, signals, connections }`
+(`ScriptMember`, `ScriptFn`, `SignalDoc`, `ConnectionInfo`) and four `EditorBackend` methods with
+"not supported" defaults: `script_info(id)`, `script_create(name, template)` →
+`scripts/<name>.ruspy`, `script_node_path(from, to)`, `script_add_stub(target, method, params)`.
+Engine side `src/editor/scripting_backend.rs` (feature `scripting`, on with `editor`):
+`relative_path` (up with `..`, then down by `Name`; absolute `/Root/..` when there is no common
+ancestor; refuses unnamed nodes and same-named siblings by checking it resolves back),
+`append_stub`, `scan_defaults`, `scan_signals`, `template_source`. The UI requests are
+`Req::ScriptNew`, `ScriptPick`, `ScriptConnect`. Tests: `crates/editor-ui/tests/node_script.rs`
+(mock backend `with_scripting()`), `scripting_backend::tests`.
+
+Known gaps: `binds` are not editable; no rename-signal refactor; members show no type-aware
+widgets (JSON text only); the stub is not removed on Disconnect or undo.
+
 ## Unreal import
 
 `tools/ue-import <project.uproject> <Map> --out <dir>` (reads files with `crates/uasset`, no

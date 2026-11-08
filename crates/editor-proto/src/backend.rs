@@ -118,4 +118,23 @@ pub trait EditorBackend {
     fn set_settings(&mut self, _group: &str, _value: Value) -> Result<(), String> {
         Err("settings are not supported by this backend".into())
     }
+
+    // ---- node scripts (defaults: not supported) --------------------------------------------
+    /// Script path, members, functions, signals and resolved connections of an entity.
+    fn script_info(&mut self, _id: EntityId) -> ScriptInfo {
+        ScriptInfo::default()
+    }
+    /// Creates `scripts/<name>.ruspy` from a template (`node`, `empty`); returns its path.
+    fn script_create(&mut self, _name: &str, _template: &str) -> Result<String, String> {
+        Err("node scripts are not supported by this backend".into())
+    }
+    /// The node path from `from` to `to` (`../HUD`, `Child`, `.`), for a connection.
+    fn script_node_path(&mut self, _from: EntityId, _to: EntityId) -> Result<String, String> {
+        Err("node scripts are not supported by this backend".into())
+    }
+    /// Appends `fn method(params) { }` to the script of `target` (Godot's connect dialog stub).
+    /// Returns the script path. Edits a file: not undoable.
+    fn script_add_stub(&mut self, _target: EntityId, _method: &str, _params: &[String]) -> Result<String, String> {
+        Err("node scripts are not supported by this backend".into())
+    }
 }
