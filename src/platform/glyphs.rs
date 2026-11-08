@@ -219,6 +219,18 @@ mod tests {
     }
 
     #[test]
+    fn keys_get_readable_labels() {
+        let mut m = ActionMap::default();
+        for (name, k) in [("a", KeyCode::Space), ("b", KeyCode::Enter), ("c", KeyCode::Tab), ("d", KeyCode::ShiftLeft), ("e", KeyCode::Escape), ("f", KeyCode::ArrowUp)] {
+            m.add(ActionDef::button(name).bind(Binding::key(k)));
+        }
+        let items = [("a", "Jump"), ("b", "OK"), ("c", "Swap"), ("d", "Run"), ("e", "Pause"), ("f", "Up")];
+        assert_eq!(hint_bar(&m, Device::KeyboardMouse, PadFamily::Xbox, &items), "[Space] Jump   [Enter] OK   [Tab] Swap   [Shift] Run   [Esc] Pause   [Up] Up");
+        // An action nobody registered shows the unbound dash, not a key.
+        assert_eq!(hint_bar(&m, Device::KeyboardMouse, PadFamily::Xbox, &[("missing", "X")]), "[\u{2014}] X");
+    }
+
+    #[test]
     fn keyboard_and_pad_glyphs() {
         let m = map();
         let g = glyph(&m, "jump", Device::KeyboardMouse, PadFamily::Xbox);

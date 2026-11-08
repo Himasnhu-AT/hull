@@ -8,6 +8,7 @@
 
 use engine::platform::{GameFolders, Platform, SaveScreenshot, ScreenshotSaved, ShotStatus, TextFocus, TextInput, UserDir, WindowInfo, WindowSettings, glyphs::Glyphs};
 use bevy::picking::events::PointerClick;
+use engine::actions::AddAction;
 use engine::prelude::*;
 use engine::ui::theme::*;
 
@@ -29,7 +30,8 @@ struct Field;
 
 fn main() {
     let mut app = engine::app(GameInfo::new("platform-demo", "Platform Demo").tagline("Talk to the OS."));
-    app.add_message::<Act>().add_systems(Startup, build_ui).add_systems(Update, (press, refresh, report));
+    app.add_action(engine::actions::ActionDef::button("jump").label("Jump").group("Gameplay").bind(engine::actions::Binding::key(KeyCode::Space)).bind(engine::actions::Binding::pad(GamepadButton::South)))
+        .add_message::<Act>().add_systems(Startup, build_ui).add_systems(Update, (press, refresh, report));
     app.run();
 }
 

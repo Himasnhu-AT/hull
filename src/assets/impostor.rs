@@ -25,6 +25,9 @@ impl MaterialExtension for ImpostorExt {
     fn vertex_shader() -> ShaderRef {
         "embedded://engine/assets/impostor.wesl".into()
     }
+    fn fragment_shader() -> ShaderRef {
+        "embedded://engine/assets/impostor.wesl".into()
+    }
     // The prepass and shadow passes would draw an unturned quad: the impostor is neither.
     fn enable_prepass() -> bool {
         false
@@ -47,7 +50,9 @@ pub(super) fn material(atlas: &ImpostorAtlas) -> ImpostorMat {
             alpha_mode: AlphaMode::Mask(p.cutoff),
             perceptual_roughness: 1.0,
             reflectance: 0.0,
-            double_sided: true,
+            // Both faces draw (no culling) but never flip the normal: the quad is turned in the shader, so
+            // its winding says nothing about which side faces the camera.
+            double_sided: false,
             cull_mode: None,
             ..default()
         },

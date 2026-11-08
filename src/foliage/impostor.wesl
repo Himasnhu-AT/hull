@@ -77,9 +77,10 @@ fn vertex(v_in: Vertex) -> VertexOutput {
     let idx = floor(fract(az / TAU + 0.5 / frames) * frames);
     let cell = vec2<f32>(idx % imp.grid.x, floor(idx / imp.grid.x));
     out.uv = (cell + corner) / imp.grid.xy;
-    // Soft foliage normal: towards the camera, out of the crown, up.
+    // Soft foliage normal: the average over the camera-facing half of a crown. Nearly level, so a
+    // high sun lights it like the near model's mix of lit tops and shaded sides, not like a flat top.
     let side = select(-1.0, 1.0, off.x >= 0.0);
-    out.world_normal = normalize(toward * 0.45 + right * side * 0.5 + vec3<f32>(0.0, 0.35, 0.0));
+    out.world_normal = normalize(toward * 0.8 + right * side * 0.4 + vec3<f32>(0.0, 0.05, 0.0));
     return out;
 }
 
@@ -105,6 +106,12 @@ fn fragment(vertex_output: VertexOutput, @builtin(front_facing) is_front: bool) 
     var in = vertex_output;
     dither(in.position, i32(round(in.uv_b.x)));
     var pbr_input = pbr_input_from_standard_material(in, is_front);
+    // The impostor has no prepass, so with SSAO / deferred normals on, Bevy would read the normal and
+    // occlusion of whatever the prepass drew behind this pixel (the ground: lit like a floor, hence
+    // brighter than the near model). Use the quad's own.
+    pbr_input.N = normalize(pbr_input.world_normal);
+    pbr_input.diffuse_occlusion = vec3<f32>(1.0);
+    pbr_input.specular_occlusion = 1.0;
     pbr_input.material.base_color = alpha_discard(pbr_input.material.flags, pbr_input.material.alpha_cutoff, pbr_input.material.base_color);
     var out: FragmentOutput;
     out.color = apply_pbr_lighting(pbr_input);
