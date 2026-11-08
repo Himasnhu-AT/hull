@@ -410,11 +410,15 @@ fn connect_panel(ui: &mut Ui, st: &mut ScriptState, v: &View<'_>, reqs: &mut Vec
             ui.label(RichText::new("Method").small().color(t.text.secondary));
             ui.horizontal(|ui| {
                 ui.add(egui::TextEdit::singleline(&mut d.method).desired_width(150.0));
-                egui::ComboBox::from_id_salt("details.script.methods").selected_text("existing").show_ui(ui, |ui| {
+                ui.menu_button("Existing \u{25BE}", |ui| {
                     for f in &tp.fns {
-                        if ui.selectable_label(d.method == f.name, format!("{}({})", f.name, f.params.join(", "))).clicked() {
+                        if ui.button(format!("{}({})", f.name, f.params.join(", "))).clicked() {
                             d.method = f.name.clone();
+                            ui.close();
                         }
+                    }
+                    if tp.fns.is_empty() {
+                        ui.weak("The target has no functions");
                     }
                 });
             });
@@ -487,6 +491,7 @@ fn groups(ui: &mut Ui, st: &mut ScriptState, v: &View<'_>, reqs: &mut Vec<Req>) 
     if v.editable {
         ui.horizontal(|ui| {
             let r = ui.add(egui::TextEdit::singleline(&mut st.group_input).hint_text("New group").desired_width(110.0));
+            r.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::TextEdit, true, "group name"));
             let name = st.group_input.trim().to_owned();
             let go = (ui.add_enabled(!name.is_empty() && !list.contains(&name), egui::Button::new("Add group")).clicked()) || (r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) && !name.is_empty() && !list.contains(&name));
             if go {
