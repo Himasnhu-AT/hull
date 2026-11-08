@@ -711,6 +711,16 @@ Still to measure (release):
 | Lantern Keeper frame cost (`script.stats.last_frame_us`) | TBD |
 | Hot reload of one script on 100 instances | TBD |
 
+## Integer division and casts
+
+`7 / 2` is `3` (int / int stays int, like GDScript). When both operands are statically ints
+(literals, annotated or inferred variables such as `hp * 100 / max_hp` with int members) the
+checker reports warning `W0101` "integer division" in the Output panel / `LogicDiagnostics`
+(`severity: Warning`, with the file:line:col); the script still runs and nothing changes at
+runtime. Fix it with `float(hp) / max_hp` (fractional) or `idiv(hp, max_hp)` (truncation on
+purpose). Operands that are untyped function parameters are not checked. Casts: `int(x)`
+(truncates floats, parses strings, 0 when unparsable), `float(x)`, `str(x)`, `bool(x)`.
+
 ## Errors and call stacks
 
 A runtime error carries the script call stack (innermost first), both in the VM and the
