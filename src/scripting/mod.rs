@@ -21,6 +21,7 @@ mod api;
 mod api_engine;
 mod api_input;
 mod api_node;
+mod api_obj;
 mod api_pause;
 mod tween;
 pub mod meta;
@@ -36,6 +37,8 @@ mod tests;
 mod tests_ui;
 #[cfg(test)]
 mod tests_api;
+#[cfg(test)]
+mod tests_lang;
 #[cfg(test)]
 mod bench;
 #[cfg(test)]
@@ -538,6 +541,7 @@ fn instantiate(world: &mut World, e: Entity, script: &Script, keep: Option<Vec<(
     let src = rt.sources.get(&key).and_then(|s| s.text.clone());
     let interp = rt.sources.get(&key).is_some_and(|s| s.interp);
     let mut engine = rt.base.fork();
+    engine.set_self_handle(Some(e.to_bits()));
     let seq = rt.next_seq;
     rt.next_seq += 1;
     // The top level may call host functions (on reload the old instance is still in the map).
@@ -880,6 +884,7 @@ pub(crate) fn rv_of_json_exact(j: &serde_json::Value) -> RV {
         J::Number(n) if n.is_f64() => RV::Float(n.as_f64().unwrap_or(0.0)),
         J::Number(n) => n.as_i64().map_or_else(|| RV::Float(n.as_f64().unwrap_or(0.0)), RV::Int),
         J::Array(a) => RV::array(a.iter().map(rv_of_json_exact).collect()),
+        J::Object(m) => RV::dict(m.iter().map(|(k, v)| (RV::Str(k.clone()), rv_of_json_exact(v))).collect()),
         other => rv_of(&Value::from_json(other)),
     }
 }

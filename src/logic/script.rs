@@ -60,7 +60,7 @@ pub(crate) fn rv_of(v: &Value) -> RV {
         Value::Num(n) => num(*n),
         Value::Str(s) => RV::Str(s.to_string()),
         Value::Vec3(a) => RV::array(a.iter().map(|x| RV::Float(*x as f64)).collect()),
-        Value::Entity(e) => RV::Int(*e as i64),
+        Value::Entity(e) => RV::Object(*e),
         Value::Json(j) => rv_of_json(j),
     }
 }
@@ -77,7 +77,7 @@ fn rv_of_json(j: &serde_json::Value) -> RV {
         J::Number(n) => num(n.as_f64().unwrap_or(0.0)),
         J::String(s) => RV::Str(s.clone()),
         J::Array(a) => RV::array(a.iter().map(rv_of_json).collect()),
-        J::Object(_) => RV::Str(j.to_string()),
+        J::Object(m) => RV::dict(m.iter().map(|(k, v)| (RV::Str(k.clone()), rv_of_json(v))).collect()),
     }
 }
 
@@ -91,6 +91,19 @@ pub(crate) fn json_of_rv(v: &RV) -> Result<serde_json::Value, String> {
         RV::Char(c) => J::String(c.to_string()),
         RV::Null | RV::Void => J::Null,
         RV::Array(a) => J::Array(a.borrow().iter().map(json_of_rv).collect::<Result<_, _>>()?),
+        RV::Dict(d) => J::Object(
+            d.borrow()
+                .iter()
+                .map(|(k, v)| {
+                    let key = match k.to_value() {
+                        RV::Str(s) => s,
+                        other => other.to_string(),
+                    };
+                    json_of_rv(v).map(|v| (key, v))
+                })
+                .collect::<Result<_, _>>()?,
+        ),
+        RV::Object(id) => J::from(*id),
         RV::Struct(..) => return Err("structs can't be passed to the game".into()),
     })
 }
@@ -102,6 +115,7 @@ pub(crate) fn value_of_rv(v: &RV) -> Result<Value, String> {
         RV::Bool(b) => Value::Bool(*b),
         RV::Str(s) => Value::text(s),
         RV::Null | RV::Void => Value::Null,
+        RV::Object(id) => Value::Entity(*id),
         other => Value::from_json(&json_of_rv(other)?),
     })
 }
@@ -112,6 +126,7 @@ fn world<'a>(c: &'a mut Ctx) -> Result<&'a mut World, String> {
 
 fn entity_arg(v: &RV) -> Result<Entity, String> {
     match v {
+        RV::Object(i) => Entity::try_from_bits(*i).ok_or_else(|| format!("bad entity {i}")),
         RV::Int(i) => Entity::try_from_bits(*i as u64).ok_or_else(|| format!("bad entity {i}")),
         RV::Null => Err("entity is null (no entity)".into()),
         other => Err(format!("expected an entity (int), got {}", other.type_name())),
