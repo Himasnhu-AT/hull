@@ -105,7 +105,6 @@ pub(crate) fn wake_signal(world: &mut World, src: Entity, signal: &str, args: &[
         .into_iter()
         .partition(|c| matches!(&c.wait, Wait::Signal { src: s2, name } if *s2 == src && name == signal));
     rt.coroutines = rest;
-    drop(rt);
     for co in hit {
         let v = match args {
             [] => RV::Null,
