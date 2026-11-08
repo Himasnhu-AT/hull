@@ -20,6 +20,7 @@
 mod api;
 mod api_engine;
 mod api_actions;
+mod api_ui2;
 mod api_input;
 mod api_node;
 mod api_obj;
@@ -41,6 +42,8 @@ pub mod ui_widgets;
 pub mod input_events;
 #[cfg(test)]
 mod tests_widgets;
+#[cfg(all(test, feature = "ui2"))]
+mod tests_ui2;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
@@ -536,6 +539,8 @@ impl Plugin for ScriptingPlugin {
         app.add_systems(Update, api_engine::nav_signals.after(timers).before(ui_signals).in_set(ScriptSet::Events));
         #[cfg(feature = "actions")]
         app.add_systems(bevy::app::RunFixedMainLoop, api_actions::latch_edges.in_set(bevy::app::RunFixedMainLoopSystems::BeforeFixedMainLoop));
+        #[cfg(feature = "ui2")]
+        api_ui2::plugin(app);
         tree::plugin(app);
         ui::plugin(app);
         ui_widgets::plugin(app);

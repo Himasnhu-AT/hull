@@ -220,4 +220,9 @@ pub const CATALOGUE: &[(&str, &str, &str)] = &[
     (r#"action_add_mouse"#, r#"action_add_mouse(name, button)"#, r#"Bind a mouse button ("Left") to an action."#),
     (r#"push_input_context"#, r#"push_input_context(name)"#, r#"Activate an input context (created if new)."#),
     (r#"pop_input_context"#, r#"pop_input_context([name])"#, r#"Deactivate a context (default: the one pushed last from script)."#),
+    (r#"ui_open"#, r#"ui_open(name)"#, r#"Open a ui2 screen (assets/ui/<name>.ui.ron)."#),
+    (r#"ui_back"#, r#"ui_back()"#, r#"Close the top ui2 screen or modal."#),
+    (r#"ui_data_set"#, r#"ui_data_set(key, value)"#, r#"Set a ui2 data key screens bind to (number, bool, str, null)."#),
+    (r#"ui_data_get"#, r#"ui_data_get(key)"#, r#"Read a ui2 data key (null when unset)."#),
+    (r#"ui_on"#, r#"ui_on(event_id, method)"#, r#"Call method(kind, arg) on this script when a ui2 component fires ("*" = any)."#),
 ];
