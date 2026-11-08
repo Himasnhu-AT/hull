@@ -28,6 +28,6 @@ fn on_body(other) {
     t = tween();
     tween_property(t, "scale", [0.01, 0.01, 0.01], 0.2);
     tween_callback(t, "queue_free");
-    spawn_vfx("sparkle", self.global_position);
+    spawn_vfx("sparks", self.global_position);
     play_sound("pickup");
 }

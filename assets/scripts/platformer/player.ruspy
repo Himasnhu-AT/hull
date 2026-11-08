@@ -25,6 +25,7 @@ spawn = [0.0, 1.0, 0.0];
 
 fn _ready() {
     add_to_group("player");
+    set_collision_mask(1);          // collide with the world (layer 1), pass through enemies (layer 2)
     add_body("kinematic", "capsule", [0.8, 1.8, 0.8]);
     self.spawn = self.position;
     game = get_node("/Game");
@@ -111,4 +112,10 @@ fn respawn() {
     self.position = spawn;
     vy = 0.0;
     invulnerable = 1.0;
+}
+
+// Test hook for the play.py steps file.
+fn debug_teleport(x, y) {
+    self.position = [x, y, 0.0];
+    vy = 0.0;
 }

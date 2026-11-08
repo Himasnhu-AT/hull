@@ -3,13 +3,34 @@
   "sleep": 2.0
  },
  {
+  "cmd": "script.call",
+  "params": {
+   "entity": "Walker",
+   "method": "freeze_at",
+   "args": [
+    14.0
+   ]
+  }
+ },
+ {
+  "cmd": "script.call",
+  "params": {
+   "entity": "Runner",
+   "method": "freeze_at",
+   "args": [
+    32.0
+   ]
+  }
+ },
+ {
   "cmd": "script.vars",
   "params": {
    "entity": "Game"
   },
   "expect": {
    "result.state": "playing",
-   "result.hp": 3
+   "result.hp": 3,
+   "result.score": 0
   }
  },
  {
@@ -19,6 +40,20 @@
   "shot": "start"
  },
  {
+  "cmd": "script.call",
+  "params": {
+   "entity": "Player",
+   "method": "debug_teleport",
+   "args": [
+    2.5,
+    1.0
+   ]
+  }
+ },
+ {
+  "sleep": 0.3
+ },
+ {
   "cmd": "input.key",
   "params": {
    "key": "d",
@@ -26,7 +61,7 @@
   }
  },
  {
-  "sleep": 1.2
+  "sleep": 0.7
  },
  {
   "cmd": "input.key",
@@ -36,12 +71,285 @@
   }
  },
  {
+  "sleep": 0.3
+ },
+ {
   "cmd": "script.vars",
   "params": {
-   "entity": "Player"
+   "entity": "Game"
+  },
+  "expect": {
+   "result.score": 1
   }
  },
  {
-  "shot": "running"
+  "shot": "shard-collected"
+ },
+ {
+  "cmd": "script.call",
+  "params": {
+   "entity": "Player",
+   "method": "debug_teleport",
+   "args": [
+    6.2,
+    1.0
+   ]
+  }
+ },
+ {
+  "sleep": 0.3
+ },
+ {
+  "cmd": "input.key",
+  "params": {
+   "key": "d",
+   "action": "down"
+  }
+ },
+ {
+  "cmd": "input.key",
+  "params": {
+   "key": "space",
+   "action": "down"
+  }
+ },
+ {
+  "sleep": 0.15
+ },
+ {
+  "cmd": "input.key",
+  "params": {
+   "key": "space",
+   "action": "up"
+  }
+ },
+ {
+  "sleep": 0.9
+ },
+ {
+  "cmd": "input.key",
+  "params": {
+   "key": "d",
+   "action": "up"
+  }
+ },
+ {
+  "sleep": 0.3
+ },
+ {
+  "shot": "platform"
+ },
+ {
+  "cmd": "script.call",
+  "params": {
+   "entity": "Player",
+   "method": "debug_teleport",
+   "args": [
+    12.4,
+    1.0
+   ]
+  }
+ },
+ {
+  "sleep": 0.3
+ },
+ {
+  "cmd": "input.key",
+  "params": {
+   "key": "d",
+   "action": "down"
+  }
+ },
+ {
+  "sleep": 0.9
+ },
+ {
+  "cmd": "input.key",
+  "params": {
+   "key": "d",
+   "action": "up"
+  }
+ },
+ {
+  "sleep": 0.2
+ },
+ {
+  "cmd": "script.vars",
+  "params": {
+   "entity": "Game"
+  },
+  "expect": {
+   "result.hp": 2
+  }
+ },
+ {
+  "shot": "hurt"
+ },
+ {
+  "cmd": "script.call",
+  "params": {
+   "entity": "Player",
+   "method": "debug_teleport",
+   "args": [
+    32.0,
+    4.0
+   ]
+  }
+ },
+ {
+  "sleep": 0.8
+ },
+ {
+  "cmd": "script.vars",
+  "params": {
+   "entity": "Game"
+  },
+  "expect": {
+   "result.stats.stomps": 2
+  }
+ },
+ {
+  "shot": "stomp"
+ },
+ {
+  "cmd": "input.key",
+  "params": {
+   "key": "p",
+   "action": "down"
+  }
+ },
+ {
+  "cmd": "input.key",
+  "params": {
+   "key": "p",
+   "action": "up"
+  }
+ },
+ {
+  "sleep": 0.4
+ },
+ {
+  "cmd": "script.vars",
+  "params": {
+   "entity": "Hud"
+  },
+  "expect": {
+   "result.shown_pause": true
+  }
+ },
+ {
+  "shot": "paused"
+ },
+ {
+  "cmd": "input.key",
+  "params": {
+   "key": "p",
+   "action": "down"
+  }
+ },
+ {
+  "cmd": "input.key",
+  "params": {
+   "key": "p",
+   "action": "up"
+  }
+ },
+ {
+  "sleep": 0.3
+ },
+ {
+  "cmd": "script.vars",
+  "params": {
+   "entity": "Hud"
+  },
+  "expect": {
+   "result.shown_pause": false
+  }
+ },
+ {
+  "cmd": "script.call",
+  "params": {
+   "entity": "Player",
+   "method": "debug_teleport",
+   "args": [
+    44.0,
+    1.0
+   ]
+  }
+ },
+ {
+  "sleep": 0.2
+ },
+ {
+  "cmd": "input.key",
+  "params": {
+   "key": "d",
+   "action": "down"
+  }
+ },
+ {
+  "sleep": 0.8
+ },
+ {
+  "cmd": "input.key",
+  "params": {
+   "key": "d",
+   "action": "up"
+  }
+ },
+ {
+  "sleep": 0.3
+ },
+ {
+  "cmd": "script.vars",
+  "params": {
+   "entity": "Goal"
+  }
+ },
+ {
+  "cmd": "script.vars",
+  "params": {
+   "entity": "Game"
+  },
+  "expect": {
+   "result.state": "won"
+  }
+ },
+ {
+  "cmd": "logic.diagnostics"
+ },
+ {
+  "shot": "won"
+ },
+ {
+  "cmd": "script.call",
+  "params": {
+   "entity": "Game",
+   "method": "restart",
+   "args": []
+  }
+ },
+ {
+  "sleep": 1.5
+ },
+ {
+  "cmd": "script.vars",
+  "params": {
+   "entity": "Game"
+  },
+  "expect": {
+   "result.state": "playing",
+   "result.hp": 3,
+   "result.score": 0
+  }
+ },
+ {
+  "cmd": "script.list"
+ },
+ {
+  "cmd": "logic.diagnostics"
+ },
+ {
+  "shot": "restarted"
  }
 ]

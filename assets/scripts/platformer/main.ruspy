@@ -4,15 +4,14 @@ shards = [[8, 2.4], [12, 3.8], [16, 2.4], [20, 3.6], [21, 3.6], [27, 2.7], [33, 
 
 fn _ready() {
     for pl in platforms {
-        n = spawn_node("Platform");
+        n = spawn_node("Platform", self);
         n.position = [pl[0], pl[1], 0.0];
         n.add_primitive("box", [pl[2], 0.4, 3.0], [0.45, 0.4, 0.55]);
         n.add_body("static", "box", [pl[2], 0.4, 3.0]);
         n.add_to_group("platforms");
-        n.set_process_mode("pausable");
     }
     for s in shards {
-        n = spawn_node("Shard");
+        n = spawn_node("Shard", self);
         n.position = [s[0], s[1], 0.0];
         n.attach_script("scripts/platformer/shard.ruspy");
     }

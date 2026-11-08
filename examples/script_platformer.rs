@@ -30,8 +30,10 @@ fn main() {
         .add_action(key("pf_left", "Left", &[KeyCode::KeyA, KeyCode::ArrowLeft]))
         .add_action(key("pf_right", "Right", &[KeyCode::KeyD, KeyCode::ArrowRight]))
         .add_action(key("pf_jump", "Jump", &[KeyCode::Space, KeyCode::KeyW, KeyCode::ArrowUp]))
-        .add_action(key("pf_pause", "Pause", &[KeyCode::KeyP]))
+        .add_action(key("pf_pause", "Pause", &[KeyCode::KeyP]).context("pf_ui"))
         .add_systems(Startup, stage);
+    // The pause key must keep working while paused, so it lives in its own always-on context.
+    app.world_mut().resource_mut::<engine::actions::InputContexts>().push("pf_ui");
     app.world_mut().resource_mut::<LevelConfig>().startup = Some("levels/platformer.level.ron".into());
     app.run();
 }

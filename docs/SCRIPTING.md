@@ -437,6 +437,10 @@ fn _physics_process(dt) {
 }
 ```
 
+Kinematic characters block each other (shape cast with a small skin), so a player and an enemy that
+should overlap need layers: `set_collision_mask(1)` on the player, `set_collision_layer(2)` on enemies,
+then `get_overlapping_bodies()` sees the touch.
+
 Scripted entities with a `Collider` get `CollisionEventsEnabled` automatically, so the built-in
 `body_entered` / `body_exited` signals work for sensors (`Sensor`) as well as bodies, including a
 static sensor against a kinematic or dynamic body. Static against static never collides (avian).
@@ -462,6 +466,9 @@ did not install is an error ("sound is not set up in this app"). `[n,]` is the o
 | `set_time_scale(x)` (0..8), `get_time_scale()`, `get_fps()`, `quit()` | engine |
 | `push_error(msg)`, `push_warning(msg)`, `assert(cond [, msg])` | Output panel (file of the running script); a failed assert raises an error |
 | `nav_goto([n,] [x,y,z])`, `nav_stop([n])`, `nav_is_done([n])`, `nav_status([n])`, `nav_target([n])` | `NavAgent` control |
+
+UI roots a script creates (`ui_panel()` with no parent) are freed with that script's node. A runtime
+connection to a node that was freed is dropped quietly. `tween_callback(t, "queue_free")` works.
 
 A `NavAgent` node emits `navigation_finished` on arrival and `navigation_failed` when no path
 exists.

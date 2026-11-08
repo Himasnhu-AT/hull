@@ -38,12 +38,12 @@
       4294966004: (
         components: {
           "bevy_ecs::name::Name": "MoverA",
-          "bevy_transform::components::transform::Transform": (translation: (24, 1.2, 0), rotation: (0.0, 0.0, 0.0, 1.0), scale: (1.0, 1.0, 1.0)),
+          "bevy_transform::components::transform::Transform": (translation: (23, 1.2, 0), rotation: (0.0, 0.0, 0.0, 1.0), scale: (1.0, 1.0, 1.0)),
           "bevy_camera::visibility::Visibility": Inherited,
           "engine::level::LevelEntity": (id: (4)),
           "engine::scripting::Script": (path: "scripts/platformer/mover.ruspy", priority: 0, process_mode: Inherit),
           "engine::level::primitive::Primitive": (shape: Cuboid, size: (3.0, 0.4, 3.0), color: Srgba((red: 0.35, green: 0.5, blue: 0.8, alpha: 1.0)), metallic: 0.0, roughness: 0.6),
-          "engine::scripting::ScriptProps": (values: [(name: "from", value: "[24.0, 1.2, 0.0]"), (name: "to", value: "[31.0, 1.2, 0.0]"), (name: "secs", value: "3.0")]),
+          "engine::scripting::ScriptProps": (values: [(name: "from", value: "[23.0, 1.2, 0.0]"), (name: "to", value: "[27.0, 1.2, 0.0]"), (name: "secs", value: "3.0")]),
         },
       ),
       4294966005: (
@@ -69,7 +69,7 @@
       4294966007: (
         components: {
           "bevy_ecs::name::Name": "Runner",
-          "bevy_transform::components::transform::Transform": (translation: (30, 0.6, 0), rotation: (0.0, 0.0, 0.0, 1.0), scale: (1.0, 1.0, 1.0)),
+          "bevy_transform::components::transform::Transform": (translation: (32, 0.6, 0), rotation: (0.0, 0.0, 0.0, 1.0), scale: (1.0, 1.0, 1.0)),
           "bevy_camera::visibility::Visibility": Inherited,
           "engine::level::LevelEntity": (id: (7)),
           "engine::scripting::Script": (path: "scripts/platformer/runner.ruspy", priority: 0, process_mode: Inherit),

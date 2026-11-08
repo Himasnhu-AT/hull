@@ -78,7 +78,7 @@ fn on_score(score, total) {
 }
 
 fn on_hp(hp, max_hp) {
-    set_progress(hp_bar, hp / max_hp);
+    set_progress(hp_bar, 1.0 * hp / max_hp);
 }
 
 fn on_state(state) {

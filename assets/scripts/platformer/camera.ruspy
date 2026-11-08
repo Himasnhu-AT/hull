@@ -1,10 +1,10 @@
 // Side-on follow camera: eases toward the player along X, fixed height and distance.
-offset = [0.0, 3.5, 13.0];
+offset = [0.0, 2.6, 9.0];
 follow = 4.0;
 player = null;
 
 fn _process(dt) {
-    if is_null(player) {
+    if is_null(player) || !is_valid(player) {
         player = get_first_node_in_group("player");
         if is_null(player) {
             return;
