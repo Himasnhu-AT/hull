@@ -119,6 +119,7 @@ pub(super) fn register(e: &mut Engine) {
     super::api_node::register(e);
     super::api_input::register(e);
     super::api_pause::register(e);
+    super::tween::register(e);
 }
 
 fn core(e: &mut Engine) {

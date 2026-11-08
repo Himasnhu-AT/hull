@@ -287,6 +287,46 @@ Actions are the engine's (`ActionDef`, rebinding, gamepad: `docs/ACTIONS.md`); p
 returns an id, `stop_timer(id)`; `timer_start([n] [, secs])`, `timer_stop([n])`,
 `timer_left([n])` drive an entity's `ScriptTimer`.
 
+### Tween
+
+Godot's `Tween` (`src/scripting/tween.rs`). A tween is bound to a node (`tween()` is `self`,
+`tween(n)` is `n`), dies with it, and follows its process mode: a paused game freezes
+pausable tweens, `Always` tweens keep going. Steps run in order; `tween_parallel(id)` makes the
+next step run together with the previous one. Defaults like Godot: ease `in_out`, trans `linear`;
+`tween_set_ease` / `tween_set_trans` apply to the steps added after them.
+
+| Function | |
+|---|---|
+| `tween([n])` | new tween id |
+| `tween_property(id, [node,] prop, to, secs)` | `prop`: `position`, `rotation` (euler), `scale`, `color` (as `set_color`), `bg`, `text_color`, `alpha`, `member:<name>` (script member), or a reflect path `"Transform.translation.y"` / `"PointLight.intensity"`; `to` is a number, `[x,y,z]` or `[r,g,b(,a)]` |
+| `tween_from(id, from)` | start value of the last property step (default: the current value when the step starts) |
+| `tween_interval(id, secs)`, `tween_callback(id, method [, args...])` | wait; call a method on the bound node |
+| `tween_parallel(id)`, `tween_chain(id)` | next step joins the previous / goes back to sequential |
+| `tween_set_ease(id, "in"/"out"/"in_out"/"out_in")`, `tween_set_trans(id, ...)` | `linear sine quad cubic quart quint expo circ back elastic bounce` |
+| `tween_set_loops(id, n)` | repeat the whole tween `n` times, `0` = forever |
+| `tween_on_finished(id, method)` | sugar: calls `method(id)` when done |
+| `tween_pause(id)`, `tween_play(id)`, `tween_kill(id)`, `tween_is_running(id)`, `tween_owner(id)` | control |
+
+When a tween ends it emits `tween_finished(id)` from the bound node:
+`connect("tween_finished", self(), "on_done")`. A looping tween never finishes.
+
+```
+fn _ready() {
+    t = tween();
+    tween_set_trans(t, "back"); tween_set_ease(t, "out");
+    tween_property(t, "scale", [1.2, 1.2, 1.2], 0.2);
+    tween_parallel(t);
+    tween_property(t, "color", [1, 0.4, 0.4], 0.2);   // together with the scale
+    tween_interval(t, 0.5);
+    tween_callback(t, "flash_done");
+}
+```
+
+Property values at the end of a step are exactly `to`. Each frame costs a few float operations
+per active step (reflect paths go through the registry and cost more: use `position`, `scale`,
+`color`, `member:` for hot tweens). Callback arguments keep numbers as floats. A step whose
+target node was freed is skipped; a property that cannot be read or set goes to the diagnostics.
+
 ### Math
 
 `vec3(x, y, z)`, `vadd`, `vsub`, `vscale(v, k)`, `vlen`, `vnorm`, `vdot`, `vcross`,
