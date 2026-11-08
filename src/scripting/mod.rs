@@ -22,6 +22,7 @@ mod api_engine;
 mod api_input;
 mod api_node;
 mod api_pause;
+mod tween;
 #[cfg(feature = "devtools")]
 mod devtools;
 pub mod tree;
@@ -38,6 +39,7 @@ mod bench;
 mod tests_pause;
 #[cfg(test)]
 mod tests_engine;
+mod tests_tween;
 
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
@@ -441,6 +443,7 @@ impl Plugin for ScriptingPlugin {
         app.add_systems(Update, api_engine::nav_signals.after(timers).before(ui_signals).in_set(ScriptSet::Events));
         tree::plugin(app);
         ui::plugin(app);
+        tween::plugin(app);
         #[cfg(feature = "devtools")]
         devtools::register(app);
     }

@@ -265,30 +265,48 @@ fn render(e: &mut Engine) {
         let w = world(c)?;
         let (t, r) = split(w, a, 1, "set_color([node,] [r, g, b(, a)])")?;
         let col = color_of(&r[0])?;
-        #[cfg(feature = "level")]
-        if let Some(mut p) = w.get_mut::<crate::level::Primitive>(t) {
-            p.color = col;
-            return Ok(RV::Void);
-        }
-        if let Some(h) = w.get::<MeshMaterial3d<StandardMaterial>>(t).map(|m| m.0.clone()) {
-            let own = w.entity(t).contains::<OwnMaterial>();
-            let mut assets = w.get_resource_mut::<Assets<StandardMaterial>>().ok_or("set_color: no material assets")?;
-            if own {
-                if let Some(mut m) = assets.get_mut(&h) {
-                    m.base_color = col;
-                }
-            } else {
-                let mut m = assets.get(&h).cloned().ok_or("set_color: material not loaded")?;
-                m.base_color = col;
-                let nh = assets.add(m);
-                w.entity_mut(t).insert((MeshMaterial3d(nh), OwnMaterial));
-            }
-            return Ok(RV::Void);
-        }
-        if let Some(mut bg) = w.get_mut::<BackgroundColor>(t) {
-            bg.0 = col;
-            return Ok(RV::Void);
-        }
-        Err(format!("set_color: entity {t} has no Primitive, StandardMaterial or BackgroundColor"))
+        apply_color(w, t, col)?;
+        Ok(RV::Void)
     });
+}
+
+/// `set_color` semantics for any caller (tweens): Primitive, own material copy, or UI background.
+pub(super) fn apply_color(w: &mut World, t: Entity, col: Color) -> Result<(), String> {
+    #[cfg(feature = "level")]
+    if let Some(mut p) = w.get_mut::<crate::level::Primitive>(t) {
+        p.color = col;
+        return Ok(());
+    }
+    if let Some(h) = w.get::<MeshMaterial3d<StandardMaterial>>(t).map(|m| m.0.clone()) {
+        let own = w.entity(t).contains::<OwnMaterial>();
+        let mut assets = w.get_resource_mut::<Assets<StandardMaterial>>().ok_or("set_color: no material assets")?;
+        if own {
+            if let Some(mut m) = assets.get_mut(&h) {
+                m.base_color = col;
+            }
+        } else {
+            let mut m = assets.get(&h).cloned().ok_or("set_color: material not loaded")?;
+            m.base_color = col;
+            let nh = assets.add(m);
+            w.entity_mut(t).insert((MeshMaterial3d(nh), OwnMaterial));
+        }
+        return Ok(());
+    }
+    if let Some(mut bg) = w.get_mut::<BackgroundColor>(t) {
+        bg.0 = col;
+        return Ok(());
+    }
+    Err(format!("set_color: entity {t} has no Primitive, StandardMaterial or BackgroundColor"))
+}
+
+/// The color `apply_color` would change.
+pub(super) fn read_color(w: &World, t: Entity) -> Option<Color> {
+    #[cfg(feature = "level")]
+    if let Some(p) = w.get::<crate::level::Primitive>(t) {
+        return Some(p.color);
+    }
+    if let Some(h) = w.get::<MeshMaterial3d<StandardMaterial>>(t) {
+        return w.get_resource::<Assets<StandardMaterial>>()?.get(&h.0).map(|m| m.base_color);
+    }
+    w.get::<BackgroundColor>(t).map(|b| b.0)
 }
