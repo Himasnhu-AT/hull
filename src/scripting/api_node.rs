@@ -90,6 +90,14 @@ fn instantiate(w: &mut World, path: &str, parent: Option<Entity>) -> Result<Opti
         let migrations = w.resource::<crate::level::LevelMigrations>();
         file::parse(&text, &registry.read(), &mut server, migrations).map_err(|e| format!("instantiate {path}: {e}"))?
     };
+    // A parent without a transform breaks transform propagation for the whole instance (its
+    // children would sit at the world origin): give it an identity one, like a Godot Node3D.
+    if let Some(p) = parent
+        && let Ok(mut pm) = w.get_entity_mut(p)
+        && !pm.contains::<Transform>()
+    {
+        pm.insert((Transform::IDENTITY, Visibility::default()));
+    }
     let spawned = file::spawn_instance(w, &parsed, parent).map_err(|e| format!("instantiate {path}: {e}"))?;
     Ok(spawned.into_iter().find(|e| w.get::<ChildOf>(*e).map(|c| c.parent()) == parent))
 }
