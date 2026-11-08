@@ -21,6 +21,10 @@ mod api;
 mod api_input;
 mod api_node;
 mod api_pause;
+#[cfg(feature = "physics")]
+mod api_physics;
+#[cfg(feature = "physics")]
+pub use api_physics::CharacterBody;
 #[cfg(feature = "devtools")]
 mod devtools;
 pub mod tree;
@@ -35,6 +39,8 @@ mod tests_api;
 mod bench;
 #[cfg(test)]
 mod tests_pause;
+#[cfg(all(test, feature = "physics"))]
+mod tests_physics;
 
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
@@ -407,6 +413,8 @@ pub enum ScriptSet {
 
 impl Plugin for ScriptingPlugin {
     fn build(&self, app: &mut App) {
+        #[cfg(feature = "physics")]
+        app.register_type::<CharacterBody>();
         app.register_type::<Script>()
             .register_type::<ScriptProps>()
             .register_type::<ScriptProp>()
@@ -1205,7 +1213,18 @@ fn ui_signals(
 /// Physics overlaps: `body_entered(other)` / `body_exited(other)` on both bodies.
 #[cfg(feature = "physics")]
 fn physics_signals(world: &mut World, mut cursor: Local<PhysicsCursor>) {
-    use avian3d::prelude::{CollisionEnd, CollisionStart};
+    use avian3d::prelude::{Collider, CollisionEnd, CollisionEventsEnabled, CollisionStart};
+    // avian writes collision messages only for colliders that opt in; scripted ones do.
+    let q = cursor.enable.get_or_insert_with(|| world.query_filtered::<Entity, (With<Script>, With<Collider>, Without<CollisionEventsEnabled>)>());
+    let need: Vec<Entity> = q.iter(world).collect();
+    for e in need {
+        // The collider tree reads the flag when a collider is added, so re-add the collider
+        // together with the flag.
+        let mut em = world.entity_mut(e);
+        if let Some(c) = em.take::<Collider>() {
+            em.insert((c, CollisionEventsEnabled));
+        }
+    }
     let mut out: Vec<(Entity, &'static str, Entity)> = vec![];
     {
         let (Some(starts), Some(ends)) = (world.get_resource::<Messages<CollisionStart>>(), world.get_resource::<Messages<CollisionEnd>>()) else {
@@ -1234,6 +1253,7 @@ fn physics_signals(world: &mut World, mut cursor: Local<PhysicsCursor>) {
 struct PhysicsCursor {
     start: bevy::ecs::message::MessageCursor<avian3d::prelude::CollisionStart>,
     end: bevy::ecs::message::MessageCursor<avian3d::prelude::CollisionEnd>,
+    enable: Option<QueryState<Entity, (With<Script>, With<avian3d::prelude::Collider>, Without<avian3d::prelude::CollisionEventsEnabled>)>>,
 }
 
 /// End of frame: deferred calls, then `queue_free` (`_exit_tree` on the subtree, then despawn),

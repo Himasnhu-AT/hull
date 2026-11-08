@@ -248,6 +248,7 @@ function acts on `self`. Errors in a host call become a diagnostic with the scri
 | `emit_signal(name, args...)` | emit from `self`; returns the number of calls made |
 | `connect([source,] signal, target, method [, flags])`, `disconnect(...)`, `is_connected(...)` | runtime connections; `source` is told apart by being an **int entity** first argument (not by argument count), else `self` |
 | `connect_flags.DEFERRED` / `connect_flags.ONE_SHOT` (or `CONNECT_DEFERRED()` / `CONNECT_ONE_SHOT()`) | Godot's flag values 1 and 4; combine with `+` (ruspy has no `|`): `connect("s", t, "m", connect_flags.DEFERRED + connect_flags.ONE_SHOT)`. Other bits are ignored |
+| physics: `raycast`, `get_overlapping_bodies`, `set_velocity`, `move_and_slide`, `is_on_floor`, ... | [Physics](#physics) |
 | `get_tree_paused()`, `set_tree_paused(b)`, `set_process_mode([n,] m)`, `get_process_mode([n])`, `set_process([n,] b)`, `set_physics_process([n,] b)`, `is_processing([n])` | [pause and process mode](#pause-and-process-mode) |
 | `call(node, method, args...)` | synchronous call into another script; returns its value |
 | `has_method([n,] method)` | |
@@ -286,6 +287,41 @@ Actions are the engine's (`ActionDef`, rebinding, gamepad: `docs/ACTIONS.md`); p
 `delta()`, `physics_delta()`, `time()` (seconds since start), `start_timer(secs, method [, repeat])`
 returns an id, `stop_timer(id)`; `timer_start([n] [, secs])`, `timer_stop([n])`,
 `timer_left([n])` drive an entity's `ScriptTimer`.
+
+### Physics
+
+Feature `physics` (`src/scripting/api_physics.rs`). Layers and masks are Godot-style int bitmasks.
+`[n,]` is the optional leading node.
+
+| Function | |
+|---|---|
+| `raycast(from, to [, exclude])`, `raycast_dir(from, dir, max_dist [, exclude])` | `null`, or a hit array `[entity, [px,py,pz], [nx,ny,nz], distance]` (ruspy has no maps yet) |
+| `get_overlapping_bodies([n])` | entities whose colliders overlap `n`'s collider now (a shape query, so it also works for static sensors; the result is the owning body) |
+| `overlap_sphere(center, radius)` | entities inside a sphere |
+| `get_velocity([n])`, `set_velocity([n,] v)`, `apply_impulse([n,] v)`, `set_gravity_scale([n,] x)` | `LinearVelocity`, impulse = `v / mass`, `GravityScale` |
+| `set_collision_layer([n,] m)`, `set_collision_mask([n,] m)`, `get_collision_layer([n])`, `get_collision_mask([n])` | `CollisionLayers` memberships / filters |
+| `move_and_slide([n,] velocity)` | Godot `CharacterBody3D`: sweeps the node's `Collider` by `velocity * physics_delta`, slides up to 4 times, returns the new velocity |
+| `is_on_floor([n])`, `is_on_wall([n])`, `is_on_ceiling([n])`, `get_floor_normal([n])` | state of the last `move_and_slide` |
+
+`move_and_slide` adds a `CharacterBody { up, floor_max_angle (45 deg), snap (0.1 m) }` component
+(Reflect, editable) and `RigidBody::Kinematic` on first use. Call it from `_physics_process`; it
+moves `Transform` directly (use a root node). While not moving up it keeps the body glued to floors
+within `snap`:
+
+```
+vx = 0.0; vy = 0.0;
+fn _physics_process(dt) {
+    v = move_and_slide([vx, vy, 0]);
+    vx = v[0];
+    vy = v[1] - 20.0 * dt;
+}
+```
+
+Scripted entities with a `Collider` get `CollisionEventsEnabled` automatically, so the built-in
+`body_entered` / `body_exited` signals work for sensors (`Sensor`) as well as bodies, including a
+static sensor against a kinematic or dynamic body. Static against static never collides (avian).
+Not provided: `apply_force` (avian 0.8 has no one-shot force; use `apply_impulse`), per-shape
+queries other than ray and sphere.
 
 ### Math
 
