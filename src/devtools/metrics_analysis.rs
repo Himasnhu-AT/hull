@@ -253,6 +253,8 @@ pub struct Input<'a> {
     pub ended: Option<&'a str>,
     /// The previous comparable run.
     pub prev: Option<&'a SessionSummary>,
+    /// The run's incident counts from its summary (used when no incident events were logged).
+    pub incidents: Option<&'a BTreeMap<String, u64>>,
 }
 
 pub fn analyze(inp: &Input) -> Analysis {
@@ -572,6 +574,11 @@ fn issues(a: &Analysis, inp: &Input) -> Vec<Issue> {
         r.0 += e.field("count").and_then(|c| c.parse::<usize>().ok()).unwrap_or(1).max(1);
         r.1 = r.1.max(v);
     }
+    if rules.is_empty() && let Some(inc) = inp.incidents {
+        for (rule, n) in inc.iter().filter(|(_, n)| **n > 0) {
+            rules.insert(rule.clone(), (*n as usize, 0.0, 0.0));
+        }
+    }
     for (rule, (n, worst, first)) in rules {
         let (title, unit) = match rule.as_str() {
             "long_frames" => ("Long frames", " ms"),
@@ -709,7 +716,7 @@ pub fn label(key: &str) -> String {
         "frame.p99_ms" => "Frame time, slowest 1%",
         "frame.max_ms" => "Slowest frame",
         "frame.hitches" => "Hitches (> 50 ms)",
-        "frame.long" => "Long frames",
+        "frame.long" => "Long frames per second (over budget)",
         "cpu.machine_pct" => "CPU, share of the whole machine",
         "cpu.process_pct" => "CPU, this game (100% = 1 core)",
         "cpu.cores" => "Cores busy",
@@ -738,7 +745,7 @@ pub fn label(key: &str) -> String {
         "gpu.render_pipelines" => "Render pipelines",
         "gpu.compute_pipelines" => "Compute pipelines",
         "mem.footprint_mb" => "Memory, this game",
-        "mem.peak_mb" => "Memory, peak of this game",
+        "mem.peak_mb" => "Memory, peak since launch",
         "mem.rss_mb" => "Resident memory, this game",
         "mem.system_used_mb" => "System memory in use",
         "mem.system_total_mb" => "System memory installed",
@@ -783,7 +790,7 @@ mod tests {
     }
 
     fn input<'a>(m: &'a Metrics, events: &'a [ViewEvent], prev: Option<&'a SessionSummary>) -> Input<'a> {
-        Input { m, events, live: false, ended: Some("exit"), prev }
+        Input { m, events, live: false, ended: Some("exit"), prev, incidents: None }
     }
 
     #[test]

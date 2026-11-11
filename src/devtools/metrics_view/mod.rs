@@ -246,7 +246,7 @@ impl ViewerUi {
         let own = inp.st.summary.clone().or_else(|| inp.info.map(|i| current(inp.m, i, quality, "running")));
         let prev = previous(inp.past, &run_id, own.as_ref());
         let ended = inp.st.summary.as_ref().map(|s| s.ended.as_str());
-        let analysis = analyze(&Input { m: inp.m, events: &inp.st.events, live, ended, prev });
+        let analysis = analyze(&Input { m: inp.m, events: &inp.st.events, live, ended, prev, incidents: inp.st.summary.as_ref().map(|s| &s.incidents) });
         let summary = own.unwrap_or_else(|| pseudo_summary(&run_id, &analysis, inp));
         self.cache = Some(Cache { key, analysis, summary });
     }

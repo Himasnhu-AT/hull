@@ -226,13 +226,15 @@ pub struct ViewEvent {
     pub name: String,
     pub fields: Vec<(String, String)>,
     pub kind: EventKind,
+    /// Readable text instead of the raw fields (incidents).
+    pub text: Option<String>,
 }
 
 impl ViewEvent {
     /// `fields` as `k=v` tokens separated by spaces.
     pub fn new(t: f64, name: &str, fields: &str) -> ViewEvent {
         let fields = fields.split_whitespace().filter_map(|kv| kv.split_once('=')).map(|(k, v)| (k.to_string(), v.to_string())).collect();
-        ViewEvent { t, name: name.to_string(), fields, kind: EventKind::of(name) }
+        ViewEvent { t, name: name.to_string(), fields, kind: EventKind::of(name), text: None }
     }
 
     pub fn field(&self, key: &str) -> Option<&str> {
@@ -241,6 +243,9 @@ impl ViewEvent {
 
     /// `"from=Boot  to=MainMenu"`.
     pub fn detail(&self) -> String {
+        if let Some(t) = &self.text {
+            return t.clone();
+        }
         self.fields.iter().map(|(k, v)| format!("{k}={v}")).collect::<Vec<_>>().join("  ")
     }
 
@@ -671,6 +676,20 @@ fn record_perf(m: &mut Metrics, o: &Map<String, Value>) {
     }
 }
 
+/// "stall 412 ms", "6 long frames, worst 38 ms", "memory +180 MB over 5 min".
+fn incident_text(o: &Map<String, Value>) -> String {
+    let value = o.get("value").and_then(Value::as_f64).unwrap_or(0.0);
+    let count = o.get("count").and_then(Value::as_u64).unwrap_or(1);
+    let v = super::metrics::sig4(value);
+    match o.get("rule").and_then(Value::as_str).unwrap_or("") {
+        "stall" if count > 1 => format!("stall {v} ms (x{count})"),
+        "stall" => format!("stall {v} ms"),
+        "long_frames" => format!("{} long frames, worst {v} ms", count * 3),
+        "memory_growth" => format!("memory +{v} MB over {} min", ashlar_trace_proto::MEMORY_FLOORS),
+        other => format!("{other} {v}"),
+    }
+}
+
 /// An event line as the view shows it.
 fn view_event(t: f64, ev: &str, o: &Map<String, Value>) -> ViewEvent {
     let mut fields = Vec::new();
@@ -687,7 +706,8 @@ fn view_event(t: f64, ev: &str, o: &Map<String, Value>) -> ViewEvent {
         let v = if v.chars().count() > 120 { v.chars().take(117).chain("...".chars()).collect() } else { v };
         fields.push((k.clone(), v));
     }
-    ViewEvent { t, name: ev.to_string(), fields, kind: EventKind::of(ev) }
+    let text = (ev == "incident").then(|| incident_text(o));
+    ViewEvent { t, name: ev.to_string(), fields, kind: EventKind::of(ev), text }
 }
 
 #[cfg(test)]
@@ -733,6 +753,14 @@ mod tests {
         )
         .unwrap();
         assert_eq!(view_event(83.42, "state", &o).line(), "1:23.4  state  from=Boot  to=MainMenu");
+    }
+
+    #[test]
+    fn incident_lines_read_well() {
+        let line = |j: &str| view_event(83.4, "incident", &serde_json::from_str::<Map<String, Value>>(j).unwrap()).line();
+        assert_eq!(line(r#"{"rule":"stall","value":412.0,"count":1}"#), "1:23.4  incident  stall 412 ms");
+        assert_eq!(line(r#"{"rule":"long_frames","value":38.0,"count":1}"#), "1:23.4  incident  3 long frames, worst 38 ms");
+        assert_eq!(line(r#"{"rule":"memory_growth","value":180.0,"count":1}"#), "1:23.4  incident  memory +180 MB over 5 min");
     }
 
     #[test]

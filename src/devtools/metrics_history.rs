@@ -66,12 +66,23 @@ pub struct SessionSummary {
     pub args: Vec<String>,
     /// Per key, over the session after warm-up.
     pub keys: BTreeMap<String, Summary>,
+    /// Incident rule name -> times it fired (see `incidents`).
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub incidents: BTreeMap<String, u64>,
 }
 
 impl SessionSummary {
     /// Same setup (mode, profile, quality, labels): deltas between these mean something.
     pub fn comparable(&self, other: &SessionSummary) -> bool {
         self.mode == other.mode && self.profile == other.profile && self.quality == other.quality && self.labels == other.labels
+    }
+
+    /// Adds this run's incident counts.
+    pub fn with_incidents(mut self, i: Option<&super::incidents::Incidents>) -> Self {
+        if let Some(i) = i {
+            self.incidents = i.counts();
+        }
+        self
     }
 
     /// `c02421c*` (dirty) or `no git`.
@@ -165,6 +176,7 @@ pub fn current(m: &Metrics, run: &RunInfo, quality: Option<String>, ended: &str)
         warmup_s: m.warmup,
         args: run.args.clone(),
         keys: m.keys().filter_map(|k| m.session(k).map(|s| (k.to_string(), s.rounded()))).collect(),
+        incidents: BTreeMap::new(),
     }
 }
 
@@ -262,6 +274,7 @@ fn save_history(
     mut history: ResMut<MetricsHistory>,
     settings: Option<Res<crate::settings::CoreSettings>>,
     log: Option<Res<SessionLog>>,
+    incidents: Option<Res<super::incidents::Incidents>>,
     time: Res<Time<Real>>,
     mut next: Local<Option<Duration>>,
     mut done: Local<bool>,
@@ -273,7 +286,7 @@ fn save_history(
     let quality = settings.map(|s| format!("{:?}", s.quality));
     if exit.read().count() > 0 {
         *done = true;
-        let s = current(&m, &run, quality, "exit");
+        let s = current(&m, &run, quality, "exit").with_incidents(incidents.as_deref());
         if let Some(l) = &log {
             l.write("metrics.summary", serde_json::to_value(&s).unwrap_or(Value::Null));
         }
@@ -286,7 +299,7 @@ fn save_history(
     let due = next.get_or_insert(CHECKPOINT);
     if now >= *due {
         *due = now + CHECKPOINT;
-        let s = current(&m, &run, quality, "killed");
+        let s = current(&m, &run, quality, "killed").with_incidents(incidents.as_deref());
         let path = checkpoint_path(&dir);
         // Off the frame: the file write never shows up as a hitch.
         let _ = std::thread::Builder::new().name("metrics-save".into()).spawn(move || {
@@ -385,13 +398,14 @@ fn dump(world: &mut World, p: Value) -> Result<Value, String> {
         "run": run,
         "window": view,
         "keys": keys,
+        "incidents": world.get_resource::<super::incidents::Incidents>().map_or(json!({}), |i| i.json()),
     }))
 }
 
 fn sessions(world: &mut World, p: Value) -> Result<Value, String> {
     let n = p.get("n").and_then(Value::as_u64).unwrap_or(10) as usize;
     let cur = match (world.get_resource::<Metrics>(), world.get_resource::<RunInfo>()) {
-        (Some(m), Some(r)) => Some(current(m, r, quality(world), "running")),
+        (Some(m), Some(r)) => Some(current(m, r, quality(world), "running").with_incidents(world.get_resource::<super::incidents::Incidents>())),
         _ => None,
     };
     let h = world.get_resource::<MetricsHistory>().cloned().unwrap_or_default();

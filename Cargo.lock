@@ -463,6 +463,20 @@ version = "0.1.0"
 source = "git+https://github.com/Himasnhu-AT/ashlar?rev=c677a9d588e7082c421768ef4cbe0cf8d3981123#c677a9d588e7082c421768ef4cbe0cf8d3981123"
 
 [[package]]
+name = "ashlar-native"
+version = "0.1.0"
+source = "git+https://github.com/Himasnhu-AT/ashlar?rev=c677a9d588e7082c421768ef4cbe0cf8d3981123#c677a9d588e7082c421768ef4cbe0cf8d3981123"
+dependencies = [
+ "ashlar-command",
+ "libc",
+ "log",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "windows",
+]
+
+[[package]]
 name = "ashlar-syntax"
 version = "0.1.0"
 source = "git+https://github.com/Himasnhu-AT/ashlar?rev=c677a9d588e7082c421768ef4cbe0cf8d3981123#c677a9d588e7082c421768ef4cbe0cf8d3981123"
@@ -3424,7 +3438,9 @@ dependencies = [
  "ashlar-command",
  "ashlar-control",
  "ashlar-mcp",
+ "ashlar-native",
  "ashlar-trace",
+ "ashlar-trace-proto",
  "ashlar-ui",
  "asset-pipe",
  "avian3d",

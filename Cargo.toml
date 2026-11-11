@@ -24,6 +24,9 @@ ashlar-command = { git = "https://github.com/Himasnhu-AT/ashlar", rev = "c677a9d
 ashlar-mcp = { git = "https://github.com/Himasnhu-AT/ashlar", rev = "c677a9d588e7082c421768ef4cbe0cf8d3981123", optional = true }
 # devtools: the metrics viewer's egui UI (src/devtools/metrics_view.rs). Ship builds carry neither.
 ashlar-ui = { git = "https://github.com/Himasnhu-AT/ashlar", rev = "c677a9d588e7082c421768ef4cbe0cf8d3981123", optional = true }
+# devtools incidents: rule constants and OS process memory (peak footprint, thread count).
+ashlar-trace-proto = { git = "https://github.com/Himasnhu-AT/ashlar", rev = "c677a9d588e7082c421768ef4cbe0cf8d3981123", optional = true }
+ashlar-native = { git = "https://github.com/Himasnhu-AT/ashlar", rev = "c677a9d588e7082c421768ef4cbe0cf8d3981123", default-features = false, features = ["memory"], optional = true }
 sysinfo = { version = "0.38", default-features = false, features = ["system"], optional = true }
 # devtools perf monitor: process/thread CPU, memory footprint, GPU probes (macOS/Linux FFI).
 libc = "0.2"
@@ -100,7 +103,7 @@ fps = ["physics"]
 # Wheeled vehicles: raycast suspension, tyres, drivetrain, winch (src/vehicle, docs/VEHICLE.md). Needs physics.
 vehicle = ["physics"]
 # Control port + MCP, offscreen capture, perf overlay. Ship builds turn this off.
-devtools = ["dep:ashlar-control", "dep:ashlar-command", "dep:ashlar-mcp", "dep:sysinfo", "dep:bevy_egui", "dep:ashlar-ui"]
+devtools = ["dep:ashlar-control", "dep:ashlar-command", "dep:ashlar-mcp", "dep:ashlar-trace-proto", "dep:ashlar-native", "dep:sysinfo", "dep:bevy_egui", "dep:ashlar-ui"]
 trace = ["dep:ashlar-trace"]
 # Code-first scene look (sun/sky/fog/exposure/grading/lens), probes, decals: src/look, docs/LOOK.md.
 look = []
