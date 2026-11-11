@@ -587,9 +587,27 @@ fn record_perf(m: &mut Metrics, o: &Map<String, Value>) {
     }
 }
 
+/// "stall 412 ms", "6 long frames, worst 38 ms", "memory +180 MB over 5 min".
+fn incident_text(o: &Map<String, Value>) -> String {
+    let value = o.get("value").and_then(Value::as_f64).unwrap_or(0.0);
+    let count = o.get("count").and_then(Value::as_u64).unwrap_or(1);
+    let v = super::metrics::sig4(value);
+    match o.get("rule").and_then(Value::as_str).unwrap_or("") {
+        "stall" if count > 1 => format!("stall {v} ms (x{count})"),
+        "stall" => format!("stall {v} ms"),
+        "long_frames" => format!("{} long frames, worst {v} ms", count * 3),
+        "memory_growth" => format!("memory +{v} MB over {} min", ashlar_trace_proto::MEMORY_FLOORS),
+        other => format!("{other} {v}"),
+    }
+}
+
 /// `"1:23.4  state  from=Boot to=MainMenu"`.
 fn event_line(t: f64, ev: &str, o: &Map<String, Value>) -> String {
     let mut s = format!("{}:{:04.1}  {ev}", (t / 60.0) as u64, t % 60.0);
+    if ev == "incident" {
+        s += &format!("  {}", incident_text(o));
+        return s;
+    }
     for (k, v) in o {
         if matches!(k.as_str(), "t" | "ts" | "kind" | "event") {
             continue;
@@ -661,6 +679,14 @@ mod tests {
             event_line(83.42, "state", &o),
             "1:23.4  state  from=Boot  to=MainMenu"
         );
+    }
+
+    #[test]
+    fn incident_lines_read_well() {
+        let line = |j: &str| event_line(83.4, "incident", &serde_json::from_str::<Map<String, Value>>(j).unwrap());
+        assert_eq!(line(r#"{"rule":"stall","value":412.0,"count":1}"#), "1:23.4  incident  stall 412 ms");
+        assert_eq!(line(r#"{"rule":"long_frames","value":38.0,"count":1}"#), "1:23.4  incident  3 long frames, worst 38 ms");
+        assert_eq!(line(r#"{"rule":"memory_growth","value":180.0,"count":1}"#), "1:23.4  incident  memory +180 MB over 5 min");
     }
 
     #[test]

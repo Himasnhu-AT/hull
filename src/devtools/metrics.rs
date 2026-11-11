@@ -401,6 +401,8 @@ pub fn default_threshold(key: &str) -> Option<Threshold> {
         "cpu.machine_pct" => t(50.0, 80.0),
         "mem.footprint_mb" | "mem.rss_mb" => t(2048.0, 4096.0),
         "frame.hitches" => t(1.0, 3.0),
+        "frame.long" => t(1.0, 5.0),
+        "mem.peak_mb" => t(2048.0, 4096.0),
         "perf.overhead_us" => t(200.0, 500.0),
         "cpu.main_ms" | "cpu.render_ms" => t(12.0, 16.7),
         k if k.starts_with("frame.") && k.ends_with("ms") => t(16.7, 33.3),
@@ -423,7 +425,7 @@ pub enum Better {
 pub fn better(key: &str) -> Better {
     if key.ends_with("fps") {
         Better::Higher
-    } else if key.ends_with("ms") || key.ends_with("_us") || key.ends_with("_pct") || key.ends_with("_mb") || key.ends_with("hitches") {
+    } else if key.ends_with("ms") || key.ends_with("_us") || key.ends_with("_pct") || key.ends_with("_mb") || key.ends_with("hitches") || key == "frame.long" {
         Better::Lower
     } else {
         Better::Neutral
@@ -442,6 +444,7 @@ impl Plugin for MetricsPlugin {
         if let Some(render_app) = app.get_sub_app_mut(bevy::render::RenderApp) {
             render_app.insert_resource(objects).add_systems(bevy::render::Render, sample_gpu_objects);
         }
+        super::incidents::build(app);
         super::metrics_history::build(app);
         super::metrics_window::build(app);
     }

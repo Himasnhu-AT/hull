@@ -19,6 +19,7 @@
 
 pub mod commands;
 pub mod control;
+pub mod incidents;
 pub mod metrics;
 mod metrics_chart;
 pub mod metrics_history;
