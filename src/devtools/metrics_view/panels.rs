@@ -274,10 +274,15 @@ impl ViewerUi {
         child.label(RichText::new(h.title).size(t.type_scale.small).color(t.text.secondary));
         RollingText::new(&format!("tile.{}", h.id), &h.text).value(h.value).font(FontId::proportional(26.0)).color(color).tabular(true).show(&mut child);
         child.shrink_clip_rect(inner);
-        child.with_layout(Layout::right_to_left(Align::Center), |ui| {
+        // Narrow tiles show only the delta (left); wide ones the sub-text elided before the delta.
+        let layout = if w < 150.0 { Layout::left_to_right(Align::Center) } else { Layout::right_to_left(Align::Center) };
+        child.with_layout(layout, |ui| {
             ui.spacing_mut().item_spacing.x = 8.0;
             if let Some(d) = h.delta {
                 delta_chip(ui, t, d);
+            }
+            if w < 150.0 {
+                return;
             }
             ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
                 ui.add(egui::Label::new(RichText::new(&h.sub).size(t.type_scale.small).color(t.text.secondary)).truncate());
