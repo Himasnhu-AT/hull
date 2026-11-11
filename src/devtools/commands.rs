@@ -115,7 +115,7 @@ pub(super) fn register(app: &mut App) {
         .add_deferred_control_command(
             "screenshot",
             "Save a screenshot (windowed or --offscreen)",
-            params(&[("path", "string", "PNG path (default: <data dir>/screenshots/shot-<frame>.png)")]),
+            params(&[("path", "string", "PNG/JPEG path, no `..` (default: <data dir>/screenshots/shot-<frame>.png)")]),
             screenshot,
         )
         .add_control_command("perf.stats", "Frame-time statistics and the perf monitor's snapshot", none.clone(), perf_stats)
@@ -347,13 +347,30 @@ fn record_frame(time: Res<Time<Real>>, mut stats: ResMut<FrameStats>) {
 
 // ---- screenshot / perf ----
 
+/// Check a caller-given screenshot path. Callers (play.py `--out <dir>`, the engine's exit
+/// tests, net_play.py) pass absolute or working-folder-relative paths anywhere on disk, so the
+/// path is not confined to the data dir; instead it must be an image file (`.png`, `.jpg`,
+/// `.jpeg`) and contain no `..`, so a control-port client can't climb out of the folder it
+/// names or overwrite a non-image file. The control port itself is dev-only and local.
+fn screenshot_path(raw: &str) -> Result<std::path::PathBuf, String> {
+    let path = std::path::PathBuf::from(raw);
+    if path.components().any(|c| matches!(c, std::path::Component::ParentDir)) {
+        return Err(format!("screenshot path must not contain `..`: {raw}"));
+    }
+    let ext = path.extension().and_then(|e| e.to_str()).map(str::to_ascii_lowercase);
+    if !matches!(ext.as_deref(), Some("png" | "jpg" | "jpeg")) {
+        return Err(format!("screenshot path must end in .png, .jpg or .jpeg: {raw}"));
+    }
+    Ok(path)
+}
+
 fn screenshot(world: &mut World, p: Value, reply: ReplyId) -> Result<(), String> {
     use bevy::render::view::window::screenshot::{Screenshot, ScreenshotCaptured, save_to_disk};
     if headless(world) || !world.contains_resource::<Assets<Image>>() {
         return Err("screenshot needs a renderer (not --headless)".into());
     }
     let path = match str_param(&p, "path") {
-        Some(s) => std::path::PathBuf::from(s),
+        Some(s) => screenshot_path(s)?,
         None => {
             let dir = world
                 .get_resource::<DataDir>()
@@ -656,5 +673,25 @@ mod tests {
         assert_eq!(parse_nav("next_tab"), Some(NavInput::NextTab));
         assert_eq!(parse_nav("Accept"), Some(NavInput::Accept));
         assert_eq!(parse_nav("sideways"), None);
+    }
+}
+
+#[cfg(test)]
+mod screenshot_path_tests {
+    use super::screenshot_path;
+
+    #[test]
+    fn accepts_image_paths_anywhere_without_dotdot() {
+        assert!(screenshot_path("/tmp/out/shot.png").is_ok());
+        assert!(screenshot_path("shots/a.JPG").is_ok());
+        assert!(screenshot_path("./out/b.jpeg").is_ok());
+    }
+
+    #[test]
+    fn rejects_traversal_and_non_images() {
+        assert!(screenshot_path("out/../../etc/x.png").is_err());
+        assert!(screenshot_path("../x.png").is_err());
+        assert!(screenshot_path("/Users/me/.zshrc").is_err());
+        assert!(screenshot_path("/tmp/out/shot").is_err());
     }
 }

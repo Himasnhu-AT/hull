@@ -108,6 +108,33 @@ impl Default for CoreSettings {
     }
 }
 
+impl CoreSettings {
+    /// Make values loaded from settings.json safe to use: anything non-finite goes back to its
+    /// default, and the rest is clamped to the settings-screen ranges (FOV 60–110°, UI scale
+    /// 0.75–1.5, volumes 0–1). A hand-edited `fov_deg` of 0 or 1e39 otherwise makes a NaN
+    /// projection. Sensitivity only gets a loose 0.1–10 bound, since games widen its slider
+    /// (Shroud: up to 4); a game that does should clamp it to its own range after loading.
+    ///
+    /// ```
+    /// use engine::settings::CoreSettings;
+    /// let s = CoreSettings { fov_deg: 0.0, master_volume: f32::NAN, ..Default::default() }.sanitized();
+    /// assert_eq!((s.fov_deg, s.master_volume), (60.0, CoreSettings::default().master_volume));
+    /// ```
+    pub fn sanitized(mut self) -> Self {
+        let d = CoreSettings::default();
+        let fix = |v: &mut f32, default: f32, lo: f32, hi: f32| *v = if v.is_finite() { v.clamp(lo, hi) } else { default };
+        fix(&mut self.sensitivity, d.sensitivity, 0.1, 10.0);
+        fix(&mut self.fov_deg, d.fov_deg, 60.0, 110.0);
+        fix(&mut self.ui_scale, d.ui_scale, 0.75, 1.5);
+        fix(&mut self.master_volume, d.master_volume, 0.0, 1.0);
+        fix(&mut self.sfx_volume, d.sfx_volume, 0.0, 1.0);
+        fix(&mut self.music_volume, d.music_volume, 0.0, 1.0);
+        fix(&mut self.ambience_volume, d.ambience_volume, 0.0, 1.0);
+        fix(&mut self.ui_volume, d.ui_volume, 0.0, 1.0);
+        self
+    }
+}
+
 /// A game's own persisted settings (difficulty, crosshair, …).
 pub trait GameSettings: Resource + Serialize + DeserializeOwned + Default + Clone + PartialEq {}
 impl<T: Resource + Serialize + DeserializeOwned + Default + Clone + PartialEq> GameSettings for T {}
@@ -401,7 +428,8 @@ pub struct CoreSettingsPlugin;
 impl Plugin for CoreSettingsPlugin {
     fn build(&self, app: &mut App) {
         let mut store = store_mut(app);
-        let core: CoreSettings = store.decode(CORE);
+        // Clamped to the settings-screen ranges: a hand-edited file can't break the projection.
+        let core: CoreSettings = store.decode::<CoreSettings>(CORE).sanitized();
         store.sections.retain(|(k, _)| *k != CORE);
         store.sections.insert(0, (CORE, serialize_resource::<CoreSettings>));
         app.insert_resource(core)
@@ -639,6 +667,25 @@ mod tests {
         // Wrong type for a section → that section defaults.
         std::fs::write(&path, r#"{"core":{"fov_deg":"wide"}}"#).unwrap();
         assert_eq!(SettingsStore::load(&path).decode::<CoreSettings>(CORE), CoreSettings::default());
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn loaded_core_settings_are_clamped_and_finite() {
+        // `1e39` parses as f32 infinity; 0° FOV and a negative volume are out of range.
+        let dir = temp_dir("clamp");
+        std::fs::write(dir.join("settings.json"), r#"{"core":{"fov_deg":1e39,"ui_scale":0.0,"master_volume":-2.0,"sensitivity":3.5}}"#).unwrap();
+        let mut app = App::new();
+        app.insert_resource(DataDir(dir.clone()));
+        app.add_plugins(CoreSettingsPlugin);
+        let c = app.world().resource::<CoreSettings>();
+        assert_eq!(c.fov_deg, CoreSettings::default().fov_deg);
+        assert_eq!(c.ui_scale, 0.75);
+        assert_eq!(c.master_volume, 0.0);
+        assert_eq!(c.sensitivity, 3.5, "games may widen the sensitivity slider; only a loose bound here");
+        let z = CoreSettings { fov_deg: 0.0, sensitivity: f32::NAN, ..default() }.sanitized();
+        assert_eq!((z.fov_deg, z.sensitivity), (60.0, CoreSettings::default().sensitivity));
+        assert_eq!(CoreSettings::default().sanitized(), CoreSettings::default());
         let _ = std::fs::remove_dir_all(dir);
     }
 

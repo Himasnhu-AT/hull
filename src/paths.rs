@@ -64,15 +64,42 @@ pub fn save_json<T: serde::Serialize>(path: &std::path::Path, value: &T) -> std:
     write_atomic(path, &text)
 }
 
-/// Writes `text` to a temp file next to `path`, then renames it over `path` (creating folders).
+/// Writes `text` to a temp file next to `path` (named with the process id, so two running
+/// copies never share one), `fsync`s it, renames it over `path` (creating folders), then makes a
+/// best-effort `fsync` of the folder so the rename survives a crash or power cut. On error the
+/// temp file is removed and `path` is untouched.
+///
+/// ```no_run
+/// engine::paths::write_atomic(std::path::Path::new("/tmp/game/save.json"), "{}")?;
+/// # Ok::<(), std::io::Error>(())
+/// ```
 pub fn write_atomic(path: &std::path::Path, text: &str) -> std::io::Result<()> {
-    if let Some(dir) = path.parent() {
+    use std::io::Write;
+    let dir = path.parent().filter(|d| !d.as_os_str().is_empty());
+    if let Some(dir) = dir {
         std::fs::create_dir_all(dir)?;
     }
     let mut tmp = path.as_os_str().to_owned();
-    tmp.push(".tmp");
-    std::fs::write(&tmp, text)?;
-    std::fs::rename(&tmp, path)
+    tmp.push(format!(".{}.tmp", std::process::id()));
+    let tmp = PathBuf::from(tmp);
+    let res = (|| {
+        let mut f = std::fs::File::create(&tmp)?;
+        f.write_all(text.as_bytes())?;
+        f.sync_all()?;
+        drop(f);
+        std::fs::rename(&tmp, path)
+    })();
+    if res.is_err() {
+        let _ = std::fs::remove_file(&tmp);
+        return res;
+    }
+    // Directories can't be opened for syncing on Windows; there the rename is already durable
+    // enough for settings and saves.
+    #[cfg(unix)]
+    if let Some(d) = dir.and_then(|d| std::fs::File::open(d).ok()) {
+        let _ = d.sync_all();
+    }
+    Ok(())
 }
 
 /// `"my-game"` → `"MY_GAME"`: prefix for this game's env overrides.
@@ -176,6 +203,18 @@ mod tests {
         std::fs::create_dir_all(&bare).unwrap();
         assert_eq!(shipped_assets(&bare.join("game")), None);
         let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn write_atomic_replaces_the_file_and_leaves_no_temp() {
+        let dir = std::env::temp_dir().join(format!("write-atomic-test-{}", std::process::id()));
+        let path = dir.join("nested/save.json");
+        write_atomic(&path, "one").unwrap();
+        write_atomic(&path, "two").unwrap();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "two");
+        let names: Vec<_> = std::fs::read_dir(path.parent().unwrap()).unwrap().flatten().map(|e| e.file_name()).collect();
+        assert_eq!(names, vec![std::ffi::OsString::from("save.json")]);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
