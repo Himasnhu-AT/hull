@@ -2,8 +2,6 @@
   {"sleep": 9},
   {"shot": "game"},
   {"shot": "metrics", "cmd": "metrics.screenshot"},
-  {"cmd": "metrics.window", "params": {"scroll": 400}},
-  {"sleep": 0.6},
-  {"shot": "metrics-scrolled", "cmd": "metrics.screenshot"},
-  {"cmd": "metrics.window", "params": {"scroll": 0}}
+  {"shot": "metrics-all", "cmd": "metrics.screenshot", "params": {"tab": "all"}},
+  {"shot": "metrics-events", "cmd": "metrics.screenshot", "params": {"tab": "events", "size": "900x700"}}
 ]

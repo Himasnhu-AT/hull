@@ -376,7 +376,7 @@ fn dump(world: &mut World, p: Value) -> Result<Value, String> {
         let (commit, dirty) = r.git();
         json!({"id": r.id, "game": r.game, "commit": commit, "dirty": dirty, "profile": r.profile, "mode": r.mode})
     });
-    let view = world.get_resource::<super::metrics_window::MetricsView>().map(|v| v.json());
+    let view = world.get_resource::<super::metrics_viewer::ViewerLauncher>().map(|l| l.json());
     Ok(json!({
         "t": (m.now() * 1000.0).round() / 1000.0,
         "frames": m.frames(),

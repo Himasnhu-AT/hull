@@ -20,6 +20,7 @@
 //! there are of 1 s averages; `frame.p95_ms` / `frame.max_ms` (per-second percentiles of
 //! frames) keep the spikes.
 
+use std::collections::HashMap;
 use std::io::{BufRead, Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
@@ -40,7 +41,7 @@ const TAIL: Duration = Duration::from_millis(250);
 /// A run counts as live while its log changed this recently and its process exists.
 const LIVE_STALE: Duration = Duration::from_secs(15);
 /// Events kept per run.
-const MAX_EVENTS: usize = 400;
+const MAX_EVENTS: usize = 5000;
 /// Runs of `sessions.jsonl` loaded for the runs table.
 const HISTORY_RUNS: usize = 200;
 
@@ -103,6 +104,11 @@ pub struct ViewerLauncher {
 }
 
 impl ViewerLauncher {
+    /// For `metrics.dump`: whether a viewer started by this game is open.
+    pub fn json(&self) -> Value {
+        serde_json::json!({"target": "viewer", "open": self.child.is_some()})
+    }
+
     /// Starts the viewer unless one is already open for this data folder. Returns its pid.
     pub fn launch(&mut self, data: &Path) -> Result<u32, String> {
         if let Some(c) = &mut self.child
@@ -171,6 +177,84 @@ pub struct RunFile {
     pub pid: Option<u32>,
 }
 
+/// What a run's log says about itself in its first lines (runs without a `sessions.jsonl` entry).
+#[derive(Clone, Debug, Default)]
+pub struct RunMeta {
+    pub game: String,
+    pub mode: String,
+    pub start_ts: u64,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum EventKind {
+    /// An `incident` line (rule, value, count).
+    Incident,
+    Hitch,
+    State,
+    /// Quality governor / settings changes.
+    Quality,
+    Other,
+}
+
+impl EventKind {
+    pub fn of(name: &str) -> EventKind {
+        match name {
+            "incident" => EventKind::Incident,
+            "perf.hitch" => EventKind::Hitch,
+            "state" => EventKind::State,
+            n if n.contains("quality") || n.contains("governor") || n == "settings" => EventKind::Quality,
+            _ => EventKind::Other,
+        }
+    }
+
+    pub fn word(self) -> &'static str {
+        match self {
+            EventKind::Incident => "incident",
+            EventKind::Hitch => "hitch",
+            EventKind::State => "state",
+            EventKind::Quality => "quality",
+            EventKind::Other => "other",
+        }
+    }
+}
+
+/// One event line of a run.
+#[derive(Clone, Debug)]
+pub struct ViewEvent {
+    /// Seconds into the run.
+    pub t: f64,
+    pub name: String,
+    pub fields: Vec<(String, String)>,
+    pub kind: EventKind,
+}
+
+impl ViewEvent {
+    /// `fields` as `k=v` tokens separated by spaces.
+    pub fn new(t: f64, name: &str, fields: &str) -> ViewEvent {
+        let fields = fields.split_whitespace().filter_map(|kv| kv.split_once('=')).map(|(k, v)| (k.to_string(), v.to_string())).collect();
+        ViewEvent { t, name: name.to_string(), fields, kind: EventKind::of(name) }
+    }
+
+    pub fn field(&self, key: &str) -> Option<&str> {
+        self.fields.iter().find(|(k, _)| k == key).map(|(_, v)| v.as_str())
+    }
+
+    /// `"from=Boot  to=MainMenu"`.
+    pub fn detail(&self) -> String {
+        self.fields.iter().map(|(k, v)| format!("{k}={v}")).collect::<Vec<_>>().join("  ")
+    }
+
+    /// `"1:23.4  state  from=Boot  to=MainMenu"`.
+    pub fn line(&self) -> String {
+        let mut s = format!("{}:{:04.1}  {}", (self.t / 60.0) as u64, self.t % 60.0, self.name);
+        if !self.fields.is_empty() {
+            s += "  ";
+            s += &self.detail();
+        }
+        s
+    }
+}
+
 /// What the viewer shows.
 #[derive(Resource)]
 pub struct ViewerState {
@@ -179,18 +263,26 @@ pub struct ViewerState {
     pub selected: Option<usize>,
     /// On the newest run: move to new runs as they start.
     pub follow: bool,
-    /// Event lines of the selected run (`mm:ss  event  fields`).
-    pub events: Vec<String>,
+    /// Event lines of the selected run.
+    pub events: Vec<ViewEvent>,
     /// The selected run's summary from `sessions.jsonl` (finished runs).
     pub summary: Option<SessionSummary>,
     pub quality: Option<String>,
     pub seconds: f64,
+    /// Bumped whenever the selected run's data changed (new lines, another run).
+    pub generation: u64,
+    /// Bumped whenever the list of runs or the history changed.
+    pub runs_gen: u64,
+    pub meta: HashMap<String, RunMeta>,
+    /// When data last arrived (new log lines).
+    pub last_data: Option<Instant>,
     loaded: Option<PathBuf>,
     offset: u64,
     partial: String,
     has_metrics: bool,
     last_scan: Option<Instant>,
     last_tail: Option<Instant>,
+    history_stamp: Option<(u64, std::time::SystemTime)>,
 }
 
 impl Default for ViewerState {
@@ -203,12 +295,17 @@ impl Default for ViewerState {
             summary: None,
             quality: None,
             seconds: 0.0,
+            generation: 0,
+            runs_gen: 0,
+            meta: HashMap::new(),
+            last_data: None,
             loaded: None,
             offset: 0,
             partial: String::new(),
             has_metrics: false,
             last_scan: None,
             last_tail: None,
+            history_stamp: None,
         }
     }
 }
@@ -218,35 +315,20 @@ impl ViewerState {
         self.selected.and_then(|i| self.runs.get(i))
     }
 
-    /// "run 3 of 12 · 20261102T054341Z · LIVE" for the header.
-    pub fn picker(&self) -> String {
-        let Some(i) = self.selected else {
-            return "no runs logged yet".into();
-        };
-        let r = &self.runs[i];
-        let state = if r.live {
-            "LIVE".to_string()
-        } else {
-            match &self.summary {
-                Some(s) => format!("ended ({})", s.ended),
-                None => "ended".into(),
-            }
-        };
-        let secs = self.seconds as u64;
-        let follow = if self.follow {
-            " · following new runs"
-        } else {
-            ""
-        };
-        format!(
-            "run {} of {} · {} · {} · {}:{:02}{follow}",
-            i + 1,
-            self.runs.len(),
-            r.id,
-            state,
-            secs / 60,
-            secs % 60
-        )
+    /// Selects run `i` (oldest first); selecting the newest follows new runs.
+    pub fn select(&mut self, i: usize) {
+        let n = self.runs.len();
+        if n == 0 {
+            return;
+        }
+        let i = i.min(n - 1);
+        self.selected = Some(i);
+        self.follow = i == n - 1;
+    }
+
+    /// The log file being read.
+    pub fn file(&self) -> Option<&Path> {
+        self.loaded.as_deref()
     }
 }
 
@@ -255,7 +337,9 @@ pub fn run(info: GameInfo) -> ! {
     let data = crate::paths::data_dir(&info);
     let _ = std::fs::create_dir_all(data.join("metrics"));
     let _ = std::fs::write(pid_file(&data), std::process::id().to_string());
-    let (w, h) = super::metrics_window::SIZE;
+    let (w, h) = crate::cli::dev_value("viewer-size")
+        .and_then(|s| s.split_once('x').and_then(|(w, h)| Some((w.parse::<u32>().ok()?, h.parse::<u32>().ok()?))))
+        .unwrap_or(super::metrics_window::SIZE);
     let mut app = App::new();
     app.add_plugins(DefaultPlugins.set(WindowPlugin {
         primary_window: Some(Window {
@@ -266,80 +350,73 @@ pub fn run(info: GameInfo) -> ! {
         }),
         ..default()
     }))
-    // Redraws on input and every 250 ms (the view's refresh), not every display frame.
+    // Redraws on input and every 250 ms while a run is live ([`pace`]), not every display frame.
     .insert_resource(WinitSettings {
         focused_mode: UpdateMode::reactive(TAIL),
         unfocused_mode: UpdateMode::reactive_low_power(TAIL * 2),
     })
     .insert_resource(info)
     .insert_resource(DataDir(data.clone()))
-    .insert_resource(crate::ui::theme::Theme::default())
     .insert_resource(fresh_metrics())
     .insert_resource(MetricsHistory {
         dir: Some(data.join("metrics")),
         past: load(&data.join("metrics/sessions.jsonl"), HISTORY_RUNS),
     })
     .init_resource::<ViewerState>()
-    .add_systems(
-        Update,
-        (viewer_keys, scan, load_selected)
-            .chain()
-            .before(super::metrics_window::ViewSystems),
-    );
-    super::metrics_window::viewer_build(&mut app);
+    .add_systems(Update, (scan, load_selected, pace).chain());
+    super::metrics_view::build(&mut app, &data);
     if let Some(path) = crate::cli::dev_value("viewer-shot") {
         let run = crate::cli::dev_value("viewer-run").and_then(|r| r.parse::<usize>().ok());
-        app.insert_resource(Shot {
-            path: path.into(),
-            run,
-            at: None,
-            asked: false,
-            taken: false,
-        })
-        .add_systems(Update, shot.after(super::metrics_window::ViewSystems));
+        app.insert_resource(Shot { path: path.into(), run, at: None, taken: None })
+            .add_systems(Update, shot.after(load_selected));
     }
     app.run();
     let _ = std::fs::remove_file(pid_file(&data));
     std::process::exit(0)
 }
 
+/// Waits for data while a run is live (250 ms), else once a second: the viewer idles.
+fn pace(st: Res<ViewerState>, mut w: ResMut<WinitSettings>) {
+    let live = st.current().is_some_and(|r| r.live);
+    let period = if live { TAIL } else { SCAN };
+    let want = WinitSettings {
+        focused_mode: UpdateMode::reactive(period),
+        unfocused_mode: UpdateMode::reactive_low_power(period * 2),
+    };
+    if w.focused_mode != want.focused_mode {
+        *w = want;
+    }
+}
+
 /// `--viewer-shot <png>` (with `--metrics-viewer`; `--viewer-run <n>`: 1 = oldest run): save
-/// the view after a few seconds and quit. For checking the viewer from scripts.
+/// the view once it has drawn data and quit. Also `--viewer-size WxH`, `--viewer-tab`,
+/// `--viewer-expand <key>`, `--viewer-search <text>`. For checking the viewer from scripts.
 #[derive(Resource)]
 struct Shot {
     path: PathBuf,
     run: Option<usize>,
     at: Option<Instant>,
-    asked: bool,
-    taken: bool,
+    taken: Option<Instant>,
 }
 
-fn shot(
-    mut commands: Commands,
-    mut s: ResMut<Shot>,
-    mut st: ResMut<ViewerState>,
-    mut view: ResMut<super::metrics_window::MetricsView>,
-    mut exit: MessageWriter<AppExit>,
-) {
+fn shot(mut commands: Commands, mut s: ResMut<Shot>, mut st: ResMut<ViewerState>, mut exit: MessageWriter<AppExit>) {
     use bevy::render::view::window::screenshot::{Screenshot, save_to_disk};
     let at = *s.at.get_or_insert_with(Instant::now);
     if let Some(n) = s.run
         && !st.runs.is_empty()
     {
-        st.selected = Some(n.clamp(1, st.runs.len()) - 1);
-        st.follow = false;
+        let i = n.clamp(1, st.runs.len()) - 1;
+        if st.selected != Some(i) {
+            st.selected = Some(i);
+            st.follow = false;
+        }
     }
-    // Ask for a redraw, then capture the frame that draws it.
-    if !s.asked && at.elapsed() > Duration::from_secs(4) {
-        s.asked = true;
-        view.redraw();
-    } else if s.asked && !s.taken {
-        s.taken = true;
-        commands
-            .spawn(Screenshot::primary_window())
-            .observe(save_to_disk(s.path.clone()));
+    // Data read and a few frames drawn: capture the next frame.
+    if s.taken.is_none() && at.elapsed() > Duration::from_millis(2500) {
+        s.taken = Some(Instant::now());
+        commands.spawn(Screenshot::primary_window()).observe(save_to_disk(s.path.clone()));
     }
-    if at.elapsed() > Duration::from_secs(6) {
+    if s.taken.is_some_and(|t| t.elapsed() > Duration::from_millis(1500)) || at.elapsed() > Duration::from_secs(20) {
         exit.write(AppExit::Success);
     }
 }
@@ -351,35 +428,21 @@ fn fresh_metrics() -> Metrics {
     m
 }
 
-fn viewer_keys(keys: Res<ButtonInput<KeyCode>>, mut st: ResMut<ViewerState>) {
-    let n = st.runs.len();
-    if n == 0 {
-        return;
-    }
-    let cur = st.selected.unwrap_or(n - 1);
-    let pick = if keys.just_pressed(KeyCode::ArrowLeft) {
-        Some(cur.saturating_sub(1))
-    } else if keys.just_pressed(KeyCode::ArrowRight) {
-        Some((cur + 1).min(n - 1))
-    } else if keys.just_pressed(KeyCode::KeyL) || keys.just_pressed(KeyCode::End) {
-        Some(n - 1)
-    } else {
-        None
-    };
-    if let Some(i) = pick {
-        st.selected = Some(i);
-        st.follow = i == n - 1;
-    }
-}
-
 /// Lists the runs (every [`SCAN`]) and marks the live ones.
 fn scan(mut st: ResMut<ViewerState>, data: Res<DataDir>, mut history: ResMut<MetricsHistory>) {
     if st.last_scan.is_some_and(|t| t.elapsed() < SCAN) {
         return;
     }
     st.last_scan = Some(Instant::now());
+    let mut changed = false;
+    // The history file is parsed again only when it changed.
     let sessions = data.0.join("metrics/sessions.jsonl");
-    history.past = load(&sessions, HISTORY_RUNS);
+    let stamp = std::fs::metadata(&sessions).ok().and_then(|m| Some((m.len(), m.modified().ok()?)));
+    if st.history_stamp != stamp || st.history_stamp.is_none() {
+        st.history_stamp = stamp;
+        history.past = load(&sessions, HISTORY_RUNS);
+        changed = true;
+    }
     let mut runs: Vec<RunFile> = std::fs::read_dir(data.0.join("logs"))
         .into_iter()
         .flatten()
@@ -387,10 +450,7 @@ fn scan(mut st: ResMut<ViewerState>, data: Res<DataDir>, mut history: ResMut<Met
         .filter_map(|e| {
             let path = e.path();
             let name = path.file_name()?.to_str()?;
-            let id = name
-                .strip_prefix("session-")?
-                .strip_suffix(".jsonl")?
-                .to_string();
+            let id = name.strip_prefix("session-")?.strip_suffix(".jsonl")?.to_string();
             let pid = id.rsplit('-').next().and_then(|p| p.parse().ok());
             let fresh = e
                 .metadata()
@@ -400,15 +460,24 @@ fn scan(mut st: ResMut<ViewerState>, data: Res<DataDir>, mut history: ResMut<Met
                 .is_some_and(|d| d < LIVE_STALE);
             let ended = history.past.iter().any(|s| s.id == id);
             let live = !ended && fresh && pid.is_some_and(alive);
-            Some(RunFile {
-                path,
-                id,
-                live,
-                pid,
-            })
+            Some(RunFile { path, id, live, pid })
         })
         .collect();
     runs.sort_by(|a, b| a.id.cmp(&b.id));
+    // Names of runs not in the history yet: the first lines of their logs.
+    let mut budget = 24;
+    for r in &runs {
+        if budget == 0 {
+            break;
+        }
+        if !st.meta.contains_key(&r.id) && !history.past.iter().any(|s| s.id == r.id) {
+            budget -= 1;
+            let meta = read_meta(&r.path);
+            st.meta.insert(r.id.clone(), meta);
+            changed = true;
+        }
+    }
+    changed |= runs.len() != st.runs.len() || runs.iter().zip(&st.runs).any(|(a, b)| a.id != b.id || a.live != b.live);
     let keep = st.current().map(|r| r.id.clone());
     let n = runs.len();
     st.runs = runs;
@@ -417,18 +486,36 @@ fn scan(mut st: ResMut<ViewerState>, data: Res<DataDir>, mut history: ResMut<Met
     } else if st.follow {
         Some(n - 1)
     } else {
-        keep.and_then(|id| st.runs.iter().position(|r| r.id == id))
-            .or(Some(n - 1))
+        keep.and_then(|id| st.runs.iter().position(|r| r.id == id)).or(Some(n - 1))
     };
+    if changed {
+        st.runs_gen += 1;
+    }
+}
+
+/// `game`, `mode`, start time of a log's `session.start` line.
+fn read_meta(path: &Path) -> RunMeta {
+    let Ok(f) = std::fs::File::open(path) else { return RunMeta::default() };
+    for line in std::io::BufReader::new(f).lines().take(20).map_while(Result::ok) {
+        let Ok(Value::Object(o)) = serde_json::from_str::<Value>(&line) else { continue };
+        if o.get("event").and_then(Value::as_str) == Some("session.start") {
+            let s = |k: &str| o.get(k).and_then(Value::as_str).unwrap_or("").to_string();
+            let args: Vec<&str> = o.get("args").and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_str).collect()).unwrap_or_default();
+            let mode = if o.get("headless").and_then(Value::as_bool) == Some(true) {
+                "headless"
+            } else if args.contains(&"--offscreen") {
+                "offscreen"
+            } else {
+                "windowed"
+            };
+            return RunMeta { game: s("game"), mode: mode.into(), start_ts: o.get("ts").and_then(Value::as_u64).unwrap_or(0) };
+        }
+    }
+    RunMeta::default()
 }
 
 /// Loads the selected run into a fresh [`Metrics`], then follows its log while it is live.
-fn load_selected(
-    mut commands: Commands,
-    mut st: ResMut<ViewerState>,
-    mut m: ResMut<Metrics>,
-    history: Res<MetricsHistory>,
-) {
+fn load_selected(mut commands: Commands, mut st: ResMut<ViewerState>, mut m: ResMut<Metrics>, history: Res<MetricsHistory>) {
     let Some(run) = st.current().cloned() else {
         return;
     };
@@ -442,11 +529,13 @@ fn load_selected(
         st.seconds = 0.0;
         st.has_metrics = file_has_metrics(&run.path);
         st.last_tail = None;
+        st.generation += 1;
         commands.remove_resource::<RunInfo>();
     }
     let summary = history.past.iter().find(|s| s.id == run.id).cloned();
     if st.summary.as_ref().map(|s| &s.id) != summary.as_ref().map(|s| &s.id) {
         st.summary = summary;
+        st.generation += 1;
     }
     if st.summary.as_ref().is_some_and(|s| s.quality.is_some()) {
         st.quality = st.summary.as_ref().and_then(|s| s.quality.clone());
@@ -476,10 +565,12 @@ fn load_selected(
     };
     st.partial = rest.to_string();
     let st = &mut *st;
+    let mut any = false;
     for line in lines.lines() {
         let Ok(Value::Object(o)) = serde_json::from_str::<Value>(line) else {
             continue;
         };
+        any = true;
         let t = o.get("t").and_then(Value::as_f64).unwrap_or(st.seconds);
         st.seconds = st.seconds.max(t);
         match o.get("kind").and_then(Value::as_str) {
@@ -503,11 +594,7 @@ fn load_selected(
                     let args: Vec<String> = o
                         .get("args")
                         .and_then(Value::as_array)
-                        .map(|a| {
-                            a.iter()
-                                .filter_map(|x| x.as_str().map(String::from))
-                                .collect()
-                        })
+                        .map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect())
                         .unwrap_or_default();
                     let mode = if o.get("headless").and_then(Value::as_bool) == Some(true) {
                         "headless"
@@ -518,23 +605,16 @@ fn load_selected(
                     };
                     let start_ts = o.get("ts").and_then(Value::as_u64).unwrap_or(0);
                     let s = |k: &str| o.get(k).and_then(Value::as_str).unwrap_or("").to_string();
-                    commands.insert_resource(RunInfo::from_log(
-                        run.id.clone(),
-                        s("game"),
-                        s("version"),
-                        start_ts,
-                        mode,
-                        args,
-                    ));
+                    commands.insert_resource(RunInfo::from_log(run.id.clone(), s("game"), s("version"), start_ts, mode, args));
                 }
                 if (ev == "settings" || ev == "quality")
                     && let Some(q) = o.get("quality").and_then(Value::as_str)
                 {
                     st.quality = Some(q.to_string());
                 }
-                st.events.push(event_line(t, ev, &o));
+                st.events.push(view_event(t, ev, &o));
                 if st.events.len() > MAX_EVENTS {
-                    st.events.remove(0);
+                    st.events.drain(..MAX_EVENTS / 10);
                 }
             }
             _ => {}
@@ -543,6 +623,10 @@ fn load_selected(
     // Commit the last second's values.
     let now = st.seconds;
     m.next_frame(now);
+    if any {
+        st.generation += 1;
+        st.last_data = Some(Instant::now());
+    }
 }
 
 /// Whether the log has per-second `metrics` lines (else the perf samples stand in).
@@ -587,9 +671,9 @@ fn record_perf(m: &mut Metrics, o: &Map<String, Value>) {
     }
 }
 
-/// `"1:23.4  state  from=Boot to=MainMenu"`.
-fn event_line(t: f64, ev: &str, o: &Map<String, Value>) -> String {
-    let mut s = format!("{}:{:04.1}  {ev}", (t / 60.0) as u64, t % 60.0);
+/// An event line as the view shows it.
+fn view_event(t: f64, ev: &str, o: &Map<String, Value>) -> ViewEvent {
+    let mut fields = Vec::new();
     for (k, v) in o {
         if matches!(k.as_str(), "t" | "ts" | "kind" | "event") {
             continue;
@@ -597,22 +681,13 @@ fn event_line(t: f64, ev: &str, o: &Map<String, Value>) -> String {
         let v = match v {
             Value::String(x) => x.clone(),
             Value::Null => continue,
-            Value::Number(n) if n.is_f64() => {
-                super::metrics::sig4(n.as_f64().unwrap_or(0.0)).to_string()
-            }
+            Value::Number(n) if n.is_f64() => super::metrics::sig4(n.as_f64().unwrap_or(0.0)).to_string(),
             other => other.to_string(),
         };
-        s += &format!("  {k}={v}");
+        let v = if v.chars().count() > 120 { v.chars().take(117).chain("...".chars()).collect() } else { v };
+        fields.push((k.clone(), v));
     }
-    if s.len() > 160 {
-        let mut cut = 157;
-        while !s.is_char_boundary(cut) {
-            cut -= 1;
-        }
-        s.truncate(cut);
-        s += "...";
-    }
-    s
+    ViewEvent { t, name: ev.to_string(), fields, kind: EventKind::of(ev) }
 }
 
 #[cfg(test)]
@@ -657,10 +732,7 @@ mod tests {
             r#"{"t":83.42,"ts":1,"kind":"event","event":"state","from":"Boot","to":"MainMenu"}"#,
         )
         .unwrap();
-        assert_eq!(
-            event_line(83.42, "state", &o),
-            "1:23.4  state  from=Boot  to=MainMenu"
-        );
+        assert_eq!(view_event(83.42, "state", &o).line(), "1:23.4  state  from=Boot  to=MainMenu");
     }
 
     #[test]

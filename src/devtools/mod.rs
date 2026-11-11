@@ -20,8 +20,9 @@
 pub mod commands;
 pub mod control;
 pub mod metrics;
-mod metrics_chart;
+pub mod metrics_analysis;
 pub mod metrics_history;
+pub mod metrics_view;
 pub mod metrics_viewer;
 pub mod metrics_window;
 pub mod offscreen;
@@ -36,7 +37,7 @@ use bevy::prelude::*;
 pub use control::{AddControlCommand, ControlAppExt, ControlRegistry, PendingReplies, ReplyId, params};
 pub use metrics::Metrics;
 pub use metrics_history::{MetricsHistory, SessionSummary};
-pub use metrics_window::{MetricsCompare, MetricsFeatured, MetricsView, MetricsWindowKey};
+pub use metrics_window::{MetricsCompare, MetricsFeatured, MetricsWindowKey};
 pub use perf::{DebugLines, PerfAppExt, PerfOverlay, PerfOverlayKey};
 pub use session_log::SessionLog;
 

@@ -3425,6 +3425,7 @@ dependencies = [
  "ashlar-control",
  "ashlar-mcp",
  "ashlar-trace",
+ "ashlar-ui",
  "asset-pipe",
  "avian3d",
  "bevy",

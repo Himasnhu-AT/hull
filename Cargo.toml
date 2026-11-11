@@ -22,6 +22,8 @@ bytemuck = { version = "1", features = ["derive"], optional = true }
 ashlar-control = { git = "https://github.com/Himasnhu-AT/ashlar", rev = "c677a9d588e7082c421768ef4cbe0cf8d3981123", optional = true }
 ashlar-command = { git = "https://github.com/Himasnhu-AT/ashlar", rev = "c677a9d588e7082c421768ef4cbe0cf8d3981123", optional = true }
 ashlar-mcp = { git = "https://github.com/Himasnhu-AT/ashlar", rev = "c677a9d588e7082c421768ef4cbe0cf8d3981123", optional = true }
+# devtools: the metrics viewer's egui UI (src/devtools/metrics_view.rs). Ship builds carry neither.
+ashlar-ui = { git = "https://github.com/Himasnhu-AT/ashlar", rev = "c677a9d588e7082c421768ef4cbe0cf8d3981123", optional = true }
 sysinfo = { version = "0.38", default-features = false, features = ["system"], optional = true }
 # devtools perf monitor: process/thread CPU, memory footprint, GPU probes (macOS/Linux FFI).
 libc = "0.2"
@@ -41,7 +43,7 @@ png = { version = "0.18", default-features = false, optional = true }
 postcard = { version = "1", default-features = false, features = ["alloc"], optional = true }
 # voice: microphone capture (the same cpal Bevy audio already builds).
 cpal = { version = "0.17.3", optional = true }
-# editor: egui inside the Bevy window (bevy_egui) hosting the Bevy-free editor UI (src/editor, docs/EDITOR.md).
+# devtools (metrics viewer) and editor: egui inside the Bevy window (bevy_egui) hosting the Bevy-free editor UI (src/editor, docs/EDITOR.md).
 bevy_egui = { version = "0.43", default-features = false, features = ["render", "default_fonts", "manage_clipboard"], optional = true }
 editor-proto = { path = "crates/editor-proto", optional = true }
 editor-ui = { path = "crates/editor-ui", optional = true, features = ["snarl"] }
@@ -98,7 +100,7 @@ fps = ["physics"]
 # Wheeled vehicles: raycast suspension, tyres, drivetrain, winch (src/vehicle, docs/VEHICLE.md). Needs physics.
 vehicle = ["physics"]
 # Control port + MCP, offscreen capture, perf overlay. Ship builds turn this off.
-devtools = ["dep:ashlar-control", "dep:ashlar-command", "dep:ashlar-mcp", "dep:sysinfo"]
+devtools = ["dep:ashlar-control", "dep:ashlar-command", "dep:ashlar-mcp", "dep:sysinfo", "dep:bevy_egui", "dep:ashlar-ui"]
 trace = ["dep:ashlar-trace"]
 # Code-first scene look (sun/sky/fog/exposure/grading/lens), probes, decals: src/look, docs/LOOK.md.
 look = []
