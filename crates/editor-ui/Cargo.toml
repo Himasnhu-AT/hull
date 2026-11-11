@@ -9,8 +9,8 @@ publish = false
 [dependencies]
 editor-proto = { path = "../editor-proto" }
 egui = { version = "0.36", default-features = false }
-ashlar-ui = { git = "https://github.com/Himasnhu-AT/ashlar", rev = "561745aaf96e07a0efe2ed61f37b0a365f46a530", features = ["serde"] }
-ashlar-command = { git = "https://github.com/Himasnhu-AT/ashlar", rev = "561745aaf96e07a0efe2ed61f37b0a365f46a530" }
+ashlar-ui = { git = "https://github.com/Himasnhu-AT/ashlar", rev = "c677a9d588e7082c421768ef4cbe0cf8d3981123", features = ["serde"] }
+ashlar-command = { git = "https://github.com/Himasnhu-AT/ashlar", rev = "c677a9d588e7082c421768ef4cbe0cf8d3981123" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 

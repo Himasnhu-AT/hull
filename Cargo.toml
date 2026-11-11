@@ -19,14 +19,14 @@ rand = "0.9"
 # vfx: instance buffer casting (already in the tree through bevy).
 bytemuck = { version = "1", features = ["derive"], optional = true }
 # devtools: test control port (TCP + MCP), offscreen rendering, perf stats.
-ashlar-control = { git = "https://github.com/Himasnhu-AT/ashlar", rev = "561745aaf96e07a0efe2ed61f37b0a365f46a530", optional = true }
-ashlar-command = { git = "https://github.com/Himasnhu-AT/ashlar", rev = "561745aaf96e07a0efe2ed61f37b0a365f46a530", optional = true }
-ashlar-mcp = { git = "https://github.com/Himasnhu-AT/ashlar", rev = "561745aaf96e07a0efe2ed61f37b0a365f46a530", optional = true }
+ashlar-control = { git = "https://github.com/Himasnhu-AT/ashlar", rev = "c677a9d588e7082c421768ef4cbe0cf8d3981123", optional = true }
+ashlar-command = { git = "https://github.com/Himasnhu-AT/ashlar", rev = "c677a9d588e7082c421768ef4cbe0cf8d3981123", optional = true }
+ashlar-mcp = { git = "https://github.com/Himasnhu-AT/ashlar", rev = "c677a9d588e7082c421768ef4cbe0cf8d3981123", optional = true }
 sysinfo = { version = "0.38", default-features = false, features = ["system"], optional = true }
 # devtools perf monitor: process/thread CPU, memory footprint, GPU probes (macOS/Linux FFI).
 libc = "0.2"
 # trace: crash / hang / frame-time reporting (no-op unless an endpoint is configured).
-ashlar-trace = { git = "https://github.com/Himasnhu-AT/ashlar", rev = "561745aaf96e07a0efe2ed61f37b0a365f46a530", features = ["sysinfo"], optional = true }
+ashlar-trace = { git = "https://github.com/Himasnhu-AT/ashlar", rev = "c677a9d588e7082c421768ef4cbe0cf8d3981123", features = ["sysinfo"], optional = true }
 # devkit golden images: PNG decode/encode. Same version + features Bevy already builds (no new copy).
 image = { version = "0.25", default-features = false, features = ["png"], optional = true }
 # world: RON world descriptions and 16-bit PNG heightmaps (both already in Bevy's tree; no new features).
@@ -159,7 +159,7 @@ voice = ["net", "sound", "actions", "dep:cpal"]
 editor = ["devtools", "devkit", "level", "world", "pcg", "spline", "logic", "scripting", "dep:bevy_egui", "dep:editor-proto", "dep:editor-ui"]
 
 [dev-dependencies]
-ashlar-control = { git = "https://github.com/Himasnhu-AT/ashlar", rev = "561745aaf96e07a0efe2ed61f37b0a365f46a530" }
+ashlar-control = { git = "https://github.com/Himasnhu-AT/ashlar", rev = "c677a9d588e7082c421768ef4cbe0cf8d3981123" }
 
 [profile.dev]
 opt-level = 1
