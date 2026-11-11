@@ -79,7 +79,7 @@ impl ViewerUi {
             if let Some(s) = s.filter(|s| s.seconds > 0.0) {
                 detail.push(clock(s.seconds));
             }
-            if !mode.is_empty() {
+            if !mode.is_empty() && !matches!(mode, "windowed" | "headless") {
                 detail.push(mode.to_string());
             }
             let detail = if detail.is_empty() { r.id.clone() } else { detail.join(" · ") };
@@ -89,7 +89,7 @@ impl ViewerUi {
             } else if s.is_some_and(|s| matches!(s.ended.as_str(), "killed" | "crash" | "crashed")) {
                 Some("KILLED")
             } else if regressed {
-                Some("REGRESSED")
+                Some("slower")
             } else {
                 None
             };
@@ -274,14 +274,14 @@ impl ViewerUi {
         child.label(RichText::new(h.title).size(t.type_scale.small).color(t.text.secondary));
         RollingText::new(&format!("tile.{}", h.id), &h.text).value(h.value).font(FontId::proportional(26.0)).color(color).tabular(true).show(&mut child);
         child.shrink_clip_rect(inner);
-        child.horizontal(|ui| {
+        child.with_layout(Layout::right_to_left(Align::Center), |ui| {
             ui.spacing_mut().item_spacing.x = 8.0;
-            if w >= 170.0 {
-                ui.label(RichText::new(&h.sub).size(t.type_scale.small).color(t.text.secondary));
-            }
             if let Some(d) = h.delta {
                 delta_chip(ui, t, d);
             }
+            ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
+                ui.add(egui::Label::new(RichText::new(&h.sub).size(t.type_scale.small).color(t.text.secondary)).truncate());
+            });
         });
         if let Some(k) = h.key
             && resp.clicked()
