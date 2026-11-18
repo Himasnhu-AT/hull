@@ -34,6 +34,11 @@ export class UiWidget {
     if (o.label) el.setAttribute('aria-label', o.label);
   }
 
+  /** Subclasses set their base class here, not on `el.className`, so the anchor classes are kept. */
+  protected setClass(base: string): void {
+    this.el.className = this.anchorClass ? `${base} ${this.anchorClass}` : base;
+  }
+
   setAnchor(a: Anchor | undefined): this {
     const next = a ? `hull-a hull-a-${a}` : '';
     if (next === this.anchorClass) return this;
@@ -72,7 +77,7 @@ export class UiText extends UiWidget {
 
   constructor(ctx: UiContext, text: string, o: BoxOpts & { title?: boolean; muted?: boolean; live?: boolean } = {}) {
     super(ctx, ctx.doc.createElement(o.title ? 'h2' : 'p'), o);
-    this.el.className = o.title ? 'hull-title' : o.muted ? 'hull-text hull-label' : 'hull-text';
+    this.setClass(o.title ? 'hull-title' : o.muted ? 'hull-text hull-label' : 'hull-text');
     // A value that changes during play (score, ammo) is announced politely if asked; a HUD is silent by default.
     if (o.live) this.el.setAttribute('aria-live', 'polite');
     this.set(text);
@@ -110,7 +115,7 @@ export class UiBar extends UiWidget {
 
   constructor(ctx: UiContext, o: BoxOpts & { lowBelow?: number } = {}) {
     super(ctx, ctx.doc.createElement('div'), o);
-    this.el.className = 'hull-bar';
+    this.setClass('hull-bar');
     this.fill = ctx.doc.createElement('i');
     this.el.appendChild(this.fill);
     this.lowBelow = o.lowBelow ?? 0;
@@ -147,7 +152,7 @@ export class UiButton extends UiWidget {
     super(ctx, ctx.doc.createElement('button'), o);
     // A real <button>: it is focusable, Enter and Space press it, and screen readers know it.
     this.el.setAttribute('type', 'button');
-    this.el.className = o.primary ? 'hull-btn primary' : 'hull-btn';
+    this.setClass(o.primary ? 'hull-btn primary' : 'hull-btn');
     this.press = onPress;
     this.el.addEventListener('click', () => this.press?.());
     this.setText(text);
@@ -173,7 +178,7 @@ export class UiImage extends UiWidget {
 
   constructor(ctx: UiContext, src: string, alt: string, o: BoxOpts = {}) {
     super(ctx, ctx.doc.createElement('img'), o);
-    this.el.className = 'hull-img';
+    this.setClass('hull-img');
     // alt is required: '' marks a decorative image, which screen readers skip.
     this.el.setAttribute('alt', alt);
     this.set(src);
@@ -201,7 +206,7 @@ export class UiPanel extends UiWidget {
 
   constructor(ctx: UiContext, readonly kind: PanelKind = 'panel', o: PanelOpts = {}) {
     super(ctx, ctx.doc.createElement('div'), o);
-    this.el.className = `hull-${kind}${o.solid ? ' hull-solid' : ''}`;
+    this.setClass(`hull-${kind}${o.solid ? ' hull-solid' : ''}`);
     if (o.menu) {
       this.el.setAttribute('role', 'menu');
       this.el.addEventListener('keydown', (e) => this.onKey(e));

@@ -150,7 +150,8 @@ describe('widgets write only on change', () => {
     const root = new UiPanel(ctx);
     const t = root.text('x', { anchor: 'top-left' });
     const el = t.el as unknown as FakeEl;
-    expect([...el.classes]).toEqual(['hull-a', 'hull-a-top-left']);
+    // The anchor is in the class string the widget was created with; it must survive the widget setting its own class.
+    expect(el.className).toBe('hull-text hull-a hull-a-top-left');
     t.setAnchor('center');
     expect([...el.classes]).toEqual(['hull-a', 'hull-a-center']);
   });
