@@ -48,13 +48,10 @@ export function useHistory(rpc: RpcClient, problems: Problem[], notify: (text: s
   const [error, setError] = useState<string | null>(null);
   const [deltas, setDeltas] = useState<Map<string, ChangeDelta[]>>(() => new Map());
   const [adopting, setAdopting] = useState<Adopting | null>(null);
-  const [checked, setChecked] = useState<Problem[]>([]);
   const asked = useRef(new Set<string>());
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const load = useCallback(() => {
-    // The check reads the authorship record, so it is what says an AI change overwrote a value you set.
-    rpc.call('tool.call', { name: 'check' }).then((r) => setChecked(r.problems.filter((x) => x.rule === 'authorship')), () => {});
     Promise.all([rpc.call('history.list', { limit: 400 }), rpc.call('exp.list', {})]).then(([c, e]) => { setChanges(c); setExps(e); setLoaded(true); setError(null); }, (e: Error) => setError(e.message));
   }, [rpc]);
   // A burst of pushes is one reload.
@@ -81,10 +78,9 @@ export function useHistory(rpc: RpcClient, problems: Problem[], notify: (text: s
   useEffect(() => { for (const c of changes) if (isAi(c.by)) ensureDeltas(c.id); }, [changes, ensureDeltas]);
 
   const flags = useMemo(() => {
-    const out = [...checked];
-    for (const p of problems) if (p.rule === 'authorship' && !out.some((x) => x.message === p.message)) out.push(p);
-    return out;
-  }, [problems, checked]);
+    // The server's `problems` state carries authorship problems and is pushed whenever history changes.
+    return problems.filter((p) => p.rule === 'authorship');
+  }, [problems]);
   const flagged = useMemo(() => {
     const out = new Map<string, Problem[]>();
     if (flags.length === 0) return out;

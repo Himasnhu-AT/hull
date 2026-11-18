@@ -4,6 +4,7 @@ import { Command } from 'commander';
 import type { Problem } from 'hull';
 import { formatProblem, type ToolDef } from './tool.ts';
 import { tools } from './tools/index.ts';
+import { projectTools } from './tools/project.ts';
 
 /** Nearest folder at or above `from` holding hull.json; `from` itself if none (so `hull new` works anywhere). */
 export function findRoot(from: string): string {
@@ -32,7 +33,10 @@ export function failed(out: unknown): boolean {
 export function buildProgram(): Command {
   const program = new Command('hull').description('Hull game engine').option('--root <dir>', 'project folder');
   const groups = new Map<string, Command>();
-  for (const tool of tools) {
+  // The project methods are commands too, from the same definitions; where a tool of the same name exists it is kept (it works on the files without a server).
+  const own = new Set(tools.map((t) => t.name));
+  const methodCommands = projectTools.filter((t) => !own.has(t.name));
+  for (const tool of [...tools, ...methodCommands]) {
     // 'review.list' is `hull review list`.
     const [group, sub] = tool.name.split('.');
     let parent: Command = program;
@@ -50,12 +54,16 @@ export function buildProgram(): Command {
       const input: Record<string, unknown> = { ...opts };
       delete input.json;
       names.forEach((n, i) => (input[n] = raw[i]));
+      const words = tool.cli?.toInput ? tool.cli.toInput(input) : input;
       const abort = new AbortController();
       process.on('SIGINT', () => { abort.abort(); process.exit(0); });
       const rootOpt = program.opts<{ root?: string }>().root;
       const root = rootOpt ? resolve(rootOpt) : tool.name === 'new' ? process.cwd() : findRoot(process.cwd());
       try {
-        const out = await tool.run({ root, author: 'you', log: (l) => console.error(l), signal: abort.signal }, input);
+        // A method goes through the project's server: the open app's, or one started for this command.
+        const link = methodCommands.includes(tool) ? await (await import('./server/link.ts')).openProject({ root, log: () => {} }) : undefined;
+        let out: unknown;
+        try { out = await tool.run({ root, author: 'you', ...(link ? { project: { call: (m, p) => link.call(m, p) } } : {}), log: (l) => console.error(l), signal: abort.signal }, words); } finally { await link?.close(); }
         console.log(opts.json ? JSON.stringify(out, null, 2) : render(tool, out).join('\n'));
         if (failed(out)) process.exitCode = 1;
         // The dev server keeps the process alive on its own; everything else ends here.
@@ -71,7 +79,9 @@ export function buildProgram(): Command {
   program.command('mcp').description('Serves the tools to an AI agent over MCP (stdio). Point the agent at this command.').action(async () => {
     const rootOpt = program.opts<{ root?: string }>().root;
     const { serveMcp } = await import('./mcp/server.ts');
-    await serveMcp({ root: rootOpt ? resolve(rootOpt) : findRoot(process.cwd()), tools, input: process.stdin, output: process.stdout, log: (l) => console.error(l) });
+    const root = rootOpt ? resolve(rootOpt) : findRoot(process.cwd());
+    const { openProject } = await import('./server/link.ts');
+    await serveMcp({ root, tools, methods: projectTools, link: () => openProject({ root, log: (l) => console.error(l) }), input: process.stdin, output: process.stdout, log: (l) => console.error(l) });
     process.exit(0);
   });
   return program;
