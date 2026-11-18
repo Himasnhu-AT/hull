@@ -1,0 +1,7 @@
+{
+  "kind": "material",
+  "note": "The gun on the screen: dark metal.",
+  "color": "#2c3036",
+  "roughness": 0.4,
+  "metalness": 0.8
+}

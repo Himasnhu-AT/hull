@@ -1,0 +1,7 @@
+{
+  "kind": "material",
+  "note": "Red: heals.",
+  "color": "#ff5a5a",
+  "roughness": 0.4,
+  "metalness": 0
+}

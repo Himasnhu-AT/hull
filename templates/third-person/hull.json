@@ -1,0 +1,13 @@
+{
+  "kind": "game",
+  "id": "third-person",
+  "title": "Third-person arena",
+  "note": "A third-person action arena built only from kits: a soldier with a boost (it spends gas), a swing, wave enemies, pickups, a pause menu and save slots.",
+  "version": "0.1.0",
+  "entry": "src/main.ts",
+  "step": 60,
+  "features": [
+    "audio",
+    "ui"
+  ]
+}

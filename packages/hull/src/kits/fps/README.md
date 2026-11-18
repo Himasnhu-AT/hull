@@ -1,0 +1,13 @@
+# fps kit
+
+A first-person body: capsule on the physics mover, mouse look, WASD relative to the view, sprint, jump with
+coyote time, footsteps and landing sounds.
+
+- **Behaviours**: `FirstPerson` (node = feet, child `eye` carries the `Camera`), `Crosshair` (HUD dot).
+  `spawnFirstPerson(world, at)` builds the whole player: body, `Health`, gun (`Weapon` on the eye), health bar, crosshair.
+- **Actions it reads**: `move`, `look` (mouse delta), `lookPad` (arrows or right stick), `jump`, `sprint`; the gun reads `fire`.
+- **Tunables** (`fps` block): `walkSpeed`, `sprintSpeed`, `accel`, `airControl`, `jumpHeight`, `gravity`, `coyoteTime`,
+  `eyeHeight`, `radius`, `height`, `mouseSensitivity`, `padLookSpeed`, `pitchLimit`, `fov`, `strideLength`.
+- **Config**: `input-map/fps`, `material/gun`, `sound/footstep`, `sound/thud`, `sound/shot`.
+- **Bench**: `bench.ts`. **Test**: `fps.test.ts` (walk, sprint, walls, look, jump, same checksum twice).
+- Stops while the pause menu is open. The body is in the `player` and `save` groups.

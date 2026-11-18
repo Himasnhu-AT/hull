@@ -1,0 +1,93 @@
+{
+  "kind": "input-map",
+  "note": "WASD moves, the mouse (or the arrow keys, or the right stick) looks, Space jumps, Shift sprints, click or F fires, Esc or P pauses.",
+  "actions": {
+    "move": {
+      "type": "axis2",
+      "keys": {
+        "up": [
+          "W"
+        ],
+        "down": [
+          "S"
+        ],
+        "left": [
+          "A"
+        ],
+        "right": [
+          "D"
+        ]
+      },
+      "pad": "stickL"
+    },
+    "look": {
+      "type": "axis2",
+      "mouse": "delta"
+    },
+    "lookPad": {
+      "type": "axis2",
+      "keys": {
+        "up": [
+          "ArrowUp"
+        ],
+        "down": [
+          "ArrowDown"
+        ],
+        "left": [
+          "ArrowLeft"
+        ],
+        "right": [
+          "ArrowRight"
+        ]
+      },
+      "pad": "stickR"
+    },
+    "jump": {
+      "type": "button",
+      "keys": [
+        "Space"
+      ],
+      "pad": "south"
+    },
+    "sprint": {
+      "type": "button",
+      "keys": [
+        "ShiftLeft"
+      ],
+      "pad": "stickLPress"
+    },
+    "pause": {
+      "type": "button",
+      "keys": [
+        "Escape",
+        "P"
+      ],
+      "pad": "start"
+    },
+    "fire": {
+      "type": "button",
+      "keys": [
+        "Mouse0",
+        "F"
+      ],
+      "pad": "triggerR"
+    }
+  },
+  "groups": {
+    "Move": [
+      "move",
+      "jump",
+      "sprint"
+    ],
+    "Look": [
+      "look",
+      "lookPad"
+    ],
+    "Combat": [
+      "fire"
+    ],
+    "Game": [
+      "pause"
+    ]
+  }
+}

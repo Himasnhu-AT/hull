@@ -114,6 +114,18 @@ importers:
         specifier: workspace:*
         version: link:../../packages/hull
 
+  templates/fps:
+    dependencies:
+      hull:
+        specifier: workspace:*
+        version: link:../../packages/hull
+
+  templates/third-person:
+    dependencies:
+      hull:
+        specifier: workspace:*
+        version: link:../../packages/hull
+
 packages:
 
   '@dimforge/rapier3d-compat@0.12.0':
