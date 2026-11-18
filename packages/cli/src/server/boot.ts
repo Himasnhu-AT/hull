@@ -27,6 +27,8 @@ export function bootSource(o: BootOptions): string {
   const themes = idsOf(o.sources, 'ui-theme');
   const wantAudio = hasModule('audio') && (features.includes('audio') || idsOf(o.sources, 'sound').length > 0);
   const wantUi = hasModule('ui') && (features.includes('ui') || themes.length > 0 || idsOf(o.sources, 'ui-screen').length > 0);
+  const looks = idsOf(o.sources, 'look');
+  const look = looks.includes('look/day') ? 'look/day' : looks[0];
   const wantInput = hasModule('input');
 
   const imports = [
@@ -40,13 +42,15 @@ export function bootSource(o: BootOptions): string {
   ];
   // A subsystem that fails to start is reported once and skipped; the game keeps running (CLAUDE.md).
   const skip = (name: string, call: string): string =>
-    `try { parts.push(${call}); } catch (e) { console.error('${name} failed to start and was skipped: ' + (e && e.message || e)); }`;
+    `try { views.${name} = ${call}; parts.push(views.${name}); } catch (e) { console.error('${name} failed to start and was skipped: ' + (e && e.message || e)); }`;
   const body = [
     `const loaded = config.load(sources);`,
     `for (const p of loaded.problems) console.error(p.file + (p.pointer ?? '') + ': ' + p.message);`,
     `const g = await startGame(game);`,
     `const parts = [];`,
-    `const view = mountRender(g, el);`,
+    `const views = { game: g };`,
+    `globalThis.hull = views;`,
+    `const view = views.render = mountRender(g, el${look ? `, { look: ${JSON.stringify(look)} }` : ''});`,
     ...(wantInput ? [skip('input', `mountInput(g, window${maps[0] ? `, ${JSON.stringify(maps[0])}` : ''})`)] : []),
     ...(wantAudio ? [skip('audio', 'mountAudio(g)')] : []),
     ...(wantUi ? [skip('ui', `mountUi(g, el${themes[0] ? `, ${JSON.stringify(themes[0])}` : ''})`)] : []),
@@ -60,10 +64,11 @@ export function bootSource(o: BootOptions): string {
       `const sources = ${JSON.stringify(o.sources)};`,
       `export async function start(el) {`,
       ...body.map((l) => `  ${l}`),
-      `  return { game: g, stop };`,
+      `  views.stop = stop;
+  return views;`,
       `}`,
       `const app = typeof document !== 'undefined' ? document.getElementById('app') : null;`,
-      `if (app) { window.hull = await start(app); }`,
+      `if (app) { await start(app); }`,
     ].join('\n');
   }
   return [
@@ -71,7 +76,6 @@ export function bootSource(o: BootOptions): string {
     `const sources = ${JSON.stringify(o.sources)};`,
     `const el = document.getElementById('app');`,
     ...body,
-    `window.hull = { game: g };`,
     `import.meta.hot?.dispose(stop);`,
   ].join('\n');
 }
