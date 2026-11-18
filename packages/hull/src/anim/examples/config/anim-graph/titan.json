@@ -1,6 +1,6 @@
 {
   "kind": "anim-graph",
-  "note": "Titan locomotion: the same clips on a 15 m body, whose gait is slower and longer: the walk covers 4.18 m/s and the run 15.55 m/s.",
+  "note": "Titan locomotion: the same clips on a 15 m body, whose gait is slower and longer: the walk covers 4.18 m/s and the run 14.0 m/s.",
   "params": {
     "speed": { "type": "number", "default": 0, "min": 0, "max": 20 },
     "grounded": { "type": "boolean", "default": true },
@@ -15,7 +15,7 @@
       "start": "idle",
       "states": {
         "idle": { "clip": "idle" },
-        "move": { "blend": { "by": "speed", "points": { "4.18": "walk", "15.55": "run" } }, "speedFrom": "speed" },
+        "move": { "blend": { "by": "speed", "points": { "4.18": "walk", "14.0": "run" } }, "speedFrom": "speed" },
         "jump": { "clip": "jump", "exit": "air", "exitBlend": 0.1 },
         "air": { "clip": "fall" },
         "swing": { "clip": "swing" },

@@ -51,7 +51,7 @@ function script(t: number): number {
   const c = t % 22;
   if (c < 2) return 0;
   if (c < 7) return 1.4;
-  if (c < 12) return 5.3;
+  if (c < 12) return 4.8;
   return 0;
 }
 
@@ -64,8 +64,10 @@ class Follow extends Behaviour {
     if (!t) return;
     const p = t.node.position;
     this.node.position.set(p.x + this.offset.x, p.y + this.offset.y, p.z + this.offset.z);
-    this.node.object3d.lookAt(p.x + this.look.x, p.y + this.look.y, p.z + this.look.z);
-    this.node.rotation.setFromQuaternion(this.node.object3d.quaternion);
+    // Aim by hand: Euler YXZ, yaw then pitch, looking down -Z like every camera.
+    const dx = p.x + this.look.x - this.node.position.x, dy = p.y + this.look.y - this.node.position.y, dz = p.z + this.look.z - this.node.position.z;
+    this.node.rotation.order = 'YXZ';
+    this.node.rotation.set(Math.atan2(dy, Math.hypot(dx, dz)), Math.atan2(-dx, -dz), 0);
   }
 }
 

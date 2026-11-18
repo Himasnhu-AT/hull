@@ -289,7 +289,7 @@ function humanoidParts(d: HumanoidDims): CharacterPart[] {
     out.push({ bone: `hand${s}`, shape: 'sphere', material: 'skin', center: [0, -d.hand * 0.4, 0], size: [0.05 * H, d.hand * 1.1, 0.06 * H] });
     limb(`leg${s}`, 'cloth', d.thigh, 0.048 * H, 0.034 * H);
     limb(`shin${s}`, 'cloth', d.shin, 0.034 * H, 0.025 * H);
-    out.push({ bone: `foot${s}`, shape: 'box', material: 'metal', center: [0, -d.footH * 0.5, -d.footLen * 0.28], size: [0.06 * H * B, d.footH, d.footLen] });
+    out.push({ bone: `foot${s}`, shape: 'box', material: 'boots', center: [0, -d.footH * 0.5, -d.footLen * 0.28], size: [0.06 * H * B, d.footH, d.footLen] });
   }
   return out;
 }

@@ -68,14 +68,14 @@ function gait(run: boolean): GeneratorFactory {
     const s = skel.scale;
     const d = skel.dims;
     const legLen = d ? d.thigh + d.shin : 0.85 * s;
-    const stride = k(knobs, 'stride', run ? 1.5 : 0.72) * s;
+    const stride = k(knobs, 'stride', run ? 1.35 : 0.72) * s;
     const armSwing = k(knobs, 'armSwing', run ? 0.8 : 0.6);
     const lean = k(knobs, 'lean', run ? 0.16 : 0.03);
     const bounce = k(knobs, 'bounce', run ? 0.05 : 0.0) * s;
     const sway = k(knobs, 'sway', run ? 0.01 : 0.02) * s;
     const length = (run ? 0.56 : 1.0) * Math.sqrt(s);
     // Step length is how far apart the feet land. A straight leg of length L that swings +-A puts them 2 L sin(A) apart.
-    const amp = Math.min(Math.asin(Math.min(stride / (2 * legLen), 0.95)), run ? 0.95 : 0.7);
+    const amp = Math.min(Math.asin(Math.min(stride / (2 * legLen), 0.95)), run ? 0.85 : 0.7);
     const kneeBase = run ? 0.3 : 0.07;
     const kneeSwing = run ? 1.5 : 0.85;
     const elbow = run ? 1.35 : 0.3;

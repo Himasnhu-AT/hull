@@ -349,7 +349,7 @@
         }
       },
       "x-ui": {
-        "help": "Roles used by the humanoid recipe: skin, cloth, metal."
+        "help": "Roles used by the humanoid recipe: skin, cloth, metal, boots."
       }
     },
     "sockets": {

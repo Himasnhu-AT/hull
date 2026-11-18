@@ -6,7 +6,7 @@
     "recipe": "humanoid",
     "proportions": { "height": 15, "head": 2.4, "legs": 0.5, "arms": 0.4, "build": 1.2 }
   },
-  "materials": { "skin": "material/titan-skin", "cloth": "material/titan-skin", "metal": "material/titan-skin" },
+  "materials": { "skin": "material/titan-skin", "cloth": "material/titan-skin", "metal": "material/titan-skin", "boots": "material/titan-skin" },
   "sockets": { "nape": { "joint": "neck", "offset": [0, 0.5, 0.9] } },
   "collider": { "shape": "capsule", "radius": 2.5, "height": 14 },
   "animSet": "anim-set/humanoid",

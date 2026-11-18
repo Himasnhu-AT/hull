@@ -6,7 +6,7 @@ import type { Character, CharacterPart } from '../schema/character.ts';
 import { acquireMaterial, releaseMaterial, type MaterialSpec } from '../render/materials.ts';
 import type { Pose, Skeleton } from './skeleton.ts';
 
-const ROLE_COLOURS: Record<string, string> = { skin: '#d9b99b', cloth: '#5b6b4f', metal: '#8c9199' };
+const ROLE_COLOURS: Record<string, string> = { skin: '#d9b99b', cloth: '#5b6b4f', metal: '#8c9199', boots: '#3b3029' };
 
 interface GeoEntry { geometry: BufferGeometry; refs: number }
 const geos = new Map<string, GeoEntry>();

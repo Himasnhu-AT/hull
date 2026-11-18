@@ -229,20 +229,20 @@ describe('graph', () => {
     const { game, a } = await start();
     const g = a.graphRuntime!;
     expect(g.clipWeights('base', 'move')).toEqual({ walk: 1, run: 0 });
-    a.set('speed', 3.4);
+    a.set('speed', 3.13);
     expect(g.clipWeights('base', 'move').walk).toBeCloseTo(0.5, 6);
     a.set('speed', 9);
     expect(g.clipWeights('base', 'move')).toEqual({ walk: 0, run: 1 });
     // Playback follows speed within 0.5x to 1.6x of the authored pace; outside that the feet slide.
     expect(g.slideAt('base', 'move', 1.44)).toBeCloseTo(0, 6);
-    expect(g.slideAt('base', 'move', 5.36)).toBeCloseTo(0, 6);
+    expect(g.slideAt('base', 'move', 4.82)).toBeCloseTo(0, 6);
     expect(g.slideAt('base', 'move', 3.4)).toBeLessThan(1.2);
     expect(g.slideAt('base', 'move', 0.4)).toBeGreaterThan(0.2);
     expect(g.slideAt('base', 'move', 12)).toBeGreaterThan(2);
-    a.set('speed', 5.36);
+    a.set('speed', 4.82);
     game.step(30);
     expect(a.footSlide).toBeLessThan(0.01);
-    expect(a.footStride).toBeCloseTo(5.36, 2);
+    expect(a.footStride).toBeCloseTo(4.82, 2);
     a.set('speed', 12);
     game.step(2);
     expect(a.footSlide).toBeGreaterThan(2);
@@ -393,7 +393,7 @@ describe('animator', () => {
     const { game, a } = await start();
     a.render(1, 0.016);
     const idleKnee = a.bone('shinL')!.quaternion.x;
-    a.set('speed', 5.36);
+    a.set('speed', 4.82);
     for (let i = 0; i < 40; i++) game.step(1);
     a.render(1, 0.016);
     expect(a.bone('shinL')!.quaternion.x).not.toBeCloseTo(idleKnee, 2);

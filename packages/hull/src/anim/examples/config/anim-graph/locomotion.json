@@ -1,6 +1,6 @@
 {
   "kind": "anim-graph",
-  "note": "Soldier locomotion. Speed is in m/s; the walk is authored for 1.44 m/s and the run for 5.36 m/s.",
+  "note": "Soldier locomotion. Speed is in m/s; the walk is authored for 1.44 m/s and the run for 4.82 m/s.",
   "params": {
     "speed": { "type": "number", "default": 0, "min": 0, "max": 12 },
     "grounded": { "type": "boolean", "default": true },
@@ -15,7 +15,7 @@
       "start": "idle",
       "states": {
         "idle": { "clip": "idle" },
-        "move": { "blend": { "by": "speed", "points": { "1.44": "walk", "5.36": "run" } }, "speedFrom": "speed" },
+        "move": { "blend": { "by": "speed", "points": { "1.44": "walk", "4.82": "run" } }, "speedFrom": "speed" },
         "jump": { "clip": "jump", "exit": "air", "exitBlend": 0.1 },
         "air": { "clip": "fall" },
         "swing": { "clip": "swing" },

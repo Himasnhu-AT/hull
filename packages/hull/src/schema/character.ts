@@ -67,7 +67,7 @@ export const characterSchema = Type.Object(
       { additionalProperties: false },
     ),
     materials: Type.Optional(
-      Type.Record(Type.String(), Type.String({ ...ref('material') }), ui({ help: 'Roles used by the humanoid recipe: skin, cloth, metal.' })),
+      Type.Record(Type.String(), Type.String({ ...ref('material') }), ui({ help: 'Roles used by the humanoid recipe: skin, cloth, metal, boots.' })),
     ),
     sockets: Type.Optional(
       Type.Record(Type.String(), Type.Object({ joint: Type.String(), offset: Type.Optional(vec3) }, { additionalProperties: false })),
