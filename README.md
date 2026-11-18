@@ -2,7 +2,10 @@
 
 Marl Studio's game engine, in TypeScript, where an AI writes the game and a person checks and tunes it.
 
-**Status: plan only.** Nothing is built yet. This folder holds the design.
+**Status: the engine is built (M0–M5 and M7); AOTT on Hull (M6) is next.** Open a project in the Hull app with
+`pnpm app` (or `pnpm app:web -- --project <dir>` in a browser), make one from a template (`cube`, `arena`, `fps`,
+`third-person`), tune it live and build it. `pnpm check` runs types and every test. See PLAN.md §7 for what each
+milestone delivered and what is still missing.
 
 ## The idea in five lines
 

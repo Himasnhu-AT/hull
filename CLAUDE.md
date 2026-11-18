@@ -3,7 +3,9 @@
 Hull is Marl Studio's TypeScript game engine for one workflow: an AI writes the game, a person verifies and tunes
 it in Hull Studio, and the game builds to one JavaScript file that runs on the web and on the desktop.
 
-**Status: nothing is built yet.** The design is in these files. Read them in this order before writing code:
+**Status: M0–M5 and M7 are built and merged on `main`; M6 (AOTT on Hull) is next.** `pnpm check` runs types and
+every test; `pnpm app` opens the Hull app. PLAN.md §7 has each milestone's state and its known gaps. The design is in
+these files. Read them in this order before changing code:
 
 1. `PLAN.md`: goals, the parts, history and experiments, the tech stack, milestones, decisions made (section 9)
    and still open (section 10).

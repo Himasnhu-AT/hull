@@ -293,6 +293,23 @@ Each milestone ends with something you can run, and a check that proves it.
 
 Later tracks, after these: AI-generated assets, and other 3D engines.
 
+### Where each milestone stands (19 Nov 2026)
+
+Checked means run and looked at: a state read back, a screenshot opened, a number measured. Sound was never heard
+by the people who built it, only measured.
+
+| | State | How it was checked | Known gaps |
+|---|---|---|---|
+| M0 | Done | Cube: 2 × 10,000 steps in 3.2 ms, same checksum; a wrong id fails the check with file and field (code and hull.json). | |
+| M1 | Done | In the app (web mode) on the arena: run speed and a sound's pitch changed live with no reload, both files changed, Build wrote one `game.js` that runs. The Electron window opened once. | The app's main process runs through tsx; a packaged Studio needs it bundled. |
+| M2 | Done | In the app: two experiments tuned apart, compared side by side, one adopted, the other kept; an AI change over yours flagged; a restore is a new change. | Authorship is per value for config and tunables only; the line diff says `+N −M lines`; each commit reads the whole project. |
+| M3 | Done | Character bench (turntable, every clip, the live state graph, foot slide), review notes over MCP, a step script whose golden matches and fails on a changed run speed. MCP and the command line reach every project method. | Bodies are rigid parts, not skinned; glTF clips are skipped; goldens come from a software GPU; the control port has step, press, state and screenshot only. |
+| M4 | Done on macOS | Dusk look with environment light, snapped shadows, post chain, six effects; saves, settings, fullscreen; physics (1,000 rays on 5,000 boxes in ~1.2 ms, no tunnelling at 100 m/s); the cube packaged as a 244 MB `.app` that launched. | Windows and Linux packages untested; the settings and key screens tested on a fake DOM only; no cascaded shadows or SMAA. |
+| M5 | Done | Kits (controllers, follow camera, health with hit zones, pickups, spawner, pause, save slots); the `fps` and `third-person` templates are ~20 lines each and play, save and load deterministically. | Kit values per project (saved to `config/tuning/<block>.json`) in progress. |
+| M6 | Next | | |
+| M7 | Done | `auto` picks WebGPU and falls back to WebGL2; the same scene matches across backends (PSNR 47.7 dB at medium); 200,000 GPU particles at 59 fps (720p). | Every build carries both backends (arena: 1.68 MB); GPU timestamps read wrong on Apple GPUs. |
+| M8, M9 | Not started | | |
+
 ## 8. Hosted: how customers will use Hull
 
 The decision: each game is its own repository. For customers the project lives on Marl's servers and **Marl holds
