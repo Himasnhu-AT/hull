@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:hull:schema:mixer",
+  "type": "object",
+  "required": [
+    "kind",
+    "buses"
+  ],
+  "properties": {
+    "kind": {
+      "type": "string",
+      "const": "mixer"
+    },
+    "note": {
+      "type": "string"
+    },
+    "buses": {
+      "type": "object",
+      "patternProperties": {
+        "^.*$": {
+          "type": "object",
+          "properties": {
+            "to": {
+              "type": "string",
+              "x-ui": {
+                "widget": "text",
+                "help": "The bus this one feeds. Default: master."
+              }
+            },
+            "level": {
+              "type": "number",
+              "minimum": -60,
+              "maximum": 12,
+              "default": 0,
+              "x-ui": {
+                "widget": "slider",
+                "unit": "dB",
+                "step": 0.5
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "x-ui": {
+        "group": "Buses",
+        "help": "\"master\" always exists; every other bus feeds master or another bus."
+      }
+    },
+    "master": {
+      "type": "object",
+      "properties": {
+        "compressor": {
+          "type": "object",
+          "required": [
+            "threshold",
+            "ratio"
+          ],
+          "properties": {
+            "threshold": {
+              "type": "number",
+              "minimum": -60,
+              "maximum": 0,
+              "default": -14,
+              "x-ui": {
+                "widget": "dial",
+                "unit": "dB"
+              }
+            },
+            "ratio": {
+              "type": "number",
+              "minimum": 1,
+              "maximum": 20,
+              "default": 3,
+              "x-ui": {
+                "widget": "dial",
+                "step": 0.5
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "limiter": {
+          "type": "number",
+          "minimum": -12,
+          "maximum": 0,
+          "default": -1,
+          "x-ui": {
+            "widget": "dial",
+            "unit": "dB",
+            "help": "Nothing gets louder than this."
+          }
+        }
+      },
+      "additionalProperties": false,
+      "x-ui": {
+        "group": "Master"
+      }
+    }
+  },
+  "additionalProperties": false,
+  "title": "Hull mixer"
+}

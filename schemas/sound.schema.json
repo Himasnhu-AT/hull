@@ -1,0 +1,1075 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:hull:schema:sound",
+  "type": "object",
+  "required": [
+    "kind",
+    "source"
+  ],
+  "properties": {
+    "kind": {
+      "type": "string",
+      "const": "sound"
+    },
+    "note": {
+      "type": "string"
+    },
+    "bus": {
+      "type": "string",
+      "default": "sfx",
+      "x-ui": {
+        "widget": "text",
+        "group": "Mix",
+        "help": "A bus from the mixer."
+      }
+    },
+    "level": {
+      "type": "number",
+      "minimum": -60,
+      "maximum": 12,
+      "default": 0,
+      "x-ui": {
+        "widget": "slider",
+        "unit": "dB",
+        "step": 0.5,
+        "group": "Mix"
+      }
+    },
+    "pitch": {
+      "anyOf": [
+        {
+          "type": "number",
+          "minimum": 0.25,
+          "maximum": 4
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "minimum": 0.25,
+            "maximum": 4
+          },
+          "minItems": 2,
+          "maxItems": 2
+        }
+      ],
+      "default": 1,
+      "x-ui": {
+        "widget": "range",
+        "step": 0.01,
+        "group": "Mix",
+        "help": "Speed multiplier. A range is drawn each play.",
+        "min": 0.25,
+        "max": 4
+      }
+    },
+    "loop": {
+      "type": "boolean",
+      "default": false,
+      "x-ui": {
+        "group": "Mix"
+      }
+    },
+    "limit": {
+      "type": "object",
+      "properties": {
+        "minGap": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 5,
+          "default": 0,
+          "x-ui": {
+            "widget": "dial",
+            "unit": "s",
+            "step": 0.005,
+            "help": "Ignore a play that comes sooner than this after the last."
+          }
+        },
+        "voices": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 32,
+          "default": 8,
+          "x-ui": {
+            "widget": "number",
+            "help": "Most copies playing at once."
+          }
+        },
+        "over": {
+          "anyOf": [
+            {
+              "type": "string",
+              "const": "steal-oldest"
+            },
+            {
+              "type": "string",
+              "const": "skip"
+            }
+          ],
+          "default": "steal-oldest",
+          "x-ui": {
+            "widget": "segments"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "x-ui": {
+        "group": "Limits"
+      }
+    },
+    "spatial": {
+      "type": "object",
+      "properties": {
+        "ref": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "default": 5,
+          "x-ui": {
+            "widget": "dial",
+            "unit": "m",
+            "help": "Full level inside this distance."
+          }
+        },
+        "max": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "default": 80,
+          "x-ui": {
+            "widget": "dial",
+            "unit": "m",
+            "help": "Silent beyond this distance."
+          }
+        },
+        "airLowpass": {
+          "type": "boolean",
+          "default": true,
+          "x-ui": {
+            "help": "Distant sounds lose their highs."
+          }
+        }
+      },
+      "additionalProperties": false,
+      "x-ui": {
+        "group": "Space"
+      }
+    },
+    "source": {
+      "anyOf": [
+        {
+          "type": "object",
+          "required": [
+            "type",
+            "length",
+            "layers"
+          ],
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "synth"
+            },
+            "length": {
+              "type": "number",
+              "minimum": 0.01,
+              "maximum": 30,
+              "default": 0.5,
+              "x-ui": {
+                "widget": "slider",
+                "unit": "s",
+                "step": 0.01,
+                "group": "Source"
+              }
+            },
+            "layers": {
+              "type": "object",
+              "patternProperties": {
+                "^.*$": {
+                  "type": "object",
+                  "required": [
+                    "from"
+                  ],
+                  "properties": {
+                    "from": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "required": [
+                            "osc",
+                            "freq"
+                          ],
+                          "properties": {
+                            "osc": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "const": "sine"
+                                },
+                                {
+                                  "type": "string",
+                                  "const": "triangle"
+                                },
+                                {
+                                  "type": "string",
+                                  "const": "square"
+                                },
+                                {
+                                  "type": "string",
+                                  "const": "sawtooth"
+                                }
+                              ],
+                              "x-ui": {
+                                "widget": "segments",
+                                "group": "Source"
+                              }
+                            },
+                            "freq": {
+                              "anyOf": [
+                                {
+                                  "type": "number",
+                                  "minimum": 10,
+                                  "maximum": 20000
+                                },
+                                {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "number",
+                                    "minimum": 10,
+                                    "maximum": 20000
+                                  },
+                                  "minItems": 2,
+                                  "maxItems": 2
+                                }
+                              ],
+                              "x-ui": {
+                                "widget": "range",
+                                "unit": "Hz",
+                                "group": "Source",
+                                "min": 10,
+                                "max": 20000
+                              }
+                            },
+                            "glideTo": {
+                              "type": "number",
+                              "exclusiveMinimum": 0,
+                              "maximum": 16,
+                              "x-ui": {
+                                "widget": "dial",
+                                "step": 0.01,
+                                "group": "Source",
+                                "help": "Pitch at the end of the glide, as a multiple of freq (0.5 is an octave down)."
+                              }
+                            },
+                            "glideTime": {
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 10,
+                              "x-ui": {
+                                "widget": "dial",
+                                "unit": "s",
+                                "step": 0.005,
+                                "group": "Source",
+                                "help": "How long the glide takes. Default: the whole layer."
+                              }
+                            },
+                            "detune": {
+                              "anyOf": [
+                                {
+                                  "type": "number",
+                                  "minimum": -1200,
+                                  "maximum": 1200
+                                },
+                                {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "number",
+                                    "minimum": -1200,
+                                    "maximum": 1200
+                                  },
+                                  "minItems": 2,
+                                  "maxItems": 2
+                                }
+                              ],
+                              "x-ui": {
+                                "widget": "range",
+                                "unit": "cents",
+                                "group": "Source",
+                                "min": -1200,
+                                "max": 1200
+                              }
+                            }
+                          },
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "required": [
+                            "noise"
+                          ],
+                          "properties": {
+                            "noise": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "const": "white"
+                                },
+                                {
+                                  "type": "string",
+                                  "const": "pink"
+                                },
+                                {
+                                  "type": "string",
+                                  "const": "brown"
+                                }
+                              ],
+                              "default": "white",
+                              "x-ui": {
+                                "widget": "segments"
+                              }
+                            }
+                          },
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "required": [
+                            "modes",
+                            "decay"
+                          ],
+                          "properties": {
+                            "modes": {
+                              "type": "array",
+                              "items": {
+                                "anyOf": [
+                                  {
+                                    "type": "number",
+                                    "minimum": 20,
+                                    "maximum": 20000
+                                  },
+                                  {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "number",
+                                      "minimum": 20,
+                                      "maximum": 20000
+                                    },
+                                    "minItems": 2,
+                                    "maxItems": 2
+                                  }
+                                ],
+                                "x-ui": {
+                                  "widget": "range",
+                                  "unit": "Hz",
+                                  "min": 20,
+                                  "max": 20000
+                                }
+                              },
+                              "minItems": 1,
+                              "maxItems": 16,
+                              "x-ui": {
+                                "group": "Source",
+                                "help": "One frequency per partial."
+                              }
+                            },
+                            "decay": {
+                              "anyOf": [
+                                {
+                                  "type": "number",
+                                  "minimum": 0.002,
+                                  "maximum": 10
+                                },
+                                {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "number",
+                                    "minimum": 0.002,
+                                    "maximum": 10
+                                  },
+                                  "minItems": 2,
+                                  "maxItems": 2
+                                }
+                              ],
+                              "default": 0.2,
+                              "x-ui": {
+                                "widget": "range",
+                                "unit": "s",
+                                "step": 0.005,
+                                "group": "Source",
+                                "help": "How long the lowest partial rings.",
+                                "min": 0.002,
+                                "max": 10
+                              }
+                            },
+                            "tilt": {
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 4,
+                              "default": 0,
+                              "x-ui": {
+                                "widget": "dial",
+                                "step": 0.05,
+                                "group": "Source",
+                                "help": "Higher partials die faster by this much."
+                              }
+                            }
+                          },
+                          "additionalProperties": false
+                        }
+                      ],
+                      "x-ui": {
+                        "group": "Source"
+                      }
+                    },
+                    "then": {
+                      "type": "array",
+                      "items": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "required": [
+                              "filter",
+                              "freq"
+                            ],
+                            "properties": {
+                              "filter": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "const": "lowpass"
+                                  },
+                                  {
+                                    "type": "string",
+                                    "const": "highpass"
+                                  },
+                                  {
+                                    "type": "string",
+                                    "const": "bandpass"
+                                  },
+                                  {
+                                    "type": "string",
+                                    "const": "notch"
+                                  },
+                                  {
+                                    "type": "string",
+                                    "const": "peaking"
+                                  }
+                                ],
+                                "x-ui": {
+                                  "widget": "segments"
+                                }
+                              },
+                              "freq": {
+                                "anyOf": [
+                                  {
+                                    "type": "number",
+                                    "minimum": 20,
+                                    "maximum": 20000
+                                  },
+                                  {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "number",
+                                      "minimum": 20,
+                                      "maximum": 20000
+                                    },
+                                    "minItems": 2,
+                                    "maxItems": 2
+                                  }
+                                ],
+                                "x-ui": {
+                                  "widget": "range",
+                                  "unit": "Hz",
+                                  "min": 20,
+                                  "max": 20000
+                                }
+                              },
+                              "q": {
+                                "anyOf": [
+                                  {
+                                    "type": "number",
+                                    "minimum": 0.1,
+                                    "maximum": 40
+                                  },
+                                  {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "number",
+                                      "minimum": 0.1,
+                                      "maximum": 40
+                                    },
+                                    "minItems": 2,
+                                    "maxItems": 2
+                                  }
+                                ],
+                                "default": 0.7,
+                                "x-ui": {
+                                  "widget": "range",
+                                  "step": 0.1,
+                                  "min": 0.1,
+                                  "max": 40
+                                }
+                              },
+                              "glideTo": {
+                                "type": "number",
+                                "exclusiveMinimum": 0,
+                                "maximum": 16,
+                                "x-ui": {
+                                  "widget": "dial",
+                                  "step": 0.01,
+                                  "help": "Cutoff at the end of the sweep, as a multiple of freq."
+                                }
+                              },
+                              "glideTime": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 10,
+                                "x-ui": {
+                                  "widget": "dial",
+                                  "unit": "s",
+                                  "step": 0.005
+                                }
+                              },
+                              "gain": {
+                                "type": "number",
+                                "minimum": -24,
+                                "maximum": 24,
+                                "x-ui": {
+                                  "widget": "dial",
+                                  "unit": "dB",
+                                  "help": "Boost or cut, for peaking only."
+                                }
+                              }
+                            },
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "required": [
+                              "envelope"
+                            ],
+                            "properties": {
+                              "envelope": {
+                                "type": "object",
+                                "required": [
+                                  "attack",
+                                  "decay"
+                                ],
+                                "properties": {
+                                  "attack": {
+                                    "anyOf": [
+                                      {
+                                        "type": "number",
+                                        "minimum": 0,
+                                        "maximum": 5
+                                      },
+                                      {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "number",
+                                          "minimum": 0,
+                                          "maximum": 5
+                                        },
+                                        "minItems": 2,
+                                        "maxItems": 2
+                                      }
+                                    ],
+                                    "default": 0.005,
+                                    "x-ui": {
+                                      "widget": "range",
+                                      "unit": "s",
+                                      "step": 0.001,
+                                      "min": 0,
+                                      "max": 5
+                                    }
+                                  },
+                                  "hold": {
+                                    "anyOf": [
+                                      {
+                                        "type": "number",
+                                        "minimum": 0,
+                                        "maximum": 5
+                                      },
+                                      {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "number",
+                                          "minimum": 0,
+                                          "maximum": 5
+                                        },
+                                        "minItems": 2,
+                                        "maxItems": 2
+                                      }
+                                    ],
+                                    "default": 0,
+                                    "x-ui": {
+                                      "widget": "range",
+                                      "unit": "s",
+                                      "step": 0.001,
+                                      "min": 0,
+                                      "max": 5
+                                    }
+                                  },
+                                  "decay": {
+                                    "anyOf": [
+                                      {
+                                        "type": "number",
+                                        "minimum": 0.001,
+                                        "maximum": 10
+                                      },
+                                      {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "number",
+                                          "minimum": 0.001,
+                                          "maximum": 10
+                                        },
+                                        "minItems": 2,
+                                        "maxItems": 2
+                                      }
+                                    ],
+                                    "default": 0.2,
+                                    "x-ui": {
+                                      "widget": "range",
+                                      "unit": "s",
+                                      "step": 0.005,
+                                      "min": 0.001,
+                                      "max": 10
+                                    }
+                                  },
+                                  "curve": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "const": "exp"
+                                      },
+                                      {
+                                        "type": "string",
+                                        "const": "linear"
+                                      }
+                                    ],
+                                    "default": "exp",
+                                    "x-ui": {
+                                      "widget": "segments"
+                                    }
+                                  }
+                                },
+                                "additionalProperties": false,
+                                "x-ui": {
+                                  "widget": "curve"
+                                }
+                              }
+                            },
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "required": [
+                              "gain"
+                            ],
+                            "properties": {
+                              "gain": {
+                                "anyOf": [
+                                  {
+                                    "type": "number",
+                                    "minimum": -60,
+                                    "maximum": 24
+                                  },
+                                  {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "number",
+                                      "minimum": -60,
+                                      "maximum": 24
+                                    },
+                                    "minItems": 2,
+                                    "maxItems": 2
+                                  }
+                                ],
+                                "x-ui": {
+                                  "widget": "range",
+                                  "unit": "dB",
+                                  "step": 0.5,
+                                  "min": -60,
+                                  "max": 24
+                                }
+                              }
+                            },
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "required": [
+                              "drive"
+                            ],
+                            "properties": {
+                              "drive": {
+                                "anyOf": [
+                                  {
+                                    "type": "number",
+                                    "minimum": 0,
+                                    "maximum": 1
+                                  },
+                                  {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "number",
+                                      "minimum": 0,
+                                      "maximum": 1
+                                    },
+                                    "minItems": 2,
+                                    "maxItems": 2
+                                  }
+                                ],
+                                "default": 0.3,
+                                "x-ui": {
+                                  "widget": "range",
+                                  "step": 0.01,
+                                  "help": "Soft clipping: 0 clean, 1 crushed.",
+                                  "min": 0,
+                                  "max": 1
+                                }
+                              }
+                            },
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "required": [
+                              "delay"
+                            ],
+                            "properties": {
+                              "delay": {
+                                "type": "object",
+                                "required": [
+                                  "time"
+                                ],
+                                "properties": {
+                                  "time": {
+                                    "anyOf": [
+                                      {
+                                        "type": "number",
+                                        "minimum": 0.001,
+                                        "maximum": 1
+                                      },
+                                      {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "number",
+                                          "minimum": 0.001,
+                                          "maximum": 1
+                                        },
+                                        "minItems": 2,
+                                        "maxItems": 2
+                                      }
+                                    ],
+                                    "default": 0.1,
+                                    "x-ui": {
+                                      "widget": "range",
+                                      "unit": "s",
+                                      "step": 0.001,
+                                      "min": 0.001,
+                                      "max": 1
+                                    }
+                                  },
+                                  "feedback": {
+                                    "type": "number",
+                                    "minimum": 0,
+                                    "maximum": 0.95,
+                                    "default": 0.3,
+                                    "x-ui": {
+                                      "widget": "slider",
+                                      "step": 0.01
+                                    }
+                                  },
+                                  "mix": {
+                                    "type": "number",
+                                    "minimum": 0,
+                                    "maximum": 1,
+                                    "default": 0.5,
+                                    "x-ui": {
+                                      "widget": "slider",
+                                      "step": 0.01
+                                    }
+                                  }
+                                },
+                                "additionalProperties": false
+                              }
+                            },
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "required": [
+                              "pan"
+                            ],
+                            "properties": {
+                              "pan": {
+                                "anyOf": [
+                                  {
+                                    "type": "number",
+                                    "minimum": -1,
+                                    "maximum": 1
+                                  },
+                                  {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "number",
+                                      "minimum": -1,
+                                      "maximum": 1
+                                    },
+                                    "minItems": 2,
+                                    "maxItems": 2
+                                  }
+                                ],
+                                "x-ui": {
+                                  "widget": "range",
+                                  "step": 0.05,
+                                  "help": "-1 left, 1 right.",
+                                  "min": -1,
+                                  "max": 1
+                                }
+                              }
+                            },
+                            "additionalProperties": false
+                          }
+                        ]
+                      },
+                      "x-ui": {
+                        "group": "Chain",
+                        "help": "Shapers run in order."
+                      }
+                    },
+                    "at": {
+                      "anyOf": [
+                        {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 10
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 10
+                          },
+                          "minItems": 2,
+                          "maxItems": 2
+                        }
+                      ],
+                      "default": 0,
+                      "x-ui": {
+                        "widget": "range",
+                        "unit": "s",
+                        "step": 0.001,
+                        "group": "Timing",
+                        "help": "When the layer starts, from the start of the sound.",
+                        "min": 0,
+                        "max": 10
+                      }
+                    },
+                    "repeat": {
+                      "type": "object",
+                      "required": [
+                        "count",
+                        "every"
+                      ],
+                      "properties": {
+                        "count": {
+                          "type": "integer",
+                          "minimum": 2,
+                          "maximum": 64,
+                          "x-ui": {
+                            "widget": "number"
+                          }
+                        },
+                        "every": {
+                          "anyOf": [
+                            {
+                              "type": "number",
+                              "minimum": 0.005,
+                              "maximum": 2
+                            },
+                            {
+                              "type": "array",
+                              "items": {
+                                "type": "number",
+                                "minimum": 0.005,
+                                "maximum": 2
+                              },
+                              "minItems": 2,
+                              "maxItems": 2
+                            }
+                          ],
+                          "x-ui": {
+                            "widget": "range",
+                            "unit": "s",
+                            "step": 0.001,
+                            "min": 0.005,
+                            "max": 2
+                          }
+                        },
+                        "falloff": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 24,
+                          "default": 0,
+                          "x-ui": {
+                            "widget": "dial",
+                            "unit": "dB",
+                            "help": "Each repeat is this much quieter than the one before."
+                          }
+                        }
+                      },
+                      "additionalProperties": false,
+                      "x-ui": {
+                        "group": "Timing",
+                        "help": "Play the layer again and again: a ratchet, footsteps in a run, droplets."
+                      }
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              },
+              "x-ui": {
+                "group": "Layers",
+                "help": "Named layers that play together."
+              }
+            },
+            "reverb": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1,
+              "default": 0,
+              "x-ui": {
+                "widget": "slider",
+                "step": 0.01,
+                "group": "Mix",
+                "help": "How much goes to the shared reverb."
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "type",
+            "file"
+          ],
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "sample"
+            },
+            "file": {
+              "type": "string",
+              "minLength": 1,
+              "x-ui": {
+                "help": "A file in assets/."
+              }
+            },
+            "start": {
+              "type": "number",
+              "minimum": 0,
+              "default": 0,
+              "x-ui": {
+                "unit": "s"
+              }
+            },
+            "end": {
+              "type": "number",
+              "minimum": 0,
+              "x-ui": {
+                "unit": "s"
+              }
+            },
+            "loop": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "type",
+            "from"
+          ],
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "pick"
+            },
+            "from": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "x-ref": "sound",
+                "x-ui": {
+                  "widget": "ref"
+                }
+              },
+              "minItems": 1,
+              "x-ui": {
+                "help": "Other sounds; one is chosen each play."
+              }
+            },
+            "mode": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "const": "random"
+                },
+                {
+                  "type": "string",
+                  "const": "shuffle"
+                },
+                {
+                  "type": "string",
+                  "const": "sequence"
+                }
+              ],
+              "default": "random",
+              "x-ui": {
+                "widget": "segments"
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "type",
+            "generator"
+          ],
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "code"
+            },
+            "generator": {
+              "type": "string",
+              "minLength": 1,
+              "x-ui": {
+                "help": "A generator registered in code with registerGenerator."
+              }
+            },
+            "knobs": {
+              "type": "object",
+              "patternProperties": {
+                "^.*$": {}
+              },
+              "x-ui": {
+                "help": "Values for the generator’s own schema."
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    }
+  },
+  "additionalProperties": false,
+  "title": "Hull sound"
+}

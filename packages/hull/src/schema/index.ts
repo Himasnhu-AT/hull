@@ -2,15 +2,23 @@
 // (hull.json, kind 'game'), tuning and material. Runs in Node and the browser.
 import { lookSchema, type Look } from './look.ts';
 import { materialSchema, type Material } from './material.ts';
+import { mixerSchema, type Mixer } from './mixer.ts';
+import { soundSchema, type Sound } from './sound.ts';
 import { manifestSchema, type Manifest } from './manifest.ts';
 import { tuningSchema, type Tuning } from './tuning.ts';
 
-export { lookSchema, manifestSchema, materialSchema, tuningSchema };
-export type { Look, Manifest, Material, Tuning };
+export { lookSchema, manifestSchema, materialSchema, mixerSchema, soundSchema, tuningSchema };
+export type { Look, Manifest, Material, Mixer, Sound, Tuning };
 export * from './ui.ts';
 
 /** Kinds that live under config/<kind>/. The manifest is separate: it is hull.json at the project root. */
-export const kinds: Readonly<Record<string, object>> = { look: lookSchema, material: materialSchema, tuning: tuningSchema };
+export const kinds: Readonly<Record<string, object>> = {
+  look: lookSchema,
+  material: materialSchema,
+  mixer: mixerSchema,
+  sound: soundSchema,
+  tuning: tuningSchema,
+};
 
 /** Value types per kind, so `config.get('tuning', id)` is typed. */
 declare module '../config/types.ts' {
@@ -18,6 +26,8 @@ declare module '../config/types.ts' {
     tuning: Tuning;
     material: Material;
     look: Look;
+    mixer: Mixer;
+    sound: Sound;
   }
 }
 
