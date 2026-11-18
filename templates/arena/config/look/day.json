@@ -3,7 +3,7 @@
   "note": "Clear afternoon: soft gradient sky, light haze so the far edge of the floor fades out, a warm sun with shadows.",
   "sky": { "horizon": "#cfe0ea", "mid": "#9cc0dc", "zenith": "#4f86bd" },
   "fog": { "color": "#cfe0ea", "near": 30, "far": 90 },
-  "ambient": { "color": "#dfe8f5", "intensity": 0.75 },
+  "ambient": { "color": "#dfe8f5", "intensity": 0.9 },
   "sun": { "color": "#fff1d6", "strength": 2.6, "elevationDeg": 50, "azimuthDeg": 215, "shadows": true, "shadowRange": 30 },
   "exposure": 1,
   "toneMapping": "neutral"

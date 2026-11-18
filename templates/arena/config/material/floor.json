@@ -1,1 +1,1 @@
-{ "kind": "material", "note": "Dull stone so the crates and gems stand out.", "color": "#5d6670", "roughness": 0.95, "metalness": 0 }
+{ "kind": "material", "note": "Light stone, so the dark crates and bright gems stand out against it.", "color": "#9a9c92", "roughness": 0.95, "metalness": 0 }
