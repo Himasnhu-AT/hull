@@ -16,6 +16,7 @@ import { setJsonPointer, valueAtPointer } from './jsonEdit.ts';
 import { expGames } from '../history/expServer.ts';
 import { History } from '../history/history.ts';
 import { appendChange, readJournal } from './journal.ts';
+import { listReview, noteReview, setReview } from '../review/store.ts';
 import { findTunables, rewriteTunable, type FoundTunable } from './tsTunables.ts';
 import { engineAliases, hullResolve, virtualModule } from './vitePlugins.ts';
 
@@ -141,7 +142,9 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
         },
         configureServer(server) {
           server.middlewares.use(async (req, res, next) => {
-            if (req.url !== '/' && req.url?.split('?')[0] !== '/index.html') return next();
+            // The path only: a query like ?hull-paused (the play tool's) still gets the page.
+            const path = req.url?.split('?')[0];
+            if (path !== '/' && path !== '/index.html') return next();
             res.setHeader('content-type', 'text/html');
             res.setHeader('cache-control', 'no-store');
             res.end(await server.transformIndexHtml('/', DEV_PAGE));
@@ -284,6 +287,25 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
   const tunableWires = (): TunableWire[] =>
     scanTunables().map((t) => ({ block: t.block, key: t.key, kind: t.kind, value: t.value, opts: t.opts, file: t.file, line: t.line, col: t.col }));
 
+  // Control ops waiting for a game's answer (the control port: `game.run` out, `game.result` back).
+  let rpcN = 0;
+  const rpcWait = new Map<number, { ok(v: never): void; fail(e: Error): void }>();
+
+  const runOnGame: Handler<'game.run'> = (p) => new Promise((ok, fail) => {
+    const candidates = [...clients].filter((c) => c.role === 'game' && c.ws.readyState === WebSocket.OPEN && (p.client ? c.id === p.client : c.exp === undefined));
+    const target = candidates[0];
+    if (!target) { fail(new RpcError(-32002, p.client ? `no game "${p.client}" is connected` : 'no game is connected; open the dev page first')); return; }
+    const id = ++rpcN;
+    const timer = setTimeout(() => { rpcWait.delete(id); fail(new RpcError(-32003, `the game did not answer ${p.control.op} within 30 s`)); }, 30_000);
+    rpcWait.set(id, { ok: (v) => { clearTimeout(timer); ok(v); }, fail: (e) => { clearTimeout(timer); fail(e); } });
+    target.ws.send(JSON.stringify({ jsonrpc: '2.0', method: 'game.rpc', params: { id, control: p.control } satisfies Pushes['game.rpc'] }));
+  });
+
+  const reviewed = <R extends { entry?: Methods['review.list']['result'][number] }>(r: R): R => {
+    if (r.entry) push('review.changed', { entry: r.entry }, 'studio');
+    return r;
+  };
+
   // ---- Methods ----------------------------------------------------------------------------------------------------
   const methods: { [M in MethodName]: Handler<M> } = {
     'project.info': (): ProjectInfo => {
@@ -335,13 +357,17 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
     'exp.compare': (p) => hist.expCompare(p.a, p.b),
     'exp.adopt': (p) => hist.expAdopt(p.name, p.author ?? 'you', p.resolve),
     'exp.discard': (p) => hist.expDiscard(p.name),
+    'game.run': runOnGame,
+    'review.list': (p) => listReview(root, p.open === true),
+    'review.set': (p) => reviewed(setReview(root, { ...p, author: p.author ?? 'you' })),
+    'review.note': (p) => reviewed(noteReview(root, { ...p, author: p.author ?? 'you' })),
     'game.control': (p: GameControl) => { push('game.control', p, 'game', '*'); return {}; },
     'tool.call': async (p) => {
       // Checks read the history's authorship record, so what is waiting is recorded first.
       await hist.flush();
       const tool = tools.find((t) => t.name === p.name && t.name !== 'dev');
       if (!tool) throw new RpcError(-32602, `there is no tool "${p.name}" (have: ${tools.filter((t) => t.name !== 'dev').map((t) => t.name).join(', ')})`);
-      const out = await tool.run({ root, author: 'you', log: (line) => push('log', { level: 'info', message: line, source: 'tool' }, 'studio'), signal: new AbortController().signal }, p.input ?? {});
+      const out = await tool.run({ root, author: 'you', server: { url: urls.ws, gameUrl: urls.http }, log: (line) => push('log', { level: 'info', message: line, source: 'tool' }, 'studio'), signal: new AbortController().signal }, p.input ?? {});
       const probs = (out as { problems?: Problem[] } | null)?.problems ?? [];
       return { ok: (out as { ok?: boolean } | null)?.ok ?? probs.length === 0, output: out, problems: probs };
     },
@@ -375,7 +401,12 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
     if (client.role === 'game') {
       // Games only talk; their reports and logs go to the studios.
       if (msg.method === 'game.report') push('game.report', { ...(msg.params as Pushes['game.report']), client: client.id }, 'studio');
-      else if (msg.method === 'log') push('log', msg.params as Pushes['log'], 'studio');
+      else if (msg.method === 'game.result') {
+        const r = msg.params as { id: number; ok: boolean; result?: never; error?: string };
+        const w = rpcWait.get(r.id);
+        rpcWait.delete(r.id);
+        if (r.ok) w?.ok(r.result as never); else w?.fail(new RpcError(-32004, r.error ?? 'the game failed the control op'));
+      } else if (msg.method === 'log') push('log', msg.params as Pushes['log'], 'studio');
       return;
     }
     if (msg.id === undefined) return;

@@ -148,6 +148,25 @@ export interface GameControl {
   restart?: boolean;
 }
 
+// ---- M3: the control port --------------------------------------------------------------------------------------------
+// An agent drives a running game over the game's own socket: the server sends `game.rpc` to the game, the game answers
+// with a `game.result` notification. Time moves only by `step`, so a script gives the same run every time.
+
+export type ControlOp =
+  /** Pause and run exactly `n` fixed steps. */
+  | { op: 'step'; n: number }
+  /** Hold a key (a KeyboardEvent `code`, like 'KeyW' or 'Space') until released. It reaches the game through the input map. */
+  | { op: 'press'; key: string }
+  | { op: 'release'; key: string }
+  /** Tick, time, checksum, and the position of the named nodes (`world.find` paths). */
+  | { op: 'state'; nodes?: string[] }
+  /** The drawn frame as PNG. */
+  | { op: 'screenshot' };
+
+export interface NodeState { found: boolean; x: number; y: number; z: number }
+export interface ControlState { tick: number; time: number; checksum: string; paused: boolean; nodes: Record<string, NodeState> }
+export interface ControlShot { png: string; width: number; height: number }
+
 export interface GameReport {
   tick: number;
   time: number;
@@ -187,8 +206,30 @@ export interface Methods {
   'exp.discard': { params: { name: string }; result: { ok: boolean } };
   /** Forwarded to every connected game. */
   'game.control': { params: GameControl; result: Record<string, never> };
+  /** Runs one control op on a connected game (the first of the project's games unless `client` is given) and returns its answer. */
+  'game.run': { params: { control: ControlOp; client?: string }; result: ControlState | ControlShot | Record<string, never> };
+  /** Review notes (.hull/review.json): what has been checked, what needs a change. */
+  'review.list': { params: { open?: boolean }; result: ReviewEntry[] };
+  'review.set': { params: { key: string; state: ReviewState; note?: string; author?: Author }; result: { ok: boolean; problems: Problem[]; entry?: ReviewEntry } };
+  'review.note': { params: { key: string; note: string; author?: Author }; result: { ok: boolean; problems: Problem[]; entry?: ReviewEntry } };
   /** Runs a tool from the registry: 'check', 'test', 'build'. */
   'tool.call': { params: { name: string; input?: unknown }; result: { ok: boolean; output: unknown; problems: Problem[] } };
+}
+
+export type ReviewState = 'unreviewed' | 'approved' | 'needs-change';
+
+/** One row of the review list. `stale` means the piece changed since it was reviewed: the state fell back to unreviewed. */
+export interface ReviewEntry {
+  /** A config id or 'tunables:<block>', optionally with '#part'. */
+  key: string;
+  state: ReviewState;
+  note?: string;
+  at?: string;
+  by?: Author;
+  hash: string;
+  stale?: boolean;
+  /** For a stale entry: the state it had when it was reviewed. */
+  was?: ReviewState;
 }
 
 /** Notifications the server pushes (JSON-RPC notifications: method + params, no id). */
@@ -207,6 +248,9 @@ export interface Pushes {
   'history.added': HistoryChange;
   /** An experiment started, was edited, adopted or discarded. Games of an experiment report as client '<name>/<id>'. */
   'exp.changed': { name: string; change: 'started' | 'edited' | 'adopted' | 'discarded'; exp: ExpInfo };
+  /** To games only: a control op to run, answered by the game's `game.result`. */
+  'game.rpc': { id: number; control: ControlOp };
+  'review.changed': { entry: ReviewEntry };
   'problems': { problems: Problem[] };
   'log': { level: 'info' | 'warn' | 'error'; message: string; source: 'server' | 'game' | 'tool' };
   /** Source code changed: the game page reloads itself (Vite HMR); studios refresh tunables.list. */
