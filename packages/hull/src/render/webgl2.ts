@@ -2,12 +2,12 @@
 import {
   ACESFilmicToneMapping,
   AgXToneMapping,
-  AmbientLight,
   CineonToneMapping,
   Color,
   DirectionalLight,
   Fog,
   FogExp2,
+  HemisphereLight,
   LinearToneMapping,
   Mesh,
   NoToneMapping,
@@ -18,6 +18,7 @@ import {
   ShaderMaterial,
   BackSide,
   SphereGeometry,
+  Vector2,
   WebGLRenderer,
   type Object3D,
   type ToneMapping as ThreeToneMapping,
@@ -28,13 +29,9 @@ import type { Backend, Capability, Quality, RenderStats } from './backend.ts';
 import { Camera } from './behaviours.ts';
 import { debugLines } from './debug.ts';
 import { stateFor } from './interp.ts';
-import { resolveLook, type ResolvedLook, type ToneMapping } from './look.ts';
-
-const QUALITY: Record<Quality, { dprCap: number; antialias: boolean; shadowMap: number }> = {
-  low: { dprCap: 1, antialias: false, shadowMap: 1024 },
-  medium: { dprCap: 1.5, antialias: true, shadowMap: 2048 },
-  high: { dprCap: 2, antialias: true, shadowMap: 4096 },
-};
+import { SkyEnvironment, SKY_GLSL, setSkyUniforms, skyUniforms } from './environment.ts';
+import { PostChain } from './post.ts';
+import { postFor, resolveLook, snapShadowTarget, TIERS, type ResolvedLook, type ToneMapping } from './look.ts';
 
 const TONE: Record<ToneMapping, ThreeToneMapping> = {
   none: NoToneMapping,
@@ -46,18 +43,16 @@ const TONE: Record<ToneMapping, ThreeToneMapping> = {
   neutral: NeutralToneMapping,
 };
 
-// A dome around the camera, painted by the direction of each pixel: horizon colour at and below the horizon,
-// mid colour at about 20 degrees up, zenith colour straight up.
+// A dome around the camera, painted by the direction of each pixel (the same gradient the environment map is baked
+// from, with the fog colour banded in at the horizon).
+const skyUnis = skyUniforms();
 const skyMaterial = new ShaderMaterial({
-  uniforms: { horizon: { value: new Color() }, mid: { value: new Color() }, zenith: { value: new Color() } },
+  uniforms: skyUnis,
   vertexShader: 'varying vec3 vDir; void main() { vDir = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-  fragmentShader: `
-    uniform vec3 horizon; uniform vec3 mid; uniform vec3 zenith; varying vec3 vDir;
+  fragmentShader: `${SKY_GLSL}
+    varying vec3 vDir;
     void main() {
-      float h = normalize(vDir).y;
-      vec3 c = mix(horizon, mid, smoothstep(0.0, 0.35, h));
-      c = mix(c, zenith, smoothstep(0.35, 1.0, h));
-      gl_FragColor = vec4(c, 1.0);
+      gl_FragColor = vec4(skyColor(vDir), 1.0);
       #include <tonemapping_fragment>
       #include <colorspace_fragment>
     }`,
@@ -72,15 +67,22 @@ export class WebGL2Backend implements Backend {
 
   private renderer: WebGLRenderer | null = null;
   private readonly scene = new Scene();
-  private readonly ambient = new AmbientLight();
+  private readonly ambient = new HemisphereLight();
+  private env: SkyEnvironment | null = null;
+  private post: PostChain | null = null;
+  private readonly size2 = new Vector2();
+  private readonly snapped: [number, number, number] = [0, 0, 0];
+  private lookValue: Look | undefined = undefined;
   private readonly sun = new DirectionalLight();
   private readonly dome = new Mesh(new SphereGeometry(1, 24, 12), skyMaterial);
   private quality: Quality = 'medium';
+  private shadowMapSize = 2048;
   private world: World | null = null;
   private rootParent: Object3D | null = null;
   private width = 1;
   private height = 1;
   private dpr = 1;
+  private rawDpr = 1;
   private look: ResolvedLook = resolveLook(undefined);
   private lastCamera: Node | null = null;
   private lastAlpha = 1;
@@ -92,19 +94,22 @@ export class WebGL2Backend implements Backend {
   private canvas: HTMLCanvasElement | null = null;
 
   init(canvas: HTMLCanvasElement, quality: Quality): void {
-    const q = QUALITY[quality];
+    const q = TIERS[quality];
     // three throws "Error creating WebGL context" when the device has none: mountRender reports that and moves on.
-    const renderer = new WebGLRenderer({ canvas, antialias: q.antialias, powerPreference: 'high-performance' });
+    const renderer = new WebGLRenderer({ canvas, antialias: quality !== 'low', powerPreference: 'high-performance' });
     this.renderer = renderer;
     this.canvas = canvas;
     this.quality = quality;
-    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.enabled = q.shadows;
     renderer.shadowMap.type = PCFShadowMap;
+    this.env = new SkyEnvironment(renderer);
+    this.post = new PostChain(renderer);
 
     this.dome.frustumCulled = false;
     this.dome.renderOrder = -1000;
     const sun = this.sun;
     sun.shadow.mapSize.set(q.shadowMap, q.shadowMap);
+    this.shadowMapSize = q.shadowMap;
     sun.shadow.camera.near = 1;
     sun.shadow.camera.far = 400;
     sun.shadow.bias = -0.0005;
@@ -115,7 +120,7 @@ export class WebGL2Backend implements Backend {
   }
 
   can(cap: Capability): boolean {
-    return cap === 'shadows' || cap === 'instancing' || (cap === 'msaa' && QUALITY[this.quality].antialias);
+    return (cap === 'shadows' && TIERS[this.quality].shadows) || cap === 'instancing' || (cap === 'post' && TIERS[this.quality].post) || (cap === 'msaa' && TIERS[this.quality].samples > 0);
   }
 
   sync(world: World, alpha: number): void {
@@ -159,12 +164,24 @@ export class WebGL2Backend implements Backend {
         const r = Math.max(1, view.far * 0.5);
         this.dome.scale.set(r, r, r);
         // The look's sun rides with the camera so its shadows cover what is on screen.
+        // The shadow box moves in whole shadow-map texels, so edges do not crawl as the camera moves.
         const d = this.look.sun.dir;
-        this.sun.target.position.set(cx, cy, cz);
-        this.sun.position.set(cx + d[0] * 150, cy + d[1] * 150, cz + d[2] * 150);
+        const sn = this.snapped;
+        snapShadowTarget(cx, cy, cz, d, this.look.sun.shadowRange, this.shadowMapSize, sn);
+        this.sun.target.position.set(sn[0], sn[1], sn[2]);
+        const reach = Math.max(60, this.look.sun.shadowRange * 4);
+        this.sun.position.set(sn[0] + d[0] * reach, sn[1] + d[1] * reach, sn[2] + d[2] * reach);
         this.sun.visible = state.suns === 0;
         debugLines.upload();
-        renderer.render(this.scene, view);
+        const post = postFor(this.look.post, TIERS[this.quality]);
+        if (post && this.post) {
+          renderer.getDrawingBufferSize(this.size2);
+          const t = TIERS[this.quality];
+          this.post.resize(this.size2.x, this.size2.y, t.samples, t.bloomLevels);
+          this.post.render(this.scene, view, post, renderer.toneMapping, renderer.toneMappingExposure);
+        } else {
+          renderer.render(this.scene, view);
+        }
         const info = renderer.info.render;
         this.calls = info.calls;
         this.tris = info.triangles;
@@ -186,10 +203,39 @@ export class WebGL2Backend implements Backend {
   }
 
   setLook(look: Look | undefined): void {
-    const r = resolveLook(look);
+    this.lookValue = look;
+    this.applyLook();
+  }
+
+  /** Changes the quality tier at runtime: shadows, pixel ratio and post follow at once. */
+  setQuality(quality: Quality): void {
+    if (quality === this.quality) return;
+    this.quality = quality;
+    const q = TIERS[quality];
+    this.shadowMapSize = q.shadowMap;
+    this.sun.shadow.mapSize.set(q.shadowMap, q.shadowMap);
+    this.sun.shadow.map?.dispose();
+    this.sun.shadow.map = null;
+    this.resize(this.width, this.height, this.rawDpr);
+    this.applyLook();
+  }
+
+  private applyLook(): void {
+    const r = resolveLook(this.lookValue);
     this.look = r;
+    const q = TIERS[this.quality];
     const renderer = this.renderer;
     const scene = this.scene;
+    const fogOn = r.fog !== null;
+    const sky = {
+      horizon: r.horizon,
+      mid: r.mid,
+      zenith: r.zenith,
+      ground: r.ambient.hemisphere ? r.ambient.ground : darken(r.horizon),
+      fogColor: r.fog?.color ?? r.horizon,
+      fogAmount: fogOn ? 1 : 0,
+      skyBlend: r.fog?.skyBlend ?? 0.35,
+    };
     if (r.skyColor !== null) {
       const bg = scene.background instanceof Color ? scene.background : new Color();
       bg.set(r.skyColor);
@@ -197,10 +243,13 @@ export class WebGL2Backend implements Backend {
       this.dome.visible = false;
     } else {
       scene.background = null;
-      skyMaterial.uniforms['horizon']!.value.set(r.horizon);
-      skyMaterial.uniforms['mid']!.value.set(r.mid);
-      skyMaterial.uniforms['zenith']!.value.set(r.zenith);
+      setSkyUniforms(skyUnis, sky);
       this.dome.visible = true;
+    }
+    if (renderer && this.env) {
+      // A flat sky has no gradient to bake, so give it a uniform one in its own colour.
+      const flat = r.skyColor !== null;
+      this.env.apply(scene, flat ? { ...sky, horizon: r.skyColor!, mid: r.skyColor!, zenith: r.skyColor!, fogAmount: 0 } : sky, r.environment.intensity);
     }
     if (r.fog === null) {
       scene.fog = null;
@@ -213,18 +262,23 @@ export class WebGL2Backend implements Backend {
       scene.fog = new Fog(r.fog.color, r.fog.near, r.fog.far);
     }
     this.ambient.color.set(r.ambient.color);
+    this.ambient.groundColor.set(r.ambient.ground);
     this.ambient.intensity = r.ambient.intensity;
     const sun = this.sun;
     sun.color.set(r.sun.color);
     sun.intensity = r.sun.intensity;
-    sun.castShadow = r.sun.shadows;
+    sun.castShadow = r.sun.shadows && q.shadows;
     const c = sun.shadow.camera;
     const range = r.sun.shadowRange;
-    if (c.right !== range) {
+    const reach = Math.max(60, range * 4);
+    if (c.right !== range || c.far !== reach + range * 2) {
       c.left = -range; c.right = range; c.top = range; c.bottom = -range;
+      c.near = 0.5;
+      c.far = reach + range * 2;
       c.updateProjectionMatrix();
     }
     if (renderer) {
+      renderer.shadowMap.enabled = q.shadows;
       renderer.toneMapping = TONE[r.toneMapping];
       renderer.toneMappingExposure = r.exposure;
     }
@@ -233,7 +287,8 @@ export class WebGL2Backend implements Backend {
   resize(width: number, height: number, dpr: number): void {
     this.width = Math.max(1, width);
     this.height = Math.max(1, height);
-    this.dpr = Math.min(dpr, QUALITY[this.quality].dprCap);
+    this.rawDpr = dpr;
+    this.dpr = Math.min(dpr, TIERS[this.quality].dprCap);
     this.renderer?.setPixelRatio(this.dpr);
     this.renderer?.setSize(this.width, this.height, false);
   }
@@ -258,6 +313,8 @@ export class WebGL2Backend implements Backend {
     debugLines.detach();
     this.scene.remove(debugLines.object);
     this.sun.dispose();
+    this.env?.dispose();
+    this.post?.dispose();
     this.dome.geometry.dispose();
     this.renderer?.dispose();
     this.renderer = null;
@@ -271,4 +328,11 @@ export class WebGL2Backend implements Backend {
     this.world = null;
     this.rootParent = null;
   }
+}
+
+/** A hex colour at 40% brightness, for the ground a reflection sees when the look names no ground colour. */
+function darken(hex: string): string {
+  const n = parseInt(hex.slice(1), 16);
+  const f = (v: number) => Math.round(v * 0.4).toString(16).padStart(2, '0');
+  return `#${f((n >> 16) & 255)}${f((n >> 8) & 255)}${f(n & 255)}`;
 }

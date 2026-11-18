@@ -24,6 +24,8 @@ export interface RenderView {
   shot(): Promise<Blob>;
   /** 'look/day' or 'day'. */
   setLook(id: string): void;
+  /** Low drops post effects and shadows; medium and high keep them (high adds grain and FXAA). */
+  setQuality(quality: Quality): void;
   dispose(): void;
 }
 
@@ -115,6 +117,7 @@ export function mountRender(game: Game, el: HTMLElement, opts: RenderOptions = {
     stats: () => be?.stats() ?? { drawCalls: 0, triangles: 0, ms: 0, fps: 0 },
     shot: () => (be ? be.shot() : Promise.reject(new Error('render: no backend is running, so there is nothing to capture'))),
     setLook,
+    setQuality: (q) => be?.setQuality(q),
     dispose() {
       cancelAnimationFrame(raf);
       observer.disconnect();

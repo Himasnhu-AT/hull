@@ -1,0 +1,448 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:hull:schema:vfx",
+  "type": "object",
+  "required": [
+    "kind",
+    "emit",
+    "particle"
+  ],
+  "properties": {
+    "kind": {
+      "type": "string",
+      "const": "vfx"
+    },
+    "note": {
+      "type": "string"
+    },
+    "emit": {
+      "type": "object",
+      "properties": {
+        "count": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "minItems": 2,
+          "maxItems": 2,
+          "items": false,
+          "default": [
+            10,
+            10
+          ],
+          "x-ui": {
+            "widget": "range",
+            "help": "Particles per burst, a whole number picked from this range."
+          }
+        },
+        "over": {
+          "type": "number",
+          "minimum": 0,
+          "x-ui": {
+            "unit": "s",
+            "help": "Spread the burst over this long instead of at once."
+          }
+        },
+        "rate": {
+          "type": "number",
+          "minimum": 0,
+          "x-ui": {
+            "unit": "/s",
+            "help": "For trails: particles per second, laid along the path the node took."
+          }
+        },
+        "shape": {
+          "anyOf": [
+            {
+              "type": "string",
+              "const": "point"
+            },
+            {
+              "type": "object",
+              "required": [
+                "sphere"
+              ],
+              "properties": {
+                "sphere": {
+                  "type": "number",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "required": [
+                "disc"
+              ],
+              "properties": {
+                "disc": {
+                  "type": "number",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "required": [
+                "box"
+              ],
+              "properties": {
+                "box": {
+                  "type": "array",
+                  "prefixItems": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ],
+                  "minItems": 3,
+                  "maxItems": 3,
+                  "items": false
+                }
+              },
+              "additionalProperties": false
+            }
+          ],
+          "default": "point",
+          "description": "Where particles start: a point, a sphere or flat disc of this radius, or a box of these sizes."
+        }
+      },
+      "additionalProperties": false
+    },
+    "particle": {
+      "type": "object",
+      "required": [
+        "life"
+      ],
+      "properties": {
+        "life": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "minItems": 2,
+          "maxItems": 2,
+          "items": false,
+          "default": [
+            0.5,
+            1
+          ],
+          "x-ui": {
+            "widget": "range",
+            "help": "Seconds a particle lives.",
+            "unit": "s"
+          }
+        },
+        "speed": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "minItems": 2,
+          "maxItems": 2,
+          "items": false,
+          "default": [
+            1,
+            2
+          ],
+          "x-ui": {
+            "widget": "range",
+            "help": "Start speed.",
+            "unit": "m/s"
+          }
+        },
+        "direction": {
+          "anyOf": [
+            {
+              "type": "object",
+              "required": [
+                "cone",
+                "angleDeg"
+              ],
+              "properties": {
+                "cone": {
+                  "type": "array",
+                  "prefixItems": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ],
+                  "minItems": 3,
+                  "maxItems": 3,
+                  "items": false
+                },
+                "angleDeg": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 180
+                }
+              },
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "required": [
+                "outward"
+              ],
+              "properties": {
+                "outward": {
+                  "type": "boolean",
+                  "const": true
+                }
+              },
+              "additionalProperties": false
+            }
+          ],
+          "description": "A cone around an axis (a burst call may aim it), or straight out from the emitter centre."
+        },
+        "gravity": {
+          "type": "number",
+          "default": 0,
+          "x-ui": {
+            "unit": "m/s2",
+            "help": "Acceleration along Y: negative falls, positive rises."
+          }
+        },
+        "drag": {
+          "type": "number",
+          "minimum": 0,
+          "default": 0,
+          "x-ui": {
+            "unit": "1/s",
+            "help": "Fraction of speed lost per second."
+          }
+        },
+        "size": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "prefixItems": [
+              {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "minItems": 2,
+            "maxItems": 2,
+            "items": false
+          },
+          "minItems": 1,
+          "x-ui": {
+            "widget": "curve",
+            "help": "Size over life, in metres."
+          }
+        },
+        "sizeScale": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "minItems": 2,
+          "maxItems": 2,
+          "items": false,
+          "default": [
+            1,
+            1
+          ],
+          "x-ui": {
+            "widget": "range",
+            "help": "Each particle multiplies its size curve by a number from this range."
+          }
+        },
+        "color": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "prefixItems": [
+              {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              {
+                "type": "string",
+                "pattern": "^#[0-9a-fA-F]{6}$"
+              }
+            ],
+            "minItems": 2,
+            "maxItems": 2,
+            "items": false
+          },
+          "minItems": 1,
+          "x-ui": {
+            "widget": "curve",
+            "help": "Colour over the particle's life: [[0, \"#ffffff\"], [1, \"#888888\"]]. Time runs 0 (born) to 1 (gone)."
+          }
+        },
+        "alpha": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "prefixItems": [
+              {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "minItems": 2,
+            "maxItems": 2,
+            "items": false
+          },
+          "minItems": 1,
+          "x-ui": {
+            "widget": "curve",
+            "help": "Opacity over life, 0 to 1."
+          }
+        },
+        "glow": {
+          "type": "number",
+          "minimum": 0,
+          "default": 1,
+          "x-ui": {
+            "step": 0.1,
+            "help": "Multiplies the colour. Above 1 makes it brighter than white so bloom picks it up."
+          }
+        },
+        "spin": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "minItems": 2,
+          "maxItems": 2,
+          "items": false,
+          "default": [
+            0,
+            0
+          ],
+          "x-ui": {
+            "widget": "range",
+            "help": "Turn speed of the sprite.",
+            "unit": "rad/s"
+          }
+        },
+        "stretch": {
+          "type": "number",
+          "minimum": 0,
+          "default": 0,
+          "x-ui": {
+            "step": 0.01,
+            "help": "Seconds of travel the sprite is stretched along its velocity. 0 keeps it round."
+          }
+        },
+        "sprite": {
+          "anyOf": [
+            {
+              "type": "string",
+              "const": "soft"
+            },
+            {
+              "type": "string",
+              "const": "smoke"
+            },
+            {
+              "type": "string",
+              "const": "hard"
+            },
+            {
+              "type": "string",
+              "const": "spark"
+            }
+          ],
+          "default": "soft",
+          "x-ui": {
+            "widget": "select"
+          }
+        },
+        "blend": {
+          "anyOf": [
+            {
+              "type": "string",
+              "const": "alpha"
+            },
+            {
+              "type": "string",
+              "const": "additive"
+            }
+          ],
+          "default": "alpha",
+          "x-ui": {
+            "widget": "select"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "budget": {
+      "type": "object",
+      "properties": {
+        "max": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 400,
+          "x-ui": {
+            "help": "Most particles alive at once. When full, new ones are skipped."
+          }
+        },
+        "fadeNear": {
+          "type": "number",
+          "minimum": 0,
+          "default": 0,
+          "x-ui": {
+            "unit": "m",
+            "help": "Particles fade out when closer to the camera than this, so none fill the screen."
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false,
+  "title": "Hull vfx"
+}

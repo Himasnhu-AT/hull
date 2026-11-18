@@ -28,6 +28,8 @@ export interface Backend {
   draw(cameraNode: Node | null): void;
   /** Applies a `look` config value (sky, fog, ambient, sun, exposure, tone mapping). Undefined restores the default. */
   setLook(look: Look | undefined): void;
+  /** Switches the quality tier while running: low drops post and shadows. */
+  setQuality(quality: Quality): void;
   resize(width: number, height: number, dpr: number): void;
   stats(): RenderStats;
   /** The last frame as a PNG. */
