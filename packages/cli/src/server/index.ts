@@ -1,7 +1,7 @@
 // The project server: one HTTP port that serves the game's dev page (Vite) and, on the same port, the JSON-RPC
 // WebSocket of dev/protocol.ts. The app's front end and every running game connect here; nothing outside this process
 // touches the project's files (CLAUDE.md: the Studio never touches the disk).
-import { mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, readdirSync, renameSync, statSync, writeFileSync } from 'node:fs';
 import type { IncomingMessage } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { join, relative, resolve } from 'node:path';
@@ -64,6 +64,17 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
   const texts = new Map<string, string>();
   // The text this server itself wrote to a .ts file. Its write is already live in the game, so it must not reload it.
   const wroteTs = new Map<string, string>();
+  // writeFileSync truncates before it writes, so a watcher can read the file half-written. That read matched neither
+  // the old nor the new text, so the server's own tunable write was taken for a hand edit and Vite reloaded the
+  // page. Writing beside .hull and renaming into place means a reader only ever sees a whole file.
+  let tmpN = 0;
+  const writeWhole = (abs: string, text: string): void => {
+    const dir = join(root, '.hull', 'tmp');
+    mkdirSync(dir, { recursive: true });
+    const tmp = join(dir, `write-${process.pid}-${tmpN++}`);
+    writeFileSync(tmp, text);
+    renameSync(tmp, abs);
+  };
   let problems: Problem[] = [];
 
   const pushTo = (role: Client['role'] | 'all', method: PushName, params: unknown): void => {
@@ -177,7 +188,7 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
 
     let from: unknown;
     try { from = valueAtPointer(JSON.parse(old), p.pointer); } catch { /* the old file did not parse */ }
-    writeFileSync(join(root, path), edited.text);
+    writeWhole(join(root, path), edited.text);
     texts.set(path, edited.text);
     invalidateBoot();
     journal({ target: idOf(path), path: p.pointer, from, to: p.value, by: p.author ?? 'you' });
@@ -214,7 +225,7 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
     const r = rewriteTunable(t.file, readFileSync(abs, 'utf8'), p.block, p.key, p.value);
     if (!r.ok) return { ok: false, problems: [{ file: t.file, pointer: `/${p.block}/${p.key}`, line: r.line ?? t.line, col: r.col ?? t.col, rule: 'tunable', message: r.message }] };
     wroteTs.set(abs, r.text);
-    writeFileSync(abs, r.text);
+    writeWhole(abs, r.text);
     journal({ target: `tunables:${p.block}`, path: p.key, from: t.value, to: p.value, by: p.author ?? 'you' });
     push('tunable.changed', { block: p.block, key: p.key, value: p.value }, 'game');
     return { ok: true, problems: [] };
