@@ -1,30 +1,14 @@
 import { createServer, type Plugin } from 'vite';
 import { defineTool } from '../tool.ts';
+import { BOOT_ID, bootSource, DEV_PAGE as PAGE } from '../server/boot.ts';
 import { loadManifest, readConfigFiles, writeIds } from './config.ts';
 
-const BOOT_ID = 'virtual:hull-boot';
 const RESOLVED_BOOT = `\0${BOOT_ID}`;
 
 /** The page the dev server serves. There is no index.html on disk: the manifest says where the game starts. */
-export function bootModule(entry: string, sources: { path: string; text: string }[]): string {
-  return [
-    `import { startGame, config } from 'hull';`,
-    `import { mountRender } from 'hull/render';`,
-    `import game from ${JSON.stringify(`/${entry.replace(/^\.?\//, '')}`)};`,
-    `const sources = ${JSON.stringify(sources)};`,
-    `const loaded = config.load(sources);`,
-    `for (const p of loaded.problems) console.error(p.file + (p.pointer ?? '') + ': ' + p.message);`,
-    `const g = await startGame(game);`,
-    `const view = mountRender(g, document.getElementById('app'));`,
-    `import.meta.hot?.dispose(() => { view.dispose(); g.dispose(); });`,
-  ].join('\n');
+export function bootModule(entry: string, sources: { path: string; text: string }[], opts: { devUrl?: string; features?: readonly string[] } = {}): string {
+  return bootSource({ entry, sources, ...opts });
 }
-
-const PAGE = `<!doctype html>
-<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Hull dev</title>
-<style>html,body,#app{margin:0;height:100%;background:#111;overflow:hidden}</style></head>
-<body><div id="app"></div><script type="module" src="/@id/${BOOT_ID}"></script></body></html>`;
 
 export interface DevInput { port?: number }
 export interface DevOutput { url: string; ok: boolean; problems: [] }
