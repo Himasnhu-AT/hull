@@ -164,6 +164,10 @@ export function mountRender(game: Game, el: HTMLElement, opts: RenderOptions = {
     shot: async () => {
       await ready;
       if (!be) throw new Error('render: no backend is running, so there is nothing to capture');
+      // Draw the state as it is now, then capture it. A paused game driven by step() (the play tool, the control
+      // port) may not have had a frame drawn since its last step, or at all: WebGPU starts asynchronously.
+      be.sync(world, 1);
+      be.draw(activeCamera(world.root));
       return be.shot();
     },
     setLook,
