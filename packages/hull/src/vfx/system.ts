@@ -9,14 +9,23 @@ import {
   Float32BufferAttribute,
   Mesh,
   NormalBlending,
+  type Material,
+  type Object3D,
+  type Scene,
   ShaderMaterial,
   UniformsLib,
   UniformsUtils,
 } from 'three';
 import { config } from '../config/index.ts';
 import type { Node, Random, World } from '../core/index.ts';
+import { renderRuntime, webgpuVfx, type RenderRuntime } from '../render/runtime.ts';
 import type { Vfx } from '../schema/vfx.ts';
 import { compile, drawCount, look, Pool, spawnOne, type Compiled, type V3 } from './emitter.ts';
+import type { FogState, GpuParticles } from './webgpu.ts';
+
+// Effects at or above this budget run their whole simulation on the GPU when the backend can compute (WebGPU).
+// Smaller ones keep the CPU pool: it is deterministic, and a few hundred particles are not worth a kernel.
+const GPU_MIN_BUDGET = 2048;
 
 const VERT = /* glsl */ `
 attribute vec4 aPosSize;
@@ -96,16 +105,24 @@ class Effect {
   c: Compiled;
   pool: Pool;
   readonly geometry = new InstancedBufferGeometry();
-  readonly material: ShaderMaterial;
+  /** The WebGL2 material; null until a WebGL2 backend is bound. */
+  material: ShaderMaterial | null = null;
   readonly mesh: Mesh;
+  /** The GPU simulation, when this effect runs on it. */
+  gpu: GpuParticles | null = null;
+  private cpuNode: { material: Material; setFog(f: FogState): void; setCompiled(c: Compiled): void } | null = null;
+  private bound: RenderRuntime | null = null;
+  private fog: FogState | null = null;
   private posSize: InstancedBufferAttribute;
   private color: InstancedBufferAttribute;
   private velRot: InstancedBufferAttribute;
   private readonly tmp = new Float32Array(5);
   private unwatch: (() => void) | null = null;
+  private readonly parent: Node;
 
   constructor(id: string, value: Vfx, parent: Node) {
     this.id = id;
+    this.parent = parent;
     this.c = compile(value);
     this.pool = new Pool(this.c.max);
     const g = this.geometry;
@@ -118,25 +135,67 @@ class Effect {
     g.setAttribute('aColor', this.color);
     g.setAttribute('aVelRot', this.velRot);
     g.instanceCount = 0;
-    this.material = new ShaderMaterial({
-      uniforms: UniformsUtils.merge([UniformsLib.fog, { uFadeNear: { value: 0 }, uStretch: { value: 0 } }]),
-      vertexShader: VERT,
-      fragmentShader: FRAG,
-      transparent: true,
-      depthWrite: false,
-    });
-    this.mesh = new Mesh(g, this.material);
+    this.mesh = new Mesh(g, undefined);
     // Bounds of a swarm are unknown to three; culling it as one sphere at the origin would hide it.
     this.mesh.frustumCulled = false;
     this.mesh.renderOrder = 10;
+    this.mesh.visible = false;
     parent.object3d.add(this.mesh);
-    this.applyMaterial();
+    this.bind(renderRuntime());
     this.unwatch = config.watch(id, (now) => this.reload(now as Vfx));
+  }
+
+  /** True when this effect's particles are simulated on the GPU (so spawning goes to a queue, not the CPU pool). */
+  get onGpu(): boolean { return this.gpu !== null; }
+
+  /**
+   * Makes the effect draw with the right kind of material for the running backend: a ShaderMaterial on WebGL2, node
+   * materials on WebGPU (CPU-fed, or the GPU simulation for big budgets). Cheap when nothing changed.
+   */
+  bind(rt: RenderRuntime | null): void {
+    if (rt === this.bound) return;
+    this.bound = rt;
+    this.releaseBackend();
+    if (rt === null) { this.mesh.visible = false; return; }
+    if (rt.backend === 'webgl2') {
+      this.material = new ShaderMaterial({
+        uniforms: UniformsUtils.merge([UniformsLib.fog, { uFadeNear: { value: 0 }, uStretch: { value: 0 } }]),
+        vertexShader: VERT,
+        fragmentShader: FRAG,
+        transparent: true,
+        depthWrite: false,
+      });
+      this.mesh.material = this.material;
+      this.applyMaterial();
+      return;
+    }
+    const wg = webgpuVfx() as typeof import('./webgpu.ts') | null;
+    if (wg === null) { this.bound = null; return; }
+    this.fog = wg.newFogState();
+    if (rt.compute && this.c.max >= GPU_MIN_BUDGET) {
+      this.gpu = new wg.GpuParticles(this.c);
+      this.parent.object3d.add(this.gpu.mesh);
+      this.mesh.visible = false;
+    } else {
+      this.cpuNode = wg.makeCpuMaterial(this.c);
+      this.mesh.material = this.cpuNode.material;
+      this.mesh.visible = this.pool.count > 0;
+    }
+  }
+
+  private releaseBackend(): void {
+    this.material?.dispose();
+    this.material = null;
+    this.cpuNode?.material.dispose();
+    this.cpuNode = null;
+    this.gpu?.dispose();
+    this.gpu = null;
   }
 
   private applyMaterial(): void {
     const c = this.c;
     const m = this.material;
+    if (!m) return;
     m.defines = { SPRITE: SPRITE_ID[c.sprite] };
     if (c.stretch > 0) m.defines['STRETCH'] = '';
     m.blending = c.blend === 'additive' ? AdditiveBlending : NormalBlending;
@@ -150,6 +209,9 @@ class Effect {
   /** Live edit: the maths and look change at once; a different budget makes a new pool and drops live particles. */
   private reload(value: Vfx): void {
     const next = compile(value);
+    const wg = webgpuVfx() as typeof import('./webgpu.ts') | null;
+    const rebuild = this.gpu !== null && wg !== null && wg.structureKey(next) !== wg.structureKey(this.c);
+    const crossed = (next.max >= GPU_MIN_BUDGET) !== (this.c.max >= GPU_MIN_BUDGET);
     if (next.max !== this.pool.capacity) {
       this.pool = new Pool(next.max);
       this.posSize = new InstancedBufferAttribute(new Float32Array(next.max * 4), 4).setUsage(DynamicDrawUsage);
@@ -160,11 +222,21 @@ class Effect {
       this.geometry.setAttribute('aVelRot', this.velRot);
     }
     this.c = next;
+    if (rebuild || (this.bound !== null && this.bound.backend === 'webgpu' && (crossed || this.cpuNode !== null))) {
+      // The shader's structure changed (or the effect moved between the CPU and the GPU): build it again.
+      const rt = this.bound;
+      this.bound = null;
+      this.bind(rt);
+      return;
+    }
+    this.gpu?.apply(next);
+    this.cpuNode?.setCompiled(next);
     this.applyMaterial();
   }
 
   /** Writes every live particle into the GPU buffers, `ahead` seconds along its velocity. */
   upload(ahead: number): void {
+    if (this.gpu !== null || this.bound === null) return;
     const p = this.pool;
     const n = p.count;
     const c = this.c;
@@ -183,7 +255,8 @@ class Effect {
       vr[o] = p.vx[i]!; vr[o + 1] = p.vy[i]!; vr[o + 2] = p.vz[i]!; vr[o + 3] = p.rot[i]!;
     }
     this.geometry.instanceCount = n;
-    this.mesh.visible = n > 0;
+    this.mesh.visible = n > 0 && (this.material !== null || this.cpuNode !== null);
+    this.updateFog();
     if (n > 0) {
       for (const a of [this.posSize, this.color, this.velRot]) {
         a.clearUpdateRanges();
@@ -193,11 +266,48 @@ class Effect {
     }
   }
 
+  /** The WebGPU material fogs by hand, so it reads the scene's fog each frame. */
+  private updateFog(): void {
+    const wg = webgpuVfx() as typeof import('./webgpu.ts') | null;
+    if (wg === null || this.fog === null) return;
+    let o: Object3D = this.mesh;
+    while (o.parent) o = o.parent;
+    wg.fogStateOf((o as Scene).fog ?? null, this.fog);
+    this.cpuNode?.setFog(this.fog);
+    this.gpu?.setFog(this.fog);
+  }
+
+  /** Starts `n` particles at `(x, y, z)`: in the CPU pool, or as one request to the GPU simulation. */
+  spawn(n: number, x: number, y: number, z: number, dir: V3 | undefined, rng: Random): void {
+    if (this.gpu !== null) {
+      this.gpu.spawn(n, x, y, z, dir, Math.floor(rng.next() * 4294967296));
+      return;
+    }
+    for (let i = 0; i < n; i++) spawnOne(this.pool, this.c, rng, x, y, z, dir);
+  }
+
+  /** One fixed step: the CPU pool moves, or the GPU simulation is told a step has passed. */
+  step(dt: number): void {
+    if (this.gpu !== null) this.gpu.endTick(dt);
+    else this.pool.step(this.c, dt);
+  }
+
+  /** Draws this frame: the GPU simulation runs its kernels, or the CPU pool is copied into the instance buffers. */
+  draw(rt: RenderRuntime | null, ahead: number, dt: number): void {
+    this.bind(rt);
+    if (this.gpu !== null && rt !== null) {
+      this.updateFog();
+      this.gpu.frame(rt.renderer as Parameters<GpuParticles['frame']>[0], dt, ahead);
+    } else {
+      this.upload(ahead);
+    }
+  }
+
   dispose(): void {
     this.unwatch?.();
+    this.releaseBackend();
     this.mesh.removeFromParent();
     this.geometry.dispose();
-    this.material.dispose();
   }
 }
 
@@ -237,7 +347,8 @@ export interface VfxStats {
   dropped: number;
   /** Instanced draws this frame (effects with at least one live particle). */
   drawCalls: number;
-  effects: Record<string, { live: number; capacity: number; spawned: number; dropped: number }>;
+  /** `gpu` is set on an effect simulated by compute shaders; its `live` is then an estimate (nothing is read back). */
+  effects: Record<string, { live: number; capacity: number; spawned: number; dropped: number; gpu?: boolean }>;
 }
 
 const JOBS = 64;
@@ -299,7 +410,7 @@ export class VfxSystem {
       }
       // Every slot is busy: start it all now instead of losing it.
     }
-    for (let i = 0; i < n; i++) spawnOne(fx.pool, fx.c, this.rng, at.x, at.y, at.z, dir);
+    fx.spawn(n, at.x, at.y, at.z, dir, this.rng);
   }
 
   /** Emits `emit.rate` particles a second along the path of `node` until stopped or the node is destroyed. */
@@ -340,7 +451,7 @@ export class VfxSystem {
       if (k > j.left) k = j.left;
       const fx = j.fx!;
       if (j.aimed) { this.aim.x = j.dx; this.aim.y = j.dy; this.aim.z = j.dz; }
-      for (let n = 0; n < k; n++) spawnOne(fx.pool, fx.c, rng, j.x, j.y, j.z, j.aimed ? this.aim : undefined);
+      if (k > 0) fx.spawn(k, j.x, j.y, j.z, j.aimed ? this.aim : undefined, rng);
       j.left -= k;
       if (j.left <= 0) { j.active = false; j.fx = null; }
     }
@@ -356,38 +467,43 @@ export class VfxSystem {
       t.carry -= k;
       for (let n = 1; n <= k; n++) {
         const f = n / k;
-        spawnOne(t.fx.pool, t.fx.c, rng, t.last.x + (p.x - t.last.x) * f, t.last.y + (p.y - t.last.y) * f, t.last.z + (p.z - t.last.z) * f, undefined);
+        t.fx.spawn(1, t.last.x + (p.x - t.last.x) * f, t.last.y + (p.y - t.last.y) * f, t.last.z + (p.z - t.last.z) * f, undefined, rng);
       }
       t.last.x = p.x; t.last.y = p.y; t.last.z = p.z;
     }
     for (let i = 0; i < this.list.length; i++) {
       const fx = this.list[i]!;
-      fx.pool.step(fx.c, dt);
+      fx.step(dt);
     }
   }
 
   private frame(alpha: number): void {
     const ahead = alpha * this.stepDt;
-    for (let i = 0; i < this.list.length; i++) this.list[i]!.upload(ahead);
+    const rt = renderRuntime();
+    for (let i = 0; i < this.list.length; i++) this.list[i]!.draw(rt, ahead, this.stepDt);
   }
 
   stats(): VfxStats {
     const s: VfxStats = { live: 0, capacity: 0, spawned: 0, dropped: 0, drawCalls: 0, effects: {} };
     for (const fx of this.list) {
       const p = fx.pool;
-      s.live += p.count;
+      const g = fx.gpu;
+      const live = g ? g.liveEstimate() : p.count;
+      const spawned = g ? g.spawned : p.spawned;
+      const dropped = g ? g.dropped : p.dropped;
+      s.live += live;
       s.capacity += p.capacity;
-      s.spawned += p.spawned;
-      s.dropped += p.dropped;
-      if (p.count > 0) s.drawCalls++;
-      s.effects[fx.id] = { live: p.count, capacity: p.capacity, spawned: p.spawned, dropped: p.dropped };
+      s.spawned += spawned;
+      s.dropped += dropped;
+      if (live > 0) s.drawCalls++;
+      s.effects[fx.id] = { live, capacity: p.capacity, spawned, dropped, ...(g ? { gpu: true } : {}) };
     }
     return s;
   }
 
   /** Removes every live particle and pending burst. */
   clear(): void {
-    for (const fx of this.list) fx.pool.clear();
+    for (const fx of this.list) { fx.pool.clear(); fx.gpu?.clear(); }
     for (const j of this.jobs) { j.active = false; j.fx = null; }
     this.trails.length = 0;
   }

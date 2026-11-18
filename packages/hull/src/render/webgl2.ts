@@ -3,10 +3,7 @@ import {
   ACESFilmicToneMapping,
   AgXToneMapping,
   CineonToneMapping,
-  Color,
   DirectionalLight,
-  Fog,
-  FogExp2,
   HemisphereLight,
   LinearToneMapping,
   Mesh,
@@ -31,7 +28,9 @@ import { debugLines } from './debug.ts';
 import { stateFor } from './interp.ts';
 import { SkyEnvironment, SKY_GLSL, setSkyUniforms, skyUniforms } from './environment.ts';
 import { PostChain } from './post.ts';
-import { postFor, resolveLook, snapShadowTarget, TIERS, type ResolvedLook, type ToneMapping } from './look.ts';
+import { setRenderRuntime } from './runtime.ts';
+import { postFor, resolveLook, TIERS, type ResolvedLook, type ToneMapping } from './look.ts';
+import { applyRig, flatBackground, placeSun, skyFor } from './rig.ts';
 
 const TONE: Record<ToneMapping, ThreeToneMapping> = {
   none: NoToneMapping,
@@ -117,6 +116,7 @@ export class WebGL2Backend implements Backend {
     this.scene.add(this.ambient, sun, sun.target, this.dome, debugLines.object);
     debugLines.attach();
     this.setLook(undefined);
+    setRenderRuntime({ backend: 'webgl2', compute: false, renderer });
   }
 
   can(cap: Capability): boolean {
@@ -164,13 +164,7 @@ export class WebGL2Backend implements Backend {
         const r = Math.max(1, view.far * 0.5);
         this.dome.scale.set(r, r, r);
         // The look's sun rides with the camera so its shadows cover what is on screen.
-        // The shadow box moves in whole shadow-map texels, so edges do not crawl as the camera moves.
-        const d = this.look.sun.dir;
-        const sn = this.snapped;
-        snapShadowTarget(cx, cy, cz, d, this.look.sun.shadowRange, this.shadowMapSize, sn);
-        this.sun.target.position.set(sn[0], sn[1], sn[2]);
-        const reach = Math.max(60, this.look.sun.shadowRange * 4);
-        this.sun.position.set(sn[0] + d[0] * reach, sn[1] + d[1] * reach, sn[2] + d[2] * reach);
+        placeSun(this.sun, this.look, cx, cy, cz, this.shadowMapSize, this.snapped);
         this.sun.visible = state.suns === 0;
         debugLines.upload();
         const post = postFor(this.look.post, TIERS[this.quality]);
@@ -226,20 +220,9 @@ export class WebGL2Backend implements Backend {
     const q = TIERS[this.quality];
     const renderer = this.renderer;
     const scene = this.scene;
-    const fogOn = r.fog !== null;
-    const sky = {
-      horizon: r.horizon,
-      mid: r.mid,
-      zenith: r.zenith,
-      ground: r.ambient.hemisphere ? r.ambient.ground : darken(r.horizon),
-      fogColor: r.fog?.color ?? r.horizon,
-      fogAmount: fogOn ? 1 : 0,
-      skyBlend: r.fog?.skyBlend ?? 0.35,
-    };
+    const sky = skyFor(r);
     if (r.skyColor !== null) {
-      const bg = scene.background instanceof Color ? scene.background : new Color();
-      bg.set(r.skyColor);
-      scene.background = bg;
+      flatBackground(scene, r.skyColor);
       this.dome.visible = false;
     } else {
       scene.background = null;
@@ -251,32 +234,7 @@ export class WebGL2Backend implements Backend {
       const flat = r.skyColor !== null;
       this.env.apply(scene, flat ? { ...sky, horizon: r.skyColor!, mid: r.skyColor!, zenith: r.skyColor!, fogAmount: 0 } : sky, r.environment.intensity);
     }
-    if (r.fog === null) {
-      scene.fog = null;
-    } else if (r.fog.density > 0) {
-      if (scene.fog instanceof FogExp2) { scene.fog.color.set(r.fog.color); scene.fog.density = r.fog.density; }
-      else scene.fog = new FogExp2(r.fog.color, r.fog.density);
-    } else if (scene.fog instanceof Fog) {
-      scene.fog.color.set(r.fog.color); scene.fog.near = r.fog.near; scene.fog.far = r.fog.far;
-    } else {
-      scene.fog = new Fog(r.fog.color, r.fog.near, r.fog.far);
-    }
-    this.ambient.color.set(r.ambient.color);
-    this.ambient.groundColor.set(r.ambient.ground);
-    this.ambient.intensity = r.ambient.intensity;
-    const sun = this.sun;
-    sun.color.set(r.sun.color);
-    sun.intensity = r.sun.intensity;
-    sun.castShadow = r.sun.shadows && q.shadows;
-    const c = sun.shadow.camera;
-    const range = r.sun.shadowRange;
-    const reach = Math.max(60, range * 4);
-    if (c.right !== range || c.far !== reach + range * 2) {
-      c.left = -range; c.right = range; c.top = range; c.bottom = -range;
-      c.near = 0.5;
-      c.far = reach + range * 2;
-      c.updateProjectionMatrix();
-    }
+    applyRig(scene, this.ambient, this.sun, r, q);
     if (renderer) {
       renderer.shadowMap.enabled = q.shadows;
       renderer.toneMapping = TONE[r.toneMapping];
@@ -309,6 +267,7 @@ export class WebGL2Backend implements Backend {
   }
 
   dispose(): void {
+    setRenderRuntime(null);
     this.releaseWorld();
     debugLines.detach();
     this.scene.remove(debugLines.object);
@@ -328,11 +287,4 @@ export class WebGL2Backend implements Backend {
     this.world = null;
     this.rootParent = null;
   }
-}
-
-/** A hex colour at 40% brightness, for the ground a reflection sees when the look names no ground colour. */
-function darken(hex: string): string {
-  const n = parseInt(hex.slice(1), 16);
-  const f = (v: number) => Math.round(v * 0.4).toString(16).padStart(2, '0');
-  return `#${f((n >> 16) & 255)}${f((n >> 8) & 255)}${f(n & 255)}`;
 }

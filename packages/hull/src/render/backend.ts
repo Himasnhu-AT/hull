@@ -1,5 +1,5 @@
 // The line between the game's node tree and a renderer. Games never see a backend: they add Mesh, Camera and
-// Light behaviours and `mountRender` drives the backend. WebGL2 is built; WebGPU slots in behind the same interface.
+// Light behaviours and `mountRender` drives the backend. WebGL2 and WebGPU both sit behind it.
 import type { Node, World } from '../core/index.ts';
 import type { Look } from '../schema/look.ts';
 
@@ -15,12 +15,19 @@ export interface RenderStats {
   ms: number;
   /** Smoothed frames per second, from the time between draws. */
   fps: number;
+  /** GPU milliseconds of the last frame, when the backend can time the GPU (WebGPU with `timestamp-query`); else absent. */
+  gpuMs?: number;
 }
 
 export interface Backend {
   readonly name: 'webgl2' | 'webgpu';
-  /** Throws, naming the reason, when the device cannot be used; `mountRender` then tries the next backend. */
-  init(canvas: HTMLCanvasElement, quality: Quality): void;
+  /** Set by `mountRender`: where a problem that comes up while running (a lost device) is reported. */
+  onProblem?: ((message: string) => void) | undefined;
+  /**
+   * Throws (or rejects), naming the reason, when the device cannot be used; `mountRender` then tries the next backend.
+   * WebGL2 starts at once; WebGPU has to ask the browser for an adapter and device, so it returns a promise.
+   */
+  init(canvas: HTMLCanvasElement, quality: Quality): void | Promise<void>;
   can(cap: Capability): boolean;
   /** Puts every node's transform between its last two fixed steps (`alpha` is 0 to 1) and adopts the world's tree. */
   sync(world: World, alpha: number): void;

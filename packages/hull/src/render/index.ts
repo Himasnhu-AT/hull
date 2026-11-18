@@ -11,3 +11,7 @@ export type { ResolvedLook, ResolvedPost, Tier, ToneMapping } from './look.ts';
 export { materialKey, materialParams } from './materials.ts';
 export type { Shape } from './materials.ts';
 export type { Backend, Capability, Quality, RenderStats } from './backend.ts';
+export { backendOrder, choiceFromQuery, webgpuRefusal } from './pick.ts';
+export type { BackendChoice, BackendName } from './pick.ts';
+export { renderRuntime, onRenderRuntime } from './runtime.ts';
+export type { RenderRuntime } from './runtime.ts';
