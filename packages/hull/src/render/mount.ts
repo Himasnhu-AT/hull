@@ -67,7 +67,7 @@ export function mountRender(game: Game, el: HTMLElement, opts: RenderOptions = {
     if (!be) return;
     const full = id.startsWith('look/') ? id : `look/${id}`;
     try {
-      be.setLook(config.get('look', full.slice('look/'.length)));
+      be.setLook(config.lookup('look', full.slice('look/'.length)));
     } catch {
       console.warn(`[hull] render: look "${full}" does not exist; keeping the current look.`);
       return;

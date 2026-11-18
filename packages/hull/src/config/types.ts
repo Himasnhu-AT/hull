@@ -35,6 +35,12 @@ export interface ConfigRegistry {
   remove(path: string): void;
   /** `id` is relative to the kind: get('tuning', 'jump') reads config/tuning/jump.json. Throws if it does not exist. */
   get<K extends Kind>(kind: K, id: IdOf<K>): HullKinds[K];
+  /**
+   * The same read for ids that arrive as data (a Mesh's `material`, a look named in a manifest). Engine code uses
+   * this: a game's generated id types are applied when the game is checked, and engine code must not depend on
+   * which ids one game happens to have. Game code uses `get`, so a wrong id is a compile error.
+   */
+  lookup<K extends Kind>(kind: K, id: string): HullKinds[K];
   /** Full id, e.g. 'tuning/jump'. */
   has(id: string): boolean;
   /** Ids of one kind, relative to the kind, sorted. */

@@ -149,6 +149,9 @@ export function createRegistry(): ConfigRegistry {
     },
 
     get<K extends Kind>(kind: K, id: IdOf<K>): HullKinds[K] {
+      return this.lookup(kind, id);
+    },
+    lookup<K extends Kind>(kind: K, id: string): HullKinds[K] {
       const e = byId.get(`${kind}/${id}`);
       if (!e) throw new Error(`config ${kind}/${id} does not exist (expected config/${kind}/${id}.json)`);
       return e.value as HullKinds[K];

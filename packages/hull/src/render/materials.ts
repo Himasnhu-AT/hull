@@ -51,7 +51,7 @@ function fullId(id: string): string {
 /** Reads `material/x` from config; reports a missing one once, by name, and returns undefined. */
 function readConfig(id: string): MaterialParams | undefined {
   try {
-    return materialParams(config.get('material', fullId(id).slice('material/'.length)));
+    return materialParams(config.lookup('material', fullId(id).slice('material/'.length)));
   } catch {
     if (!reported.has(id)) {
       reported.add(id);
