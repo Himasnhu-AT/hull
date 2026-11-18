@@ -26,6 +26,8 @@ export interface PlatformOptions {
   pointerLock?: PointerLockPolicy;
   /** The input view, for the pointer lock and for menus (`input.enabled`). */
   input?: { lockPointer(): void; unlockPointer(): void; readonly pointerLocked: boolean; enabled: boolean };
+  /** The render view, so the quality preset's pixel-ratio cap is applied to drawing. */
+  render?: { setPixelRatioCap(cap: number): void; setQuality?(q: 'low' | 'medium' | 'high'): void };
   defaults?: Partial<SettingsValues>;
   report?: Report;
   /** For tests. */
@@ -139,6 +141,6 @@ export function createPlatform(game: Game, opts: PlatformOptions): Platform {
     dispose() { for (const f of offs.splice(0)) f(); },
   };
   // The quality preset sets the cap even for games that never call `settings.apply`.
-  offs.push(settings.apply({ pixelRatioCap: (c) => { cap = c; } }));
+  offs.push(settings.apply({ pixelRatioCap: (c) => { cap = c; opts.render?.setPixelRatioCap(c); } }));
   return self;
 }

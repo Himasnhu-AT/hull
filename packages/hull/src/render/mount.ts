@@ -26,6 +26,8 @@ export interface RenderView {
   setLook(id: string): void;
   /** Low drops post effects and shadows; medium and high keep them (high adds grain and FXAA). */
   setQuality(quality: Quality): void;
+  /** Most device pixels per CSS pixel to draw at; the platform's quality presets set it (a 3x phone draws at 1.5x). */
+  setPixelRatioCap(cap: number): void;
   dispose(): void;
 }
 
@@ -89,7 +91,8 @@ export function mountRender(game: Game, el: HTMLElement, opts: RenderOptions = {
   canvas.addEventListener('webglcontextrestored', onRestored);
 
   const world = game.world;
-  const resize = () => be?.resize(el.clientWidth, el.clientHeight, globalThis.devicePixelRatio || 1);
+  let dprCap = Infinity;
+  const resize = () => be?.resize(el.clientWidth, el.clientHeight, Math.min(globalThis.devicePixelRatio || 1, dprCap));
   resize();
   const observer = new ResizeObserver(resize);
   observer.observe(el);
@@ -118,6 +121,7 @@ export function mountRender(game: Game, el: HTMLElement, opts: RenderOptions = {
     shot: () => (be ? be.shot() : Promise.reject(new Error('render: no backend is running, so there is nothing to capture'))),
     setLook,
     setQuality: (q) => be?.setQuality(q),
+    setPixelRatioCap: (cap) => { dprCap = cap > 0 ? cap : Infinity; resize(); },
     dispose() {
       cancelAnimationFrame(raf);
       observer.disconnect();
