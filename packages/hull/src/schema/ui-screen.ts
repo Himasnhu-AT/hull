@@ -12,9 +12,17 @@ const props = Type.Object(
     format: Type.Optional(Type.String({ ...ui({ help: 'text: a template, {} is the value.' }) })),
     primary: Type.Optional(Type.Boolean()),
     align: Type.Optional(
-      Type.Union(
-        ['top-left', 'top', 'top-right', 'left', 'center', 'right', 'bottom-left', 'bottom', 'bottom-right'].map((a) => Type.Literal(a)),
-      ),
+      Type.Union([
+        Type.Literal('top-left'),
+        Type.Literal('top'),
+        Type.Literal('top-right'),
+        Type.Literal('left'),
+        Type.Literal('center'),
+        Type.Literal('right'),
+        Type.Literal('bottom-left'),
+        Type.Literal('bottom'),
+        Type.Literal('bottom-right'),
+      ]),
     ),
     width: Type.Optional(Type.Number({ exclusiveMinimum: 0, ...ui({ unit: 'px' }) })),
     gap: Type.Optional(Type.Number({ minimum: 0, ...ui({ unit: 'px' }) })),

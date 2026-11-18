@@ -1,0 +1,101 @@
+{
+  "kind": "input-map",
+  "note": "WASD moves relative to the camera, the mouse (or the arrow keys, or the right stick) turns it, Space jumps, Shift sprints, E boosts (uses gas), click or F swings, Esc or P pauses.",
+  "actions": {
+    "move": {
+      "type": "axis2",
+      "keys": {
+        "up": [
+          "W"
+        ],
+        "down": [
+          "S"
+        ],
+        "left": [
+          "A"
+        ],
+        "right": [
+          "D"
+        ]
+      },
+      "pad": "stickL"
+    },
+    "look": {
+      "type": "axis2",
+      "mouse": "delta"
+    },
+    "lookPad": {
+      "type": "axis2",
+      "keys": {
+        "up": [
+          "ArrowUp"
+        ],
+        "down": [
+          "ArrowDown"
+        ],
+        "left": [
+          "ArrowLeft"
+        ],
+        "right": [
+          "ArrowRight"
+        ]
+      },
+      "pad": "stickR"
+    },
+    "jump": {
+      "type": "button",
+      "keys": [
+        "Space"
+      ],
+      "pad": "south"
+    },
+    "sprint": {
+      "type": "button",
+      "keys": [
+        "ShiftLeft"
+      ],
+      "pad": "stickLPress"
+    },
+    "pause": {
+      "type": "button",
+      "keys": [
+        "Escape",
+        "P"
+      ],
+      "pad": "start"
+    },
+    "boost": {
+      "type": "button",
+      "keys": [
+        "E"
+      ],
+      "pad": "triggerR"
+    },
+    "attack": {
+      "type": "button",
+      "keys": [
+        "Mouse0",
+        "F"
+      ],
+      "pad": "west"
+    }
+  },
+  "groups": {
+    "Move": [
+      "move",
+      "jump",
+      "sprint",
+      "boost"
+    ],
+    "Look": [
+      "look",
+      "lookPad"
+    ],
+    "Combat": [
+      "attack"
+    ],
+    "Game": [
+      "pause"
+    ]
+  }
+}

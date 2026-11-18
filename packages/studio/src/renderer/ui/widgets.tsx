@@ -3,7 +3,7 @@
 // Dragging is 1:1 from the value at pointer-down (math.ts); nothing here waits for the server to answer.
 
 import { memo, useCallback, useRef, useState, type JSX, type KeyboardEvent, type PointerEvent as RPointerEvent } from 'react';
-import type { Field } from '../lib/schemaForm.ts';
+import { defaultFor, mapEntryFields, type Field } from '../lib/schemaForm.ts';
 import {
   arcPath, clamp, curveAt, curveMove, dialAngle, dialDrag, dragScale, formatNumber, fromFraction, nearestEnd, rangeMove, sameJson,
   scrubDelta, snap, toFraction, type CurvePoint,
@@ -20,6 +20,8 @@ export interface FieldViewProps {
   problems: readonly string[];
   /** Ids of the kind a `ref` field points at. */
   refOptions: readonly string[];
+  /** Ids of any kind, for the `ref` fields inside a map's entries. */
+  refs?: (kind: string) => string[];
   onChange: Change;
 }
 
@@ -64,7 +66,7 @@ function useDrag<T>(handlers: {
 
 /* ---------- number input ---------- */
 
-function NumInput({ value, step, label, onCommit, className }: { value: number; step: number; label: string; onCommit(v: number): void; className?: string }): JSX.Element {
+function NumInput({ value, step, label, onCommit, className, blank }: { value: number; step: number; label: string; onCommit(v: number): void; className?: string; blank?: boolean }): JSX.Element {
   const [draft, setDraft] = useState<string | null>(null);
   const finish = (): void => {
     if (draft === null) return;
@@ -77,8 +79,9 @@ function NumInput({ value, step, label, onCommit, className }: { value: number; 
       className={className}
       aria-label={label}
       inputMode="decimal"
-      value={draft ?? formatNumber(value, step)}
-      onFocus={(e) => { setDraft(formatNumber(value, step)); e.currentTarget.select(); }}
+      value={draft ?? (blank ? '' : formatNumber(value, step))}
+      placeholder={blank ? '\u2014' : undefined}
+      onFocus={(e) => { setDraft(blank ? '' : formatNumber(value, step)); e.currentTarget.select(); }}
       onChange={(e) => setDraft(e.target.value)}
       onBlur={finish}
       onKeyDown={(e) => {
@@ -305,12 +308,12 @@ const PRESETS = ['#5a9bff', '#3cc482', '#f2a43c', '#ff7a70', '#e9ebee', '#2a2e35
 
 /* ---------- one field ---------- */
 
-export const FieldView = memo(function FieldView({ field, value, baseline, problems, refOptions, onChange }: FieldViewProps): JSX.Element {
+export const FieldView = memo(function FieldView({ field, value, baseline, problems, refOptions, refs, onChange }: FieldViewProps): JSX.Element {
   const changed = baseline !== undefined && !sameJson(value, baseline);
   const send = useCallback((v: unknown, final = false) => onChange(field.pointer, v, final), [onChange, field.pointer]);
   const reset = (): void => { if (baseline !== undefined) send(baseline, true); };
   const w = field.widget;
-  const cls = `fld${changed ? ' mod' : ''}${problems.length ? ' bad' : ''}`;
+  const cls = `fld${changed ? ' mod' : ''}${problems.length ? ' bad' : ''}${field.unset ? (field.def !== undefined ? ' dflt' : ' unset') : ''}`;
   const unit = field.unit ? <small>{field.unit}</small> : null;
 
   if (w === 'toggle') {
@@ -334,7 +337,7 @@ export const FieldView = memo(function FieldView({ field, value, baseline, probl
       <div className={cls}>
         <div className="fh">
           <ScrubLabel field={field} value={v} onChange={(n, final) => send(n, final)} />
-          <span className="fv"><NumInput value={v} step={field.step} label={field.label} onCommit={(n) => send(n, true)} />{unit}</span>
+          <span className="fv"><NumInput value={v} step={field.step} label={field.label} blank={value === undefined} onCommit={(n) => send(n, true)} />{unit}</span>
           <ResetButton onClick={reset} />
         </div>
         {w !== 'number' && <Slider field={field} value={v} onChange={(n, final) => send(n, final)} />}
@@ -403,7 +406,7 @@ export const FieldView = memo(function FieldView({ field, value, baseline, probl
     const presets = PRESETS.some((p) => p.toLowerCase() === hex.toLowerCase()) ? PRESETS : [hex, ...PRESETS.slice(0, 5)];
     return (
       <div className={cls}>
-        <div className="fh"><span className="fl" title={field.help}>{field.label}</span><span className="fv"><span style={{ color: 'var(--muted)' }}>{hex.toLowerCase()}</span></span><ResetButton onClick={reset} /></div>
+        <div className="fh"><span className="fl" title={field.help}>{field.label}</span><span className="fv"><span style={{ color: 'var(--muted)' }}>{typeof value === 'string' ? hex.toLowerCase() : '\u2014'}</span></span><ResetButton onClick={reset} /></div>
         <div className="sws">
           {presets.map((c) => (
             <button key={c} className={`swc${c.toLowerCase() === hex.toLowerCase() ? ' on' : ''}`} style={{ background: c }} onClick={() => send(c, true)} aria-label={`${field.label} ${c}`} />
@@ -422,7 +425,7 @@ export const FieldView = memo(function FieldView({ field, value, baseline, probl
       <div className={cls}>
         <div className="fh"><span className="fl" title={field.help}>{field.label}</span><ResetButton onClick={reset} /></div>
         <div className="seg full" role="group" aria-label={field.label}>
-          {field.options.map((o) => <button key={o} className={String(value) === o ? 'on' : ''} aria-pressed={String(value) === o} onClick={() => send(coerce(field, o), true)} title={o}>{o}</button>)}
+          {field.options.map((o) => <button key={o} className={String(value) === o ? 'on' : ''} aria-pressed={String(value) === o} onClick={() => send(optionValue(field, o), true)} title={o}>{o}</button>)}
         </div>
         {field.help && <div className="help">{field.help}</div>}
         <Problems list={problems} />
@@ -436,7 +439,8 @@ export const FieldView = memo(function FieldView({ field, value, baseline, probl
       <div className={cls}>
         <div className="fh"><label className="fl" htmlFor={`f${field.pointer}`} title={field.help}>{field.label}</label><ResetButton onClick={reset} /></div>
         {opts.length > 0 ? (
-          <select id={`f${field.pointer}`} className="field-in" value={String(value ?? '')} onChange={(e) => send(coerce(field, e.target.value), true)}>
+          <select id={`f${field.pointer}`} className="field-in" value={String(value ?? '')} onChange={(e) => send(optionValue(field, e.target.value), true)}>
+            {value === undefined && <option value="" disabled>Choose...</option>}
             {opts.map((o) => <option key={o} value={o}>{o}</option>)}
           </select>
         ) : <input id={`f${field.pointer}`} className="field-in" value={String(value ?? '')} onChange={(e) => send(e.target.value, false)} onBlur={(e) => send(e.target.value, true)} />}
@@ -446,6 +450,10 @@ export const FieldView = memo(function FieldView({ field, value, baseline, probl
     );
   }
 
+  if (w === 'map') {
+    return <MapField className={cls} field={field} value={value} problems={problems} refs={refs} send={send} reset={reset} onChange={onChange} />;
+  }
+
   if (w === 'text' || w === 'keys') {
     return <TextField className={cls} field={field} value={value} send={send} reset={reset} problems={problems} />;
   }
@@ -453,16 +461,24 @@ export const FieldView = memo(function FieldView({ field, value, baseline, probl
   return <JsonField className={cls} field={field} value={value} send={send} reset={reset} problems={problems} />;
 });
 
-const coerce = (field: Field, s: string): unknown => (typeof field.value === 'number' ? Number(s) : s);
+/** The real value behind an option label: a number or boolean stays one. */
+const optionValue = (field: Field, label: string): unknown => {
+  const i = field.options.indexOf(label);
+  return i >= 0 && i < field.optionValues.length ? field.optionValues[i] : typeof field.value === 'number' ? Number(label) : label;
+};
 
 function TextField({ className, field, value, send, reset, problems }: { className: string; field: Field; value: unknown; send(v: unknown, final?: boolean): void; reset(): void; problems: readonly string[] }): JSX.Element {
   const [draft, setDraft] = useState<string | null>(null);
+  // A list of words (key names, feature names) is typed with commas and stored as an array.
+  const list = field.widget === 'keys' && (Array.isArray(value) || value === undefined);
+  const shown = list ? (Array.isArray(value) ? value.join(', ') : '') : String(value ?? '');
+  const out = (t: string): unknown => (list ? t.split(',').map((x) => x.trim()).filter(Boolean) : t);
   return (
     <div className={className}>
       <div className="fh"><label className="fl" htmlFor={`f${field.pointer}`} title={field.help}>{field.label}</label><ResetButton onClick={reset} /></div>
-      <input id={`f${field.pointer}`} className="field-in" value={draft ?? String(value ?? '')}
-        onChange={(e) => { setDraft(e.target.value); send(e.target.value, false); }}
-        onBlur={(e) => { send(e.target.value, true); setDraft(null); }}
+      <input id={`f${field.pointer}`} className="field-in" value={draft ?? shown} placeholder={list ? 'Comma separated' : undefined}
+        onChange={(e) => { setDraft(e.target.value); if (!list) send(out(e.target.value), false); }}
+        onBlur={(e) => { if (draft !== null && draft !== shown) send(out(e.target.value), true); setDraft(null); }}
         onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }} />
       {field.help && <div className="help">{field.help}</div>}
       <Problems list={problems} />
@@ -481,13 +497,93 @@ function JsonField({ className, field, value, send, reset, problems }: { classNa
   };
   return (
     <div className={`${className}${bad ? ' bad' : ''}`}>
-      <div className="fh"><label className="fl" htmlFor={`f${field.pointer}`} title={field.help}>{field.label}</label><ResetButton onClick={reset} /></div>
-      <textarea id={`f${field.pointer}`} className="field-in" spellCheck={false} value={draft ?? JSON.stringify(value, null, 2)}
+      <div className="fh"><label className="fl" htmlFor={`f${field.pointer}`} title={field.help}>{field.label}</label>{field.fallback && <span className="jtag" title="The Inspector has no form for this shape yet">JSON</span>}<ResetButton onClick={reset} /></div>
+      <textarea id={`f${field.pointer}`} className="field-in" spellCheck={false} placeholder={field.unset ? 'Not set' : undefined} value={draft ?? (value === undefined ? '' : JSON.stringify(value, null, 2))}
         onChange={(e) => setDraft(e.target.value)} onBlur={commit}
         onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) commit(); else if (e.key === 'Escape') { setDraft(null); setBad(null); } }} />
-      {field.help && <div className="help">{field.help}</div>}
+      {field.help ? <div className="help">{field.help}</div> : field.fallback && field.label !== '' && <div className="help">No form for this shape yet, so this is the raw JSON. It is checked before it is saved.</div>}
       {bad && <div className="err" role="alert"><Icon name="warn" /><span>{bad}</span></div>}
       <Problems list={problems} />
     </div>
+  );
+}
+
+/** A map with names the user picks (sockets, materials, clips): add, remove and rename, each value in its own widget. */
+function MapField({ className, field, value, problems, refs, send, reset, onChange }: {
+  className: string; field: Field; value: unknown; problems: readonly string[]; refs?: (kind: string) => string[];
+  send(v: unknown, final?: boolean): void; reset(): void; onChange: Change;
+}): JSX.Element {
+  const obj: Record<string, unknown> = value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+  const keys = Object.keys(obj);
+  const [closed, setClosed] = useState<Set<string>>(() => new Set(keys.length > 5 ? keys : []));
+  const [draft, setDraft] = useState('');
+  const [note, setNote] = useState<string | null>(null);
+  const root = field.schemaRoot ?? {};
+  const toggle = (k: string): void => setClosed((c) => { const n = new Set(c); if (n.has(k)) n.delete(k); else n.add(k); return n; });
+
+  const add = (): void => {
+    const k = draft.trim();
+    if (!k) return;
+    if (k in obj) { setNote(`"${k}" is already here.`); return; }
+    send({ ...obj, [k]: defaultFor(root, field.valueSchema, refs ? refs(refKindOf(field.valueSchema)) : []) }, true);
+    setDraft(''); setNote(null);
+  };
+  const remove = (k: string): void => { const { [k]: _gone, ...rest } = obj; send(rest, true); };
+  const rename = (from: string, to: string): boolean => {
+    const t = to.trim();
+    if (t === from) return true;
+    if (!t) { setNote('A name cannot be empty.'); return false; }
+    if (t in obj) { setNote(`"${t}" is already here.`); return false; }
+    // Rebuild in order so the entry keeps its place in the list.
+    send(Object.fromEntries(keys.map((k) => [k === from ? t : k, obj[k]])), true);
+    setNote(null);
+    return true;
+  };
+
+  return (
+    <div className={`${className} map`}>
+      <div className="fh"><span className="fl" title={field.help}>{field.label === field.group ? `${keys.length} ${keys.length === 1 ? 'entry' : 'entries'}` : field.label}</span>{field.label !== field.group && <span className="fv"><span style={{ color: 'var(--muted)' }}>{keys.length}</span></span>}<ResetButton onClick={reset} /></div>
+      {field.help && <div className="help">{field.help}</div>}
+      {keys.length === 0 && <div className="help">Nothing here yet.</div>}
+      {keys.map((k) => {
+        const open = !closed.has(k);
+        const entry = mapEntryFields(field, k, obj[k]);
+        const plain = entry.length === 1 && entry[0]!.label === '';
+        return (
+          <div className="mapent" key={k}>
+            <div className="mapk">
+              {!plain && <button className={`mapc${open ? ' open' : ''}`} onClick={() => toggle(k)} aria-expanded={open} aria-label={`${open ? 'Collapse' : 'Expand'} ${k}`}><Icon name="chevron" size={12} /></button>}
+              <KeyInput name={k} onRename={rename} />
+              {plain && <div className="mapv">{entry.map((f) => <FieldView key={f.pointer} field={f} value={f.value} baseline={undefined} problems={[]} refOptions={f.refKind && refs ? refs(f.refKind) : []} refs={refs} onChange={onChange} />)}</div>}
+              <button className="rs show" onClick={() => remove(k)} aria-label={`Remove ${k}`} title={`Remove ${k}`}><Icon name="trash" /></button>
+            </div>
+            {!plain && open && (
+              <div className="mapb">
+                {entry.map((f) => <FieldView key={f.pointer} field={f} value={f.value} baseline={undefined} problems={[]} refOptions={f.refKind && refs ? refs(f.refKind) : []} refs={refs} onChange={onChange} />)}
+              </div>
+            )}
+          </div>
+        );
+      })}
+      <div className="mapadd">
+        <input className="field-in" value={draft} placeholder="New name" aria-label={`New name in ${field.label}`} onChange={(e) => { setDraft(e.target.value); setNote(null); }} onKeyDown={(e) => { if (e.key === 'Enter') add(); }} />
+        <button className="btn" onClick={add} disabled={!draft.trim()}><Icon name="plus" />Add</button>
+      </div>
+      {note && <div className="err" role="alert"><Icon name="warn" /><span>{note}</span></div>}
+      <Problems list={problems} />
+    </div>
+  );
+}
+
+const refKindOf = (schema: Field['valueSchema']): string => (schema && typeof schema['x-ref'] === 'string' ? schema['x-ref'] : '');
+
+/** The name of a map entry; Enter or leaving the box renames it, Escape puts the old name back. */
+function KeyInput({ name, onRename }: { name: string; onRename(from: string, to: string): boolean }): JSX.Element {
+  const [draft, setDraft] = useState<string | null>(null);
+  const done = (): void => { if (draft !== null && !onRename(name, draft)) { /* keep the old name; the note says why */ } setDraft(null); };
+  return (
+    <input className="field-in mapname" value={draft ?? name} aria-label={`Name of ${name}`} spellCheck={false}
+      onChange={(e) => setDraft(e.target.value)} onBlur={done}
+      onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); else if (e.key === 'Escape') { setDraft(null); e.currentTarget.blur(); } }} />
   );
 }

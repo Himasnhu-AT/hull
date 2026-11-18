@@ -1,0 +1,40 @@
+{
+  "kind": "sound",
+  "note": "Heavy landing. Low and short; the noise is the dirt.",
+  "bus": "sfx",
+  "level": -5,
+  "pitch": [0.9, 1.1],
+  "limit": { "minGap": 0.05, "voices": 4 },
+  "spatial": { "ref": 6, "max": 50 },
+  "source": {
+    "type": "synth",
+    "length": 0.4,
+    "layers": {
+      "thump": {
+        "from": { "osc": "sine", "freq": [100, 125], "glideTo": 0.38, "glideTime": 0.1 },
+        "then": [
+          { "envelope": { "attack": 0.002, "decay": 0.28, "curve": "exp" } },
+          { "drive": 0.25 },
+          { "gain": -2 }
+        ]
+      },
+      "dirt": {
+        "from": { "noise": "brown" },
+        "then": [
+          { "filter": "lowpass", "freq": 520, "glideTo": 0.5, "glideTime": 0.12 },
+          { "envelope": { "attack": 0.002, "decay": 0.16 } },
+          { "gain": 2 }
+        ]
+      },
+      "knock": {
+        "from": { "noise": "pink" },
+        "then": [
+          { "filter": "bandpass", "freq": 620, "q": 1 },
+          { "envelope": { "attack": 0.002, "decay": 0.07 } },
+          { "gain": -4 }
+        ]
+      }
+    },
+    "reverb": 0.06
+  }
+}

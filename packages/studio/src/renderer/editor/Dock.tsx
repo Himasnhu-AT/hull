@@ -54,7 +54,7 @@ export function Dock({ tab, onTab, logs, problems, journal, onClear, onOpen, his
             {problems.map((p, i) => {
               const id = idFromPath(p.file);
               return (
-                <div key={`p${i}`} className="logl error">
+                <div key={`p${i}`} className="logl prob error">
                   <span className="t">problem</span><span className="src">{p.rule}</span>
                   <span className="m">{id ? <button onClick={() => onOpen(id)}>{problemPlace(p)}</button> : problemPlace(p)}{`  ${p.message}`}</span>
                 </div>

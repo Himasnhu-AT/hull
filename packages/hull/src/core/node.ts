@@ -17,6 +17,8 @@ export class Node {
   _parent: Node | null;
   _children: Node[] = [];
   _behaviours: Behaviour[] = [];
+  /** Every behaviour on this node, in the order they were added. Saves and tools walk it; game code uses `get`. */
+  get behaviours(): readonly Behaviour[] { return this._behaviours; }
   _groups: string[] = [];
   _links: Listener[] | null = null;
   _pending = false;
