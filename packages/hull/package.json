@@ -13,6 +13,7 @@
     "./audio": "./src/audio/index.ts",
     "./input": "./src/input/index.ts",
     "./ui": "./src/ui/index.ts",
+    "./platform": "./src/platform/index.ts",
     "./dev": "./src/dev/index.ts",
     "./dev/protocol": "./src/dev/protocol.ts"
   },
