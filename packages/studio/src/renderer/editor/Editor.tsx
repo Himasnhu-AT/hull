@@ -12,9 +12,16 @@ import { BenchView, type BenchKind } from '../benches/Benches.tsx'; // w3-app-be
 import { SoundBench } from './SoundBench.tsx';
 import { TitleBar, type BuildState, type Panels } from './TitleBar.tsx';
 import { useProject, idFromPath } from './useProject.ts';
+// History and experiments (M2): the wiring lines are marked "history:".
+import { useHistory } from '../history/useHistory.ts';
+import { useExpEditing } from '../history/useExpEditing.ts';
+import { HistoryPanel } from '../history/HistoryPanel.tsx';
+import { ExpSwitch } from '../history/ExpSwitch.tsx';
+import { Compare } from '../history/Compare.tsx';
+import { AdoptDialog } from '../history/AdoptDialog.tsx';
 import { useSplit } from './useSplit.ts';
 
-type View = 'game' | 'sound' | BenchKind; // w3-app-benches: character, vfx, look
+type View = 'game' | 'sound' | 'compare' | BenchKind; // w3-app-benches: character, vfx, look; w3-app-history: compare
 
 interface Toast { text: string; error?: boolean; action?: { label: string; run(): void } }
 
@@ -46,6 +53,22 @@ function EditorBody({ rpc, project, platform, onClose }: { rpc: RpcClient; proje
   const baselines = useRef(new Map<string, unknown>());
   const search = useRef<HTMLInputElement>(null);
   const split = useSplit();
+  // history: the timeline, the experiments, which line the Game view and the Inspector are on, and the compare pair.
+  const notify = useCallback((text: string, error?: boolean) => setToast({ text, ...(error ? { error } : {}) }), []);
+  const h = useHistory(rpc, p.problems, notify);
+  const [openExp, setOpenExp] = useState<string | null>(null);
+  const [pair, setPair] = useState<{ a: string; b: string }>({ a: 'main', b: '' });
+  const openInfo = h.exps.find((e) => e.name === openExp && e.status === 'active');
+  // An experiment that was adopted or discarded closes; one just started may not be in the list yet.
+  useEffect(() => { if (openExp && h.exps.some((e) => e.name === openExp && e.status !== 'active')) setOpenExp(null); }, [openExp, h.exps]);
+  const ed = useExpEditing(rpc, openInfo ? openInfo.name : null, p.tunables, p.setTunableLocal, baselines, `${openInfo?.tip}/${openInfo?.changes}`);
+  const compareExps = useCallback((a: string, b: string) => { setPair({ a, b }); setView('compare'); }, []);
+  const compareNow = (() => {
+    const active = h.exps.filter((e) => e.status === 'active').map((e) => e.name);
+    const a = pair.a === 'main' || active.includes(pair.a) ? pair.a : 'main';
+    const b = pair.b && pair.b !== a && (pair.b === 'main' || active.includes(pair.b)) ? pair.b : (['main', ...active].find((n) => n !== a) ?? 'main');
+    return { a, b };
+  })();
 
   // The game's own report is the truth; between reports the buttons show what was just asked.
   useEffect(() => { if (p.report) setCtl({ paused: p.report.paused, timeScale: p.report.timeScale }); }, [p.report]);
@@ -108,7 +131,9 @@ function EditorBody({ rpc, project, platform, onClose }: { rpc: RpcClient; proje
   const item = items.find((i) => i.id === selected) ?? null;
   const sounds = useMemo(() => items.filter((i) => i.kind === 'sound'), [items]);
   const changed = useMemo(() => new Set(p.journal.map((c) => c.target)), [p.journal]);
-  const problemCount = Math.max(p.problems.length, items.reduce((n, i) => n + i.problems, 0));
+  // history: authorship problems (AI over your values) come from the check and are listed with the others.
+  const allProblems = useMemo(() => [...p.problems, ...h.flags.filter((f) => !p.problems.some((x) => x.message === f.message))], [p.problems, h.flags]);
+  const problemCount = Math.max(allProblems.length, items.reduce((n, i) => n + i.problems, 0));
 
   const select = useCallback((id: string) => setSelected(id), []);
   const openFromConsole = useCallback((id: string) => { setSelected(id); setPanels((s) => ({ ...s, insp: true })); }, []);
@@ -147,6 +172,7 @@ function EditorBody({ rpc, project, platform, onClose }: { rpc: RpcClient; proje
         <div className="bar">
           <div className="tabs" role="tablist">
             <button role="tab" aria-selected={view === 'game'} className={`tab${view === 'game' ? ' on' : ''}`} onClick={() => setView('game')}><Icon name="game" />Game</button>
+            <button role="tab" aria-selected={view === 'compare'} className={`tab${view === 'compare' ? ' on' : ''}`} onClick={() => setView('compare')}><Icon name="compare" />Compare{h.exps.some((e) => e.status === 'active') && <span style={{ color: 'var(--faint)', fontSize: 11 }}>{h.exps.filter((e) => e.status === 'active').length}</span>}</button>
             <button role="tab" aria-selected={view === 'sound'} className={`tab${view === 'sound' ? ' on' : ''}`} onClick={() => setView('sound')}><Icon name="audio" />Sound</button>
             {/* w3-app-benches */}
             <button role="tab" aria-selected={view === 'character'} className={`tab${view === 'character' ? ' on' : ''}`} onClick={() => setView('character')}><Icon name="characters" />Character</button>
@@ -154,15 +180,17 @@ function EditorBody({ rpc, project, platform, onClose }: { rpc: RpcClient; proje
             <button role="tab" aria-selected={view === 'look'} className={`tab${view === 'look' ? ' on' : ''}`} onClick={() => setView('look')}><Icon name="sliders" />Look</button>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-            <span className="note">{view === 'game' ? gameNote : view === 'sound' ? 'Rendered offline from the file' : 'Runs the real engine; edits show live'}</span>
+            <span className="note">{view === 'game' ? (openInfo ? `Experiment ${openInfo.name}: edits go to it, not to main` : gameNote) : view === 'compare' ? 'Two lines running side by side' : view === 'sound' ? 'Rendered offline from the file' : 'Runs the real engine; edits show live'}</span>
+            {view === 'game' && <ExpSwitch h={h} openExp={openInfo ? openInfo.name : null} onOpenExp={setOpenExp} />}
             {view === 'game' && <button className="btn ghost" onClick={() => setGameKey((k) => k + 1)} title="Reload the game page" aria-label="Reload the game page" style={{ padding: '0 6px' }}><Icon name="reload" /></button>}
           </div>
         </div>
         <div className="stage">
           {view === 'game' && (
             <>
-              <iframe key={gameKey} title="Game" src={project.gameUrl} allow="autoplay; gamepad; fullscreen" sandbox="allow-scripts allow-same-origin allow-pointer-lock allow-forms" />
-              {p.report && (
+              <iframe key={`${gameKey}${openInfo?.name ?? ''}`} title="Game" src={openInfo?.gameUrl ?? project.gameUrl} allow="autoplay; gamepad; fullscreen" sandbox="allow-scripts allow-same-origin allow-pointer-lock allow-forms" />
+              {openInfo && <div className="hx-stagebadge glass"><Icon name="branch" size={13} />experiment {openInfo.name}</div>}
+              {p.report && !openInfo && (
                 <div className="hud glass" aria-label="Game status">
                   <span><b>tick</b>{p.report.tick}</span><span><b>time</b>{p.report.time.toFixed(2)} s</span><span><b>fps</b>{Math.round(p.report.fps)}</span><span><b>speed</b>{p.report.timeScale}×</span>
                 </div>
@@ -171,21 +199,26 @@ function EditorBody({ rpc, project, platform, onClose }: { rpc: RpcClient; proje
               {p.status !== 'open' && <div className="badge glass warn"><Icon name="warn" size={13} />{p.status === 'closed' ? 'Lost the connection to the project. Reconnecting...' : 'Connecting to the project...'}</div>}
             </>
           )}
+          {view === 'compare' && <Compare rpc={rpc} h={h} mainUrl={project.gameUrl} a={compareNow.a} b={compareNow.b} onPick={(a, b) => setPair({ a, b })} version={h.exps.map((e) => `${e.name}${e.tip}`).join()} />}
           {view === 'sound' && <SoundBench rpc={rpc} sounds={sounds} selected={selected} onSelect={select} />}
           {(view === 'character' || view === 'vfx' || view === 'look') && <BenchView key={view} kind={view} rpc={rpc} items={items} selected={selected} onSelect={select} />}
         </div>
       </main>
 
       {insp && (
-        <Inspector rpc={rpc} item={item} library={items} tunables={p.tunables} baselines={baselines} setTunableLocal={p.setTunableLocal}
+        <Inspector key={openInfo?.name ?? 'main'} rpc={ed.rpc} item={item} library={items} tunables={ed.tunables} baselines={ed.baselines} setTunableLocal={ed.setTunableLocal}
           onOpenSound={(id) => { setSelected(id); setView('sound'); }} reveal={reveal} />
       )}
 
-      {dock && <Dock tab={dockTab} onTab={setDockTab} logs={p.logs} problems={p.problems} journal={p.journal} onClear={p.clearLogs} onOpen={openFromConsole} />}
+      {dock && <Dock tab={dockTab} onTab={setDockTab} logs={p.logs} problems={allProblems} journal={p.journal} onClear={p.clearLogs} onOpen={openFromConsole}
+        flagged={h.flagged.size}
+        history={<HistoryPanel h={h} openExp={openInfo ? openInfo.name : null} onOpenExp={setOpenExp} onCompare={compareExps} onProblems={() => setDockTab('console')} />} />}
 
       {lib && <div className={`splitter v${split.active === 'lib' ? ' drag' : ''}`} style={{ left: w.lib - 3 }} {...split.bind('lib', 1, 200, 420)} role="separator" aria-orientation="vertical" aria-label="Resize Library" />}
       {insp && <div className={`splitter v${split.active === 'insp' ? ' drag' : ''}`} style={{ right: w.insp - 3 }} {...split.bind('insp', -1, 260, 560)} role="separator" aria-orientation="vertical" aria-label="Resize Inspector" />}
       {dock && <div className={`splitter h${split.active === 'dock' ? ' drag' : ''}`} style={{ bottom: w.dock - 3, left: lib ? w.lib : 0, right: insp ? w.insp : 0 }} {...split.bind('dock', -1, 120, 520, 'y')} role="separator" aria-orientation="horizontal" aria-label="Resize Dock" />}
+
+      <AdoptDialog h={h} />
 
       {toast && (
         <div className={`toast glass${toast.error ? ' err' : ''}`} role="status">
