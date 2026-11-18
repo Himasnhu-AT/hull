@@ -41,10 +41,10 @@ function Groups({ groups, values, baseKey, baselines, problems, refs, onChange }
           <div className="gt">{g.name}</div>
           {g.dials.length > 0 && (
             <div className="dials">
-              {g.dials.map((f) => <Dial key={f.pointer} field={f} value={values(f.pointer)} baseline={baselines.current.get(`${baseKey}\0${f.pointer}`)} problems={probsFor(f.pointer)} refOptions={[]} onChange={onChange} />)}
+              {g.dials.map((f) => <Dial key={f.pointer} field={f} value={values(f.pointer) ?? f.value} baseline={baselines.current.get(`${baseKey}\0${f.pointer}`)} problems={probsFor(f.pointer)} refOptions={[]} onChange={onChange} />)}
             </div>
           )}
-          {g.fields.map((f) => <FieldView key={f.pointer} field={f} value={values(f.pointer)} baseline={baselines.current.get(`${baseKey}\0${f.pointer}`)} problems={probsFor(f.pointer)} refOptions={f.refKind ? refs(f.refKind) : []} onChange={onChange} />)}
+          {g.fields.map((f) => <FieldView key={f.pointer} field={f} value={values(f.pointer) ?? f.value} baseline={baselines.current.get(`${baseKey}\0${f.pointer}`)} problems={probsFor(f.pointer)} refOptions={f.refKind ? refs(f.refKind) : []} refs={refs} onChange={onChange} />)}
         </section>
       ))}
     </>
@@ -91,7 +91,7 @@ function ConfigForm({ rpc, id, path, library, baselines, onOpenSound, reveal }: 
         const walk = (schema: unknown): void => {
           for (const g of buildForm(schema, r.value, { showAdvanced: true })) for (const f of [...g.dials, ...g.fields]) {
             const k = `${id}\0${f.pointer}`;
-            if (!baselines.current.has(k)) baselines.current.set(k, structuredClone(f.value));
+            if (!f.unset && !baselines.current.has(k)) baselines.current.set(k, structuredClone(f.value));
           }
         };
         walk(r.schema);
