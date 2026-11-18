@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:hull:schema:material",
+  "type": "object",
+  "required": [
+    "kind",
+    "color"
+  ],
+  "properties": {
+    "kind": {
+      "type": "string",
+      "const": "material"
+    },
+    "note": {
+      "type": "string"
+    },
+    "color": {
+      "type": "string",
+      "pattern": "^#[0-9a-fA-F]{6}$",
+      "default": "#ffffff",
+      "x-ui": {
+        "widget": "color"
+      }
+    },
+    "roughness": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "default": 0.5,
+      "x-ui": {
+        "widget": "slider",
+        "step": 0.01
+      }
+    },
+    "metalness": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "default": 0,
+      "x-ui": {
+        "widget": "slider",
+        "step": 0.01
+      }
+    },
+    "texture": {
+      "type": "object",
+      "required": [
+        "recipe"
+      ],
+      "properties": {
+        "recipe": {
+          "type": "string",
+          "x-ui": {
+            "help": "Name of a procedural texture recipe."
+          }
+        },
+        "scale": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "default": 1,
+          "x-ui": {
+            "widget": "dial",
+            "step": 0.1
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false,
+  "title": "Hull material"
+}

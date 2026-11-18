@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:hull:schema:tuning",
+  "type": "object",
+  "required": [
+    "kind"
+  ],
+  "properties": {
+    "kind": {
+      "type": "string",
+      "const": "tuning"
+    },
+    "note": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": {
+    "type": "number"
+  },
+  "title": "Hull tuning block"
+}
