@@ -15,7 +15,7 @@ import { BOOT_ID, bootSource, DEV_PAGE } from './boot.ts';
 import { setJsonPointer, valueAtPointer } from './jsonEdit.ts';
 import { appendChange, readJournal } from './journal.ts';
 import { findTunables, rewriteTunable, type FoundTunable } from './tsTunables.ts';
-import { hullResolve, virtualModule } from './vitePlugins.ts';
+import { engineAliases, hullResolve, virtualModule } from './vitePlugins.ts';
 
 export { createProject, listTemplates } from './templates.ts';
 export { buildProject } from './build.ts';
@@ -108,10 +108,10 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
         // A tunable write is already applied to the running game through `tunable.changed`. Letting Vite hot-update the
         // module would reload the page and throw that state away, so the one write the server made itself is dropped
         // from HMR. Its module is still invalidated by Vite before this hook, so the next reload reads the new file.
-        handleHotUpdate(ctx) {
+        async handleHotUpdate(ctx) {
           const mine = wroteTs.get(ctx.file);
           if (mine === undefined) return undefined;
-          return ctx.read() === mine ? [] : undefined;
+          return (await ctx.read()) === mine ? [] : undefined;
         },
         configureServer(server) {
           server.middlewares.use(async (req, res, next) => {
@@ -123,7 +123,11 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
         },
       },
     ],
-    optimizeDeps: { noDiscovery: true, include: [] },
+    // The engine's own dependencies live beside it, not in the project, so they are aliased to their files in the engine's folder. Pre-bundling them
+    // up front means the first page load never discovers one late and reloads itself. Ajv is CommonJS and typebox is
+    // hundreds of small files; neither can be served as it is.
+    optimizeDeps: { noDiscovery: true, include: ['ajv/dist/2020.js', 'three', 'typebox'] },
+    resolve: { alias: engineAliases() },
     server: {
       port: opts.port ?? 0,
       strictPort: opts.port !== undefined,

@@ -1,5 +1,5 @@
 // Vite plugins shared by the project server (dev page) and the build.
-import { readFileSync } from 'node:fs';
+import { readFileSync, realpathSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Plugin } from 'vite';
 import { compileTunables } from './tsTunables.ts';
@@ -64,4 +64,38 @@ export function skipValidator(): Plugin {
       ? 'export const validateAgainst = () => []; export const collectRefs = () => []; export const segments = () => []; export const valueAt = () => undefined;'
       : undefined),
   };
+}
+
+const esc = (s: string): string => s.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+
+/**
+ * Aliases for the engine's own dependencies (three, typebox, ajv) and for `hull` itself, as absolute paths. The
+ * dependency optimiser does not run plugins and looks for packages from the project's folder, where a template copy has
+ * none; an alias is the one thing it honours. Package exports are followed for ESM, wildcards included.
+ */
+export function engineAliases(): { find: RegExp; replacement: string }[] {
+  const out: { find: RegExp; replacement: string }[] = Object.entries(hullPkg.exports).map(([key, target]) => ({
+    find: new RegExp(`^hull${key === '.' ? '' : esc(key.slice(1))}$`),
+    replacement: join(hullSrc, '..', target),
+  }));
+  for (const name of ['three', 'typebox', 'ajv']) {
+    const dir = realpathSync(join(hullSrc, '..', 'node_modules', name));
+    const pkg = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')) as { exports?: Record<string, string | Record<string, string>>; module?: string; main?: string };
+    const pick = (v: string | Record<string, string>): string => (typeof v === 'string' ? v : (v['import'] ?? v['default'] ?? ''));
+    if (!pkg.exports) {
+      out.push({ find: new RegExp(`^${esc(name)}$`), replacement: join(dir, pkg.main ?? 'index.js') });
+      out.push({ find: new RegExp(`^${esc(name)}/(.*)$`), replacement: `${dir}/$1` });
+      continue;
+    }
+    if (!pkg.exports['.'] && (pkg.module ?? pkg.main)) out.push({ find: new RegExp(`^${esc(name)}$`), replacement: join(dir, (pkg.module ?? pkg.main)!) });
+    for (const [key, value] of Object.entries(pkg.exports)) {
+      const target = pick(value);
+      if (!target) continue;
+      const full = name + key.slice(1);
+      out.push(key.includes('*')
+        ? { find: new RegExp(`^${esc(full).replace('\\*', '(.*)')}$`), replacement: `${dir}/${target.slice(2).replace('*', '$1')}` }
+        : { find: new RegExp(`^${esc(full)}$`), replacement: join(dir, target) });
+    }
+  }
+  return out;
 }
