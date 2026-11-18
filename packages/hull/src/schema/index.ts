@@ -9,9 +9,10 @@ import { manifestSchema, type Manifest } from './manifest.ts';
 import { tuningSchema, type Tuning } from './tuning.ts';
 import { uiScreenSchema, type UiScreenDef } from './ui-screen.ts';
 import { uiThemeSchema, type UiTheme } from './ui-theme.ts';
+import { vfxSchema, type Vfx } from './vfx.ts';
 
-export { inputMapSchema, lookSchema, manifestSchema, materialSchema, mixerSchema, soundSchema, tuningSchema, uiScreenSchema, uiThemeSchema };
-export type { InputMap, Look, Manifest, Material, Mixer, Sound, Tuning, UiScreenDef, UiTheme };
+export { inputMapSchema, lookSchema, manifestSchema, materialSchema, mixerSchema, soundSchema, tuningSchema, uiScreenSchema, uiThemeSchema, vfxSchema };
+export type { InputMap, Look, Manifest, Material, Mixer, Sound, Tuning, UiScreenDef, UiTheme, Vfx };
 export * from './ui.ts';
 
 /** Kinds that live under config/<kind>/. The manifest is separate: it is hull.json at the project root. */
@@ -24,6 +25,7 @@ export const kinds: Readonly<Record<string, object>> = {
   tuning: tuningSchema,
   'ui-screen': uiScreenSchema,
   'ui-theme': uiThemeSchema,
+  vfx: vfxSchema,
 };
 
 /** Value types per kind, so `config.get('tuning', id)` is typed. */
@@ -37,6 +39,7 @@ declare module '../config/types.ts' {
     'input-map': InputMap;
     'ui-screen': UiScreenDef;
     'ui-theme': UiTheme;
+    vfx: Vfx;
   }
 }
 
