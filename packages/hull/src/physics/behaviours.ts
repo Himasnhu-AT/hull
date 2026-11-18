@@ -100,6 +100,7 @@ export class Body extends Behaviour {
   linearDamping = 0.01;
   angularDamping = 0.05;
   gravityScale = 1;
+  rollingResistance = 1.5;
   layer = 1;
   mask = LAYER_ALL;
   tag = '';
@@ -115,7 +116,7 @@ export class Body extends Behaviour {
     }
     this.rb = new RigidBody(c.solid, {
       mass: this.mass, restitution: this.restitution, friction: this.friction,
-      linearDamping: this.linearDamping, angularDamping: this.angularDamping, gravityScale: this.gravityScale,
+      linearDamping: this.linearDamping, angularDamping: this.angularDamping, gravityScale: this.gravityScale, rollingResistance: this.rollingResistance,
       node: this.node,
     });
     const q = this.node.object3d.quaternion;

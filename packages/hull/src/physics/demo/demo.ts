@@ -28,7 +28,7 @@ const game = await startGame(defineGame({
     // A ball set rolling down the z street, and some crates dropped in front of it.
     const ball = g.world.spawn('ball');
     ball.position.set(0.5, 1, -26);
-    ball.add(Body, { shape: { type: 'sphere', radius: 1 }, mass: 4, restitution: 0.35, friction: 0.6 }).setVelocity(0, 0, 14);
+    ball.add(Body, { shape: { type: 'sphere', radius: 1 }, mass: 4, restitution: 0.35, friction: 0.6, rollingResistance: 0.15 }).setVelocity(0, 0, 14);
     for (let i = 0; i < 8; i++) {
       const c = g.world.spawn(`crate${i}`);
       c.position.set(-1.5 + (i % 4) * 1.1, 0.6 + Math.floor(i / 4) * 1.1, 8 + (i % 3));

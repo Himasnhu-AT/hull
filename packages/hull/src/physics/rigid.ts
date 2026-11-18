@@ -24,6 +24,8 @@ export interface BodyOptions {
   linearDamping?: number;
   angularDamping?: number;
   gravityScale?: number;
+  /** Extra damping while resting on something, per second. Without it, spheres roll for ever. Default 1.5. */
+  rollingResistance?: number;
   node?: Node | null;
 }
 
@@ -37,6 +39,7 @@ export class RigidBody {
   linearDamping: number;
   angularDamping: number;
   gravityScale: number;
+  rollingResistance: number;
   // Inverse inertia about the local axes.
   readonly iix: number; readonly iiy: number; readonly iiz: number;
   px = 0; py = 0; pz = 0;
@@ -68,6 +71,7 @@ export class RigidBody {
     this.linearDamping = o.linearDamping ?? 0.01;
     this.angularDamping = o.angularDamping ?? 0.05;
     this.gravityScale = o.gravityScale ?? 1;
+    this.rollingResistance = o.rollingResistance ?? 1.5;
     if (shape.kind === K.sphere) {
       const r = shape.r;
       const i = 0.4 * this.mass * r * r;
@@ -175,8 +179,8 @@ export class RigidSolver {
       const gs = b.gravityScale * dt;
       b.vx += g.x * gs; b.vy += g.y * gs; b.vz += g.z * gs;
       // Resting on something drains energy faster (rolling resistance), so spheres on a floor come to rest.
-      const rest = b.touching ? 1.5 : 0;
-      const ld = 1 / (1 + (b.linearDamping + rest * 0.5) * dt);
+      const rest = b.touching ? b.rollingResistance : 0;
+      const ld = 1 / (1 + (b.linearDamping + rest * 0.1) * dt);
       const ad = 1 / (1 + (b.angularDamping + rest) * dt);
       b.vx *= ld; b.vy *= ld; b.vz *= ld;
       b.wx *= ad; b.wy *= ad; b.wz *= ad;
