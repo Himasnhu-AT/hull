@@ -149,7 +149,7 @@ export function mountAudio(game: Game, opts: MountOptions = {}): AudioView {
   const loadMixer = (): void => {
     let m: Mixer | undefined;
     try {
-      m = config.has(mixerId) ? (config.get('mixer', mixerId.replace(/^mixer\//, '') as never) as Mixer) : undefined;
+      m = config.has(mixerId) ? (config.lookup('mixer', mixerId.replace(/^mixer\//, '')) as Mixer) : undefined;
     } catch (e) {
       report(`mixer-load`, `${mixerId}: ${(e as Error).message}`);
     }
@@ -182,7 +182,7 @@ export function mountAudio(game: Game, opts: MountOptions = {}): AudioView {
     entries.set(rel, e);
     const entry = e;
     if (config.has(`sound/${rel}`)) {
-      try { entry.sound = config.get('sound', rel as never) as Sound; } catch (err) { report(`get:${rel}`, `sound/${rel}: ${(err as Error).message}`); }
+      try { entry.sound = config.lookup('sound', rel) as Sound; } catch (err) { report(`get:${rel}`, `sound/${rel}: ${(err as Error).message}`); }
     }
     // Live rebuild: the new recipe applies to the next play, and a looping sound restarts on it at once.
     entry.unwatch = config.watch(`sound/${rel}`, (now) => {

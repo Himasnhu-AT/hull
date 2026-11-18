@@ -33,7 +33,7 @@ export function mountInput(game: Game, el: HTMLElement | Window, map?: string | 
   if (typeof map === 'string') {
     const id = map.startsWith('input-map/') ? map : `input-map/${map}`;
     if (config.has(id)) {
-      core.setMap(config.get('input-map', id.slice('input-map/'.length)), id);
+      core.setMap(config.lookup('input-map', id.slice('input-map/'.length)), id);
       off.push(config.watch(id, (now) => core.setMap(now as InputMap, id)));
     } else {
       core.setMap(undefined, id);

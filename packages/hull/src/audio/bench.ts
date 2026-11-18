@@ -44,7 +44,7 @@ async function renderChecked(sound: Sound, seed: number, sampleRate: number, cod
     const id = new RandomStream(seed, 'pick').pick(src.from);
     const rel = id.replace(/^sound\//, '');
     let child: Sound;
-    try { child = checkSound(config.get('sound', rel as never), id); } catch (e) { throw new Error(`sound#/source/from: ${(e as Error).message}`); }
+    try { child = checkSound(config.lookup('sound', rel), id); } catch (e) { throw new Error(`sound#/source/from: ${(e as Error).message}`); }
     return renderChecked(child, seed, sampleRate, codeLength, depth + 1);
   }
   if (src.type === 'sample') throw new Error('sound#/source/type: sample sources are not built yet');

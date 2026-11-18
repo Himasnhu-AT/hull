@@ -37,4 +37,18 @@ describe('house rules', () => {
       expect(hits).toEqual([]);
     });
   }
+
+  // A game's generated id types narrow config.get when the game is checked, and the engine source is checked with
+  // it. Engine code reads ids that arrive as data, so it must use config.lookup (see config/types.ts).
+  it('engine code outside config reads ids with config.lookup, not config.get', () => {
+    const hits: string[] = [];
+    for (const f of files(root)) {
+      if (f.includes(`${join('src', 'config')}`)) continue;
+      readFileSync(f, 'utf8').split('\n').forEach((line, i) => {
+        if (/^\s*(\/\/|\/?\*)/.test(line)) return;
+        if (/\bconfig\.get\(/.test(line)) hits.push(`${relative(root, f)}:${i + 1}`);
+      });
+    }
+    expect(hits).toEqual([]);
+  });
 });
