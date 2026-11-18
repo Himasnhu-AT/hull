@@ -1,0 +1,7 @@
+{
+  "kind": "material",
+  "note": "Yellow: refills ammo.",
+  "color": "#ffd24a",
+  "roughness": 0.4,
+  "metalness": 0
+}

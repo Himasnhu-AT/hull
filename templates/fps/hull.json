@@ -1,0 +1,13 @@
+{
+  "kind": "game",
+  "id": "fps",
+  "title": "First-person arena",
+  "note": "A first-person shooter arena built only from kits: wave enemies, pickups, a pause menu and save slots. Hit zones: a headshot counts double.",
+  "version": "0.1.0",
+  "entry": "src/main.ts",
+  "step": 60,
+  "features": [
+    "audio",
+    "ui"
+  ]
+}

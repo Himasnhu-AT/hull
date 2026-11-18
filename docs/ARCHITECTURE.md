@@ -435,6 +435,18 @@ What the tools give an agent:
   image fails on a perceptual difference and writes the diff.
 * **Control port**: in a dev build the game listens on a local WebSocket: `step`, `press`, `release`, `state`,
   `set`, `spawn`, `teleport`, `shot`, `errors`, `perf`. `hull mcp` exposes the same list as MCP tools.
+* **As built (M3).** The control port is the project server's `game.run` method: the server sends `game.rpc` to a
+  connected game and the game answers `game.result` (`dev/protocol.ts`, `dev/runtime.ts`). Ops so far: `step`, `press`,
+  `release`, `state`, `screenshot`. A page opened with `?hull-paused&hull-client=<id>` starts frozen at tick 0 and
+  can be aimed at by id, so a script starts from the same state every time. The `play` tool takes a JSON script of
+  `step`, `press`, `release`, `hold`, `read`, `check` and `screenshot` steps, runs it in a headless browser
+  (agent-browser) and compares each screenshot with `tests/golden/<name>.png` per channel and per pixel (default: 8
+  of 255 per channel, 0 pixels allowed). A missing golden is written; `--update` rewrites them; a mismatch stops the
+  script and leaves `.hull/play/<name>.actual.png` and `.diff.png`. `hull mcp` speaks newline-delimited JSON-RPC
+  on stdio (initialize, tools/list, tools/call) and serves the registry without `dev` and `new`; tool names with a
+  dot are subcommands on the command line (`hull review list`). Not yet: `set`, `spawn`, `teleport`, `errors`,
+  `perf`, `waitUntil`, perceptual (not per-pixel) compare, and the project methods (`config.set`, `history.*`) as
+  MCP tools.
 * **Budgets**: a test can assert frame time at the 95th percentile, draw calls, node count and allocations per
   frame.
 * **Sound bench**: peak, loudness, length, spectral centre per sound; a rule file states the expected order and

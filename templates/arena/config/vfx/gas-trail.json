@@ -1,0 +1,17 @@
+{
+  "kind": "vfx",
+  "note": "A pale gas stream behind a moving node (vfx.trail). It stays where it was laid and thins out.",
+  "emit": { "rate": 90, "shape": { "sphere": 0.05 } },
+  "particle": {
+    "life": [0.5, 0.9],
+    "speed": [0.2, 0.8],
+    "direction": { "outward": true },
+    "gravity": 0.2,
+    "drag": 2,
+    "size": [[0, 0.12], [1, 0.55]],
+    "color": [[0, "#e8f4ff"], [1, "#b7cbe0"]],
+    "alpha": [[0, 0.55], [1, 0]],
+    "sprite": "soft"
+  },
+  "budget": { "max": 500, "fadeNear": 0.8 }
+}

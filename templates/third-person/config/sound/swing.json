@@ -1,0 +1,33 @@
+{
+  "kind": "sound",
+  "note": "Something fast passing by. The band sweeps up then closes.",
+  "bus": "sfx",
+  "level": -1,
+  "pitch": [0.95, 1.05],
+  "limit": { "minGap": 0.1, "voices": 3 },
+  "spatial": { "ref": 5, "max": 70 },
+  "source": {
+    "type": "synth",
+    "length": 0.7,
+    "layers": {
+      "air": {
+        "from": { "noise": "pink" },
+        "then": [
+          { "filter": "bandpass", "freq": [500, 700], "q": 1.3, "glideTo": 6, "glideTime": 0.3 },
+          { "envelope": { "attack": 0.18, "decay": 0.4, "curve": "linear" } },
+          { "gain": 4 }
+        ]
+      },
+      "hiss": {
+        "from": { "noise": "white" },
+        "then": [
+          { "filter": "highpass", "freq": 3500 },
+          { "envelope": { "attack": 0.22, "decay": 0.3, "curve": "linear" } },
+          { "gain": -10 },
+          { "pan": [-0.3, 0.3] }
+        ]
+      }
+    },
+    "reverb": 0.12
+  }
+}

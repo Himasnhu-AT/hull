@@ -3,7 +3,7 @@
 // game's tick, time and frame rate about four times a second. Dev only: a build never imports this file.
 import { config, setTunable } from '../config/index.ts';
 import type { Game } from '../core/index.ts';
-import type { GameControl, GameReport, Pushes } from './protocol.ts';
+import type { ControlOp, ControlShot, ControlState, GameControl, GameReport, Pushes } from './protocol.ts';
 
 export interface DevConnection { dispose(): void }
 
@@ -13,7 +13,8 @@ const REPORT_MS = 250;
 const RECONNECT_MS = [250, 500, 1000, 2000];
 
 export function connectDev(game: Game, opts: { url: string; /** Called for `restart`; the default reloads the page, which runs `ready` again with the same seed. */ onRestart?: () => void }): DevConnection {
-  const client = crypto.randomUUID().slice(0, 6);
+  // A page opened by the play tool names itself (?hull-client=) so the tool can aim control ops at exactly this game.
+  const client = new URLSearchParams(location.search).get('hull-client') ?? crypto.randomUUID().slice(0, 6);
   const url = `${opts.url}${opts.url.includes('?') ? '&' : '?'}role=game&client=${client}`;
   let ws: WebSocket | null = null;
   let disposed = false;
@@ -42,6 +43,43 @@ export function connectDev(game: Game, opts: { url: string; /** Called for `rest
     if (c.restart) (opts.onRestart ?? (() => location.reload()))();
   };
 
+  // The control port. Keys go through real KeyboardEvents so the input map and the latched edges behave as for a player.
+  const key = (type: 'keydown' | 'keyup', code: string): void => {
+    window.dispatchEvent(new KeyboardEvent(type, { code, bubbles: true, cancelable: true }));
+  };
+  const stateOf = (names: readonly string[] = []): ControlState => {
+    const nodes: ControlState['nodes'] = {};
+    for (const name of names) {
+      const n = game.world.find(name);
+      nodes[name] = n ? { found: true, x: n.position.x, y: n.position.y, z: n.position.z } : { found: false, x: 0, y: 0, z: 0 };
+    }
+    return { tick: game.world.tick, time: game.world.time, checksum: game.world.checksum(), paused: game.paused, nodes };
+  };
+  const runControl = async (c: ControlOp): Promise<ControlState | ControlShot | Record<string, never>> => {
+    switch (c.op) {
+      case 'step':
+        if (!Number.isFinite(c.n) || c.n < 0) throw new Error(`step needs a count of zero or more, got ${String(c.n)}`);
+        game.paused = true;
+        game.step(Math.floor(c.n));
+        return stateOf();
+      case 'press': key('keydown', c.key); return {};
+      case 'release': key('keyup', c.key); return {};
+      case 'state': return stateOf(c.nodes);
+      case 'screenshot': {
+        const view = (globalThis as { hull?: { render?: { shot(): Promise<Blob> } } }).hull?.render;
+        if (!view) throw new Error('the game has no render view to capture');
+        const blob = await view.shot();
+        const bytes = new Uint8Array(await blob.arrayBuffer());
+        let bin = '';
+        for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+        const bmp = await createImageBitmap(blob);
+        const shot = { png: btoa(bin), width: bmp.width, height: bmp.height };
+        bmp.close();
+        return shot;
+      }
+    }
+  };
+
   const handle = (n: Note): void => {
     switch (n.method) {
       case 'config.changed': {
@@ -58,6 +96,14 @@ export function connectDev(game: Game, opts: { url: string; /** Called for `rest
         break;
       }
       case 'game.control': control(n.params as GameControl); break;
+      case 'game.rpc': {
+        const p = n.params as Pushes['game.rpc'];
+        runControl(p.control).then(
+          (result) => send('game.result', { id: p.id, ok: true, result }),
+          (err: unknown) => send('game.result', { id: p.id, ok: false, error: err instanceof Error ? err.message : String(err) }),
+        );
+        break;
+      }
     }
   };
 
@@ -76,6 +122,8 @@ export function connectDev(game: Game, opts: { url: string; /** Called for `rest
     };
     send('game.report', body);
   };
+  // A page opened with ?hull-paused starts frozen at tick 0, before its first frame, so a script begins from the same state every time.
+  if (new URLSearchParams(location.search).has('hull-paused')) game.paused = true;
   const reporter = setInterval(report, REPORT_MS);
 
   const open = (): void => {
