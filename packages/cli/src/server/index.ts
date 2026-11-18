@@ -165,8 +165,10 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
     ],
     // The engine's own dependencies live beside it, not in the project, so they are aliased to their files in the engine's folder. Pre-bundling them
     // up front means the first page load never discovers one late and reloads itself. Ajv is CommonJS and typebox is
-    // hundreds of small files; neither can be served as it is.
-    optimizeDeps: { noDiscovery: true, include: ['ajv/dist/2020.js', 'three', 'typebox'] },
+    // hundreds of small files; neither can be served as it is. three is not pre-bundled: three.module.js and
+    // three.webgpu.js both import three.core.js, so served as they are the page gets one copy of three. Pre-bundling
+    // `three` alone gave the WebGPU backend a second copy ("Multiple instances of Three.js").
+    optimizeDeps: { noDiscovery: true, include: ['ajv/dist/2020.js', 'typebox'] },
     resolve: { alias: engineAliases() },
     server: {
       port: opts.port ?? 0,
