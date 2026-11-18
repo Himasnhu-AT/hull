@@ -13,7 +13,7 @@ describe('load', () => {
     const res = r.load([goodTuning, goodMaterial, manifest()]);
     expect(res.problems).toEqual([]);
     expect(res.ok).toBe(true);
-    expect(res.ids).toEqual({ material: ['steel'], tuning: ['jump'] });
+    expect(res.ids).toEqual({ material: ['steel'], mixer: [], sound: [], tuning: ['jump'] });
     const t = r.get('tuning', 'jump');
     expect(t['height']).toBe(2.4);
     expect(Object.isFrozen(t)).toBe(true);
@@ -129,6 +129,8 @@ describe('idsModule', () => {
         "declare module 'hull' {",
         '  interface HullIds {',
         "    material: 'steel';",
+        '    mixer: never;',
+        '    sound: never;',
         "    tuning: 'jump' | 'run';",
         '  }',
         '}',

@@ -1,0 +1,25 @@
+{
+  "kind": "sound",
+  "note": "Button press. A tiny metal tick, nothing more.",
+  "bus": "ui",
+  "level": -2,
+  "limit": { "minGap": 0.03, "voices": 3 },
+  "source": {
+    "type": "synth",
+    "length": 0.12,
+    "layers": {
+      "tick": {
+        "from": { "modes": [2400, 3600, 5200], "decay": [0.025, 0.035], "tilt": 0.5 },
+        "then": [{ "gain": -4 }]
+      },
+      "edge": {
+        "from": { "noise": "white" },
+        "then": [
+          { "filter": "highpass", "freq": 4000 },
+          { "envelope": { "attack": 0.0005, "decay": 0.01 } },
+          { "gain": -12 }
+        ]
+      }
+    }
+  }
+}
