@@ -103,6 +103,14 @@ Kinds in the first version: `game`, `tuning`, `sound`, `music`, `mixer`, `charac
 
 ### 3.3 Tools: the command line and Hull Studio
 
+**The Hull desktop app is the product, and comes first.** You make a project in it and work in it, the way you
+work in Unreal or Unity: a launcher to create a project from a template or open one, then the editor with the game
+running inside it, the Library, the Inspector, the benches, History and the Build button. The project server runs
+inside the app (its main process) and speaks the same protocol a remote one will, so the hosted Studio of M8 is the
+same front end. The `hull` command line below is **paused**: the tools stay defined once in the tools package and
+the app calls them; their command-line front is kept working as it is (for agents and CI) but not extended until the
+app is done.
+
 One command, `hull`, made to be run by an agent. Every command prints errors as `file:line: message` and can
 print JSON.
 
@@ -273,11 +281,11 @@ Each milestone ends with something you can run, and a check that proves it.
 | | Delivers | Done when |
 |---|---|---|
 | **M0 Skeleton** | Repo, `core`, `config` (load, validate, typed access, tunables), `hull check`, `hull test`, `hull dev`, a spinning-cube template. | A scenario test steps the cube game 10,000 frames in Node in under a second and gets the same end state twice. A wrong config id fails `hull check` with file and field. |
-| **M1 First playable + first bench** | `render` basics behind the render bridge (WebGL2 backend), `input`, `audio` with recipes, `ui` basics, `hull build` to one file, Hull Studio with Library, sound bench and inspector writing to JSON and to tunables. | A small arena game runs from `dist/web/game.js`. In the Studio you change a sound's pitch and a run speed with sliders, hear and see it at once, and the JSON file and the `.ts` literal have changed. |
-| **M2 History and experiments** | The history store, the diff, checkpoints, experiments with their own working copies, compare, adopt, merge, authorship. | You start two experiments from one point, tune each differently, run them side by side, adopt one, and the other is still in the timeline. An AI change over a value you set is flagged by `hull check`. |
-| **M3 Characters and the agent loop** | `anim` (generated rigs, clips, state graph, IK), character and animation benches, `hull play` with screenshots and golden images, control port, MCP, review notes. | You scrub every animation of a character and leave a note; the AI lists the note from the command line. A step script walks the character and its golden screenshot matches. |
+| **M1 The app, first playable, first bench** | The Hull desktop app: launcher (new project from a template, open, recent), editor with the game running in it (play, pause, step), Library, Inspector writing to JSON and to tunables, sound bench, Build button. The project server inside the app. Engine: `render` basics behind the render bridge (WebGL2 backend), `input`, `audio` with recipes, `ui` basics, the build to one file. | You create an arena project in the app and play it there. You change a sound's pitch and a run speed with the Inspector, hear and see it at once, and the JSON file and the `.ts` literal have changed. Build writes `dist/web/game.js`, and it runs. |
+| **M2 History and experiments** | The history store, the diff, checkpoints, experiments with their own working copies, compare, adopt, merge, authorship. | You start two experiments from one point, tune each differently, run them side by side, adopt one, and the other is still in the timeline. An AI change over a value you set is flagged by the check. All of it from the app's History panel. |
+| **M3 Characters and the agent loop** | `anim` (generated rigs, clips, state graph, IK), character and animation benches, step scripts with screenshots and golden images, control port, MCP, review notes. | You scrub every animation of a character in the app and leave a note; an agent lists the note over MCP. A step script walks the character and its golden screenshot matches. |
 | **M4 Desktop and the look** | `platform`, `hull package` for the three systems (Electron; Tauri experimental), the look (sky, fog, post), `vfx`, the settings and key-binding screens, saves. | The arena game installs and runs on macOS, Windows and Linux with saves, fullscreen and a gamepad. |
-| **M5 Kits and templates** | The first kits (first-person and third-person controllers, follow camera, health, pickups, spawner, pause menu, save slots), three templates, the kit gallery. | `hull new` plus one prompt gives a playable prototype built only from kits and config. |
+| **M5 Kits and templates** | The first kits (first-person and third-person controllers, follow camera, health, pickups, spawner, pause menu, save slots), three templates, the kit gallery. | A new project from the app plus one prompt gives a playable prototype built only from kits and config. |
 | **M6 AOTT on Hull** | AOTT rebuilt on the engine, as the proof and the source of fixes. | It plays the same, its sounds and characters are all on benches, and its build is one file. |
 | **M7 WebGPU** | The second render backend behind the bridge; capabilities (`compute`, GPU particles); golden images on both. | AOTT's golden screenshots match on both backends, the game picks the right one by itself on each system, and a bench with 200,000 particles holds 60 frames a second on WebGPU. |
 | **M8 Hosted** | Hull Studio served from Marl's servers; projects held there; publish to a share link (section 8). | A customer with only a browser opens a project, tunes it, publishes it, and a second person plays it from the link without an account. No source reaches either machine. |
