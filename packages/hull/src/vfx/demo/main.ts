@@ -60,7 +60,7 @@ const def = defineGame({
     ship.add(Orbit);
 
     const eye = w.spawn('camera');
-    eye.position.set(0, 2.6, 11);
+    eye.position.set(0, 2.2, 7.5);
     eye.rotation.x = -0.1;
     eye.add(Camera, { fov: 48, far: 400 });
   },
@@ -111,9 +111,11 @@ async function main(): Promise<void> {
       let cpu = 0, render = 0, n = 0;
       await new Promise<void>((done) => {
         const tick = (): void => {
-          const a = performance.now();
           n++;
           if (n >= frames) { done(); return; }
+          // The whole frame on the CPU: particle step, buffer fill, scene and post draw calls.
+          const a = performance.now();
+          game.frame(0);
           cpu += performance.now() - a;
           render += view.stats().ms;
           requestAnimationFrame(tick);
@@ -127,6 +129,25 @@ async function main(): Promise<void> {
     },
   };
   (window as unknown as { demo: typeof demo }).demo = demo;
+
+  // Query-string actions, so a check can be driven by the URL alone: ?fire=1&snap=40&bench=1&notrail=1
+  const out = document.createElement('pre');
+  out.id = 'out';
+  out.style.cssText = 'position:fixed;left:8px;top:8px;margin:0;color:#fff;font:12px monospace;text-shadow:0 0 3px #000;white-space:pre-wrap';
+  document.body.appendChild(out);
+  const say = (t: string): void => { out.textContent = t; };
+  if (q.get('notrail') === '1') trail?.stop();
+  if (q.get('fire') === '1') fireAll();
+  const snap = Number(q.get('snap') ?? 0);
+  if (snap > 0) demo.snap(snap);
+  if (q.get('bench') === '1') {
+    // let the shaders compile and the page settle first
+    await new Promise((r) => setTimeout(r, 1500));
+    const r = await demo.bench(Number(q.get('frames') ?? 180));
+    say(`BENCH ${JSON.stringify(r)} quality=${q.get('quality') ?? 'high'} backend=${view.backend}`);
+  } else if (q.get('hud') === '1') {
+    say(`${view.backend} ${JSON.stringify(vfx.stats())}`);
+  }
 }
 
 void main();
