@@ -215,11 +215,11 @@ describe('frame', () => {
     g.paused = true;
     g.frame(1);
     expect(g.world.tick).toBe(19);
-    expect(alphas.length).toBe(4);
+    expect(alphas.length).toBe(5); // paused still draws
     off();
     g.paused = false;
     g.frame(1 / 60);
-    expect(alphas.length).toBe(4);
+    expect(alphas.length).toBe(5);
   });
 
   it('sixty frames of 1/60 s make sixty steps', async () => {

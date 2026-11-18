@@ -26,12 +26,15 @@ class GameImpl implements Game {
     for (let i = 0; i < n; i++) this.world.step();
   }
 
-  /** Paused means nothing at all: no steps, no update, no onFrame callbacks. */
+  /**
+   * Paused is a time scale of 0 (ARCHITECTURE §2): no fixed steps, but update and onFrame still run, so a paused
+   * view keeps drawing and the Studio can still move its camera over a frozen game.
+   */
   frame(realDt: number): void {
-    if (this.disposed || this.paused) return;
+    if (this.disposed) return;
     const world = this.world;
     const dt = world.dt;
-    const scaled = Math.min(Math.max(realDt, 0), MAX_FRAME) * this.timeScale;
+    const scaled = this.paused ? 0 : Math.min(Math.max(realDt, 0), MAX_FRAME) * this.timeScale;
     this.acc += scaled;
     while (this.acc >= dt - EPS) {
       world.step();
