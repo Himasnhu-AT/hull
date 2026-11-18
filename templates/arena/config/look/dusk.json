@@ -1,0 +1,12 @@
+{
+  "kind": "look",
+  "note": "A hazy dusk: warm low sun, peach horizon fading to a deep blue zenith, fog in the horizon colour.",
+  "sun": { "color": "#ffb878", "strength": 3.4, "elevationDeg": 14, "azimuthDeg": 235, "shadows": true, "shadowRange": 24 },
+  "sky": { "horizon": "#f2b48c", "mid": "#a58aa6", "zenith": "#2b3f6e" },
+  "ambient": { "color": "#8fa3d0", "ground": "#4a3a3a", "intensity": 0.55 },
+  "environment": { "intensity": 0.7 },
+  "fog": { "color": "#d99f8a", "near": 18, "far": 130, "skyBlend": 0.4 },
+  "exposure": 1.0,
+  "toneMapping": "aces",
+  "post": { "bloom": 0.45, "bloomThreshold": 0.9, "contrast": 1.08, "saturation": 1.12, "lift": [0.01, 0.0, 0.02], "gamma": [1.0, 1.0, 1.0], "gain": [1.05, 1.0, 0.94], "vignette": 0.3, "grain": 0.02, "aa": "fxaa" }
+}

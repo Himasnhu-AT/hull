@@ -1,0 +1,20 @@
+{
+  "kind": "vfx",
+  "note": "Steel on steel: hot streaks that arc and fall. Additive with glow above 1, so bloom picks them up.",
+  "emit": { "count": [14, 24], "shape": "point" },
+  "particle": {
+    "life": [0.25, 0.65],
+    "speed": [3, 9],
+    "direction": { "cone": [0, 1, 0], "angleDeg": 50 },
+    "gravity": -14,
+    "drag": 0.8,
+    "size": [[0, 0.07], [1, 0.02]],
+    "color": [[0, "#fff2c2"], [0.4, "#ffae42"], [1, "#d8441a"]],
+    "alpha": [[0, 1], [0.7, 1], [1, 0]],
+    "glow": 4,
+    "stretch": 0.05,
+    "sprite": "spark",
+    "blend": "additive"
+  },
+  "budget": { "max": 600 }
+}
