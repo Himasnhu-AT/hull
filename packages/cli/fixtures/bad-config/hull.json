@@ -1,0 +1,7 @@
+{
+  "kind": "game",
+  "id": "bad-config",
+  "title": "Bad config",
+  "entry": "src/main.ts",
+  "step": 45
+}

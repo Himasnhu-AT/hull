@@ -1,0 +1,8 @@
+{
+  "kind": "game",
+  "id": "cube",
+  "title": "Spinning cube",
+  "version": "0.1.0",
+  "entry": "src/main.ts",
+  "step": 60
+}

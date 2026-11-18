@@ -1,0 +1,5 @@
+{
+  "kind": "tuning",
+  "note": "How the cube looks and moves. Edit a number and the dev page reloads.",
+  "spin": 1.2
+}
