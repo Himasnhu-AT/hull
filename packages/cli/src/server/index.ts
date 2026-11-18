@@ -1,7 +1,7 @@
 // The project server: one HTTP port that serves the game's dev page (Vite) and, on the same port, the JSON-RPC
 // WebSocket of dev/protocol.ts. The app's front end and every running game connect here; nothing outside this process
 // touches the project's files (CLAUDE.md: the Studio never touches the disk).
-import { mkdirSync, readFileSync, readdirSync, renameSync, statSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, statSync, writeFileSync } from 'node:fs';
 import type { IncomingMessage } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { join, relative, resolve } from 'node:path';
@@ -55,7 +55,10 @@ function walk(dir: string, accept: (name: string) => boolean, out: string[] = []
 const isLoopback = (host: string): boolean => host === 'localhost' || host === '127.0.0.1' || host === '[::1]';
 
 export async function startProjectServer(opts: { root: string; port?: number; log?: (line: string) => void; /** Quiet time before edits are recorded in the history (default 2000 ms; tests use 0). */ historyQuietMs?: number }): Promise<ProjectServer> {
-  const root = resolve(opts.root);
+  // The real path: Vite and the file watcher report real paths (on macOS /var is /private/var), and the server's
+  // record of its own writes is keyed by path, so a symlinked root made every tunable write look like a hand edit
+  // and reload the game.
+  const root = realpathSync(resolve(opts.root));
   const log = opts.log ?? (() => {});
   const manifestInfo = await loadManifest(root);
   if (!manifestInfo.value) throw new Error(manifestInfo.problems.map((p) => `${p.file}#${p.pointer ?? ''}: ${p.message}`).join('\n') || 'invalid hull.json');
