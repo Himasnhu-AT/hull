@@ -1,0 +1,19 @@
+{
+  "kind": "vfx",
+  "note": "A spray of dark red droplets from a hit; aim it with the hit direction.",
+  "emit": { "count": [16, 28], "shape": { "sphere": 0.08 } },
+  "particle": {
+    "life": [0.4, 0.9],
+    "speed": [2, 6],
+    "direction": { "cone": [0, 1, 0], "angleDeg": 35 },
+    "gravity": -12,
+    "drag": 0.6,
+    "size": [[0, 0.09], [1, 0.05]],
+    "sizeScale": [0.6, 1.4],
+    "color": [[0, "#8e0f0f"], [1, "#4a0606"]],
+    "alpha": [[0, 1], [0.8, 0.95], [1, 0]],
+    "stretch": 0.03,
+    "sprite": "hard"
+  },
+  "budget": { "max": 500 }
+}

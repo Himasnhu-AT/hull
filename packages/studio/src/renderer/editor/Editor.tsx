@@ -8,12 +8,13 @@ import { Icon } from '../ui/Icon.tsx';
 import { Dock, type DockTab } from './Dock.tsx';
 import { Inspector } from './Inspector.tsx';
 import { Library } from './Library.tsx';
+import { BenchView, type BenchKind } from '../benches/Benches.tsx'; // w3-app-benches
 import { SoundBench } from './SoundBench.tsx';
 import { TitleBar, type BuildState, type Panels } from './TitleBar.tsx';
 import { useProject, idFromPath } from './useProject.ts';
 import { useSplit } from './useSplit.ts';
 
-type View = 'game' | 'sound';
+type View = 'game' | 'sound' | BenchKind; // w3-app-benches: character, vfx, look
 
 interface Toast { text: string; error?: boolean; action?: { label: string; run(): void } }
 
@@ -147,9 +148,13 @@ function EditorBody({ rpc, project, platform, onClose }: { rpc: RpcClient; proje
           <div className="tabs" role="tablist">
             <button role="tab" aria-selected={view === 'game'} className={`tab${view === 'game' ? ' on' : ''}`} onClick={() => setView('game')}><Icon name="game" />Game</button>
             <button role="tab" aria-selected={view === 'sound'} className={`tab${view === 'sound' ? ' on' : ''}`} onClick={() => setView('sound')}><Icon name="audio" />Sound</button>
+            {/* w3-app-benches */}
+            <button role="tab" aria-selected={view === 'character'} className={`tab${view === 'character' ? ' on' : ''}`} onClick={() => setView('character')}><Icon name="characters" />Character</button>
+            <button role="tab" aria-selected={view === 'vfx'} className={`tab${view === 'vfx' ? ' on' : ''}`} onClick={() => setView('vfx')}><Icon name="world" />VFX</button>
+            <button role="tab" aria-selected={view === 'look'} className={`tab${view === 'look' ? ' on' : ''}`} onClick={() => setView('look')}><Icon name="sliders" />Look</button>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-            <span className="note">{view === 'game' ? gameNote : 'Rendered offline from the file'}</span>
+            <span className="note">{view === 'game' ? gameNote : view === 'sound' ? 'Rendered offline from the file' : 'Runs the real engine; edits show live'}</span>
             {view === 'game' && <button className="btn ghost" onClick={() => setGameKey((k) => k + 1)} title="Reload the game page" aria-label="Reload the game page" style={{ padding: '0 6px' }}><Icon name="reload" /></button>}
           </div>
         </div>
@@ -167,6 +172,7 @@ function EditorBody({ rpc, project, platform, onClose }: { rpc: RpcClient; proje
             </>
           )}
           {view === 'sound' && <SoundBench rpc={rpc} sounds={sounds} selected={selected} onSelect={select} />}
+          {(view === 'character' || view === 'vfx' || view === 'look') && <BenchView key={view} kind={view} rpc={rpc} items={items} selected={selected} onSelect={select} />}
         </div>
       </main>
 

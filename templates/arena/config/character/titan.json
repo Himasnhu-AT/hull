@@ -1,0 +1,14 @@
+{
+  "kind": "character",
+  "note": "A 15 m titan from the same generator: a bigger height, a larger head, heavier build, no clothes.",
+  "body": {
+    "type": "generated",
+    "recipe": "humanoid",
+    "proportions": { "height": 15, "head": 2.4, "legs": 0.5, "arms": 0.4, "build": 1.2 }
+  },
+  "materials": { "skin": "material/titan-skin", "cloth": "material/titan-skin", "metal": "material/titan-skin", "boots": "material/titan-skin" },
+  "sockets": { "nape": { "joint": "neck", "offset": [0, 0.5, 0.9] } },
+  "collider": { "shape": "capsule", "radius": 2.5, "height": 14 },
+  "animSet": "anim-set/humanoid",
+  "animGraph": "anim-graph/titan"
+}
