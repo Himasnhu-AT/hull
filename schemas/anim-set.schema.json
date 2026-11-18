@@ -1,0 +1,224 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:hull:schema:anim-set",
+  "type": "object",
+  "required": [
+    "kind",
+    "clips"
+  ],
+  "properties": {
+    "kind": {
+      "type": "string",
+      "const": "anim-set"
+    },
+    "note": {
+      "type": "string"
+    },
+    "clips": {
+      "type": "object",
+      "patternProperties": {
+        "^.*$": {
+          "type": "object",
+          "required": [
+            "type"
+          ],
+          "properties": {
+            "type": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "const": "keyframes"
+                },
+                {
+                  "type": "string",
+                  "const": "generated"
+                },
+                {
+                  "type": "string",
+                  "const": "gltf"
+                }
+              ],
+              "x-ui": {
+                "widget": "segments"
+              }
+            },
+            "loop": {
+              "type": "boolean",
+              "default": false
+            },
+            "length": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "x-ui": {
+                "unit": "s",
+                "help": "Keyframes: required. Generated: overrides the generator's own length."
+              }
+            },
+            "speed": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "default": 1,
+              "x-ui": {
+                "help": "Playback multiplier."
+              }
+            },
+            "travel": {
+              "type": "number",
+              "minimum": 0,
+              "x-ui": {
+                "unit": "m/s",
+                "help": "Ground speed the feet in this clip are authored for. Lets a graph match playback to speed and report foot slide."
+              }
+            },
+            "curve": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "const": "smooth"
+                },
+                {
+                  "type": "string",
+                  "const": "linear"
+                }
+              ],
+              "default": "smooth",
+              "x-ui": {
+                "widget": "segments"
+              }
+            },
+            "generator": {
+              "type": "string",
+              "x-ui": {
+                "help": "humanoid/idle, humanoid/walk, humanoid/run, procedural/breathe, procedural/sway, or one registered in code."
+              }
+            },
+            "knobs": {
+              "type": "object",
+              "patternProperties": {
+                "^.*$": {
+                  "type": "number"
+                }
+              }
+            },
+            "tracks": {
+              "type": "object",
+              "patternProperties": {
+                "^.*$": {
+                  "type": "object",
+                  "properties": {
+                    "rotation": {
+                      "type": "array",
+                      "items": {
+                        "type": "array",
+                        "prefixItems": [
+                          {
+                            "type": "number",
+                            "minimum": 0
+                          },
+                          {
+                            "type": "array",
+                            "prefixItems": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "number"
+                              }
+                            ],
+                            "minItems": 3,
+                            "maxItems": 3,
+                            "items": false
+                          }
+                        ],
+                        "minItems": 2,
+                        "maxItems": 2,
+                        "items": false
+                      },
+                      "minItems": 1,
+                      "x-ui": {
+                        "help": "[time, [x, y, z]] in seconds and radians."
+                      }
+                    },
+                    "offset": {
+                      "type": "array",
+                      "items": {
+                        "type": "array",
+                        "prefixItems": [
+                          {
+                            "type": "number",
+                            "minimum": 0
+                          },
+                          {
+                            "type": "array",
+                            "prefixItems": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "number"
+                              }
+                            ],
+                            "minItems": 3,
+                            "maxItems": 3,
+                            "items": false
+                          }
+                        ],
+                        "minItems": 2,
+                        "maxItems": 2,
+                        "items": false
+                      },
+                      "minItems": 1
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              },
+              "x-ui": {
+                "help": "Bone name to its keyframes."
+              }
+            },
+            "events": {
+              "type": "object",
+              "patternProperties": {
+                "^.*$": {
+                  "anyOf": [
+                    {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    {
+                      "type": "array",
+                      "items": {
+                        "type": "number",
+                        "minimum": 0
+                      },
+                      "minItems": 1
+                    }
+                  ]
+                }
+              },
+              "x-ui": {
+                "help": "0 to 1 of the loop for looping clips, seconds otherwise."
+              }
+            },
+            "clip": {
+              "type": "string",
+              "x-ui": {
+                "help": "gltf only."
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      }
+    }
+  },
+  "additionalProperties": false,
+  "title": "Hull animation set"
+}
