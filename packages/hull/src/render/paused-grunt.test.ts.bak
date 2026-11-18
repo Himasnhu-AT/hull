@@ -1,0 +1,25 @@
+import { Mesh as ThreeMesh, Scene, Vector3 } from 'three';
+import { describe, expect, it } from 'vitest';
+import { defineGame, startGame } from '../index.ts';
+import { spawnGrunt } from '../kits/index.ts';
+import { stateFor } from './interp.ts';
+
+describe('a kit enemy (parent node, mesh children) spawned during a paused step', () => {
+  it('draws both meshes at the pose it was spawned at', async () => {
+    const g = await startGame(defineGame({ ready() {} }));
+    g.paused = true;
+    const e = spawnGrunt(g.world, 6, -3, 1);
+    g.step(3);
+    const scene = new Scene();
+    scene.add(g.world.root.object3d);
+    const { interp } = stateFor(g.world);
+    interp.apply(0);
+    scene.updateMatrixWorld(true);
+    const meshes: Vector3[] = [];
+    scene.traverseVisible((o) => { if ((o as ThreeMesh).isMesh) meshes.push(new Vector3().setFromMatrixPosition(o.matrixWorld)); });
+    interp.restore();
+    expect(meshes.length).toBe(2);
+    for (const m of meshes) { expect(Math.abs(m.x - e.position.x)).toBeLessThan(1.5); expect(Math.abs(m.z - e.position.z)).toBeLessThan(1.5); }
+    g.dispose();
+  });
+});

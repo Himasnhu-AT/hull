@@ -13,7 +13,7 @@ export interface RenderOptions {
   /**
    * 'auto' (the default) tries WebGPU when the browser has it and the machine's adapter is a real GPU, and otherwise
    * (or when WebGPU fails to start) falls back to WebGL2. The two named values force one backend. A page may also
-   * force one for a test with `?hullBackend=webgl2|webgpu` when this option is left out.
+   * force one for a test with `?hullBackend=webgl2|webgpu` (or the same after a `#`, for servers that refuse a query) when this option is left out.
    */
   backend?: BackendChoice;
   /** A `look/*` id to start with. */
@@ -50,7 +50,7 @@ const factories: Record<BackendName, () => Backend | Promise<Backend>> = {
 export function mountRender(game: Game, el: HTMLElement, opts: RenderOptions = {}): RenderView {
   const problem = opts.onProblem ?? ((m: string) => console.error(`[hull] ${m}`));
   const quality = opts.quality ?? 'medium';
-  const choice = opts.backend ?? choiceFromQuery(globalThis.location?.search ?? '');
+  const choice = opts.backend ?? choiceFromQuery(`${globalThis.location?.search ?? ''}&${(globalThis.location?.hash ?? '').slice(1)}`);
   const order = backendOrder(choice, typeof navigator !== 'undefined' && 'gpu' in navigator);
 
   let canvas: HTMLCanvasElement | null = null;
