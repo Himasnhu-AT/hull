@@ -1,0 +1,143 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:hull:schema:ui-theme",
+  "type": "object",
+  "required": [
+    "kind"
+  ],
+  "properties": {
+    "kind": {
+      "type": "string",
+      "const": "ui-theme"
+    },
+    "note": {
+      "type": "string"
+    },
+    "color": {
+      "type": "object",
+      "properties": {
+        "panel": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$",
+          "x-ui": {
+            "widget": "color",
+            "help": "Background of panels and buttons."
+          }
+        },
+        "text": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$",
+          "x-ui": {
+            "widget": "color",
+            "help": "Main text."
+          }
+        },
+        "muted": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$",
+          "x-ui": {
+            "widget": "color",
+            "help": "Labels and hints."
+          }
+        },
+        "accent": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$",
+          "x-ui": {
+            "widget": "color",
+            "help": "Bars, the primary button, the focus ring."
+          }
+        },
+        "danger": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$",
+          "x-ui": {
+            "widget": "color",
+            "help": "Warnings and low bars."
+          }
+        },
+        "good": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$",
+          "x-ui": {
+            "widget": "color",
+            "help": "Success."
+          }
+        },
+        "line": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$",
+          "x-ui": {
+            "widget": "color",
+            "help": "Borders and bar tracks."
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "type": {
+      "type": "object",
+      "properties": {
+        "family": {
+          "type": "string",
+          "x-ui": {
+            "help": "A CSS font-family list."
+          }
+        },
+        "size": {
+          "type": "number",
+          "minimum": 8,
+          "maximum": 72,
+          "default": 14,
+          "x-ui": {
+            "widget": "slider",
+            "unit": "px",
+            "step": 1
+          }
+        },
+        "labelTracking": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "default": 0.2,
+          "x-ui": {
+            "widget": "dial",
+            "unit": "em",
+            "step": 0.01
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "space": {
+      "type": "object",
+      "properties": {
+        "gutter": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 96,
+          "default": 20,
+          "x-ui": {
+            "widget": "slider",
+            "unit": "px",
+            "step": 1
+          }
+        },
+        "radius": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 48,
+          "default": 2,
+          "x-ui": {
+            "widget": "slider",
+            "unit": "px",
+            "step": 1
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false,
+  "title": "Hull UI theme"
+}

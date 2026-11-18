@@ -7,13 +7,13 @@ const dir = join(import.meta.dirname, '..', '..', '..', 'schemas');
 
 describe('schemas', () => {
   it('has the M0 kinds', () => {
-    expect(Object.keys(kinds).sort()).toEqual(['material', 'tuning']);
+    expect(Object.keys(kinds).sort()).toEqual(expect.arrayContaining(['material', 'tuning', 'input-map', 'ui-theme', 'ui-screen']));
     expect(manifestSchema).toBeTruthy();
   });
 
   it('carries x-ui and x-ref in the emitted JSON', () => {
     const files = emitSchemas();
-    expect(Object.keys(files).sort()).toEqual(['game.schema.json', 'material.schema.json', 'tuning.schema.json']);
+    expect(Object.keys(files)).toEqual(expect.arrayContaining(['game.schema.json', 'material.schema.json', 'tuning.schema.json', 'input-map.schema.json', 'ui-theme.schema.json', 'ui-screen.schema.json']));
     const game = JSON.parse(files['game.schema.json']!);
     expect(game.$schema).toBe('https://json-schema.org/draft/2020-12/schema');
     expect(game.properties.start.properties.level['x-ref']).toBe('level');

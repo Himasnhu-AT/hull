@@ -1,0 +1,1003 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:hull:schema:ui-screen",
+  "type": "object",
+  "required": [
+    "kind",
+    "root"
+  ],
+  "properties": {
+    "kind": {
+      "type": "string",
+      "const": "ui-screen"
+    },
+    "note": {
+      "type": "string"
+    },
+    "pausesGame": {
+      "type": "boolean",
+      "default": false
+    },
+    "root": {
+      "type": "object",
+      "properties": {
+        "panel": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string",
+              "x-ui": {
+                "help": "Literal text, or @key for a line of the strings file."
+              }
+            },
+            "bind": {
+              "type": "string",
+              "x-ui": {
+                "help": "Name of a value the game exposes, e.g. player.hp."
+              }
+            },
+            "max": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "string"
+                }
+              ],
+              "x-ui": {
+                "help": "bar: a number or the name of a value."
+              }
+            },
+            "format": {
+              "type": "string",
+              "x-ui": {
+                "help": "text: a template, {} is the value."
+              }
+            },
+            "primary": {
+              "type": "boolean"
+            },
+            "align": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "const": "top-left"
+                },
+                {
+                  "type": "string",
+                  "const": "top"
+                },
+                {
+                  "type": "string",
+                  "const": "top-right"
+                },
+                {
+                  "type": "string",
+                  "const": "left"
+                },
+                {
+                  "type": "string",
+                  "const": "center"
+                },
+                {
+                  "type": "string",
+                  "const": "right"
+                },
+                {
+                  "type": "string",
+                  "const": "bottom-left"
+                },
+                {
+                  "type": "string",
+                  "const": "bottom"
+                },
+                {
+                  "type": "string",
+                  "const": "bottom-right"
+                }
+              ]
+            },
+            "width": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "x-ui": {
+                "unit": "px"
+              }
+            },
+            "gap": {
+              "type": "number",
+              "minimum": 0,
+              "x-ui": {
+                "unit": "px"
+              }
+            },
+            "src": {
+              "type": "string"
+            },
+            "alt": {
+              "type": "string"
+            },
+            "label": {
+              "type": "string",
+              "x-ui": {
+                "help": "Accessible name when there is no visible text."
+              }
+            },
+            "menu": {
+              "type": "boolean",
+              "x-ui": {
+                "help": "Arrow keys move focus between the buttons inside."
+              }
+            },
+            "visible": {
+              "type": "string",
+              "x-ui": {
+                "help": "Name of a value; the node shows while it is truthy."
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "stack": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string",
+              "x-ui": {
+                "help": "Literal text, or @key for a line of the strings file."
+              }
+            },
+            "bind": {
+              "type": "string",
+              "x-ui": {
+                "help": "Name of a value the game exposes, e.g. player.hp."
+              }
+            },
+            "max": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "string"
+                }
+              ],
+              "x-ui": {
+                "help": "bar: a number or the name of a value."
+              }
+            },
+            "format": {
+              "type": "string",
+              "x-ui": {
+                "help": "text: a template, {} is the value."
+              }
+            },
+            "primary": {
+              "type": "boolean"
+            },
+            "align": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "const": "top-left"
+                },
+                {
+                  "type": "string",
+                  "const": "top"
+                },
+                {
+                  "type": "string",
+                  "const": "top-right"
+                },
+                {
+                  "type": "string",
+                  "const": "left"
+                },
+                {
+                  "type": "string",
+                  "const": "center"
+                },
+                {
+                  "type": "string",
+                  "const": "right"
+                },
+                {
+                  "type": "string",
+                  "const": "bottom-left"
+                },
+                {
+                  "type": "string",
+                  "const": "bottom"
+                },
+                {
+                  "type": "string",
+                  "const": "bottom-right"
+                }
+              ]
+            },
+            "width": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "x-ui": {
+                "unit": "px"
+              }
+            },
+            "gap": {
+              "type": "number",
+              "minimum": 0,
+              "x-ui": {
+                "unit": "px"
+              }
+            },
+            "src": {
+              "type": "string"
+            },
+            "alt": {
+              "type": "string"
+            },
+            "label": {
+              "type": "string",
+              "x-ui": {
+                "help": "Accessible name when there is no visible text."
+              }
+            },
+            "menu": {
+              "type": "boolean",
+              "x-ui": {
+                "help": "Arrow keys move focus between the buttons inside."
+              }
+            },
+            "visible": {
+              "type": "string",
+              "x-ui": {
+                "help": "Name of a value; the node shows while it is truthy."
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "row": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string",
+              "x-ui": {
+                "help": "Literal text, or @key for a line of the strings file."
+              }
+            },
+            "bind": {
+              "type": "string",
+              "x-ui": {
+                "help": "Name of a value the game exposes, e.g. player.hp."
+              }
+            },
+            "max": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "string"
+                }
+              ],
+              "x-ui": {
+                "help": "bar: a number or the name of a value."
+              }
+            },
+            "format": {
+              "type": "string",
+              "x-ui": {
+                "help": "text: a template, {} is the value."
+              }
+            },
+            "primary": {
+              "type": "boolean"
+            },
+            "align": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "const": "top-left"
+                },
+                {
+                  "type": "string",
+                  "const": "top"
+                },
+                {
+                  "type": "string",
+                  "const": "top-right"
+                },
+                {
+                  "type": "string",
+                  "const": "left"
+                },
+                {
+                  "type": "string",
+                  "const": "center"
+                },
+                {
+                  "type": "string",
+                  "const": "right"
+                },
+                {
+                  "type": "string",
+                  "const": "bottom-left"
+                },
+                {
+                  "type": "string",
+                  "const": "bottom"
+                },
+                {
+                  "type": "string",
+                  "const": "bottom-right"
+                }
+              ]
+            },
+            "width": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "x-ui": {
+                "unit": "px"
+              }
+            },
+            "gap": {
+              "type": "number",
+              "minimum": 0,
+              "x-ui": {
+                "unit": "px"
+              }
+            },
+            "src": {
+              "type": "string"
+            },
+            "alt": {
+              "type": "string"
+            },
+            "label": {
+              "type": "string",
+              "x-ui": {
+                "help": "Accessible name when there is no visible text."
+              }
+            },
+            "menu": {
+              "type": "boolean",
+              "x-ui": {
+                "help": "Arrow keys move focus between the buttons inside."
+              }
+            },
+            "visible": {
+              "type": "string",
+              "x-ui": {
+                "help": "Name of a value; the node shows while it is truthy."
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "title": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string",
+              "x-ui": {
+                "help": "Literal text, or @key for a line of the strings file."
+              }
+            },
+            "bind": {
+              "type": "string",
+              "x-ui": {
+                "help": "Name of a value the game exposes, e.g. player.hp."
+              }
+            },
+            "max": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "string"
+                }
+              ],
+              "x-ui": {
+                "help": "bar: a number or the name of a value."
+              }
+            },
+            "format": {
+              "type": "string",
+              "x-ui": {
+                "help": "text: a template, {} is the value."
+              }
+            },
+            "primary": {
+              "type": "boolean"
+            },
+            "align": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "const": "top-left"
+                },
+                {
+                  "type": "string",
+                  "const": "top"
+                },
+                {
+                  "type": "string",
+                  "const": "top-right"
+                },
+                {
+                  "type": "string",
+                  "const": "left"
+                },
+                {
+                  "type": "string",
+                  "const": "center"
+                },
+                {
+                  "type": "string",
+                  "const": "right"
+                },
+                {
+                  "type": "string",
+                  "const": "bottom-left"
+                },
+                {
+                  "type": "string",
+                  "const": "bottom"
+                },
+                {
+                  "type": "string",
+                  "const": "bottom-right"
+                }
+              ]
+            },
+            "width": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "x-ui": {
+                "unit": "px"
+              }
+            },
+            "gap": {
+              "type": "number",
+              "minimum": 0,
+              "x-ui": {
+                "unit": "px"
+              }
+            },
+            "src": {
+              "type": "string"
+            },
+            "alt": {
+              "type": "string"
+            },
+            "label": {
+              "type": "string",
+              "x-ui": {
+                "help": "Accessible name when there is no visible text."
+              }
+            },
+            "menu": {
+              "type": "boolean",
+              "x-ui": {
+                "help": "Arrow keys move focus between the buttons inside."
+              }
+            },
+            "visible": {
+              "type": "string",
+              "x-ui": {
+                "help": "Name of a value; the node shows while it is truthy."
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "text": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string",
+              "x-ui": {
+                "help": "Literal text, or @key for a line of the strings file."
+              }
+            },
+            "bind": {
+              "type": "string",
+              "x-ui": {
+                "help": "Name of a value the game exposes, e.g. player.hp."
+              }
+            },
+            "max": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "string"
+                }
+              ],
+              "x-ui": {
+                "help": "bar: a number or the name of a value."
+              }
+            },
+            "format": {
+              "type": "string",
+              "x-ui": {
+                "help": "text: a template, {} is the value."
+              }
+            },
+            "primary": {
+              "type": "boolean"
+            },
+            "align": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "const": "top-left"
+                },
+                {
+                  "type": "string",
+                  "const": "top"
+                },
+                {
+                  "type": "string",
+                  "const": "top-right"
+                },
+                {
+                  "type": "string",
+                  "const": "left"
+                },
+                {
+                  "type": "string",
+                  "const": "center"
+                },
+                {
+                  "type": "string",
+                  "const": "right"
+                },
+                {
+                  "type": "string",
+                  "const": "bottom-left"
+                },
+                {
+                  "type": "string",
+                  "const": "bottom"
+                },
+                {
+                  "type": "string",
+                  "const": "bottom-right"
+                }
+              ]
+            },
+            "width": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "x-ui": {
+                "unit": "px"
+              }
+            },
+            "gap": {
+              "type": "number",
+              "minimum": 0,
+              "x-ui": {
+                "unit": "px"
+              }
+            },
+            "src": {
+              "type": "string"
+            },
+            "alt": {
+              "type": "string"
+            },
+            "label": {
+              "type": "string",
+              "x-ui": {
+                "help": "Accessible name when there is no visible text."
+              }
+            },
+            "menu": {
+              "type": "boolean",
+              "x-ui": {
+                "help": "Arrow keys move focus between the buttons inside."
+              }
+            },
+            "visible": {
+              "type": "string",
+              "x-ui": {
+                "help": "Name of a value; the node shows while it is truthy."
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "bar": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string",
+              "x-ui": {
+                "help": "Literal text, or @key for a line of the strings file."
+              }
+            },
+            "bind": {
+              "type": "string",
+              "x-ui": {
+                "help": "Name of a value the game exposes, e.g. player.hp."
+              }
+            },
+            "max": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "string"
+                }
+              ],
+              "x-ui": {
+                "help": "bar: a number or the name of a value."
+              }
+            },
+            "format": {
+              "type": "string",
+              "x-ui": {
+                "help": "text: a template, {} is the value."
+              }
+            },
+            "primary": {
+              "type": "boolean"
+            },
+            "align": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "const": "top-left"
+                },
+                {
+                  "type": "string",
+                  "const": "top"
+                },
+                {
+                  "type": "string",
+                  "const": "top-right"
+                },
+                {
+                  "type": "string",
+                  "const": "left"
+                },
+                {
+                  "type": "string",
+                  "const": "center"
+                },
+                {
+                  "type": "string",
+                  "const": "right"
+                },
+                {
+                  "type": "string",
+                  "const": "bottom-left"
+                },
+                {
+                  "type": "string",
+                  "const": "bottom"
+                },
+                {
+                  "type": "string",
+                  "const": "bottom-right"
+                }
+              ]
+            },
+            "width": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "x-ui": {
+                "unit": "px"
+              }
+            },
+            "gap": {
+              "type": "number",
+              "minimum": 0,
+              "x-ui": {
+                "unit": "px"
+              }
+            },
+            "src": {
+              "type": "string"
+            },
+            "alt": {
+              "type": "string"
+            },
+            "label": {
+              "type": "string",
+              "x-ui": {
+                "help": "Accessible name when there is no visible text."
+              }
+            },
+            "menu": {
+              "type": "boolean",
+              "x-ui": {
+                "help": "Arrow keys move focus between the buttons inside."
+              }
+            },
+            "visible": {
+              "type": "string",
+              "x-ui": {
+                "help": "Name of a value; the node shows while it is truthy."
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "button": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string",
+              "x-ui": {
+                "help": "Literal text, or @key for a line of the strings file."
+              }
+            },
+            "bind": {
+              "type": "string",
+              "x-ui": {
+                "help": "Name of a value the game exposes, e.g. player.hp."
+              }
+            },
+            "max": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "string"
+                }
+              ],
+              "x-ui": {
+                "help": "bar: a number or the name of a value."
+              }
+            },
+            "format": {
+              "type": "string",
+              "x-ui": {
+                "help": "text: a template, {} is the value."
+              }
+            },
+            "primary": {
+              "type": "boolean"
+            },
+            "align": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "const": "top-left"
+                },
+                {
+                  "type": "string",
+                  "const": "top"
+                },
+                {
+                  "type": "string",
+                  "const": "top-right"
+                },
+                {
+                  "type": "string",
+                  "const": "left"
+                },
+                {
+                  "type": "string",
+                  "const": "center"
+                },
+                {
+                  "type": "string",
+                  "const": "right"
+                },
+                {
+                  "type": "string",
+                  "const": "bottom-left"
+                },
+                {
+                  "type": "string",
+                  "const": "bottom"
+                },
+                {
+                  "type": "string",
+                  "const": "bottom-right"
+                }
+              ]
+            },
+            "width": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "x-ui": {
+                "unit": "px"
+              }
+            },
+            "gap": {
+              "type": "number",
+              "minimum": 0,
+              "x-ui": {
+                "unit": "px"
+              }
+            },
+            "src": {
+              "type": "string"
+            },
+            "alt": {
+              "type": "string"
+            },
+            "label": {
+              "type": "string",
+              "x-ui": {
+                "help": "Accessible name when there is no visible text."
+              }
+            },
+            "menu": {
+              "type": "boolean",
+              "x-ui": {
+                "help": "Arrow keys move focus between the buttons inside."
+              }
+            },
+            "visible": {
+              "type": "string",
+              "x-ui": {
+                "help": "Name of a value; the node shows while it is truthy."
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "image": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string",
+              "x-ui": {
+                "help": "Literal text, or @key for a line of the strings file."
+              }
+            },
+            "bind": {
+              "type": "string",
+              "x-ui": {
+                "help": "Name of a value the game exposes, e.g. player.hp."
+              }
+            },
+            "max": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "string"
+                }
+              ],
+              "x-ui": {
+                "help": "bar: a number or the name of a value."
+              }
+            },
+            "format": {
+              "type": "string",
+              "x-ui": {
+                "help": "text: a template, {} is the value."
+              }
+            },
+            "primary": {
+              "type": "boolean"
+            },
+            "align": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "const": "top-left"
+                },
+                {
+                  "type": "string",
+                  "const": "top"
+                },
+                {
+                  "type": "string",
+                  "const": "top-right"
+                },
+                {
+                  "type": "string",
+                  "const": "left"
+                },
+                {
+                  "type": "string",
+                  "const": "center"
+                },
+                {
+                  "type": "string",
+                  "const": "right"
+                },
+                {
+                  "type": "string",
+                  "const": "bottom-left"
+                },
+                {
+                  "type": "string",
+                  "const": "bottom"
+                },
+                {
+                  "type": "string",
+                  "const": "bottom-right"
+                }
+              ]
+            },
+            "width": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "x-ui": {
+                "unit": "px"
+              }
+            },
+            "gap": {
+              "type": "number",
+              "minimum": 0,
+              "x-ui": {
+                "unit": "px"
+              }
+            },
+            "src": {
+              "type": "string"
+            },
+            "alt": {
+              "type": "string"
+            },
+            "label": {
+              "type": "string",
+              "x-ui": {
+                "help": "Accessible name when there is no visible text."
+              }
+            },
+            "menu": {
+              "type": "boolean",
+              "x-ui": {
+                "help": "Arrow keys move focus between the buttons inside."
+              }
+            },
+            "visible": {
+              "type": "string",
+              "x-ui": {
+                "help": "Name of a value; the node shows while it is truthy."
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "on": {
+          "type": "object",
+          "patternProperties": {
+            "^.*$": {
+              "type": "string"
+            }
+          }
+        },
+        "children": {
+          "type": "array",
+          "items": {}
+        }
+      },
+      "additionalProperties": false
+    },
+    "states": {
+      "type": "object",
+      "patternProperties": {
+        "^.*$": {
+          "type": "object",
+          "properties": {
+            "mock": {
+              "type": "object",
+              "patternProperties": {
+                "^.*$": {}
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      }
+    }
+  },
+  "additionalProperties": false,
+  "title": "Hull UI screen"
+}

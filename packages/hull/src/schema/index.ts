@@ -1,21 +1,33 @@
 // Every config kind as a TypeBox schema, emitted as JSON Schema into /schemas. M0 kinds: the manifest
 // (hull.json, kind 'game'), tuning and material. Runs in Node and the browser.
+import { inputMapSchema, type InputMap } from './input-map.ts';
 import { materialSchema, type Material } from './material.ts';
 import { manifestSchema, type Manifest } from './manifest.ts';
 import { tuningSchema, type Tuning } from './tuning.ts';
+import { uiScreenSchema, type UiScreenDef } from './ui-screen.ts';
+import { uiThemeSchema, type UiTheme } from './ui-theme.ts';
 
-export { manifestSchema, materialSchema, tuningSchema };
-export type { Manifest, Material, Tuning };
+export { inputMapSchema, manifestSchema, materialSchema, tuningSchema, uiScreenSchema, uiThemeSchema };
+export type { InputMap, Manifest, Material, Tuning, UiScreenDef, UiTheme };
 export * from './ui.ts';
 
 /** Kinds that live under config/<kind>/. The manifest is separate: it is hull.json at the project root. */
-export const kinds: Readonly<Record<string, object>> = { material: materialSchema, tuning: tuningSchema };
+export const kinds: Readonly<Record<string, object>> = {
+  'input-map': inputMapSchema,
+  material: materialSchema,
+  tuning: tuningSchema,
+  'ui-screen': uiScreenSchema,
+  'ui-theme': uiThemeSchema,
+};
 
 /** Value types per kind, so `config.get('tuning', id)` is typed. */
 declare module '../config/types.ts' {
   interface HullKinds {
     tuning: Tuning;
     material: Material;
+    'input-map': InputMap;
+    'ui-screen': UiScreenDef;
+    'ui-theme': UiTheme;
   }
 }
 
