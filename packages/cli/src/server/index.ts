@@ -187,6 +187,8 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
   };
 
   const journal = (c: { target: string; path: string; from: unknown; to: unknown; by: Author }): void => {
+    // A drag ends by sending the value it already set; a write that changes nothing is not a change.
+    if (JSON.stringify(c.from) === JSON.stringify(c.to)) return;
     const change: Change = { at: new Date().toISOString(), by: c.by, target: c.target, path: c.path, from: c.from, to: c.to };
     appendChange(root, change);
     push('journal.added', change);
