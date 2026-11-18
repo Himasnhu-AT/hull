@@ -13,7 +13,7 @@ interface Loadable { afterLoad?(): void }
 const stateOf = (b: object): readonly string[] | undefined => (b.constructor as { state?: readonly string[] }).state;
 // Behaviours are listed through the node's engine-side list: the kits are part of the engine, and this is the one
 // place that needs every behaviour of a node, not one type.
-const behavioursOf = (n: Node): object[] => n._behaviours;
+const behavioursOf = (n: Node): readonly object[] => n.behaviours;
 
 /**
  * Save slots for the nodes in the `save` group: where each is, and the declared `state` of each of its behaviours
