@@ -1,0 +1,157 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:hull:schema:game",
+  "type": "object",
+  "required": [
+    "kind",
+    "id",
+    "title",
+    "entry"
+  ],
+  "properties": {
+    "kind": {
+      "type": "string",
+      "const": "game"
+    },
+    "note": {
+      "type": "string"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*$"
+    },
+    "title": {
+      "type": "string"
+    },
+    "version": {
+      "type": "string"
+    },
+    "entry": {
+      "type": "string"
+    },
+    "step": {
+      "enum": [
+        30,
+        60,
+        120
+      ],
+      "default": 60,
+      "x-ui": {
+        "unit": "Hz",
+        "widget": "segments",
+        "help": "Fixed simulation rate."
+      }
+    },
+    "features": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "audio",
+          "anim",
+          "ui",
+          "vfx",
+          "physics",
+          "saves"
+        ]
+      }
+    },
+    "start": {
+      "type": "object",
+      "properties": {
+        "screen": {
+          "type": "string",
+          "x-ref": "ui-screen",
+          "x-ui": {
+            "widget": "ref"
+          }
+        },
+        "level": {
+          "type": "string",
+          "x-ref": "level",
+          "x-ui": {
+            "widget": "ref"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "systems": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "targets": {
+      "type": "object",
+      "properties": {
+        "web": {
+          "type": "object",
+          "properties": {
+            "singleFile": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false
+        },
+        "desktop": {
+          "type": "object",
+          "properties": {
+            "appId": {
+              "type": "string"
+            },
+            "systems": {
+              "type": "array",
+              "items": {
+                "enum": [
+                  "mac",
+                  "win",
+                  "linux"
+                ]
+              }
+            },
+            "window": {
+              "type": "object",
+              "required": [
+                "width",
+                "height"
+              ],
+              "properties": {
+                "width": {
+                  "type": "number",
+                  "minimum": 1
+                },
+                "height": {
+                  "type": "number",
+                  "minimum": 1
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "budgets": {
+      "type": "object",
+      "properties": {
+        "bundleKb": {
+          "type": "number",
+          "minimum": 0
+        },
+        "frameMsP95": {
+          "type": "number",
+          "minimum": 0
+        },
+        "drawCalls": {
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false,
+  "title": "Hull game manifest"
+}
