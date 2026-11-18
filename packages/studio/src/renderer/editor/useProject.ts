@@ -69,6 +69,7 @@ export function useProject(rpc: RpcClient): ProjectState {
   }, [loadLibrary]);
 
   useEffect(() => {
+    let tuningTimer: ReturnType<typeof setTimeout> | undefined;
     const offs = [
       rpc.onStatus((s) => {
         setStatus(s);
@@ -84,8 +85,9 @@ export function useProject(rpc: RpcClient): ProjectState {
       rpc.on('journal.added', (c) => setJournal((j) => [c, ...j].slice(0, 500))),
       rpc.on('game.report', (r) => setReport(r)),
       rpc.on('problems', (p) => { setProblems(p.problems); refreshLibrary(); }),
-      rpc.on('config.changed', () => refreshLibrary()),
-      rpc.on('config.removed', () => refreshLibrary()),
+      // A tuning file holds a kit block's values: refresh them once edits settle (a drag sends many), so a hand edit or an agent's shows.
+      rpc.on('config.changed', (c) => { refreshLibrary(); if (c.id.startsWith('tuning/')) { clearTimeout(tuningTimer); tuningTimer = setTimeout(loadTunables, 400); } }),
+      rpc.on('config.removed', () => { refreshLibrary(); loadTunables(); }),
       rpc.on('source.changed', () => { loadTunables(); refreshLibrary(); }),
       rpc.on('tunable.changed', (t) => setTunables((list) => list.map((x) => (x.block === t.block && x.key === t.key ? { ...x, value: t.value } : x)))),
     ];
@@ -94,7 +96,7 @@ export function useProject(rpc: RpcClient): ProjectState {
       loadTunables();
       rpc.call('journal.list', { limit: 200 }).then(setJournal, () => {});
     }
-    return () => { offs.forEach((o) => o()); if (timer.current) clearTimeout(timer.current); };
+    return () => { offs.forEach((o) => o()); clearTimeout(tuningTimer); if (timer.current) clearTimeout(timer.current); };
   }, [rpc, loadLibrary, loadTunables, refreshLibrary, log]);
 
   const setTunableLocal = useCallback((block: string, key: string, value: unknown) => {

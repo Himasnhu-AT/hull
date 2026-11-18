@@ -1,7 +1,7 @@
 // The game side of the project protocol. The dev page calls connectDev(game, { url }) once; from then on config and
 // tunable edits made in the app arrive here and are applied to the running game without a reload, and the app sees the
 // game's tick, time and frame rate about four times a second. Dev only: a build never imports this file.
-import { config, setTunable } from '../config/index.ts';
+import { config, setTunable, tuningProblems } from '../config/index.ts';
 import type { Game } from '../core/index.ts';
 import type { ControlOp, ControlShot, ControlState, GameControl, GameReport, Pushes } from './protocol.ts';
 
@@ -80,12 +80,26 @@ export function connectDev(game: Game, opts: { url: string; /** Called for `rest
     }
   };
 
+  // A bad value in config/tuning/<block>.json is skipped (the code value stays); say so once per distinct complaint.
+  const told = new Set<string>();
+  const reportTuning = (): void => {
+    const now = new Set<string>();
+    for (const p of tuningProblems()) {
+      const line = `${p.file}#${p.pointer ?? ''}: ${p.message}`;
+      now.add(line);
+      if (!told.has(line)) log('error', line);
+    }
+    told.clear();
+    for (const l of now) told.add(l);
+  };
+
   const handle = (n: Note): void => {
     switch (n.method) {
       case 'config.changed': {
         const p = n.params as Pushes['config.changed'];
         const r = config.update({ path: p.path, text: p.text });
         for (const problem of r.problems) log('error', `${problem.file}${problem.pointer ?? ''}: ${problem.message}`);
+        reportTuning();
         break;
       }
       case 'config.removed': config.remove((n.params as Pushes['config.removed']).path); break;
@@ -129,7 +143,7 @@ export function connectDev(game: Game, opts: { url: string; /** Called for `rest
   const open = (): void => {
     if (disposed) return;
     ws = new WebSocket(url);
-    ws.onopen = () => { attempt = 0; report(); };
+    ws.onopen = () => { attempt = 0; report(); reportTuning(); };
     ws.onmessage = (e) => {
       try { handle(JSON.parse(String(e.data)) as Note); } catch (err) { log('error', `dev message failed: ${(err as Error).message}`); }
     };

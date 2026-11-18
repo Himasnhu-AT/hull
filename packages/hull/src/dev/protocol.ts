@@ -31,6 +31,8 @@ export interface LibraryItem {
   title: string;
   note?: string;
   problems: number;
+  /** For a tunables block: 'kit' when it is declared by an engine kit rather than the project's own code. */
+  source?: 'code' | 'kit';
 }
 
 /** A tunable as the Inspector sees it: the dev-runtime info plus where its literal is in the source. */
@@ -44,6 +46,12 @@ export interface TunableWire {
   file: string;
   line: number;
   col: number;
+  /** 'code': the literal is in the project's src/ and edits rewrite it. 'kit': a kit's block in the engine; the project's values live in config/tuning/<block>.json. Absent means 'code'. */
+  source?: 'code' | 'kit';
+  /** Kit tunables: the value in the kit's code, which the reset arrow returns to by removing the key from the file. `value` is what the project uses now. */
+  initial?: unknown;
+  /** Kit tunables: the file that holds the project's values, e.g. 'config/tuning/third-person.json'. */
+  overrides?: string;
 }
 
 export interface WriteResult {

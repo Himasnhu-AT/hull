@@ -45,6 +45,8 @@ export interface ConfigRegistry {
   has(id: string): boolean;
   /** Ids of one kind, relative to the kind, sorted. */
   ids(kind: string): readonly string[];
+  /** Called after every load, update or removal that changed the registry. Returns an unsubscribe. */
+  onChange(fn: () => void): () => void;
   /** Full id, e.g. 'sound/sword/hit'. Returns an unsubscribe. */
   watch(id: string, fn: (now: unknown) => void): () => void;
   /** Source text for .hull/gen/ids.ts. */
