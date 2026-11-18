@@ -127,6 +127,8 @@ describe('idsModule', () => {
     expect(text).toContain("declare module 'hull' {\n  interface HullIds {");
     expect(text).toContain("    material: 'steel';\n");
     expect(text).toContain("    tuning: 'jump' | 'run';\n");
+    // Kind names with a dash must be quoted, or every project's ids.ts fails to parse.
+    expect(text).toContain("    'input-map': never;\n");
   });
 
   it('uses never for a kind with no files', () => {
