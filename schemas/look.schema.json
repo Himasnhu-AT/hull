@@ -1,0 +1,254 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:hull:schema:look",
+  "type": "object",
+  "required": [
+    "kind"
+  ],
+  "properties": {
+    "kind": {
+      "type": "string",
+      "const": "look"
+    },
+    "note": {
+      "type": "string"
+    },
+    "sky": {
+      "type": "object",
+      "properties": {
+        "color": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$",
+          "default": "#14161b",
+          "x-ui": {
+            "widget": "color",
+            "help": "A flat sky. Leave out when the three gradient colours below are set."
+          }
+        },
+        "horizon": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$",
+          "default": "#a9c6dc",
+          "x-ui": {
+            "widget": "color"
+          }
+        },
+        "mid": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$",
+          "default": "#8fb2d6",
+          "x-ui": {
+            "widget": "color"
+          }
+        },
+        "zenith": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$",
+          "default": "#3d6aa8",
+          "x-ui": {
+            "widget": "color"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "fog": {
+      "type": "object",
+      "required": [
+        "color"
+      ],
+      "properties": {
+        "color": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$",
+          "default": "#a9c6dc",
+          "x-ui": {
+            "widget": "color"
+          }
+        },
+        "near": {
+          "type": "number",
+          "minimum": 0,
+          "x-ui": {
+            "unit": "m",
+            "help": "Linear fog starts here. Use near and far, or density."
+          }
+        },
+        "far": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "x-ui": {
+            "unit": "m"
+          }
+        },
+        "density": {
+          "type": "number",
+          "minimum": 0,
+          "x-ui": {
+            "step": 0.0005,
+            "help": "Exponential fog. Wins over near and far when set."
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "ambient": {
+      "type": "object",
+      "properties": {
+        "color": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$",
+          "default": "#ffffff",
+          "x-ui": {
+            "widget": "color"
+          }
+        },
+        "intensity": {
+          "type": "number",
+          "minimum": 0,
+          "default": 0.6,
+          "x-ui": {
+            "widget": "slider",
+            "step": 0.05
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "sun": {
+      "type": "object",
+      "properties": {
+        "color": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$",
+          "default": "#ffffff",
+          "x-ui": {
+            "widget": "color"
+          }
+        },
+        "strength": {
+          "type": "number",
+          "minimum": 0,
+          "default": 2.2,
+          "x-ui": {
+            "widget": "slider",
+            "step": 0.05
+          }
+        },
+        "elevationDeg": {
+          "type": "number",
+          "minimum": -90,
+          "maximum": 90,
+          "default": 45,
+          "x-ui": {
+            "widget": "dial",
+            "unit": "deg"
+          }
+        },
+        "azimuthDeg": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 360,
+          "default": 143,
+          "x-ui": {
+            "widget": "dial",
+            "unit": "deg",
+            "help": "Compass bearing of the sun: 0 is -Z, 90 is +X."
+          }
+        },
+        "shadows": {
+          "type": "boolean",
+          "default": false
+        },
+        "shadowRange": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "default": 40,
+          "x-ui": {
+            "unit": "m",
+            "help": "Half the width of the shadowed area around the camera."
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "exposure": {
+      "type": "number",
+      "minimum": 0,
+      "default": 1,
+      "x-ui": {
+        "widget": "slider",
+        "step": 0.05
+      }
+    },
+    "toneMapping": {
+      "anyOf": [
+        {
+          "type": "string",
+          "const": "none"
+        },
+        {
+          "type": "string",
+          "const": "linear"
+        },
+        {
+          "type": "string",
+          "const": "reinhard"
+        },
+        {
+          "type": "string",
+          "const": "cineon"
+        },
+        {
+          "type": "string",
+          "const": "aces"
+        },
+        {
+          "type": "string",
+          "const": "agx"
+        },
+        {
+          "type": "string",
+          "const": "neutral"
+        }
+      ],
+      "default": "none",
+      "x-ui": {
+        "widget": "select"
+      }
+    },
+    "post": {
+      "type": "object",
+      "properties": {
+        "bloom": {
+          "type": "number",
+          "minimum": 0
+        },
+        "contrast": {
+          "type": "number",
+          "minimum": 0
+        },
+        "saturation": {
+          "type": "number",
+          "minimum": 0
+        },
+        "vignette": {
+          "type": "number",
+          "minimum": 0
+        },
+        "grain": {
+          "type": "number",
+          "minimum": 0
+        },
+        "speedBlur": {
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "description": "Not drawn yet."
+    }
+  },
+  "additionalProperties": false,
+  "title": "Hull look"
+}
