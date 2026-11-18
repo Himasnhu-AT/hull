@@ -1,5 +1,8 @@
 // Every config kind as a TypeBox schema, emitted as JSON Schema into /schemas. M0 kinds: the manifest
 // (hull.json, kind 'game'), tuning and material. Runs in Node and the browser.
+import { animGraphSchema, type AnimGraph } from './anim-graph.ts';
+import { animSetSchema, type AnimSet } from './anim-set.ts';
+import { characterSchema, type Character } from './character.ts';
 import { lookSchema, type Look } from './look.ts';
 import { inputMapSchema, type InputMap } from './input-map.ts';
 import { materialSchema, type Material } from './material.ts';
@@ -11,12 +14,15 @@ import { uiScreenSchema, type UiScreenDef } from './ui-screen.ts';
 import { uiThemeSchema, type UiTheme } from './ui-theme.ts';
 import { vfxSchema, type Vfx } from './vfx.ts';
 
-export { inputMapSchema, lookSchema, manifestSchema, materialSchema, mixerSchema, soundSchema, tuningSchema, uiScreenSchema, uiThemeSchema, vfxSchema };
-export type { InputMap, Look, Manifest, Material, Mixer, Sound, Tuning, UiScreenDef, UiTheme, Vfx };
+export { animGraphSchema, animSetSchema, characterSchema, inputMapSchema, lookSchema, manifestSchema, materialSchema, mixerSchema, soundSchema, tuningSchema, uiScreenSchema, uiThemeSchema, vfxSchema };
+export type { AnimGraph, AnimSet, Character, InputMap, Look, Manifest, Material, Mixer, Sound, Tuning, UiScreenDef, UiTheme, Vfx };
 export * from './ui.ts';
 
 /** Kinds that live under config/<kind>/. The manifest is separate: it is hull.json at the project root. */
 export const kinds: Readonly<Record<string, object>> = {
+  'anim-graph': animGraphSchema,
+  'anim-set': animSetSchema,
+  character: characterSchema,
   'input-map': inputMapSchema,
   look: lookSchema,
   material: materialSchema,
@@ -40,6 +46,9 @@ declare module '../config/types.ts' {
     'ui-screen': UiScreenDef;
     'ui-theme': UiTheme;
     vfx: Vfx;
+    character: Character;
+    'anim-set': AnimSet;
+    'anim-graph': AnimGraph;
   }
 }
 

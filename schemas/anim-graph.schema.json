@@ -1,0 +1,290 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:hull:schema:anim-graph",
+  "type": "object",
+  "required": [
+    "kind",
+    "layers"
+  ],
+  "properties": {
+    "kind": {
+      "type": "string",
+      "const": "anim-graph"
+    },
+    "note": {
+      "type": "string"
+    },
+    "params": {
+      "type": "object",
+      "patternProperties": {
+        "^.*$": {
+          "type": "object",
+          "required": [
+            "type"
+          ],
+          "properties": {
+            "type": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "const": "number"
+                },
+                {
+                  "type": "string",
+                  "const": "boolean"
+                },
+                {
+                  "type": "string",
+                  "const": "trigger"
+                }
+              ],
+              "x-ui": {
+                "widget": "segments"
+              }
+            },
+            "default": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "boolean"
+                }
+              ]
+            },
+            "min": {
+              "type": "number"
+            },
+            "max": {
+              "type": "number"
+            }
+          },
+          "additionalProperties": false
+        }
+      }
+    },
+    "layers": {
+      "type": "object",
+      "patternProperties": {
+        "^.*$": {
+          "type": "object",
+          "required": [
+            "start",
+            "states"
+          ],
+          "properties": {
+            "mask": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "x-ui": {
+                "help": "Bones this layer moves, with everything below them."
+              }
+            },
+            "additive": {
+              "type": "boolean",
+              "default": false
+            },
+            "weight": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1,
+              "default": 1
+            },
+            "start": {
+              "type": "string"
+            },
+            "states": {
+              "type": "object",
+              "patternProperties": {
+                "^.*$": {
+                  "type": "object",
+                  "properties": {
+                    "clip": {
+                      "type": "string",
+                      "x-ui": {
+                        "help": "Name of a clip in the anim-set."
+                      }
+                    },
+                    "blend": {
+                      "type": "object",
+                      "required": [
+                        "by",
+                        "points"
+                      ],
+                      "properties": {
+                        "by": {
+                          "type": "string",
+                          "x-ui": {
+                            "help": "A number parameter."
+                          }
+                        },
+                        "points": {
+                          "type": "object",
+                          "patternProperties": {
+                            "^-?[0-9]+(\\.[0-9]+)?$": {
+                              "type": "string"
+                            }
+                          },
+                          "x-ui": {
+                            "help": "Parameter value to clip."
+                          }
+                        }
+                      },
+                      "additionalProperties": false
+                    },
+                    "speedFrom": {
+                      "type": "string",
+                      "x-ui": {
+                        "help": "A number parameter (ground speed). Playback is scaled so the feet match it; the rest is foot slide."
+                      }
+                    },
+                    "speed": {
+                      "type": "number",
+                      "exclusiveMinimum": 0,
+                      "default": 1
+                    },
+                    "exit": {
+                      "type": "string",
+                      "x-ui": {
+                        "help": "State to go to when a clip that plays once has finished."
+                      }
+                    },
+                    "exitBlend": {
+                      "type": "number",
+                      "minimum": 0,
+                      "default": 0.1,
+                      "x-ui": {
+                        "unit": "s"
+                      }
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              }
+            },
+            "transitions": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "from",
+                  "to"
+                ],
+                "properties": {
+                  "from": {
+                    "type": "string",
+                    "x-ui": {
+                      "help": "A state name, or * for any."
+                    }
+                  },
+                  "to": {
+                    "type": "string"
+                  },
+                  "when": {
+                    "type": "string"
+                  },
+                  "blend": {
+                    "type": "number",
+                    "minimum": 0,
+                    "default": 0.15,
+                    "x-ui": {
+                      "unit": "s"
+                    }
+                  },
+                  "after": {
+                    "type": "number",
+                    "minimum": 0,
+                    "x-ui": {
+                      "unit": "s",
+                      "help": "Not before this long in the state."
+                    }
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      }
+    },
+    "ik": {
+      "type": "object",
+      "properties": {
+        "feet": {
+          "type": "object",
+          "required": [
+            "enabled"
+          ],
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "default": true
+            },
+            "maxStep": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "default": 0.35,
+              "x-ui": {
+                "unit": "m",
+                "help": "Most a foot is moved to meet the ground, for a 1.78 m body; scales with height."
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "look": {
+          "type": "object",
+          "required": [
+            "enabled"
+          ],
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "default": true
+            },
+            "weights": {
+              "type": "object",
+              "patternProperties": {
+                "^.*$": {
+                  "type": "number",
+                  "minimum": 0
+                }
+              },
+              "x-ui": {
+                "help": "Bone to its share of the turn, base to tip."
+              }
+            },
+            "yawDeg": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 180,
+              "default": 80
+            },
+            "pitchDeg": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 90,
+              "default": 45
+            },
+            "speed": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "default": 8,
+              "x-ui": {
+                "unit": "1/s",
+                "help": "How fast the look weight follows."
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false,
+  "title": "Hull animation graph"
+}

@@ -1,0 +1,442 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:hull:schema:character",
+  "type": "object",
+  "required": [
+    "kind",
+    "body"
+  ],
+  "properties": {
+    "kind": {
+      "type": "string",
+      "const": "character"
+    },
+    "note": {
+      "type": "string"
+    },
+    "body": {
+      "type": "object",
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "type": {
+          "anyOf": [
+            {
+              "type": "string",
+              "const": "generated"
+            },
+            {
+              "type": "string",
+              "const": "gltf"
+            }
+          ],
+          "default": "generated",
+          "x-ui": {
+            "widget": "segments"
+          }
+        },
+        "recipe": {
+          "anyOf": [
+            {
+              "type": "string",
+              "const": "humanoid"
+            },
+            {
+              "type": "string",
+              "const": "custom"
+            }
+          ],
+          "default": "humanoid",
+          "x-ui": {
+            "widget": "segments",
+            "help": "custom uses only the bones and parts listed here."
+          }
+        },
+        "proportions": {
+          "type": "object",
+          "properties": {
+            "height": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "maximum": 200,
+              "default": 1.78,
+              "x-ui": {
+                "unit": "m",
+                "step": 0.01,
+                "help": "Top of the head above the floor. A 15 m titan is just a bigger number."
+              }
+            },
+            "shoulders": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "x-ui": {
+                "unit": "m",
+                "step": 0.01,
+                "help": "Shoulder width. Default: 0.247 of the height."
+              }
+            },
+            "legs": {
+              "type": "number",
+              "minimum": 0.3,
+              "maximum": 0.7,
+              "default": 0.52,
+              "x-ui": {
+                "widget": "slider",
+                "step": 0.01,
+                "help": "Hip height as a fraction of the height."
+              }
+            },
+            "head": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "x-ui": {
+                "unit": "m",
+                "step": 0.01,
+                "help": "Head height. Default: 0.129 of the height."
+              }
+            },
+            "arms": {
+              "type": "number",
+              "minimum": 0.2,
+              "maximum": 0.6,
+              "default": 0.37,
+              "x-ui": {
+                "widget": "slider",
+                "step": 0.01,
+                "help": "Shoulder to fingertip, as a fraction of the height."
+              }
+            },
+            "build": {
+              "type": "number",
+              "minimum": 0.4,
+              "maximum": 2.5,
+              "default": 1,
+              "x-ui": {
+                "widget": "slider",
+                "step": 0.05,
+                "help": "Thickness of the limbs and torso."
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "bones": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "name",
+              "offset"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "parent": {
+                "type": "string",
+                "x-ui": {
+                  "help": "Name of an earlier bone. Leave out for a root."
+                }
+              },
+              "offset": {
+                "type": "array",
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "minItems": 3,
+                "maxItems": 3,
+                "items": false,
+                "x-ui": {
+                  "widget": "vec3"
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          "x-ui": {
+            "help": "Custom recipe: parents before children."
+          }
+        },
+        "parts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "bone",
+              "shape"
+            ],
+            "properties": {
+              "bone": {
+                "type": "string",
+                "minLength": 1
+              },
+              "shape": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "const": "limb"
+                  },
+                  {
+                    "type": "string",
+                    "const": "box"
+                  },
+                  {
+                    "type": "string",
+                    "const": "sphere"
+                  }
+                ],
+                "x-ui": {
+                  "widget": "segments"
+                }
+              },
+              "material": {
+                "type": "string",
+                "x-ui": {
+                  "help": "A key of \"materials\" on this character."
+                }
+              },
+              "color": {
+                "type": "string",
+                "pattern": "^#[0-9a-fA-F]{6}$",
+                "x-ui": {
+                  "widget": "color",
+                  "help": "Used when there is no material."
+                }
+              },
+              "from": {
+                "type": "array",
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "minItems": 3,
+                "maxItems": 3,
+                "items": false,
+                "x-ui": {
+                  "widget": "vec3"
+                }
+              },
+              "to": {
+                "type": "array",
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "minItems": 3,
+                "maxItems": 3,
+                "items": false,
+                "x-ui": {
+                  "widget": "vec3"
+                }
+              },
+              "radius": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "radiusEnd": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "center": {
+                "type": "array",
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "minItems": 3,
+                "maxItems": 3,
+                "items": false,
+                "x-ui": {
+                  "widget": "vec3"
+                }
+              },
+              "size": {
+                "type": "array",
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "minItems": 3,
+                "maxItems": 3,
+                "items": false,
+                "x-ui": {
+                  "widget": "vec3"
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          "x-ui": {
+            "help": "Added to the humanoid recipe, or the whole body for custom."
+          }
+        },
+        "scale": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 100,
+          "default": 1,
+          "x-ui": {
+            "help": "Uniform multiplier on every length."
+          }
+        },
+        "file": {
+          "type": "string",
+          "x-ui": {
+            "help": "gltf only."
+          }
+        },
+        "joints": {
+          "type": "object",
+          "patternProperties": {
+            "^.*$": {
+              "type": "string"
+            }
+          },
+          "x-ui": {
+            "help": "gltf only: engine joint name to the model's."
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "materials": {
+      "type": "object",
+      "patternProperties": {
+        "^.*$": {
+          "type": "string",
+          "x-ref": "material",
+          "x-ui": {
+            "widget": "ref"
+          }
+        }
+      },
+      "x-ui": {
+        "help": "Roles used by the humanoid recipe: skin, cloth, metal, boots."
+      }
+    },
+    "sockets": {
+      "type": "object",
+      "patternProperties": {
+        "^.*$": {
+          "type": "object",
+          "required": [
+            "joint"
+          ],
+          "properties": {
+            "joint": {
+              "type": "string"
+            },
+            "offset": {
+              "type": "array",
+              "prefixItems": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "minItems": 3,
+              "maxItems": 3,
+              "items": false,
+              "x-ui": {
+                "widget": "vec3"
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      }
+    },
+    "collider": {
+      "type": "object",
+      "required": [
+        "shape"
+      ],
+      "properties": {
+        "shape": {
+          "anyOf": [
+            {
+              "type": "string",
+              "const": "capsule"
+            },
+            {
+              "type": "string",
+              "const": "box"
+            },
+            {
+              "type": "string",
+              "const": "sphere"
+            }
+          ]
+        },
+        "radius": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "height": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "animSet": {
+      "type": "string",
+      "x-ref": "anim-set",
+      "x-ui": {
+        "widget": "ref"
+      }
+    },
+    "animGraph": {
+      "type": "string",
+      "x-ref": "anim-graph",
+      "x-ui": {
+        "widget": "ref"
+      }
+    }
+  },
+  "additionalProperties": false,
+  "title": "Hull character"
+}

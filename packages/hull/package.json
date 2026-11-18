@@ -8,6 +8,7 @@
     "./render": "./src/render/index.ts",
     "./vfx": "./src/vfx/index.ts",
     "./schema": "./src/schema/index.ts",
+    "./anim": "./src/anim/index.ts",
     "./audio": "./src/audio/index.ts",
     "./input": "./src/input/index.ts",
     "./ui": "./src/ui/index.ts",
