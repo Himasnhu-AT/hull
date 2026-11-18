@@ -213,6 +213,8 @@ export interface Methods {
   'review.set': { params: { key: string; state: ReviewState; note?: string; author?: Author }; result: { ok: boolean; problems: Problem[]; entry?: ReviewEntry } };
   'review.note': { params: { key: string; note: string; author?: Author }; result: { ok: boolean; problems: Problem[]; entry?: ReviewEntry } };
   /** Runs a tool from the registry: 'check', 'test', 'build'. */
+  /** The server's problem state: config problems plus authorship problems (what the `problems` push carries). */
+  'problems.list': { params: Record<string, never>; result: Problem[] };
   'tool.call': { params: { name: string; input?: unknown }; result: { ok: boolean; output: unknown; problems: Problem[] } };
 }
 

@@ -8,6 +8,8 @@ export interface ToolContext {
   author: string;
   /** The running project server, when the tool is called from inside one (the app, or `hull dev`). Tools that need a game start their own otherwise. */
   server?: { url: string; gameUrl: string };
+  /** The project's server, attached or started in-process on first use. Method tools (config.set, game.run, ...) call through it. */
+  project?: { call(method: string, params: unknown): Promise<unknown> };
   log(line: string): void;
   signal: AbortSignal;
 }
@@ -16,6 +18,8 @@ export interface ToolContext {
 export interface CliShape {
   args?: { name: string; description: string; optional?: boolean }[];
   options?: { name: string; flags: string; description: string; default?: string }[];
+  /** Turns the words (all strings) into the input object, for inputs that are not flat strings. */
+  toInput?(words: Record<string, unknown>): Record<string, unknown>;
 }
 
 export interface ToolDef<I, O> {

@@ -15,6 +15,7 @@ import { BOOT_ID, bootSource, DEV_PAGE } from './boot.ts';
 import { setJsonPointer, valueAtPointer } from './jsonEdit.ts';
 import { expGames } from '../history/expServer.ts';
 import { History } from '../history/history.ts';
+import { removeServerFile, writeServerFile } from './link.ts';
 import { appendChange, readJournal } from './journal.ts';
 import { listReview, noteReview, setReview } from '../review/store.ts';
 import { findTunables, rewriteTunable, type FoundTunable } from './tsTunables.ts';
@@ -83,6 +84,17 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
     renameSync(tmp, abs);
   };
   let problems: Problem[] = [];
+  // AI changes over values the person set (history/authors.ts). Kept apart from `problems`: a config file's own
+  // problems must not change when history does, and config.set judges a write only against the file's own problems.
+  let authorship: Problem[] = [];
+  let pushedProblems = '';
+  const allProblems = (): Problem[] => [...problems, ...authorship];
+  const pushProblems = (): void => {
+    const now = JSON.stringify(allProblems());
+    if (now === pushedProblems) return;
+    pushedProblems = now;
+    push('problems', { problems: allProblems() }, 'studio');
+  };
 
   // `exp` picks which games hear a push: the project's own (undefined), one experiment's, or every game ('*').
   const pushTo = (role: Client['role'] | 'all', method: PushName, params: unknown, exp?: string): void => {
@@ -113,9 +125,8 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
     const registry = createRegistry();
     const r = registry.load(files);
     writeIds(root, registry.idsModule());
-    const before = JSON.stringify(problems);
     problems = r.problems;
-    if (JSON.stringify(problems) !== before) push('problems', { problems }, 'studio');
+    pushProblems();
   };
   revalidate();
 
@@ -172,9 +183,16 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
   // The history store: changes are recorded after a burst of edits goes quiet; experiments get their own pages.
   hist = await History.open({
     root, quietMs: opts.historyQuietMs, log, games,
-    onAdded: (c) => push('history.added', c, 'studio'),
+    onAdded: (c) => {
+      push('history.added', c, 'studio');
+      // A change may add or clear an authorship problem; the app learns it from the problem state, not by running `check`.
+      void hist.authorshipProblems().then((a) => { authorship = a; pushProblems(); }).catch((e) => log(`authorship: ${(e as Error).message}`));
+    },
     onExp: (name, change, exp) => push('exp.changed', { name, change, exp }, 'studio'),
   });
+
+  authorship = await hist.authorshipProblems().catch(() => []);
+  pushedProblems = JSON.stringify(allProblems());
 
   const invalidateBoot = (): void => {
     const mod = vite.moduleGraph.getModuleById(`\0${BOOT_ID}`);
@@ -280,7 +298,8 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
     writeWhole(abs, r.text);
     hist.touch(by);
     journal({ target: `tunables:${p.block}`, path: p.key, from: t.value, to: p.value, by: p.author ?? 'you' });
-    push('tunable.changed', { block: p.block, key: p.key, value: p.value }, 'game');
+    // Studios hear it too: an edit by an agent over MCP must move the Inspector's dial, not only the running game.
+    push('tunable.changed', { block: p.block, key: p.key, value: p.value }, 'all');
     return { ok: true, problems: [] };
   };
 
@@ -362,12 +381,13 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
     'review.set': (p) => reviewed(setReview(root, { ...p, author: p.author ?? 'you' })),
     'review.note': (p) => reviewed(noteReview(root, { ...p, author: p.author ?? 'you' })),
     'game.control': (p: GameControl) => { push('game.control', p, 'game', '*'); return {}; },
+    'problems.list': () => allProblems(),
     'tool.call': async (p) => {
       // Checks read the history's authorship record, so what is waiting is recorded first.
       await hist.flush();
       const tool = tools.find((t) => t.name === p.name && t.name !== 'dev');
       if (!tool) throw new RpcError(-32602, `there is no tool "${p.name}" (have: ${tools.filter((t) => t.name !== 'dev').map((t) => t.name).join(', ')})`);
-      const out = await tool.run({ root, author: 'you', server: { url: urls.ws, gameUrl: urls.http }, log: (line) => push('log', { level: 'info', message: line, source: 'tool' }, 'studio'), signal: new AbortController().signal }, p.input ?? {});
+      const out = await tool.run({ root, author: 'you', project: { call: (m, params) => Promise.resolve((methods[m as MethodName] as (x: unknown) => unknown)(params)) }, server: { url: urls.ws, gameUrl: urls.http }, log: (line) => push('log', { level: 'info', message: line, source: 'tool' }, 'studio'), signal: new AbortController().signal }, p.input ?? {});
       const probs = (out as { problems?: Problem[] } | null)?.problems ?? [];
       return { ok: (out as { ok?: boolean } | null)?.ok ?? probs.length === 0, output: out, problems: probs };
     },
@@ -454,11 +474,15 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
   vite.watcher.add([join(root, 'config'), join(root, 'src'), join(root, 'assets'), join(root, MANIFEST)]);
   mkdirSync(join(root, '.hull'), { recursive: true });
   log(`project server for ${root}: ${urls.http}`);
+  // Anything else that wants this project (hull mcp, the command line, a second app window) attaches to this server
+  // rather than starting another: two servers would fight over writes and watchers.
+  writeServerFile(root, { url: urls.ws, gameUrl: urls.http, pid: process.pid });
 
   return {
     url: urls.ws,
     gameUrl: urls.http,
     async close() {
+      removeServerFile(root, process.pid);
       for (const c of clients) c.ws.close();
       wss.close();
       await hist.close();
