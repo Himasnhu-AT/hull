@@ -112,7 +112,7 @@ export function Launcher({ app, onOpen, startError }: { app: HullApp; onOpen(p: 
                 <label className="lab">Name<input className="field-in" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="My Game" autoFocus /></label>
                 <div className="lab">Where
                   <div className="where">
-                    <span className="path" title={parent ?? ''}><bdo dir="ltr">{parent ?? 'Choose a folder'}</bdo></span>
+                    <span className={`path${parent ? ' set' : ''}`} title={parent ?? ''}><bdo dir="ltr">{parent ?? 'Choose a folder'}</bdo></span>
                     <button type="button" className="btn" onClick={() => void chooseWhere()} style={{ height: 32 }}>Choose</button>
                   </div>
                 </div>

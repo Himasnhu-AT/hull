@@ -350,7 +350,8 @@ textarea.field-in { height: auto; min-height: 76px; padding: 6px 8px; font-famil
 .lab { display: flex; flex-direction: column; gap: 6px; font-size: 12px; font-weight: 600; }
 .lab .field-in { height: 32px; font-weight: 400; font-size: 13px; }
 .where { display: flex; gap: 8px; align-items: center; }
-.where .path { flex: 1; min-width: 0; height: 32px; border-radius: 6px; border: 1px solid var(--line); background: var(--field); display: flex; align-items: center; padding: 0 10px; font-family: var(--mono); font-size: 11.5px; color: var(--muted); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; direction: rtl; text-align: left; }
+.where .path { flex: 1; min-width: 0; height: 32px; border-radius: 6px; border: 1px solid var(--line); background: var(--field); display: flex; align-items: center; padding: 0 10px; font-family: var(--mono); font-size: 11.5px; color: var(--muted); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.where .path.set { direction: rtl; text-align: left; }
 .note-err { color: var(--danger); font-size: 12.5px; line-height: 1.45; border: 1px solid color-mix(in srgb, var(--danger) 45%, transparent); border-radius: 8px; padding: 8px 10px; background: color-mix(in srgb, var(--danger) 8%, transparent); user-select: text; }
 .skeleton { height: 40px; border-radius: 10px; background: linear-gradient(90deg, var(--panel) 0%, var(--panel2) 50%, var(--panel) 100%); background-size: 200% 100%; animation: shimmer 1.4s linear infinite; }
 

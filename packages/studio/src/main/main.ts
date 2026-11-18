@@ -9,7 +9,10 @@ import { createHost } from './host.ts';
 // Dev only: lets a test driver (agent-browser) attach to the window.
 if (process.env['HULL_CDP_PORT'] && !app.isPackaged) app.commandLine.appendSwitch('remote-debugging-port', process.env['HULL_CDP_PORT']);
 
-const here =dirname(fileURLToPath(import.meta.url));
+// Lets tests keep recents (and the rest of userData) somewhere disposable.
+if (process.env['HULL_USER_DATA']) app.setPath('userData', process.env['HULL_USER_DATA']);
+
+const here = dirname(fileURLToPath(import.meta.url));
 const host = createHost({ dataDir: app.getPath('userData'), log: (l) => console.log(`[hull] ${l}`) });
 let win: BrowserWindow | null = null;
 
