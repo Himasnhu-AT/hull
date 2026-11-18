@@ -89,7 +89,7 @@ export function mountUi(game: Game, el: HTMLElement, theme?: string): UiView {
     if (typeof t === 'string') {
       const id = t.startsWith('ui-theme/') ? t : `ui-theme/${t}`;
       if (config.has(id)) {
-        paint(config.get('ui-theme', id.slice('ui-theme/'.length)));
+        paint(config.lookup('ui-theme', id.slice('ui-theme/'.length)));
         themeOff = config.watch(id, (now) => paint(now as UiTheme));
       } else paint(undefined);
     } else paint(t);
@@ -117,7 +117,7 @@ export function mountUi(game: Game, el: HTMLElement, theme?: string): UiView {
         ? Array.from(this.panel.el.querySelectorAll('button')).indexOf(doc.activeElement as HTMLButtonElement) : -1;
       this.panel.clear();
       if (!config.has(this.id)) throw new Error(`${this.id}: there is no such ui-screen in config/`);
-      const def = config.get('ui-screen', this.id.slice('ui-screen/'.length)) as UiScreenDef;
+      const def = config.lookup('ui-screen', this.id.slice('ui-screen/'.length)) as UiScreenDef;
       const mock = def.states?.[this.opts.state ?? 'default']?.mock ?? {};
       const env: ScreenEnv = {
         vm: this.vm,
