@@ -28,24 +28,23 @@ export function writeIds(root: string, source: string): void {
 /** The part of a manifest the CLI needs; SCHEMAS section 2 has the rest. */
 export interface ManifestInfo { entry: string; step?: number; title?: string }
 
-// config adds checkManifest to its index; until that merges, reach it through a narrow type.
-type CheckManifest = (src: ConfigSource) => { value?: ManifestInfo; problems: Problem[] };
-
 /** Validates hull.json. Returns the manifest when it is usable. */
 export async function loadManifest(root: string): Promise<{ value?: ManifestInfo; problems: Problem[] }> {
   const manifest = readManifest(root);
   if (!manifest) return { problems: [{ file: 'hull.json', message: 'hull.json not found: is this a Hull project?', rule: 'parse' }] };
-  const mod = (await import('hull')) as unknown as { checkManifest: CheckManifest };
-  return mod.checkManifest(manifest);
+  const { checkManifest } = await import('hull');
+  return checkManifest(manifest);
 }
 
 /** Reads the project's config and manifest, validates them, and refreshes the generated ids. */
 export async function checkConfig(root: string): Promise<Problem[]> {
   // Imported late so the pure parts of this package can be tested without the engine behind them.
   const { createRegistry } = await import('hull');
-  const problems = [...(await loadManifest(root)).problems];
+  const manifest = readManifest(root);
+  if (!manifest) return [{ file: 'hull.json', message: 'hull.json not found: is this a Hull project?', rule: 'parse' }];
+  // The manifest goes through the registry with the rest, so its references (start.level, start.screen) resolve.
   const registry = createRegistry();
-  const result = registry.load(readConfigFiles(root));
+  const result = registry.load([manifest, ...readConfigFiles(root)]);
   writeIds(root, registry.idsModule());
-  return [...problems, ...result.problems];
+  return result.problems;
 }

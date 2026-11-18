@@ -8,7 +8,9 @@ const MANIFEST = 'hull.json';
 const PREFIX = 'config/';
 
 interface Entry { path: string; kind: string; id: string; fullId: string; value: unknown; refs: RefUse[]; refPos: (p: string) => { line: number; col: number } }
-interface Checked { entry?: Entry; manifest?: { value: Manifest; refs: RefUse[]; refPos: Entry['refPos'] }; problems: Problem[] }
+// `loose` carries the references of a file that failed its schema, so one run reports a bad field and a missing id
+// together instead of making the author fix them one at a time.
+interface Checked { entry?: Entry; manifest?: { value: Manifest; refs: RefUse[]; refPos: Entry['refPos'] }; loose?: { refs: RefUse[]; refPos: Entry['refPos'] }; problems: Problem[] }
 
 function deepFreeze<T>(v: T): T {
   if (v !== null && typeof v === 'object' && !Object.isFrozen(v)) {
@@ -32,7 +34,7 @@ function check(src: ConfigSource): Checked {
 
   if (file === MANIFEST) {
     const problems = problemsOf(manifestSchema);
-    if (problems.length) return { problems };
+    if (problems.length) return { problems, loose: { refs: collectRefs(manifestSchema, scanned.value), refPos } };
     return { manifest: { value: deepFreeze(scanned.value as Manifest), refs: collectRefs(manifestSchema, scanned.value), refPos }, problems };
   }
 
@@ -54,7 +56,7 @@ function check(src: ConfigSource): Checked {
     };
   }
   const problems = problemsOf(schema);
-  if (problems.length) return { problems };
+  if (problems.length) return { problems, loose: { refs: collectRefs(schema, v), refPos } };
   return { entry: { path: file, kind, id, fullId: `${kind}/${id}`, value: deepFreeze(v), refs: collectRefs(schema, v), refPos }, problems };
 }
 
@@ -113,6 +115,7 @@ export function createRegistry(): ConfigRegistry {
       for (const { file, c } of checked) {
         if (c.entry) problems.push(...refProblems(file, c.entry.refs, c.entry.refPos, has));
         if (c.manifest) problems.push(...refProblems(file, c.manifest.refs, c.manifest.refPos, has));
+        if (c.loose) problems.push(...refProblems(file, c.loose.refs, c.loose.refPos, has));
       }
       return result(problems);
     },
@@ -129,6 +132,7 @@ export function createRegistry(): ConfigRegistry {
         problems.push(...refProblems(file, staged.refs, staged.refPos, has));
       }
       if (c.manifest) problems.push(...refProblems(file, c.manifest.refs, c.manifest.refPos, has));
+      if (c.loose) problems.push(...refProblems(file, c.loose.refs, c.loose.refPos, has));
       if (problems.length) return result(problems);
       if (staged) {
         put(staged);

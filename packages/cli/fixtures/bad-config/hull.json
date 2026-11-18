@@ -3,5 +3,8 @@
   "id": "bad-config",
   "title": "Bad config",
   "entry": "src/main.ts",
-  "step": 45
+  "step": 45,
+  "start": {
+    "level": "level/arena"
+  }
 }
