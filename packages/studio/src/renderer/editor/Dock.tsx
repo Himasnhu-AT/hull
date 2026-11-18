@@ -1,10 +1,10 @@
-import { useEffect, useRef, type JSX } from 'react';
+import { useEffect, useRef, type JSX, type ReactNode } from 'react';
 import type { Problem } from 'hull';
 import type { Change } from 'hull/dev/protocol';
 import { Icon } from '../ui/Icon.tsx';
 import { idFromPath, problemPlace, type LogLine } from './useProject.ts';
 
-export type DockTab = 'console' | 'changes';
+export type DockTab = 'console' | 'changes' | 'history';
 
 const clock = (t: number | string): string => new Date(t).toTimeString().slice(0, 8);
 
@@ -21,9 +21,12 @@ interface Props {
   journal: Change[];
   onClear(): void;
   onOpen(id: string): void;
+  /** The History panel (history/HistoryPanel) and how many of its changes are flagged. */
+  history?: ReactNode;
+  flagged?: number;
 }
 
-export function Dock({ tab, onTab, logs, problems, journal, onClear, onOpen }: Props): JSX.Element {
+export function Dock({ tab, onTab, logs, problems, journal, onClear, onOpen, history, flagged = 0 }: Props): JSX.Element {
   const body = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
   useEffect(() => { const b = body.current; if (b && stick.current && tab === 'console') b.scrollTop = b.scrollHeight; }, [logs, problems, tab]);
@@ -38,10 +41,14 @@ export function Dock({ tab, onTab, logs, problems, journal, onClear, onOpen }: P
           <button role="tab" aria-selected={tab === 'changes'} className={`tab${tab === 'changes' ? ' on' : ''}`} onClick={() => onTab('changes')}>
             <Icon name="history" />Changes{journal.length > 0 && <span style={{ color: 'var(--faint)', fontSize: 11 }}>{journal.length}</span>}
           </button>
+          <button role="tab" aria-selected={tab === 'history'} className={`tab${tab === 'history' ? ' on' : ''}`} onClick={() => onTab('history')}>
+            <Icon name="branch" />History{flagged > 0 && <span className="count">{flagged}</span>}
+          </button>
         </div>
         {tab === 'console' && <button className="btn ghost" onClick={onClear} disabled={logs.length === 0}><Icon name="trash" />Clear</button>}
       </div>
-      <div className="dock-b" ref={body} onScroll={(e) => { const t = e.currentTarget; stick.current = t.scrollHeight - t.scrollTop - t.clientHeight < 24; }}>
+      {tab === 'history' && <div className="dock-b" style={{ overflow: 'hidden' }}>{history}</div>}
+      <div className="dock-b" hidden={tab === 'history'} ref={body} onScroll={(e) => { const t = e.currentTarget; stick.current = t.scrollHeight - t.scrollTop - t.clientHeight < 24; }}>
         {tab === 'console' && (
           <div role="log" aria-live="polite">
             {problems.map((p, i) => {
