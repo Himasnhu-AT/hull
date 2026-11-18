@@ -1,0 +1,172 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:hull:schema:input-map",
+  "type": "object",
+  "required": [
+    "kind",
+    "actions"
+  ],
+  "properties": {
+    "kind": {
+      "type": "string",
+      "const": "input-map"
+    },
+    "note": {
+      "type": "string"
+    },
+    "actions": {
+      "type": "object",
+      "patternProperties": {
+        "^.*$": {
+          "type": "object",
+          "required": [
+            "type"
+          ],
+          "properties": {
+            "type": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "const": "button"
+                },
+                {
+                  "type": "string",
+                  "const": "axis"
+                },
+                {
+                  "type": "string",
+                  "const": "axis2"
+                }
+              ],
+              "x-ui": {
+                "widget": "segments",
+                "help": "button: held or not. axis: -1 to 1. axis2: two axes, like a stick."
+              }
+            },
+            "keys": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "x-ui": {
+                    "widget": "keys"
+                  }
+                },
+                {
+                  "type": "object",
+                  "patternProperties": {
+                    "^.*$": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "x-ui": {
+                        "widget": "keys"
+                      }
+                    }
+                  }
+                }
+              ],
+              "x-ui": {
+                "help": "button: a list. axis: { neg, pos }. axis2: { up, down, left, right }."
+              }
+            },
+            "mouse": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "const": "delta"
+                },
+                {
+                  "type": "string",
+                  "const": "deltaX"
+                },
+                {
+                  "type": "string",
+                  "const": "deltaY"
+                },
+                {
+                  "type": "string",
+                  "const": "wheel"
+                }
+              ],
+              "x-ui": {
+                "help": "Mouse movement or wheel. Movement counts only while the pointer is locked."
+              }
+            },
+            "pad": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ],
+              "x-ui": {
+                "help": "button: button names (south, triggerR...). axis: stickLX, stickLY, stickRX, stickRY. axis2: stickL or stickR."
+              }
+            },
+            "deadzone": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 0.95,
+              "default": 0.15,
+              "x-ui": {
+                "widget": "slider",
+                "step": 0.01
+              }
+            },
+            "sensitivity": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "default": 1,
+              "x-ui": {
+                "widget": "dial",
+                "step": 0.05,
+                "help": "Multiplies mouse movement."
+              }
+            },
+            "invertY": {
+              "type": "boolean",
+              "default": false,
+              "x-ui": {
+                "widget": "toggle"
+              }
+            },
+            "rebind": {
+              "type": "boolean",
+              "default": true,
+              "x-ui": {
+                "widget": "toggle",
+                "help": "false keeps this action out of the key-binding screen."
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      }
+    },
+    "groups": {
+      "type": "object",
+      "patternProperties": {
+        "^.*$": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "x-ui": {
+        "help": "Sections of the key-binding screen."
+      }
+    }
+  },
+  "additionalProperties": false,
+  "title": "Hull input map"
+}
