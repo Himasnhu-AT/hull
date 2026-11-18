@@ -1,0 +1,15 @@
+{
+  "kind": "tuning",
+  "note": "The arena's layout and the round. Crates and gems are placed from the seed, so a run is the same every time.",
+  "size": 40,
+  "wallHeight": 2.5,
+  "wallThickness": 0.6,
+  "crateCount": 14,
+  "crateMin": 1.2,
+  "crateMax": 2.6,
+  "spawnClearRadius": 4,
+  "gemCount": 12,
+  "gemHeight": 0.9,
+  "gemMargin": 0.4,
+  "roundSeconds": 45
+}

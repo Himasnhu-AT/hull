@@ -1,0 +1,9 @@
+{
+  "kind": "input-map",
+  "note": "WASD or arrows or the left stick to move, Space or the south button to jump.",
+  "actions": {
+    "move": { "type": "axis2", "keys": { "up": ["W", "ArrowUp"], "down": ["S", "ArrowDown"], "left": ["A", "ArrowLeft"], "right": ["D", "ArrowRight"] }, "pad": "stickL" },
+    "jump": { "type": "button", "keys": ["Space"], "pad": "south" }
+  },
+  "groups": { "Move": ["move", "jump"] }
+}

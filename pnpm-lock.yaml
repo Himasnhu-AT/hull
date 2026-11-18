@@ -102,6 +102,12 @@ importers:
         specifier: 8.3.8
         version: 8.3.8(@types/node@26.6.6)(esbuild@0.28.2)(tsx@4.23.15)
 
+  templates/arena:
+    dependencies:
+      hull:
+        specifier: workspace:*
+        version: link:../../packages/hull
+
   templates/cube:
     dependencies:
       hull:
