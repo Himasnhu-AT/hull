@@ -6,6 +6,8 @@ export interface ToolContext {
   root: string;
   /** Who is acting: 'you', 'ai:<agent>', 'marl:<model>'. Recorded in the history. */
   author: string;
+  /** The running project server, when the tool is called from inside one (the app, or `hull dev`). Tools that need a game start their own otherwise. */
+  server?: { url: string; gameUrl: string };
   log(line: string): void;
   signal: AbortSignal;
 }

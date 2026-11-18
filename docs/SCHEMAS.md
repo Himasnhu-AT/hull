@@ -515,7 +515,7 @@ Not config: the record of what you have checked. It lives with Hull's own data, 
 ```json
 {
   "items": {
-    "sound/sword/hit": { "state": "approved", "at": "2026-11-20T10:12:00Z", "hash": "9c1f0a" },
+    "sound/sword/hit": { "state": "approved", "at": "2026-11-20T10:12:00Z", "by": "you", "hash": "9c1f0a" },
     "anim/soldier#run": { "state": "needs-change", "note": "Arms swing too wide; feet slide on the turn.", "at": "2026-11-20T10:15:00Z", "hash": "44b7e2" },
     "ui/pause": { "state": "unreviewed", "hash": "a03d51" }
   }
@@ -526,4 +526,6 @@ Not config: the record of what you have checked. It lives with Hull's own data, 
   screen).
 * `hash` is the content hash at review time. When the piece changes, the state falls back to `unreviewed` and the
   old note is kept beside it until you clear it.
-* `hull review list` prints the open notes; `hull review list --json` gives them to the AI.
+* `by` is who wrote the entry (`you`, `ai:<agent>`). A key must name a piece that exists; the write is refused otherwise.
+* `hull review list` prints the open notes; `hull review list --json` gives them to the AI. Also `hull review set <key> <state> [--note]` and `hull review note <key> <text>`; the project server has the same as `review.list`, `review.set`, `review.note`.
+* `hash` is six hex digits of a SHA-1 of the file text (config) or of the block's keys and values (tunables). A `#part` key hashes the whole piece.

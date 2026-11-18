@@ -31,8 +31,16 @@ export function failed(out: unknown): boolean {
 
 export function buildProgram(): Command {
   const program = new Command('hull').description('Hull game engine').option('--root <dir>', 'project folder');
+  const groups = new Map<string, Command>();
   for (const tool of tools) {
-    const cmd = program.command(tool.name).description(tool.summary).option('--json', 'print the output object as JSON');
+    // 'review.list' is `hull review list`.
+    const [group, sub] = tool.name.split('.');
+    let parent: Command = program;
+    if (sub) {
+      if (!groups.has(group!)) groups.set(group!, program.command(group!).description(`${group} tools`));
+      parent = groups.get(group!)!;
+    }
+    const cmd = parent.command(sub ?? tool.name).description(tool.summary).option('--json', 'print the output object as JSON');
     for (const a of tool.cli?.args ?? []) cmd.argument(a.optional ? `[${a.name}]` : `<${a.name}>`, a.description);
     for (const o of tool.cli?.options ?? []) cmd.option(o.flags, o.description, o.default);
     cmd.action(async (...raw: unknown[]) => {
@@ -60,6 +68,12 @@ export function buildProgram(): Command {
       }
     });
   }
+  program.command('mcp').description('Serves the tools to an AI agent over MCP (stdio). Point the agent at this command.').action(async () => {
+    const rootOpt = program.opts<{ root?: string }>().root;
+    const { serveMcp } = await import('./mcp/server.ts');
+    await serveMcp({ root: rootOpt ? resolve(rootOpt) : findRoot(process.cwd()), tools, input: process.stdin, output: process.stdout, log: (l) => console.error(l) });
+    process.exit(0);
+  });
   return program;
 }
 
