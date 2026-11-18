@@ -6,7 +6,12 @@
   "exports": {
     ".": "./src/index.ts",
     "./render": "./src/render/index.ts",
-    "./schema": "./src/schema/index.ts"
+    "./schema": "./src/schema/index.ts",
+    "./audio": "./src/audio/index.ts",
+    "./input": "./src/input/index.ts",
+    "./ui": "./src/ui/index.ts",
+    "./dev": "./src/dev/index.ts",
+    "./dev/protocol": "./src/dev/protocol.ts"
   },
   "dependencies": {
     "ajv": "8.20.0",

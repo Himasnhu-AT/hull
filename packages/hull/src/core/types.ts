@@ -21,6 +21,8 @@ export interface Game {
   paused: boolean;
   /** Render, audio and UI read state here and never write it. Returns an unsubscribe. */
   onFrame(fn: (alpha: number) => void): () => void;
+  /** Runs at the start of every frame and every `step` call, before any fixed step: input sampling lives here. */
+  onBeforeSteps(fn: () => void): () => void;
   dispose(): void;
 }
 

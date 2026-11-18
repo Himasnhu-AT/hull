@@ -14,6 +14,8 @@ class GameImpl implements Game {
   private acc = 0;
   private disposed = false;
   private frameFns: (((alpha: number) => void) | null)[] = [];
+  // Few and registered once (input), so plain array removal is fine here.
+  private beforeFns: (() => void)[] = [];
   private framing = 0;
   private frameDirty = false;
 
@@ -23,6 +25,7 @@ class GameImpl implements Game {
 
   step(n = 1): void {
     if (this.disposed) return;
+    for (let i = 0; i < this.beforeFns.length; i++) this.beforeFns[i]!();
     for (let i = 0; i < n; i++) this.world.step();
   }
 
@@ -34,6 +37,7 @@ class GameImpl implements Game {
     if (this.disposed) return;
     const world = this.world;
     const dt = world.dt;
+    for (let i = 0; i < this.beforeFns.length; i++) this.beforeFns[i]!();
     const scaled = this.paused ? 0 : Math.min(Math.max(realDt, 0), MAX_FRAME) * this.timeScale;
     this.acc += scaled;
     while (this.acc >= dt - EPS) {
@@ -56,6 +60,14 @@ class GameImpl implements Game {
       this.framing--;
       if (this.framing === 0 && this.frameDirty) this.sweep();
     }
+  }
+
+  onBeforeSteps(fn: () => void): () => void {
+    this.beforeFns.push(fn);
+    return () => {
+      const i = this.beforeFns.indexOf(fn);
+      if (i >= 0) this.beforeFns.splice(i, 1);
+    };
   }
 
   onFrame(fn: (alpha: number) => void): () => void {

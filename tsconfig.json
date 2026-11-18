@@ -1,4 +1,17 @@
 {
   "files": [],
-  "references": [{ "path": "packages/hull" }, { "path": "packages/cli" }, { "path": "templates/cube" }]
+  "references": [
+    {
+      "path": "packages/hull"
+    },
+    {
+      "path": "packages/cli"
+    },
+    {
+      "path": "templates/cube"
+    },
+    {
+      "path": "packages/studio"
+    }
+  ]
 }

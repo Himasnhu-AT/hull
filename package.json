@@ -3,12 +3,16 @@
   "private": true,
   "type": "module",
   "packageManager": "pnpm@11.24.0",
-  "engines": { "node": ">=24" },
+  "engines": {
+    "node": ">=24"
+  },
   "scripts": {
     "typecheck": "tsc -b",
     "test": "vitest run",
     "check": "pnpm typecheck && pnpm test",
-    "hull": "tsx packages/cli/src/main.ts"
+    "hull": "tsx packages/cli/src/main.ts",
+    "app": "pnpm --filter @hull/studio app",
+    "app:web": "pnpm --filter @hull/studio web"
   },
   "devDependencies": {
     "@types/node": "26.6.6",
