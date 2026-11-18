@@ -1,3 +1,4 @@
+/// <reference types="vite/client" />
 // A bench page for the look and the particles: a dusk scene with metal spheres, a hazy wall, and one station per
 // example effect. Dev only: it is not part of any game and never ships. `window.demo` is the handle the browser
 // checks drive (they step the game instead of waiting on real time).
