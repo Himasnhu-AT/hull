@@ -1,0 +1,23 @@
+{
+  "kind": "sound",
+  "note": "A bright two-note blip. Change `pitch` to make every pickup higher or lower.",
+  "bus": "sfx",
+  "level": -8,
+  "pitch": 1.25,
+  "limit": { "minGap": 0.03, "voices": 4, "over": "steal-oldest" },
+  "source": {
+    "type": "synth",
+    "length": 0.35,
+    "layers": {
+      "low": {
+        "from": { "osc": "triangle", "freq": 660 },
+        "then": [{ "envelope": { "attack": 0.002, "decay": 0.12, "curve": "exp" } }, { "gain": -3 }]
+      },
+      "high": {
+        "from": { "osc": "sine", "freq": 990 },
+        "then": [{ "envelope": { "attack": 0.002, "decay": 0.25, "curve": "exp" } }, { "gain": -5 }]
+      }
+    },
+    "reverb": 0.1
+  }
+}

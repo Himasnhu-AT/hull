@@ -1,0 +1,29 @@
+{
+  "kind": "sound",
+  "note": "A dry crack with a short low thump. Fires up to ten times a second, so it is short.",
+  "bus": "sfx",
+  "level": -4,
+  "pitch": [0.95, 1.05],
+  "limit": { "minGap": 0.05, "voices": 4, "over": "steal-oldest" },
+  "source": {
+    "type": "synth",
+    "length": 0.22,
+    "layers": {
+      "crack": {
+        "from": { "noise": "white" },
+        "then": [
+          { "filter": "highpass", "freq": 1800 },
+          { "envelope": { "attack": 0.001, "decay": 0.05, "curve": "exp" } },
+          { "gain": -4 }
+        ]
+      },
+      "thump": {
+        "from": { "osc": "sine", "freq": [180, 200], "glideTo": 0.3, "glideTime": 0.1 },
+        "then": [
+          { "envelope": { "attack": 0.001, "decay": 0.12, "curve": "exp" } },
+          { "gain": -3 }
+        ]
+      }
+    }
+  }
+}

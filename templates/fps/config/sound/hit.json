@@ -1,0 +1,36 @@
+{
+  "kind": "sound",
+  "note": "Blade on armour. Short and bright.",
+  "bus": "sfx",
+  "level": -3,
+  "pitch": [0.95, 1.05],
+  "limit": { "minGap": 0.06, "voices": 4, "over": "steal-oldest" },
+  "spatial": { "ref": 4, "max": 60, "airLowpass": true },
+  "source": {
+    "type": "synth",
+    "length": 0.5,
+    "layers": {
+      "ring": {
+        "from": { "osc": "triangle", "freq": [1800, 2300], "glideTo": 0.7, "glideTime": 0.12 },
+        "then": [
+          { "filter": "bandpass", "freq": 2400, "q": 6 },
+          { "envelope": { "attack": 0.002, "decay": 0.28, "curve": "exp" } },
+          { "gain": -2 }
+        ]
+      },
+      "clack": {
+        "from": { "noise": "white" },
+        "then": [
+          { "filter": "highpass", "freq": 3000 },
+          { "envelope": { "attack": 0.001, "decay": 0.04 } },
+          { "gain": -8 }
+        ]
+      },
+      "body": {
+        "from": { "modes": [1100, 2080, 3300, 4400], "decay": [0.05, 0.08], "tilt": 0.6 },
+        "then": [{ "gain": -6 }]
+      }
+    },
+    "reverb": 0.15
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "kind": "material",
+  "note": "The head is another colour so the hit zone can be seen.",
+  "color": "#f0c36a",
+  "roughness": 0.6,
+  "metalness": 0
+}

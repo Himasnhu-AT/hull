@@ -1,0 +1,7 @@
+{
+  "kind": "material",
+  "note": "Blue: refills gas.",
+  "color": "#5ad1ff",
+  "roughness": 0.4,
+  "metalness": 0
+}
