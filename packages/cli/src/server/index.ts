@@ -13,6 +13,8 @@ import { loadManifest, readConfigFiles, readManifest, writeIds } from '../tools/
 import { tools } from '../tools/index.ts';
 import { BOOT_ID, bootSource, DEV_PAGE } from './boot.ts';
 import { setJsonPointer, valueAtPointer } from './jsonEdit.ts';
+import { expGames } from '../history/expServer.ts';
+import { History } from '../history/history.ts';
 import { appendChange, readJournal } from './journal.ts';
 import { findTunables, rewriteTunable, type FoundTunable } from './tsTunables.ts';
 import { engineAliases, hullResolve, virtualModule } from './vitePlugins.ts';
@@ -28,7 +30,8 @@ export interface ProjectServer {
   close(): Promise<void>;
 }
 
-interface Client { ws: WebSocket; role: 'studio' | 'game'; id: string }
+/** `exp` is set for a game page that belongs to an experiment: it hears only that experiment's edits. */
+interface Client { ws: WebSocket; role: 'studio' | 'game'; id: string; exp?: string }
 type Handler<M extends MethodName> = (params: Methods[M]['params']) => Promise<Methods[M]['result']> | Methods[M]['result'];
 
 class RpcError extends Error {
@@ -51,7 +54,7 @@ function walk(dir: string, accept: (name: string) => boolean, out: string[] = []
 
 const isLoopback = (host: string): boolean => host === 'localhost' || host === '127.0.0.1' || host === '[::1]';
 
-export async function startProjectServer(opts: { root: string; port?: number; log?: (line: string) => void }): Promise<ProjectServer> {
+export async function startProjectServer(opts: { root: string; port?: number; log?: (line: string) => void; /** Quiet time before edits are recorded in the history (default 2000 ms; tests use 0). */ historyQuietMs?: number }): Promise<ProjectServer> {
   const root = resolve(opts.root);
   const log = opts.log ?? (() => {});
   const manifestInfo = await loadManifest(root);
@@ -66,16 +69,26 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
   const wroteTs = new Map<string, string>();
   let problems: Problem[] = [];
 
-  const pushTo = (role: Client['role'] | 'all', method: PushName, params: unknown): void => {
+  // `exp` picks which games hear a push: the project's own (undefined), one experiment's, or every game ('*').
+  const pushTo = (role: Client['role'] | 'all', method: PushName, params: unknown, exp?: string): void => {
     const data = JSON.stringify({ jsonrpc: '2.0', method, params });
-    for (const c of clients) if ((role === 'all' || c.role === role) && c.ws.readyState === WebSocket.OPEN) c.ws.send(data);
+    for (const c of clients) {
+      if (!(role === 'all' || c.role === role) || c.ws.readyState !== WebSocket.OPEN) continue;
+      if (c.role === 'game' && exp !== '*' && c.exp !== exp) continue;
+      c.ws.send(data);
+    }
   };
-  const push = <K extends PushName>(method: K, params: Pushes[K], role: Client['role'] | 'all' = 'all'): void => pushTo(role, method, params);
+  const push = <K extends PushName>(method: K, params: Pushes[K], role: Client['role'] | 'all' = 'all', exp?: string): void => pushTo(role, method, params, exp);
 
-  const configFiles = (): ConfigSource[] => {
-    const m = readManifest(root);
-    return [...(m ? [m] : []), ...readConfigFiles(root)];
+  const configFilesIn = (dir: string): ConfigSource[] => {
+    const m = readManifest(dir);
+    return [...(m ? [m] : []), ...readConfigFiles(dir)];
   };
+  const configFiles = (): ConfigSource[] => configFilesIn(root);
+
+  let hist!: History;
+  let urls = { http: '', ws: '' };
+  const games = expGames(root, () => urls.ws);
 
   /** Validates everything (a fresh registry each time: it is cheap, and it keeps the answers free of old state). */
   const revalidate = (): void => {
@@ -92,7 +105,6 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
   revalidate();
 
   // ---- Vite: the game's dev page --------------------------------------------------------------------------------
-  let urls = { http: '', ws: '' };
   const vite: ViteDevServer = await createServer({
     root,
     configFile: false,
@@ -140,6 +152,13 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
   const addr = vite.httpServer!.address() as AddressInfo;
   urls = { http: `http://127.0.0.1:${addr.port}/`, ws: `ws://127.0.0.1:${addr.port}/` };
 
+  // The history store: changes are recorded after a burst of edits goes quiet; experiments get their own pages.
+  hist = await History.open({
+    root, quietMs: opts.historyQuietMs, log, games,
+    onAdded: (c) => push('history.added', c, 'studio'),
+    onExp: (name, change, exp) => push('exp.changed', { name, change, exp }, 'studio'),
+  });
+
   const invalidateBoot = (): void => {
     const mod = vite.moduleGraph.getModuleById(`\0${BOOT_ID}`);
     if (mod) vite.moduleGraph.invalidateModule(mod);
@@ -153,31 +172,48 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
   };
   const idOf = (path: string): string => (path === MANIFEST ? MANIFEST : path.slice('config/'.length, -'.json'.length));
   const kindOfPath = (path: string): string => (path === MANIFEST ? 'game' : path.split('/')[1] ?? '');
-  const readText = (path: string): string => {
-    try { return readFileSync(join(root, path), 'utf8'); } catch { throw new RpcError(-32001, `${path} does not exist`); }
+  const readText = (path: string, dir = root): string => {
+    try { return readFileSync(join(dir, path), 'utf8'); } catch { throw new RpcError(-32001, `${path} does not exist`); }
   };
   const key = (p: Problem): string => `${p.file}|${p.pointer ?? ''}|${p.rule}|${p.message}`;
 
   /** The problems a file would have if it held `text`, without touching the live state. */
-  const problemsWith = (path: string, text: string): Problem[] => {
-    const files = configFiles().filter((f) => f.path !== path);
+  const problemsWith = (path: string, text: string, dir = root): Problem[] => {
+    const files = configFilesIn(dir).filter((f) => f.path !== path);
     files.push({ path, text });
     return createRegistry().load(files).problems.filter((p) => p.file === path);
   };
 
-  const setConfig: Handler<'config.set'> = (p) => {
+  /** The folder an edit targets: the project, or one experiment's working copy. */
+  const targetDir = (exp: string | undefined): string => {
+    try { return exp ? hist.expDirOf(exp) : root; } catch (e) { throw new RpcError(-32602, (e as Error).message); }
+  };
+
+  const setConfig: Handler<'config.set'> = async (p) => {
+    const dir = targetDir(p.exp);
+    const by = p.author ?? 'you';
     const path = pathOf(p.id);
-    const old = readText(path);
+    const old = readText(path, dir);
     const edited = setJsonPointer(old, p.pointer, p.value);
     if (!edited.ok) return { ok: false, problems: [{ file: path, pointer: p.pointer, rule: 'edit', message: edited.message }] };
     // A write may not add a problem. A file that was already broken elsewhere can still be fixed one field at a time.
-    const known = new Set(problems.filter((x) => x.file === path).map(key));
-    const added = problemsWith(path, edited.text).filter((x) => !known.has(key(x)));
+    const known = new Set((p.exp ? createRegistry().load(configFilesIn(dir)).problems : problems).filter((x) => x.file === path).map(key));
+    const added = problemsWith(path, edited.text, dir).filter((x) => !known.has(key(x)));
     if (added.length) return { ok: false, problems: added };
 
+    // Edits still waiting from another author are recorded first, so each change has one author.
+    await hist.settle(by, p.exp ?? 'main');
+    if (p.exp) {
+      writeFileSync(join(dir, path), edited.text);
+      games.get(p.exp)?.invalidateBoot();
+      push('config.changed', { id: idOf(path), path, text: edited.text }, 'game', p.exp);
+      hist.touch(by, p.exp);
+      return { ok: true, problems: [] };
+    }
     let from: unknown;
     try { from = valueAtPointer(JSON.parse(old), p.pointer); } catch { /* the old file did not parse */ }
     writeFileSync(join(root, path), edited.text);
+    hist.touch(by);
     texts.set(path, edited.text);
     invalidateBoot();
     journal({ target: idOf(path), path: p.pointer, from, to: p.value, by: p.author ?? 'you' });
@@ -193,10 +229,10 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
   };
 
   // ---- Tunables ---------------------------------------------------------------------------------------------------
-  const scanTunables = (): (FoundTunable & { file: string })[] => {
+  const scanTunables = (dir = root): (FoundTunable & { file: string })[] => {
     const out: (FoundTunable & { file: string })[] = [];
-    for (const abs of walk(join(root, 'src'), (n) => n.endsWith('.ts') && !n.endsWith('.d.ts') && !n.endsWith('.test.ts'))) {
-      const file = norm(relative(root, abs));
+    for (const abs of walk(join(dir, 'src'), (n) => n.endsWith('.ts') && !n.endsWith('.d.ts') && !n.endsWith('.test.ts'))) {
+      const file = norm(relative(dir, abs));
       let text: string;
       try { text = readFileSync(abs, 'utf8'); } catch { continue; }
       if (!text.includes('tunables')) continue;
@@ -205,14 +241,25 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
     return out;
   };
 
-  const setTunableValue: Handler<'tunables.set'> = (p) => {
-    const t = scanTunables().find((x) => x.block === p.block && x.key === p.key);
+  const setTunableValue: Handler<'tunables.set'> = async (p) => {
+    const dir = targetDir(p.exp);
+    const by = p.author ?? 'you';
+    const t = scanTunables(dir).find((x) => x.block === p.block && x.key === p.key);
     if (!t) return { ok: false, problems: [{ file: 'src', rule: 'tunable', message: `there is no literal tunable "${p.block}.${p.key}" in src/` }] };
-    const abs = join(root, t.file);
+    const abs = join(dir, t.file);
     const r = rewriteTunable(t.file, readFileSync(abs, 'utf8'), p.block, p.key, p.value);
     if (!r.ok) return { ok: false, problems: [{ file: t.file, pointer: `/${p.block}/${p.key}`, line: r.line ?? t.line, col: r.col ?? t.col, rule: 'tunable', message: r.message }] };
+    await hist.settle(by, p.exp ?? 'main');
+    if (p.exp) {
+      games.get(p.exp)?.wroteTs.set(abs, r.text);
+      writeFileSync(abs, r.text);
+      push('tunable.changed', { block: p.block, key: p.key, value: p.value }, 'game', p.exp);
+      hist.touch(by, p.exp);
+      return { ok: true, problems: [] };
+    }
     wroteTs.set(abs, r.text);
     writeFileSync(abs, r.text);
+    hist.touch(by);
     journal({ target: `tunables:${p.block}`, path: p.key, from: t.value, to: p.value, by: p.author ?? 'you' });
     push('tunable.changed', { block: p.block, key: p.key, value: p.value }, 'game');
     return { ok: true, problems: [] };
@@ -263,8 +310,19 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
     'tunables.list': tunableWires,
     'tunables.set': setTunableValue,
     'journal.list': (p) => readJournal(root, p.limit),
-    'game.control': (p: GameControl) => { push('game.control', p, 'game'); return {}; },
+    'history.list': (p) => hist.list(p),
+    'history.diff': (p) => hist.diff(p),
+    'history.restore': (p) => hist.restore(p.id, p.author ?? 'you'),
+    'history.checkpoint': (p) => hist.checkpoint(p.name, p.id),
+    'exp.start': (p) => hist.expStart(p.name, p.from, p.author ?? 'you'),
+    'exp.list': () => hist.expList(),
+    'exp.compare': (p) => hist.expCompare(p.a, p.b),
+    'exp.adopt': (p) => hist.expAdopt(p.name, p.author ?? 'you', p.resolve),
+    'exp.discard': (p) => hist.expDiscard(p.name),
+    'game.control': (p: GameControl) => { push('game.control', p, 'game', '*'); return {}; },
     'tool.call': async (p) => {
+      // Checks read the history's authorship record, so what is waiting is recorded first.
+      await hist.flush();
       const tool = tools.find((t) => t.name === p.name && t.name !== 'dev');
       if (!tool) throw new RpcError(-32602, `there is no tool "${p.name}" (have: ${tools.filter((t) => t.name !== 'dev').map((t) => t.name).join(', ')})`);
       const out = await tool.run({ root, author: 'you', log: (line) => push('log', { level: 'info', message: line, source: 'tool' }, 'studio'), signal: new AbortController().signal }, p.input ?? {});
@@ -286,7 +344,9 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
     if (!allowed && origin) { try { allowed = isLoopback(new URL(origin).hostname === '::1' ? '[::1]' : new URL(origin).hostname); } catch { allowed = false; } }
     if (!allowed || (role !== 'studio' && role !== 'game')) { socket.write('HTTP/1.1 403 Forbidden\r\n\r\n'); socket.destroy(); return; }
     wss.handleUpgrade(req, socket, head, (ws) => {
-      const client: Client = { ws, role, id: url.searchParams.get('client') ?? Math.random().toString(36).slice(2, 8) };
+      const exp = role === 'game' ? url.searchParams.get('exp') ?? undefined : undefined;
+      const id = url.searchParams.get('client') ?? Math.random().toString(36).slice(2, 8);
+      const client: Client = { ws, role, id: exp ? `${exp}/${id}` : id, ...(exp ? { exp } : {}) };
       clients.add(client);
       ws.on('close', () => clients.delete(client));
       ws.on('message', (data) => void onMessage(client, String(data)));
@@ -319,11 +379,13 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
       if (event === 'unlink') {
         texts.delete(rel); invalidateBoot(); revalidate();
         push('config.removed', { id: idOf(rel), path: rel });
+        hist.touch('disk');
         return;
       }
       let text: string;
       try { text = readFileSync(abs, 'utf8'); } catch { return; }
       if (texts.get(rel) === text) return;
+      hist.touch('disk');
       invalidateBoot();
       revalidate();
       // A file with problems is reported, not pushed: the running game keeps its last good value.
@@ -334,12 +396,15 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
       try { text = readFileSync(abs, 'utf8'); } catch { /* deleted */ }
       if (text !== undefined && wroteTs.get(abs) === text) return;
       wroteTs.delete(abs);
+      hist.touch('disk');
       push('source.changed', { path: rel });
+    } else if (rel.startsWith('src/') || rel.startsWith('assets/')) {
+      hist.touch('disk');
     }
   };
   vite.watcher.on('change', (f) => onDisk('change', f)).on('add', (f) => onDisk('add', f)).on('unlink', (f) => onDisk('unlink', f));
   // Directories that did not exist at start (a new project's first config/ folder) are picked up too.
-  vite.watcher.add([join(root, 'config'), join(root, 'src'), join(root, MANIFEST)]);
+  vite.watcher.add([join(root, 'config'), join(root, 'src'), join(root, 'assets'), join(root, MANIFEST)]);
   mkdirSync(join(root, '.hull'), { recursive: true });
   log(`project server for ${root}: ${urls.http}`);
 
@@ -349,6 +414,8 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
     async close() {
       for (const c of clients) c.ws.close();
       wss.close();
+      await hist.close();
+      await games.closeAll();
       await vite.close();
     },
   };
