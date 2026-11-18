@@ -1,5 +1,6 @@
 import type { Problem } from 'hull';
 import { defineTool, type ProblemOutput } from '../tool.ts';
+import { checkAuthorship } from '../history/authors.ts';
 import { checkConfig } from './config.ts';
 import { checkHouseRules } from './houseRules.ts';
 import { runTsc } from './types.ts';
@@ -14,6 +15,8 @@ export const check = defineTool<Record<string, never>, ProblemOutput>({
     const problems: Problem[] = [];
     problems.push(...(await checkConfig(ctx.root)));
     problems.push(...checkHouseRules(ctx.root));
+    // An AI change over a value you set is flagged (ARCHITECTURE section 7, authorship per value).
+    problems.push(...(await checkAuthorship(ctx.root)));
     problems.push(...(await runTsc(ctx.root)));
     return { ok: problems.length === 0, problems };
   },

@@ -1,5 +1,5 @@
 // Web dev mode: the app's renderer in a normal browser, without Electron.
-//   pnpm --filter @hull/studio web -- --project <dir> [--mock] [--port 5305]
+//   pnpm --filter @hull/studio web -- --project <dir> [--port 5305]
 // Runs the project server in Node (the same host code Electron's main process uses) and serves the renderer with Vite.
 // Without --project the launcher shows, and templates are created in a scratch folder.
 // With --electron it also starts the Electron window pointed at that Vite server (the `app` script).
@@ -23,7 +23,7 @@ const port = Number(flag('port') ?? 5305);
 const dataDir = await mkdtemp(join(tmpdir(), 'hull-web-'));
 const scratch = join(dataDir, 'projects');
 await mkdir(scratch, { recursive: true });
-const host = createHost({ dataDir, mock: has('mock'), log: (l) => console.log(`[hull] ${l}`) });
+const host = createHost({ dataDir, log: (l) => console.log(`[hull] ${l}`) });
 
 let initial: OpenedProject | null = null;
 const project = flag('project');

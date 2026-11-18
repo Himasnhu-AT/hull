@@ -63,6 +63,82 @@ export interface Change {
   to: unknown;
 }
 
+// ---- M2: history and experiments ------------------------------------------------------------------------------------
+
+/** Who made a recorded change. `disk` is an edit made outside Hull (an editor, git). */
+export type HistoryAuthor = Author | 'disk';
+
+/** One difference between two states of the project, by path (config JSON), by name (tunables), or by lines. */
+export interface ChangeDelta {
+  /** The file: 'config/tuning/jump.json' or 'src/tuning.ts'. */
+  file: string;
+  kind: 'json' | 'tunable' | 'lines' | 'asset' | 'file';
+  op: 'set' | 'add' | 'remove';
+  /** Config id ('tuning/jump', 'hull.json'), 'tunables:<block>', or the file path for lines, assets and files. */
+  target: string;
+  /** JSON pointer for json, the tunable key for tunables, '' otherwise. */
+  path: string;
+  from?: unknown;
+  to?: unknown;
+  /** For kind 'lines'. */
+  added?: number;
+  removed?: number;
+  /** The plain-words line the timeline shows, like 'tuning/jump: height 2.2 → 2.6'. */
+  text: string;
+}
+
+/** A change in the timeline (a commit in the history store). */
+export interface HistoryChange {
+  /** Full commit id; any unambiguous prefix or a checkpoint name is accepted wherever an id is asked for. */
+  id: string;
+  short: string;
+  at: string;
+  by: HistoryAuthor;
+  /** 'main' or the experiment's name. */
+  line: string;
+  kind: 'start' | 'change' | 'restore' | 'merge';
+  /** The one-line description in plain words. */
+  message: string;
+  /** Every delta's text, one per line. */
+  details: string[];
+  parents: string[];
+  /** Checkpoint names pointing here. */
+  checkpoints: string[];
+}
+
+export interface ExpInfo {
+  name: string;
+  status: 'active' | 'adopted' | 'discarded';
+  /** The change it started from. */
+  from: string;
+  /** Its newest change (equals `from` until it is tuned). */
+  tip: string;
+  changes: number;
+  createdAt: string;
+  by: HistoryAuthor;
+  /** The experiment's own game page (active experiments only), so two can run side by side. */
+  gameUrl?: string;
+}
+
+/** A value changed on both sides of a merge. `target#path` is the key for `resolve`. */
+export interface MergeConflict {
+  file: string;
+  kind: ChangeDelta['kind'];
+  target: string;
+  path: string;
+  base?: unknown;
+  ours?: unknown;
+  theirs?: unknown;
+}
+
+export interface ExpAdoptResult {
+  ok: boolean;
+  /** Nothing is written while conflicts are open: send `resolve` ('ours' | 'theirs' per `target#path`) and call again. */
+  conflicts: MergeConflict[];
+  problems: Problem[];
+  change?: HistoryChange;
+}
+
 export interface GameControl {
   paused?: boolean;
   /** Run exactly n fixed steps (implies paused afterwards). */
@@ -88,11 +164,27 @@ export interface Methods {
   /** A config file: its text, parsed value, JSON Schema (with x-ui / x-ref) and current problems. */
   'config.read': { params: { id: string }; result: { id: string; path: string; text: string; value: unknown; schema: unknown; problems: Problem[] } };
   /** Set one field. Validated before it is kept; the file keeps its formatting; recorded with its author. */
-  'config.set': { params: { id: string; pointer: string; value: unknown; author?: Author }; result: WriteResult };
+  'config.set': { params: { id: string; pointer: string; value: unknown; author?: Author; /** Edit this experiment's copy instead of the project. */ exp?: string }; result: WriteResult };
   'tunables.list': { params: Record<string, never>; result: TunableWire[] };
   /** Rewrites the literal in the .ts file (re-parsed and type-checked first) and pushes the value to running games. */
-  'tunables.set': { params: { block: string; key: string; value: unknown; author?: Author }; result: WriteResult };
+  'tunables.set': { params: { block: string; key: string; value: unknown; author?: Author; /** Edit this experiment's copy instead of the project. */ exp?: string }; result: WriteResult };
   'journal.list': { params: { limit?: number }; result: Change[] };
+  /** The timeline, newest first, across the main line and every experiment. */
+  'history.list': { params: { limit?: number; line?: string }; result: HistoryChange[] };
+  /** What changed: `from` defaults to the parent of `to`. Ids, checkpoint names, 'main' or an experiment name. */
+  'history.diff': { params: { from?: string; to: string }; result: { from: string | null; to: string; deltas: ChangeDelta[] } };
+  /** Puts the project back as it was at `id`. Itself a new change, so it can be undone. */
+  'history.restore': { params: { id: string; author?: Author }; result: { ok: boolean; problems: Problem[]; change?: HistoryChange } };
+  'history.checkpoint': { params: { name: string; id?: string }; result: { name: string; id: string } };
+  /** Makes a working copy under .hull/exp/<name>/ from `from` (default: the project's newest change). */
+  'exp.start': { params: { name: string; from?: string; author?: Author }; result: ExpInfo };
+  'exp.list': { params: Record<string, never>; result: ExpInfo[] };
+  /** The value differences between two lines ('main' or an experiment name), a to b. */
+  'exp.compare': { params: { a: string; b: string }; result: { a: string; b: string; deltas: ChangeDelta[] } };
+  /** Three-way merge into the project. The experiment stays in the timeline. */
+  'exp.adopt': { params: { name: string; author?: Author; resolve?: Record<string, 'ours' | 'theirs'> }; result: ExpAdoptResult };
+  /** Closes the working copy. Its changes stay in the timeline. */
+  'exp.discard': { params: { name: string }; result: { ok: boolean } };
   /** Forwarded to every connected game. */
   'game.control': { params: GameControl; result: Record<string, never> };
   /** Runs a tool from the registry: 'check', 'test', 'build'. */
@@ -111,6 +203,10 @@ export interface Pushes {
   /** From games, relayed to studios. */
   'game.report': GameReport & { client: string };
   'journal.added': Change;
+  /** A new change in the timeline. */
+  'history.added': HistoryChange;
+  /** An experiment started, was edited, adopted or discarded. Games of an experiment report as client '<name>/<id>'. */
+  'exp.changed': { name: string; change: 'started' | 'edited' | 'adopted' | 'discarded'; exp: ExpInfo };
   'problems': { problems: Problem[] };
   'log': { level: 'info' | 'warn' | 'error'; message: string; source: 'server' | 'game' | 'tool' };
   /** Source code changed: the game page reloads itself (Vite HMR); studios refresh tunables.list. */

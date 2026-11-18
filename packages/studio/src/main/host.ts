@@ -16,8 +16,6 @@ interface ServerModule {
 export interface HostOptions {
   /** Where recents live (Electron's userData). */
   dataDir: string;
-  /** Use the in-memory mock server (dev only). Also used when the real server module is missing. */
-  mock?: boolean;
   log?: (line: string) => void;
 }
 
@@ -29,7 +27,7 @@ export interface Host {
   recents(): Promise<RecentProject[]>;
   forgetRecent(root: string): Promise<void>;
   /** The server module in use, for tests and the banner. */
-  serverKind(): Promise<'real' | 'mock'>;
+  serverKind(): Promise<'real'>;
 }
 
 const MAX_RECENTS = 10;
@@ -42,23 +40,12 @@ export function slug(title: string): string {
 export function createHost(opts: HostOptions): Host {
   const log = opts.log ?? (() => {});
   const recentsFile = join(opts.dataDir, 'recents.json');
-  let loaded: { mod: ServerModule; kind: 'real' | 'mock' } | null = null;
+  let loaded: { mod: ServerModule; kind: 'real' } | null = null;
   let running: { root: string; server: ProjectServer } | null = null;
 
-  async function load(): Promise<{ mod: ServerModule; kind: 'real' | 'mock' }> {
+  async function load(): Promise<{ mod: ServerModule; kind: 'real' }> {
     if (loaded) return loaded;
-    if (!opts.mock && process.env['HULL_MOCK'] !== '1') {
-      try {
-        // The specifier is a variable so a missing module is a runtime fallback, not a build error.
-        const spec = '@hull/cli/server';
-        return (loaded = { mod: (await import(/* @vite-ignore */ spec)) as ServerModule, kind: 'real' });
-      } catch (e) {
-        const code = (e as { code?: string }).code;
-        if (code !== 'ERR_MODULE_NOT_FOUND' && code !== 'MODULE_NOT_FOUND') throw e;
-        log('the project server (@hull/cli/server) is not available yet: using the in-memory mock');
-      }
-    }
-    return (loaded = { mod: (await import('../mock/server.ts')) as unknown as ServerModule, kind: 'mock' });
+    return (loaded = { mod: (await import('@hull/cli/server')) as ServerModule, kind: 'real' });
   }
 
   async function readRecents(): Promise<RecentProject[]> {
