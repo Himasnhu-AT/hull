@@ -36,7 +36,7 @@ export function settingsScreenDef(buses: readonly string[]): UiScreenDef {
       { button: { text: 'Back', primary: true }, on: { press: 'settings.back' } },
     ] },
   );
-  return { kind: 'ui-screen', pausesGame: true, root: { panel: { align: 'center' as never /* the schema builds the align union from an array, which loses the literals */, menu: true, label: 'Settings', gap: 10 }, on: { back: 'settings.back' }, children } };
+  return { kind: 'ui-screen', pausesGame: true, root: { panel: { align: 'center' as const, menu: true, label: 'Settings', gap: 10 }, on: { back: 'settings.back' }, children } };
 }
 
 export interface SettingsScreenDeps {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { TunableWire } from 'hull/dev/protocol';
-import { advancedCount, buildForm, groupFields, humanize, tunableFields, type Field } from './schemaForm.ts';
+import { advancedCount, buildForm, defaultFor, groupFields, humanize, mapEntryFields, tunableFields, type Field } from './schemaForm.ts';
 
 const flat = (g: ReturnType<typeof buildForm>): Field[] => g.flatMap((x) => [...x.dials, ...x.fields]);
 const find = (g: ReturnType<typeof buildForm>, ptr: string): Field => {
@@ -135,5 +135,95 @@ describe('tunableFields', () => {
   it('groups by opts.group or block name', () => {
     const g = groupFields(tunableFields([t('bool', true, { group: 'Feel' }), t('bool', false)]));
     expect(g.map((x) => x.name)).toEqual(['Feel', 'Player']);
+  });
+});
+
+const lit = (v: string) => ({ type: 'string', const: v });
+
+describe('unions of constants', () => {
+  it('draws up to four as segments, with the options, even when x-ui asked for segments', () => {
+    const schema = { type: 'object', properties: { type: { anyOf: [lit('generated'), lit('gltf')], default: 'generated', 'x-ui': { widget: 'segments' } } } };
+    const f = find(buildForm(schema, { type: 'gltf' }), '/type');
+    expect(f).toMatchObject({ widget: 'segments', options: ['generated', 'gltf'], value: 'gltf' });
+  });
+  it('draws more than four as a select, and keeps number constants numbers', () => {
+    const schema = { type: 'object', properties: {
+      shape: { oneOf: ['a', 'b', 'c', 'd', 'e'].map(lit) },
+      n: { anyOf: [{ const: 1 }, { const: 2 }] },
+      e5: { enum: ['a', 'b', 'c', 'd', 'e'], 'x-ui': { widget: 'segments' } },
+    } };
+    const g = buildForm(schema, { shape: 'a', n: 2, e5: 'b' });
+    expect(find(g, '/shape')).toMatchObject({ widget: 'select', options: ['a', 'b', 'c', 'd', 'e'] });
+    expect(find(g, '/n')).toMatchObject({ widget: 'segments', options: ['1', '2'], optionValues: [1, 2] });
+    expect(find(g, '/e5').widget).toBe('select');
+  });
+  it('never renders an unknown shape as nothing: it is a labelled JSON field', () => {
+    const f = find(buildForm({ type: 'object', properties: { odd: { anyOf: [{ type: 'object', properties: { a: { type: 'string' } } }, { type: 'boolean' }] } } }, { odd: 7 }), '/odd');
+    expect(f).toMatchObject({ widget: 'json', fallback: true });
+    expect(find(buildForm({ type: 'object', properties: { free: {} } }, { free: 3 }), '/free')).toMatchObject({ widget: 'json', fallback: true });
+  });
+});
+
+describe('maps', () => {
+  const schema = { type: 'object', properties: {
+    kind: { const: 'character' },
+    materials: { type: 'object', patternProperties: { '^.*$': { type: 'string', 'x-ref': 'material' } } },
+    sockets: { type: 'object', patternProperties: { '^.*$': { type: 'object', required: ['joint'], properties: { joint: { type: 'string' }, scale: { type: 'number', minimum: 0, maximum: 2, default: 1 } } } } },
+    tags: { type: 'object', additionalProperties: { type: 'number' } },
+  } };
+  const value = { kind: 'character', materials: { skin: 'material/skin' }, sockets: { hand: { joint: 'wrist' } } };
+  const g = buildForm(schema, value);
+
+  it('makes one map field for patternProperties and additionalProperties maps', () => {
+    for (const p of ['/materials', '/sockets', '/tags']) expect(find(g, p).widget).toBe('map');
+    expect(find(g, '/materials').valueSchema).toMatchObject({ 'x-ref': 'material' });
+  });
+  it('gives each entry the widget its schema says, a ref for x-ref values', () => {
+    const mat = mapEntryFields(find(g, '/materials'), 'skin', 'material/skin');
+    expect(mat).toHaveLength(1);
+    expect(mat[0]).toMatchObject({ pointer: '/materials/skin', widget: 'ref', refKind: 'material', label: '' });
+    const sock = mapEntryFields(find(g, '/sockets'), 'hand', { joint: 'wrist' });
+    expect(sock.map((f) => [f.pointer, f.widget])).toEqual([['/sockets/hand/joint', 'text'], ['/sockets/hand/scale', 'slider']]);
+  });
+  it('escapes a key with a slash in its pointer', () => {
+    expect(mapEntryFields(find(g, '/tags'), 'a/b', 3)[0]!.pointer).toBe('/tags/a~1b');
+  });
+  it('makes a starting value for a new entry from the schema', () => {
+    const f = find(g, '/sockets');
+    expect(defaultFor(f.schemaRoot!, f.valueSchema)).toEqual({ joint: '' });
+    expect(defaultFor({}, { type: 'string', 'x-ref': 'material' }, ['material/a'])).toBe('material/a');
+    expect(defaultFor({}, { anyOf: [lit('x'), lit('y')] })).toBe('x');
+  });
+});
+
+describe('values missing from the file', () => {
+  it('shows the schema default, marked unset, instead of zero', () => {
+    const schema = { type: 'object', properties: {
+      height: { type: 'number', minimum: 0, maximum: 5, default: 1.78 },
+      nodefault: { type: 'number' },
+      body: { type: 'object', properties: { legs: { type: 'number', minimum: 0, maximum: 1, default: 0.52 } } },
+    } };
+    const g = buildForm(schema, { nodefault: 4 });
+    expect(find(g, '/height')).toMatchObject({ value: 1.78, def: 1.78, unset: true });
+    expect(find(g, '/body/legs')).toMatchObject({ value: 0.52, unset: true });
+    expect(find(g, '/nodefault')).toMatchObject({ value: 4, unset: false });
+    expect(find(buildForm(schema, { height: 2 }), '/height')).toMatchObject({ value: 2, unset: false });
+  });
+  it('treats a field with neither value nor default as unset with no value', () => {
+    expect(find(buildForm({ type: 'object', properties: { x: { type: 'number' } } }, {}), '/x')).toMatchObject({ unset: true, value: undefined });
+  });
+});
+
+describe('lists and big optional objects', () => {
+  it('draws an array of strings as a comma list', () => {
+    const g = buildForm({ type: 'object', properties: { features: { type: 'array', items: { type: 'string' } } } }, { features: ['audio'] });
+    expect(find(g, '/features').widget).toBe('keys');
+  });
+  it('hides the fields of a long optional object the file leaves out, until Show all', () => {
+    const many = Object.fromEntries(Array.from({ length: 10 }, (_, i) => [`f${i}`, { type: 'string' }]));
+    const schema = { type: 'object', properties: { node: { type: 'object', properties: many }, small: { type: 'object', properties: { a: { type: 'string' } } } } };
+    expect(flat(buildForm(schema, {})).map((f) => f.pointer)).toEqual(['/small/a']);
+    expect(flat(buildForm(schema, {}, { showAdvanced: true }))).toHaveLength(11);
+    expect(flat(buildForm(schema, { node: { f0: 'x' } })).length).toBe(11);
   });
 });

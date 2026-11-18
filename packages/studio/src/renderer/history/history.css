@@ -113,3 +113,6 @@
 .hx-crow { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .hx-dialog .btn { color: #e9ebee; }
 .hx-dialog .btn.primary { color: #fff; }
+
+/* the lane drawing may paint its stroke caps outside the box, so a merge curve is not cut at the top edge of its row */
+.hx-lanes { overflow: visible; }

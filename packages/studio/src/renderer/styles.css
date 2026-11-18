@@ -381,3 +381,34 @@ textarea.field-in { height: auto; min-height: 76px; padding: 6px 8px; font-famil
   .launcher { grid-template-columns: 1fr; height: auto; min-height: 100vh; overflow: auto; }
   body { overflow: auto; }
 }
+
+/* a field the file does not set: the schema's default, shown quietly until the user edits it */
+.fld.dflt .fl::after, .fld.unset .fl::after { margin-left: 7px; padding: 0 6px; border-radius: 99px; background: var(--field); color: var(--faint); font-size: 10.5px; font-weight: 400; }
+.fld.dflt .fl::after { content: 'default'; }
+.fld.unset .fl::after { content: 'not set'; }
+.fld.dflt .fv, .fld.unset .fv, .fld.dflt .field-in, .fld.unset .field-in { color: var(--faint); }
+.fld.dflt .seg button.on, .fld.unset .seg button.on { color: var(--muted); }
+.jtag { font-size: 10.5px; padding: 0 6px; border-radius: 99px; background: var(--field); color: var(--faint); font-family: var(--mono); }
+
+/* a map: named entries with add, rename and remove */
+.map { gap: 8px; }
+.mapent { border: 1px solid var(--line); border-radius: 8px; background: var(--panel2); }
+.mapk { display: flex; align-items: center; gap: 6px; padding: 4px 6px 4px 4px; min-width: 0; }
+.mapc { width: 20px; height: 22px; border: 0; background: transparent; color: var(--faint); display: grid; place-items: center; border-radius: 4px; flex: none; transition: transform 0.15s var(--ease); }
+.mapc.open { transform: rotate(90deg); }
+.mapname { flex: 0 1 96px; min-width: 64px; height: 24px; font-weight: 500; }
+.mapv { flex: 1; min-width: 0; }
+.mapv .field-in, .mapv .fh { min-width: 0; }
+.mapv .fld { padding: 0; }
+.mapv .fld::before { display: none; }
+.mapb { padding: 2px 10px 6px 12px; border-top: 1px solid var(--line); }
+.mapb .fld::before { left: -10px; }
+.mapk .rs.show { opacity: 0.55; pointer-events: auto; margin-left: auto; }
+.mapk .rs.show:hover { opacity: 1; color: var(--danger); }
+.mapadd { display: flex; gap: 6px; align-items: center; }
+.mapadd .field-in { flex: 1; min-width: 0; }
+
+/* console problems: the rule name fits its words instead of spilling into the message */
+.logl.prob { grid-template-columns: 62px max-content minmax(0, 1fr); }
+.mapv .fh:has(> label.fl:empty) { display: none; }
+.mapv textarea.field-in { min-height: 30px; height: 30px; }
