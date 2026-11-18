@@ -1,0 +1,6 @@
+{
+  "kind": "ui-theme",
+  "color": { "panel": "#10141a", "text": "#f4f1ea", "muted": "#a9b4c0", "accent": "#35e0c2", "danger": "#ff6b5a", "line": "#2b3440" },
+  "type": { "family": "system-ui, sans-serif", "size": 18, "labelTracking": 0.15 },
+  "space": { "gutter": 20, "radius": 6 }
+}

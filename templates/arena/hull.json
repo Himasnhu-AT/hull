@@ -1,0 +1,10 @@
+{
+  "kind": "game",
+  "id": "arena",
+  "title": "Arena",
+  "note": "A small third-person arena: run, jump, collect gems before the clock runs out. Shows render, input, audio, ui and tunables together.",
+  "version": "0.1.0",
+  "entry": "src/main.ts",
+  "step": 60,
+  "features": ["audio", "ui"]
+}
