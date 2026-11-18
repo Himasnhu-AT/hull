@@ -243,6 +243,27 @@ Schema (abridged):
 }
 ```
 
+### Added while building the engine (M1)
+
+What AOTT's sounds needed and the first draft above could not say:
+
+| Field | Meaning |
+|---|---|
+| layer `at` | Start the layer this many seconds after the sound starts. |
+| layer `repeat: { count, every, falloff }` | Play the layer again `count` times, `every` seconds apart, each quieter by `falloff` (ratchets, debris). |
+| source `modes` | A bank of decaying sine partials (`freq`, `gain`, `decay` each): struck metal, bells, blades. |
+| noise `color` | `white`, `pink` or `brown`. |
+| oscillator `detune` | In cents. |
+| filter `glideTo`, `glideTime` | Sweep the cutoff to this multiple of its start over `glideTime` seconds. |
+| filter `gain` | For `peaking` filters, in dB. |
+| envelope `hold` | Seconds held at full level between attack and decay. |
+| `pick.mode` | How a variation is chosen: `random` or `cycle`. |
+| `bus` | A bus name inside the mixer file, so it is not an `x-ref`. |
+
+`sample` sources are accepted by the schema and reported as not supported yet. `code` sources call a generator the
+game registers with `registerGenerator`. The mixer has buses and a master compressor and limiter; ducking and
+snapshots come later.
+
 ## 5. `mixer` and `music`
 
 ```json
