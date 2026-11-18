@@ -88,6 +88,17 @@
             "step": 0.0005,
             "help": "Exponential fog. Wins over near and far when set."
           }
+        },
+        "skyBlend": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "default": 0.35,
+          "x-ui": {
+            "widget": "slider",
+            "step": 0.05,
+            "help": "How high the fog colour climbs into the sky (0 none, 1 to the zenith)."
+          }
         }
       },
       "additionalProperties": false
@@ -110,6 +121,31 @@
           "x-ui": {
             "widget": "slider",
             "step": 0.05
+          }
+        },
+        "ground": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$",
+          "default": "#3a3631",
+          "x-ui": {
+            "widget": "color",
+            "help": "Light from below. With it, ambient is a hemisphere: `color` from above, this from below."
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "environment": {
+      "type": "object",
+      "properties": {
+        "intensity": {
+          "type": "number",
+          "minimum": 0,
+          "default": 0.4,
+          "x-ui": {
+            "widget": "slider",
+            "step": 0.05,
+            "help": "Light and reflections from the sky, so metals are not black. Defaults to 0.4 with a gradient sky and 0 with a flat one."
           }
         }
       },
@@ -222,31 +258,153 @@
       "properties": {
         "bloom": {
           "type": "number",
-          "minimum": 0
+          "minimum": 0,
+          "x-ui": {
+            "widget": "slider",
+            "step": 0.05,
+            "help": "Glow strength. 0 turns bloom off."
+          }
+        },
+        "bloomThreshold": {
+          "type": "number",
+          "minimum": 0,
+          "default": 1,
+          "x-ui": {
+            "step": 0.05,
+            "help": "Brightness (linear, before tone mapping) where glow starts."
+          }
         },
         "contrast": {
           "type": "number",
-          "minimum": 0
+          "minimum": 0,
+          "x-ui": {
+            "widget": "slider",
+            "step": 0.01
+          }
         },
         "saturation": {
           "type": "number",
-          "minimum": 0
+          "minimum": 0,
+          "x-ui": {
+            "widget": "slider",
+            "step": 0.01
+          }
+        },
+        "lift": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "minItems": 3,
+          "maxItems": 3,
+          "items": false,
+          "default": [
+            0,
+            0,
+            0
+          ],
+          "x-ui": {
+            "help": "Added to the shadows, per channel (red, green, blue)."
+          }
+        },
+        "gamma": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "minItems": 3,
+          "maxItems": 3,
+          "items": false,
+          "default": [
+            1,
+            1,
+            1
+          ],
+          "x-ui": {
+            "help": "Bends the mid tones, per channel. Above 1 brightens."
+          }
+        },
+        "gain": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "minItems": 3,
+          "maxItems": 3,
+          "items": false,
+          "default": [
+            1,
+            1,
+            1
+          ],
+          "x-ui": {
+            "help": "Multiplies the highlights, per channel."
+          }
         },
         "vignette": {
           "type": "number",
-          "minimum": 0
+          "minimum": 0,
+          "x-ui": {
+            "widget": "slider",
+            "step": 0.01
+          }
         },
         "grain": {
           "type": "number",
-          "minimum": 0
+          "minimum": 0,
+          "x-ui": {
+            "widget": "slider",
+            "step": 0.005
+          }
+        },
+        "aa": {
+          "anyOf": [
+            {
+              "type": "string",
+              "const": "none"
+            },
+            {
+              "type": "string",
+              "const": "fxaa"
+            }
+          ],
+          "default": "none",
+          "x-ui": {
+            "widget": "select",
+            "help": "Edge smoothing after the grade. The scene itself is multisampled on medium and high."
+          }
         },
         "speedBlur": {
           "type": "number",
-          "minimum": 0
+          "minimum": 0,
+          "description": "Not drawn yet."
         }
       },
-      "additionalProperties": false,
-      "description": "Not drawn yet."
+      "additionalProperties": false
     }
   },
   "additionalProperties": false,

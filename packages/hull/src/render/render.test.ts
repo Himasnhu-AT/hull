@@ -45,7 +45,7 @@ describe('look', () => {
     const grad = resolveLook({ kind: 'look', sky: { horizon: '#ffffff', zenith: '#000000' }, fog: { color: '#888888', density: 0.01 } });
     expect(grad.skyColor).toBeNull();
     expect(grad.mid).toBe('#ffffff');
-    expect(grad.fog).toEqual({ color: '#888888', near: 0, far: 1000, density: 0.01 });
+    expect(grad.fog).toEqual({ color: '#888888', near: 0, far: 1000, density: 0.01, skyBlend: 0.35 });
     expect(defaultLook.kind).toBe('look');
   });
 });
