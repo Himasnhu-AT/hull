@@ -212,7 +212,15 @@ export const player = tunables('player', {
   replaces exactly those characters, re-parses and type-checks the file, and only then keeps the write. Only
   literals that are direct arguments of `num`, `bool`, `color`, `vec`, `choice`, `range` and `curve` inside a
   `tunables` call are ever rewritten.
-* **In a build**, the block compiles to constants.
+* **Kit blocks** are declared in engine source, which a project must never rewrite (it would change every game).
+  A block takes its values from `config/tuning/<block>.json` (block name in kebab case: `thirdPerson` is
+  `third-person.json`) when that file exists; keys the file lacks keep the code value, a value the tunable's options
+  refuse is a problem at `file#/key` and the code value stays. The override is applied on load and on each live
+  change of the file, never per frame. The server finds a game's kit blocks by reading which names it imports from
+  `hull/kits` (and the kits those import), so it works with no game running; `tunables.list` marks them
+  `source: 'kit'`, and `tunables.set` on one writes only that key into the file (a value equal to the kit's own
+  removes the key). Tuning files hold numbers, so only `num` kit tunables can be saved this way.
+* **In a build**, a project's own block compiles to constants; kit blocks stay live cells (with the file's values).
 * When to use which: values that belong to one piece of code and nobody else reads go in `tunables`; things with
   structure, or shared between code and tools (a sound, a character, a screen), are config files.
 

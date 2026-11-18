@@ -1,4 +1,4 @@
-import type { NumOpts, Problem, Tunable, TunableInfo, TunableValues } from './types.ts';
+import type { ConfigRegistry, NumOpts, Problem, Tunable, TunableInfo, TunableValues } from './types.ts';
 
 // Values that live in code. Each is a cell; the block object has getters over the cells, so reading one in the
 // simulation allocates nothing and always sees the latest value the dev runtime set.
@@ -25,7 +25,11 @@ const blocks = new Set<string>();
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 
 /** Returns a plain sentence when `v` is not allowed for this tunable, otherwise null. */
-function reason(c: Cell, v: unknown): string | null {
+const reason = (c: Cell, v: unknown): string | null => tunableProblem(c.kind, c.key, c.opts, v);
+
+/** The same check without a declared tunable, for tools that know a tunable's kind and options from its source. */
+export function tunableProblem(kind: TKind, key: string, opts: Record<string, unknown>, v: unknown): string | null {
+  const c = { kind, key, opts };
   const { min, max } = c.opts as { min?: number; max?: number };
   const bounds = (n: number, label: string): string | null => {
     if (min !== undefined && n < min) return `${label} must be at least ${min}, got ${n}`;
@@ -69,6 +73,9 @@ function reason(c: Cell, v: unknown): string | null {
   }
 }
 
+/** `thirdPerson` -> `third-person`: the file name a code block's overrides live under (config/tuning/<name>.json). */
+export const tuningIdOf = (block: string): string => block.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
+
 const freezeValue = (v: unknown): unknown => {
   if (Array.isArray(v)) { v.forEach(freezeValue); return Object.freeze(v); }
   return v;
@@ -89,6 +96,7 @@ export function tunables<S extends Record<string, Tunable<unknown>>>(name: strin
   }
   blocks.add(name);
   for (const c of made) cells.set(`${name}.${c.key}`, c);
+  if (bound) applyOverrides(name, bound);
   return Object.freeze(out) as TunableValues<S>;
 }
 
@@ -111,4 +119,55 @@ export function setTunable(path: string, value: unknown): Problem | null {
 export function resetTunables(): void {
   cells.clear();
   blocks.clear();
+  overrideProblems = [];
 }
+
+// ---- Overrides from config/tuning/<block>.json ---------------------------------------------------------------------
+// A project keeps its own values for a block declared in code (a kit's, above all) without touching the code. The file
+// holds only the keys that differ; a key it lacks keeps the value from code. Applying runs on load and on every live
+// change of the file, never per frame, so reads stay plain getters over cells.
+
+let bound: ConfigRegistry | undefined;
+let overrideProblems: Problem[] = [];
+
+const sameValue = (a: unknown, b: unknown): boolean => a === b || (typeof a === 'object' && a !== null && JSON.stringify(a) === JSON.stringify(b));
+
+/** Sets each cell of one block from its file (or back to the code value). Returns what the file got wrong. */
+function applyOverrides(block: string, reg: ConfigRegistry): Problem[] {
+  const id = tuningIdOf(block);
+  const file = `config/tuning/${id}.json`;
+  const have = reg.has(`tuning/${id}`);
+  const given = have ? (reg.lookup('tuning', id) as unknown as Record<string, unknown>) : {};
+  const out: Problem[] = [];
+  const names = new Set([...cells.values()].filter((c) => c.block === block).map((c) => c.key));
+  for (const c of cells.values()) {
+    if (c.block !== block) continue;
+    const mine = Object.prototype.hasOwnProperty.call(given, c.key);
+    if (!mine) { if (!sameValue(c.value, c.initial)) c.value = c.initial; continue; }
+    const v = given[c.key];
+    const bad = reason(c, v);
+    if (bad) { out.push({ file, pointer: `/${c.key}`, rule: 'tunable', message: bad }); if (!sameValue(c.value, c.initial)) c.value = c.initial; continue; }
+    if (!sameValue(c.value, v)) c.value = freezeValue(Array.isArray(v) ? structuredClone(v) : v);
+  }
+  for (const k of Object.keys(given)) {
+    if (k !== 'kind' && k !== 'note' && !names.has(k)) out.push({ file, pointer: `/${k}`, rule: 'tunable', message: `"${block}" has no tunable "${k}"` });
+  }
+  return out;
+}
+
+/**
+ * Connects tunables to a config registry: every block takes its values from config/tuning/<block>.json when that file
+ * exists, now and after each load, update or removal. Blocks declared later are applied as they are declared.
+ */
+export function bindTunables(reg: ConfigRegistry): void {
+  bound = reg;
+  const sync = (): void => {
+    overrideProblems = [];
+    for (const b of blocks) overrideProblems.push(...applyOverrides(b, reg));
+  };
+  reg.onChange(sync);
+  sync();
+}
+
+/** What the project's tuning files got wrong about code blocks, as of the last load or update. */
+export const tuningProblems = (): readonly Problem[] => overrideProblems;

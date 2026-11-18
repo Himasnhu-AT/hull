@@ -81,6 +81,8 @@ export function createRegistry(): ConfigRegistry {
   const byId = new Map<string, Entry>();
   const watchers = new Map<string, Set<(now: unknown) => void>>();
   let manifestValue: Manifest | undefined;
+  const listeners = new Set<() => void>();
+  const changed = (): void => { for (const fn of [...listeners]) fn(); };
 
   const idsNow = (): Record<string, string[]> => {
     const out: Record<string, string[]> = {};
@@ -117,6 +119,7 @@ export function createRegistry(): ConfigRegistry {
         if (c.manifest) problems.push(...refProblems(file, c.manifest.refs, c.manifest.refPos, has));
         if (c.loose) problems.push(...refProblems(file, c.loose.refs, c.loose.refPos, has));
       }
+      changed();
       return result(problems);
     },
 
@@ -139,6 +142,7 @@ export function createRegistry(): ConfigRegistry {
         for (const fn of [...(watchers.get(staged.fullId) ?? [])]) fn(staged.value);
       }
       if (c.manifest) manifestValue = c.manifest.value;
+      changed();
       return result([]);
     },
 
@@ -146,7 +150,10 @@ export function createRegistry(): ConfigRegistry {
       const p = normalize(path);
       if (p === MANIFEST) manifestValue = undefined;
       else drop(p);
+      changed();
     },
+
+    onChange(fn) { listeners.add(fn); return () => { listeners.delete(fn); }; },
 
     get<K extends Kind>(kind: K, id: IdOf<K>): HullKinds[K] {
       return this.lookup(kind, id);

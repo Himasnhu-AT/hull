@@ -19,6 +19,7 @@ import { removeServerFile, writeServerFile } from './link.ts';
 import { appendChange, readJournal } from './journal.ts';
 import { listReview, noteReview, setReview } from '../review/store.ts';
 import { findTunables, rewriteTunable, type FoundTunable } from './tsTunables.ts';
+import { kitImports, kitTunables } from './kitTunables.ts';
 import { engineAliases, hullResolve, virtualModule } from './vitePlugins.ts';
 
 export { createProject, listTemplates } from './templates.ts';
@@ -54,6 +55,15 @@ function walk(dir: string, accept: (name: string) => boolean, out: string[] = []
   return out;
 }
 
+/** Line and column (1-based) of `"key"` in a JSON text, for a problem about its value. */
+function locateKey(text: string, key: string): { line: number; col: number } | Record<string, never> {
+  const at = text.indexOf(`"${key}"`);
+  if (at < 0) return {};
+  const before = text.slice(0, at);
+  const line = before.split('\n').length;
+  return { line, col: at - before.lastIndexOf('\n') };
+}
+
 const isLoopback = (host: string): boolean => host === 'localhost' || host === '127.0.0.1' || host === '[::1]';
 
 export async function startProjectServer(opts: { root: string; port?: number; log?: (line: string) => void; /** Quiet time before edits are recorded in the history (default 2000 ms; tests use 0). */ historyQuietMs?: number }): Promise<ProjectServer> {
@@ -64,7 +74,7 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
   const log = opts.log ?? (() => {});
   const manifestInfo = await loadManifest(root);
   if (!manifestInfo.value) throw new Error(manifestInfo.problems.map((p) => `${p.file}#${p.pointer ?? ''}: ${p.message}`).join('\n') || 'invalid hull.json');
-  const { createRegistry } = await import('hull');
+  const { createRegistry, tuningIdOf, tunableProblem } = await import('hull');
   const { kinds, manifestSchema } = await import('hull/schema');
 
   const clients = new Set<Client>();
@@ -118,6 +128,8 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
   const games = expGames(root, () => urls.ws);
 
   /** Validates everything (a fresh registry each time: it is cheap, and it keeps the answers free of old state). */
+  // Set once the kit scan below exists; judges tuning files against the kit tunables they name.
+  let kitProblems: (files: readonly ConfigSource[]) => Problem[] = () => [];
   const revalidate = (): void => {
     const files = configFiles();
     texts.clear();
@@ -125,7 +137,7 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
     const registry = createRegistry();
     const r = registry.load(files);
     writeIds(root, registry.idsModule());
-    problems = r.problems;
+    problems = [...r.problems, ...kitProblems(files)];
     pushProblems();
   };
   revalidate();
@@ -278,10 +290,105 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
     return out;
   };
 
+  // Kit blocks: the tunables of the kits the project imports, with the project's own values from config/tuning/<block>.json.
+  type KitWire = TunableWire & { tuningId: string; initial: unknown };
+  const kitWires = (dir = root, files?: readonly ConfigSource[]): KitWire[] => {
+    const names: string[] = [];
+    for (const abs of walk(join(dir, 'src'), (n) => n.endsWith('.ts') && !n.endsWith('.d.ts') && !n.endsWith('.test.ts'))) {
+      try { names.push(...kitImports(abs, readFileSync(abs, 'utf8'))); } catch { /* unreadable files are skipped */ }
+    }
+    const own = new Set(scanTunables(dir).map((t) => t.block));
+    const src = files ?? configFilesIn(dir);
+    return kitTunables(names).filter((t) => !own.has(t.block)).map((t) => {
+      const tuningId = tuningIdOf(t.block);
+      const text = src.find((f) => f.path === `config/tuning/${tuningId}.json`)?.text;
+      let given: Record<string, unknown> = {};
+      try { if (text) given = JSON.parse(text) as Record<string, unknown>; } catch { /* the problem list says why */ }
+      const set = Object.prototype.hasOwnProperty.call(given, t.key) && !tunableProblem(t.kind, t.key, t.opts, given[t.key]);
+      return { block: t.block, key: t.key, kind: t.kind, value: set ? given[t.key] : t.value, initial: t.value, opts: t.opts, file: t.file, line: t.line, col: t.col, source: 'kit' as const, overrides: `config/tuning/${tuningId}.json`, tuningId };
+    });
+  };
+
+  /** A tuning file's values judged against the kit tunables they name; the registry cannot, it does not know the code. */
+  const kitFileProblems = (files: readonly ConfigSource[]): Problem[] => {
+    const out: Problem[] = [];
+    const wires = kitWires(root, files);
+    for (const f of files) {
+      if (!f.path.startsWith('config/tuning/')) continue;
+      const mine = wires.filter((w) => w.overrides === f.path);
+      if (mine.length === 0) continue;
+      let given: Record<string, unknown>;
+      try { given = JSON.parse(f.text) as Record<string, unknown>; } catch { continue; }
+      for (const w of mine) {
+        if (!Object.prototype.hasOwnProperty.call(given, w.key)) continue;
+        const bad = tunableProblem(w.kind, w.key, w.opts, given[w.key]);
+        if (bad) {
+          const at = locateKey(f.text, w.key);
+          out.push({ file: f.path, pointer: `/${w.key}`, ...at, rule: 'tunable', message: bad });
+        }
+      }
+    }
+    return out;
+  };
+
+  kitProblems = kitFileProblems;
+  revalidate();
+
+  /** Writes one kit tunable into config/tuning/<block>.json: creates the file, validates, keeps only keys that differ from the code. */
+  const setKitTunable = async (w: KitWire, p: Methods['tunables.set']['params']): Promise<WriteResult> => {
+    const dir = targetDir(p.exp);
+    const by = p.author ?? 'you';
+    const path = w.overrides!;
+    const bad = tunableProblem(w.kind, w.key, w.opts, p.value);
+    if (bad) return { ok: false, problems: [{ file: path, pointer: `/${w.key}`, rule: 'tunable', message: bad }] };
+    if (w.kind !== 'num') return { ok: false, problems: [{ file: path, pointer: `/${w.key}`, rule: 'tunable', message: `${w.block}.${w.key} is a ${w.kind}; tuning files hold numbers only, so it can only be changed in the kit's code` }] };
+    let old: string | undefined;
+    try { old = readFileSync(join(dir, path), 'utf8'); } catch { /* created below */ }
+    let doc: Record<string, unknown> = { kind: 'tuning' };
+    if (old !== undefined) {
+      try { doc = JSON.parse(old) as Record<string, unknown>; } catch { return { ok: false, problems: [{ file: path, rule: 'parse', message: 'invalid JSON; fix the file before tuning it from here' }] }; }
+    }
+    const from = Object.prototype.hasOwnProperty.call(doc, w.key) ? doc[w.key] : w.initial;
+    let text: string;
+    if (JSON.stringify(p.value) === JSON.stringify(w.initial)) {
+      // Back at the kit's own value: the file stops saying anything about this key.
+      if (old === undefined || !Object.prototype.hasOwnProperty.call(doc, w.key)) return { ok: true, problems: [] };
+      const { [w.key]: _gone, ...rest } = doc;
+      text = `${JSON.stringify(rest, null, 2)}\n`;
+    } else if (old !== undefined) {
+      const edited = setJsonPointer(old, `/${w.key}`, p.value);
+      if (!edited.ok) return { ok: false, problems: [{ file: path, pointer: `/${w.key}`, rule: 'edit', message: edited.message }] };
+      text = edited.text;
+    } else {
+      text = `${JSON.stringify({ ...doc, [w.key]: p.value }, null, 2)}\n`;
+    }
+    await hist.settle(by, p.exp ?? 'main');
+    mkdirSync(join(dir, 'config', 'tuning'), { recursive: true });
+    writeWhole(join(dir, path), text);
+    if (p.exp) {
+      games.get(p.exp)?.invalidateBoot();
+      push('config.changed', { id: idOf(path), path, text }, 'game', p.exp);
+      hist.touch(by, p.exp);
+      return { ok: true, problems: [] };
+    }
+    hist.touch(by);
+    texts.set(path, text);
+    invalidateBoot();
+    journal({ target: idOf(path), path: `/${w.key}`, from, to: p.value, by });
+    revalidate();
+    push('config.changed', { id: idOf(path), path, text });
+    push('tunable.changed', { block: w.block, key: w.key, value: p.value }, 'studio');
+    return { ok: true, problems: [] };
+  };
+
   const setTunableValue: Handler<'tunables.set'> = async (p) => {
     const dir = targetDir(p.exp);
     const by = p.author ?? 'you';
     const t = scanTunables(dir).find((x) => x.block === p.block && x.key === p.key);
+    if (!t) {
+      const k = kitWires(dir).find((x) => x.block === p.block && x.key === p.key);
+      if (k) return setKitTunable(k, p);
+    }
     if (!t) return { ok: false, problems: [{ file: 'src', rule: 'tunable', message: `there is no literal tunable "${p.block}.${p.key}" in src/` }] };
     const abs = join(dir, t.file);
     const r = rewriteTunable(t.file, readFileSync(abs, 'utf8'), p.block, p.key, p.value);
@@ -303,8 +410,10 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
     return { ok: true, problems: [] };
   };
 
-  const tunableWires = (): TunableWire[] =>
-    scanTunables().map((t) => ({ block: t.block, key: t.key, kind: t.kind, value: t.value, opts: t.opts, file: t.file, line: t.line, col: t.col }));
+  const tunableWires = (): TunableWire[] => [
+    ...scanTunables().map((t): TunableWire => ({ block: t.block, key: t.key, kind: t.kind, value: t.value, opts: t.opts, file: t.file, line: t.line, col: t.col, source: 'code' })),
+    ...kitWires().map(({ tuningId: _id, ...w }): TunableWire => w),
+  ];
 
   // Control ops waiting for a game's answer (the control port: `game.run` out, `game.result` back).
   let rpcN = 0;
@@ -350,7 +459,12 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
       for (const t of scanTunables()) {
         if (seen.has(t.block)) continue;
         seen.add(t.block);
-        items.push({ id: `tunables:${t.block}`, kind: 'tunables', path: t.file, title: t.block, problems: 0 });
+        items.push({ id: `tunables:${t.block}`, kind: 'tunables', path: t.file, title: t.block, problems: 0, source: 'code' });
+      }
+      for (const t of kitWires()) {
+        if (seen.has(t.block)) continue;
+        seen.add(t.block);
+        items.push({ id: `tunables:${t.block}`, kind: 'tunables', path: t.overrides!, title: t.block, problems: problems.filter((x) => x.file === t.overrides).length, source: 'kit' });
       }
       return items;
     },

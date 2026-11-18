@@ -51,10 +51,10 @@ function Groups({ groups, values, baseKey, baselines, problems, refs, onChange }
   );
 }
 
-function Header({ id, kind, path, line, onReveal, extra }: { id: string; kind: string; path: string; line?: number; onReveal(): void; extra?: JSX.Element }): JSX.Element {
+function Header({ id, kind, path, line, onReveal, extra, tag }: { id: string; kind: string; path: string; line?: number; onReveal(): void; extra?: JSX.Element; tag?: string }): JSX.Element {
   return (
     <div className="insp-h">
-      <div className="id"><b title={id}>{id}</b><span className="kind">{kind}</span></div>
+      <div className="id"><b title={id}>{id}</b><span className="kind">{kind}</span>{tag && <span className="kind" title="Declared by an engine kit; your values are saved in your project, not in the kit">{tag}</span>}</div>
       <button className="pathlink" onClick={onReveal} title="Show in Finder"><Icon name="file" size={13} /><span>{path}{line ? `:${line}` : ''}</span></button>
       {extra}
     </div>
@@ -170,7 +170,11 @@ function TunablesForm({ rpc, block, path, tunables, baselines, setTunableLocal, 
   const throttles = useRef(new Map<string, ReturnType<typeof throttle<[unknown]>>>());
   const sent = useRef(new Map<string, unknown>());
   const baseKey = `tunables:${block}`;
-  for (const t of mine) { const k = `${baseKey}\0${t.key}`; if (!baselines.current.has(k)) baselines.current.set(k, structuredClone(t.value)); }
+  for (const t of mine) { const k = `${baseKey}\0${t.key}`; if (!baselines.current.has(k)) baselines.current.set(k, structuredClone(t.initial ?? t.value)); }
+  // A kit's tunables keep the project's values in config/tuning/<block>.json; the baseline is the kit's own value, so
+  // a changed one shows as changed and its reset arrow (which sends that value) removes the key from the file.
+  const kit = mine[0]?.source === 'kit';
+  const overrides = mine[0]?.overrides;
 
   useEffect(() => () => { for (const t of throttles.current.values()) t.flush(); }, [block]);
 
@@ -197,12 +201,14 @@ function TunablesForm({ rpc, block, path, tunables, baselines, setTunableLocal, 
   const first = mine[0];
   return (
     <>
-      <Header id={baseKey} kind="tunables" path={first?.file ?? path} line={first?.line} onReveal={() => reveal(first?.file ?? path)} />
+      <Header id={baseKey} kind="tunables" tag={kit ? 'kit' : undefined} path={kit ? overrides ?? path : first?.file ?? path} line={kit ? undefined : first?.line} onReveal={() => reveal(kit ? overrides ?? path : first?.file ?? path)} />
       <div className="insp-b">
         {mine.length === 0 && <p className="empty-note">No tunables are declared in this block right now. Start the game and they appear here.</p>}
         <Groups groups={groups} values={(k) => byKey.get(k)} baseKey={baseKey} baselines={baselines} problems={probs} refs={() => []} onChange={onChange} />
       </div>
-      <div className="insp-f"><span>Values live in code</span><span>Edits rewrite the literal</span></div>
+      <div className="insp-f">{kit
+        ? <><span>Saved to {overrides}</span><span>Reset removes the key</span></>
+        : <><span>Values live in code</span><span>Edits rewrite the literal</span></>}</div>
     </>
   );
 }
