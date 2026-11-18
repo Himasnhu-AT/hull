@@ -569,8 +569,9 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
       hist.touch('disk');
       invalidateBoot();
       revalidate();
-      // A file with problems is reported, not pushed: the running game keeps its last good value.
-      if (problems.some((x) => x.file === rel)) log(`${rel} has problems; the game keeps the last good value`);
+      // A file with problems is reported, not pushed: the running game keeps its last good value. A tuning value a kit
+      // refuses is the exception: the game skips just that key (and says so), so it matches what a restart would do.
+      if (problems.some((x) => x.file === rel && x.rule !== 'tunable')) log(`${rel} has problems; the game keeps the last good value`);
       else push('config.changed', { id: idOf(rel), path: rel, text });
     } else if (rel.startsWith('src/') && rel.endsWith('.ts')) {
       let text: string | undefined;

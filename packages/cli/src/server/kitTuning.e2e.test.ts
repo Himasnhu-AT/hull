@@ -98,6 +98,9 @@ describe('kit tunables', () => {
     writeFileSync(file(), `{\n  "kind": "tuning",\n  "runSpeed": 900\n}\n`);
     const p = await until('problems', (x) => x.problems.some((q: any) => q.rule === 'tunable'));
     expect(p.problems.find((q: any) => q.rule === 'tunable')).toMatchObject({ file: 'config/tuning/third-person.json', pointer: '/runSpeed', line: 3 });
+    expect(p.problems.filter((q: any) => q.file === 'config/tuning/third-person.json')).toHaveLength(1);
+    // The game is told too, so it skips just that key like a restart would, instead of keeping an older value.
+    expect((await until('config.changed', (c) => c.id === 'tuning/third-person' && c.text.includes('900'))).path).toBe('config/tuning/third-person.json');
     const t = (await call<any[]>('tunables.list')).find((x) => x.key === 'runSpeed');
     expect(t.value).toBe(7);
   });
