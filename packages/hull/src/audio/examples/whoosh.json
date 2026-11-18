@@ -2,7 +2,7 @@
   "kind": "sound",
   "note": "Something fast passing by. The band sweeps up then closes.",
   "bus": "sfx",
-  "level": -4,
+  "level": -1,
   "pitch": [0.95, 1.05],
   "limit": { "minGap": 0.1, "voices": 3 },
   "spatial": { "ref": 5, "max": 70 },

@@ -2,7 +2,7 @@
   "kind": "sound",
   "note": "One step on packed ground. Pitch and the noise start vary each play, so a run of steps does not machine-gun.",
   "bus": "sfx",
-  "level": -5,
+  "level": -1,
   "pitch": [0.88, 1.12],
   "limit": { "minGap": 0.12, "voices": 4, "over": "skip" },
   "spatial": { "ref": 3, "max": 30 },

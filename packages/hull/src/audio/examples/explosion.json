@@ -2,7 +2,7 @@
   "kind": "sound",
   "note": "Big blast: a falling boom, a roar that closes down, a crack, then debris pattering.",
   "bus": "sfx",
-  "level": -3,
+  "level": -9,
   "pitch": [0.92, 1.05],
   "limit": { "minGap": 0.1, "voices": 3, "over": "steal-oldest" },
   "spatial": { "ref": 12, "max": 150 },

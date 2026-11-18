@@ -2,7 +2,7 @@
   "kind": "sound",
   "note": "Heavy landing. Low and short; the noise is the dirt.",
   "bus": "sfx",
-  "level": -2,
+  "level": -5,
   "pitch": [0.9, 1.1],
   "limit": { "minGap": 0.05, "voices": 4 },
   "spatial": { "ref": 6, "max": 50 },
