@@ -133,6 +133,12 @@ print JSON.
   experiments, a side-by-side compare, adopt.
 * **Review**: mark a piece approved or needs-change and leave a note. The AI reads the notes as its to-do list.
 * **Play**: the whole game with pause, single-step, slow motion and the same inspector.
+* **Chat**: a panel beside every view. `@` names a piece, a clip, a value or a history entry; `/` runs a skill
+  (fix, recreate, tune, variations, explain, new clip, check, test, checkpoint, undo). The mode (agent, ask, plan)
+  and the model sit in the composer. A conversation stays the same across views until you start a new one, and
+  each turn ends as one change in the history. Skills are files under `.hull/skills/`, listed by the same tool
+  registry as everything else.
+* Every panel can be shown or hidden, so a change made from the chat is seen live in whichever bench is open.
 
 ### 3.4 Who drives it: three ways
 
@@ -212,9 +218,9 @@ checking the current release.
 | Rendering | three.js *: WebGL2 first, WebGPU second, behind one bridge | See 6.1. |
 | Sound | Web Audio API, own engine | No dependency; recipes render offline for measurement. |
 | UI | DOM + CSS, own small kit | Text, focus, accessibility and layout for free. |
-| Schemas | TypeBox (schemas are JSON Schema, types are inferred), Ajv to validate | One source for types, checks and forms. |
+| Schemas | TypeBox (the `typebox` package, 1.x; schemas are JSON Schema, types are inferred), Ajv to validate | One source for types, checks and forms. |
 | History storage | git objects through isomorphic-git, in a private repository under `.hull/` | A proven store and merge base with no dependency on git being installed; Hull adds the diff that understands JSON and tunables. |
-| Source edits | TypeScript compiler API | Rewrites one literal in place without touching the rest of the file. |
+| Source edits | TypeScript 6's compiler API (`typescript@6`) | Rewrites one literal in place without touching the rest of the file. TypeScript 7 is a native compiler whose JavaScript API is still marked unstable, so tools parse with 6 while `hull check` type-checks with 7's `tsc`. |
 | Rigid bodies (optional) | Rapier (WASM, inlined into the bundle) | Fast, deterministic; only loaded by games that ask for it. |
 | Tests | Vitest in Node; Playwright with headless Chromium for the browser | Logic without a browser; screenshots with one pinned Chromium. |
 | Studio | Electron * app; React + Vite inside | Its own window, direct file access, the same Chromium the games ship in. Only the Studio uses React. |

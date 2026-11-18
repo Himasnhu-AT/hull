@@ -210,8 +210,8 @@ export const player = tunables('player', {
   `set player.runSpeed 14`; the next frame uses it. No reload.
 * **Written back**: the project server finds the literal with the TypeScript compiler's parse of that file,
   replaces exactly those characters, re-parses and type-checks the file, and only then keeps the write. Only
-  literals that are direct arguments of `num`, `bool`, `color`, `vec` and `choice` inside a `tunables` call are
-  ever rewritten.
+  literals that are direct arguments of `num`, `bool`, `color`, `vec`, `choice`, `range` and `curve` inside a
+  `tunables` call are ever rewritten.
 * **In a build**, the block compiles to constants.
 * When to use which: values that belong to one piece of code and nobody else reads go in `tunables`; things with
   structure, or shared between code and tools (a sound, a character, a screen), are config files.
