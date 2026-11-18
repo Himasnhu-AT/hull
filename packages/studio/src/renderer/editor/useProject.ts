@@ -76,6 +76,8 @@ export function useProject(rpc: RpcClient): ProjectState {
           loadLibrary();
           loadTunables();
           rpc.call('journal.list', { limit: 200 }).then(setJournal, () => {});
+          // The server's problem state includes authorship problems; later changes arrive as `problems` pushes.
+          rpc.call('problems.list', {}).then(setProblems, () => {});
         }
       }),
       rpc.on('log', (p) => log(p.level, p.message, p.source)),
