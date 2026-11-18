@@ -5,7 +5,11 @@
   "private": true,
   "type": "module",
   "main": "./out/main/main.js",
-  "scripts": {},
+  "scripts": {
+    "web": "node --import tsx src/web/dev.ts",
+    "app": "node --import tsx src/web/dev.ts --electron",
+    "build:renderer": "vite build"
+  },
   "dependencies": {
     "@hull/cli": "workspace:*",
     "hull": "workspace:*",

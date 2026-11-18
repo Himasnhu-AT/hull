@@ -1,0 +1,493 @@
+// The Inspector's widgets. Each one shows the value it is given and reports changes through `onChange(value, final)`:
+// `final` is true when a gesture ends (pointer up, Enter, blur), so the caller can flush its throttle.
+// Dragging is 1:1 from the value at pointer-down (math.ts); nothing here waits for the server to answer.
+
+import { memo, useCallback, useRef, useState, type JSX, type KeyboardEvent, type PointerEvent as RPointerEvent } from 'react';
+import type { Field } from '../lib/schemaForm.ts';
+import {
+  arcPath, clamp, curveAt, curveMove, dialAngle, dialDrag, dragScale, formatNumber, fromFraction, nearestEnd, rangeMove, sameJson,
+  scrubDelta, snap, toFraction, type CurvePoint,
+} from '../lib/math.ts';
+import { Icon } from './Icon.tsx';
+
+export type Change = (pointer: string, value: unknown, final?: boolean) => void;
+
+export interface FieldViewProps {
+  field: Field;
+  value: unknown;
+  /** The value when the project was opened (what the AI wrote): the reset arrow goes back to it. */
+  baseline: unknown;
+  problems: readonly string[];
+  /** Ids of the kind a `ref` field points at. */
+  refOptions: readonly string[];
+  onChange: Change;
+}
+
+const asNum = (v: unknown, d = 0): number => (typeof v === 'number' && Number.isFinite(v) ? v : d);
+
+/* ---------- pointer gestures ---------- */
+
+interface DragState<T> { id: number; x0: number; y0: number; s: T }
+
+/** Pointer-captured drag: start gives the state to remember, move/end receive it with the distance travelled. */
+function useDrag<T>(handlers: {
+  start(e: RPointerEvent<Element>): T;
+  move(e: RPointerEvent<Element>, s: T, dx: number, dy: number): void;
+  end?(e: RPointerEvent<Element>, s: T): void;
+}): { onPointerDown(e: RPointerEvent<Element>): void; onPointerMove(e: RPointerEvent<Element>): void; onPointerUp(e: RPointerEvent<Element>): void; onPointerCancel(e: RPointerEvent<Element>): void } {
+  const st = useRef<DragState<T> | null>(null);
+  const h = useRef(handlers);
+  h.current = handlers;
+  return {
+    onPointerDown: (e) => {
+      if (e.button !== 0) return;
+      e.currentTarget.setPointerCapture(e.pointerId);
+      st.current = { id: e.pointerId, x0: e.clientX, y0: e.clientY, s: h.current.start(e) };
+    },
+    onPointerMove: (e) => {
+      const d = st.current;
+      if (d && d.id === e.pointerId) h.current.move(e, d.s, e.clientX - d.x0, e.clientY - d.y0);
+    },
+    onPointerUp: (e) => {
+      const d = st.current;
+      if (!d || d.id !== e.pointerId) return;
+      st.current = null;
+      h.current.end?.(e, d.s);
+    },
+    onPointerCancel: (e) => {
+      const d = st.current;
+      st.current = null;
+      if (d) h.current.end?.(e, d.s);
+    },
+  };
+}
+
+/* ---------- number input ---------- */
+
+function NumInput({ value, step, label, onCommit, className }: { value: number; step: number; label: string; onCommit(v: number): void; className?: string }): JSX.Element {
+  const [draft, setDraft] = useState<string | null>(null);
+  const finish = (): void => {
+    if (draft === null) return;
+    const n = Number.parseFloat(draft.replace(',', '.'));
+    setDraft(null);
+    if (Number.isFinite(n) && n !== value) onCommit(n);
+  };
+  return (
+    <input
+      className={className}
+      aria-label={label}
+      inputMode="decimal"
+      value={draft ?? formatNumber(value, step)}
+      onFocus={(e) => { setDraft(formatNumber(value, step)); e.currentTarget.select(); }}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={finish}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') e.currentTarget.blur();
+        else if (e.key === 'Escape') { setDraft(null); e.currentTarget.blur(); }
+        else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+          e.preventDefault();
+          const cur = draft === null ? value : Number.parseFloat(draft);
+          const next = (Number.isFinite(cur) ? cur : value) + (e.key === 'ArrowUp' ? 1 : -1) * step * (e.shiftKey ? 10 : 1);
+          setDraft(null);
+          onCommit(Number(next.toFixed(6)));
+        }
+      }}
+    />
+  );
+}
+
+/* ---------- shells ---------- */
+
+function ResetButton({ onClick }: { onClick(): void }): JSX.Element {
+  return (
+    <button className="rs" onClick={onClick} aria-label="Back to the value the AI wrote" title="Back to the value the AI wrote">
+      <Icon name="reset" />
+    </button>
+  );
+}
+
+function Problems({ list }: { list: readonly string[] }): JSX.Element | null {
+  if (list.length === 0) return null;
+  return <>{list.map((m, i) => <div key={i} className="err" role="alert"><Icon name="warn" /><span>{m}</span></div>)}</>;
+}
+
+/** A label you can drag sideways to change the number, like Unity. */
+function ScrubLabel({ field, value, onChange }: { field: Field; value: number; onChange(v: number, final: boolean): void }): JSX.Element {
+  const last = useRef(value);
+  last.current = value;
+  const drag = useDrag<number>({
+    start: () => value,
+    move: (e, s, dx) => onChange(scrubDelta(s, dx, field.min, field.max, field.step, dragScale(e)), false),
+    end: () => onChange(last.current, true),
+  });
+  return <label className="fl scrub" title="Drag sideways to change. Shift: fine. Alt: coarse." {...drag}>{field.label}</label>;
+}
+
+/* ---------- slider ---------- */
+
+function Slider({ field, value, onChange }: { field: Field; value: number; onChange(v: number, final: boolean): void }): JSX.Element {
+  const track = useRef<HTMLDivElement>(null);
+  const [active, setActive] = useState(false);
+  const at = (clientX: number): number => {
+    const r = track.current!.getBoundingClientRect();
+    return snap(fromFraction((clientX - r.left) / r.width, field.min, field.max), field.min, field.max, field.step);
+  };
+  const last = useRef(value);
+  last.current = value;
+  const drag = useDrag<null>({
+    start: (e) => { setActive(true); onChange(at(e.clientX), false); return null; },
+    move: (e) => onChange(at(e.clientX), false),
+    end: () => { setActive(false); onChange(last.current, true); },
+  });
+  const f = toFraction(value, field.min, field.max) * 100;
+  const key = (e: KeyboardEvent): void => {
+    const big = e.shiftKey ? 10 : 1;
+    const d = e.key === 'ArrowRight' || e.key === 'ArrowUp' ? 1 : e.key === 'ArrowLeft' || e.key === 'ArrowDown' ? -1 : e.key === 'PageUp' ? 10 : e.key === 'PageDown' ? -10 : 0;
+    if (e.key === 'Home') { e.preventDefault(); onChange(field.min, true); }
+    else if (e.key === 'End') { e.preventDefault(); onChange(field.max, true); }
+    else if (d) { e.preventDefault(); onChange(snap(value + d * field.step * big, field.min, field.max, field.step), true); }
+  };
+  return (
+    <>
+      <div ref={track} className="slider" role="slider" tabIndex={0} aria-label={field.label} aria-valuemin={field.min} aria-valuemax={field.max} aria-valuenow={value} onKeyDown={key} {...drag}>
+        <span className="base" /><span className="fill" style={{ left: 0, width: `${f}%` }} /><span className={`thumb${active ? ' drag' : ''}`} style={{ left: `${f}%` }} />
+      </div>
+      <div className="scale"><span>{formatNumber(field.min, field.step)}</span><span>{formatNumber(field.max, field.step)}</span></div>
+    </>
+  );
+}
+
+/* ---------- dial ---------- */
+
+export const Dial = memo(function Dial({ field, value, baseline, problems, onChange }: FieldViewProps): JSX.Element {
+  const v = asNum(value);
+  const f = toFraction(v, field.min, field.max);
+  const changed = baseline !== undefined && !sameJson(value, baseline);
+  const [grab, setGrab] = useState(false);
+  const send = (n: number, final = false): void => onChange(field.pointer, n, final);
+  const last = useRef(v);
+  last.current = v;
+  const drag = useDrag<number>({
+    start: () => { setGrab(true); return v; },
+    move: (e, s, _dx, dy) => send(dialDrag(s, dy, field.min, field.max, field.step, dragScale(e))),
+    end: () => { setGrab(false); send(last.current, true); },
+  });
+  const a1 = dialAngle(f);
+  return (
+    <div className={`dial${changed ? ' mod' : ''}${problems.length ? ' bad' : ''}`}>
+      <button
+        className="knob" role="slider" aria-label={field.label} aria-valuemin={field.min} aria-valuemax={field.max} aria-valuenow={v}
+        title={`${field.label}. Drag up or down. Shift: fine. Double-click: back to the AI's value.`}
+        onDoubleClick={() => { if (baseline !== undefined) onChange(field.pointer, baseline, true); }}
+        onKeyDown={(e) => {
+          const d = e.key === 'ArrowUp' || e.key === 'ArrowRight' ? 1 : e.key === 'ArrowDown' || e.key === 'ArrowLeft' ? -1 : 0;
+          if (d) { e.preventDefault(); send(snap(v + d * field.step * (e.shiftKey ? 10 : 1), field.min, field.max, field.step), true); }
+        }}
+        {...drag}
+      >
+        <svg viewBox="0 0 64 64" aria-hidden="true">
+          <path d={arcPath(32, 32, 25, -135, 135)} stroke="var(--track)" strokeWidth="5" fill="none" strokeLinecap="round" />
+          <path d={arcPath(32, 32, 25, -135, a1)} stroke="var(--accent)" strokeWidth="5" fill="none" strokeLinecap="round" />
+          <circle cx="32" cy="32" r={grab ? 17 : 16} fill="var(--panel2)" stroke="var(--line2)" style={{ transition: 'r 0.12s var(--ease)' }} />
+        </svg>
+        <span className="kv">{formatNumber(v, field.step)}</span>
+      </button>
+      <span className="dl" title={field.help || field.label}>{field.label}</span>
+      <span className="du">{field.unit}</span>
+      <button className="rs" onClick={() => { if (baseline !== undefined) onChange(field.pointer, baseline, true); }} aria-label="Back to the value the AI wrote" title="Back to the value the AI wrote"><Icon name="reset" /></button>
+      {problems.length > 0 && <div style={{ gridColumn: '1 / -1' }}><Problems list={problems} /></div>}
+    </div>
+  );
+});
+
+/* ---------- range (two ends) ---------- */
+
+function RangeBody({ field, pair, onChange }: { field: Field; pair: [number, number]; onChange(p: [number, number], final: boolean): void }): JSX.Element {
+  const track = useRef<HTMLDivElement>(null);
+  const cur = useRef(pair);
+  cur.current = pair;
+  const at = (clientX: number): number => {
+    const r = track.current!.getBoundingClientRect();
+    return fromFraction((clientX - r.left) / r.width, field.min, field.max);
+  };
+  const drag = useDrag<0 | 1>({
+    start: (e) => {
+      const which = nearestEnd(cur.current, at(e.clientX));
+      onChange(rangeMove(cur.current, which, at(e.clientX), field.min, field.max, field.step), false);
+      return which;
+    },
+    move: (e, which) => onChange(rangeMove(cur.current, which, at(e.clientX), field.min, field.max, field.step), false),
+    end: () => onChange(cur.current, true),
+  });
+  const lo = toFraction(pair[0], field.min, field.max) * 100;
+  const hi = toFraction(pair[1], field.min, field.max) * 100;
+  return (
+    <>
+      <div ref={track} className="slider" role="group" aria-label={`${field.label}, drag either end`} {...drag}>
+        <span className="base" /><span className="fill" style={{ left: `${lo}%`, width: `${hi - lo}%` }} />
+        <span className="thumb" style={{ left: `${lo}%` }} /><span className="thumb" style={{ left: `${hi}%` }} />
+      </div>
+      <div className="scale"><span>{formatNumber(field.min, field.step)}</span><span>{formatNumber(field.max, field.step)}</span></div>
+    </>
+  );
+}
+
+/* ---------- curve ---------- */
+
+const CW = 260;
+const CH = 96;
+
+function CurveBody({ field, points, onChange }: { field: Field; points: CurvePoint[]; onChange(p: CurvePoint[], final: boolean): void }): JSX.Element {
+  const svg = useRef<SVGSVGElement>(null);
+  const cur = useRef(points);
+  cur.current = points;
+  const vMin = Number.isFinite(field.min) ? field.min : 0;
+  const vMax = Number.isFinite(field.max) ? field.max : 1;
+  const px = (t: number): number => 6 + t * (CW - 12);
+  const py = (v: number): number => 6 + (1 - (v - vMin) / (vMax - vMin || 1)) * (CH - 12);
+  const toLocal = (e: { clientX: number; clientY: number }): { t: number; v: number } => {
+    const r = svg.current!.getBoundingClientRect();
+    const x = ((e.clientX - r.left) / r.width) * CW;
+    const y = ((e.clientY - r.top) / r.height) * CH;
+    return { t: clamp((x - 6) / (CW - 12), 0, 1), v: vMin + (1 - clamp((y - 6) / (CH - 12), 0, 1)) * (vMax - vMin) };
+  };
+  const drag = useDrag<number>({
+    start: (e) => Number(e.currentTarget.getAttribute('data-i')),
+    move: (e, i) => { const p = toLocal(e); onChange(curveMove(cur.current, i, p.t, p.v, vMin, vMax), false); },
+    end: () => onChange(cur.current, true),
+  });
+  const path = points.map((p, i) => `${i ? 'L' : 'M'}${px(p[0]).toFixed(1)} ${py(p[1]).toFixed(1)}`).join(' ');
+  const addPoint = (e: React.MouseEvent): void => {
+    const { t } = toLocal(e);
+    const next = [...cur.current, [Number(t.toFixed(3)), Number(curveAt(cur.current, t).toFixed(3))] as CurvePoint].sort((a, b) => a[0] - b[0]);
+    onChange(next, true);
+  };
+  return (
+    <>
+      <svg ref={svg} className="curve" viewBox={`0 0 ${CW} ${CH}`} preserveAspectRatio="none" role="group" aria-label={`${field.label} curve, drag the points. Double-click to add or remove one.`} onDoubleClick={addPoint}>
+        <line x1="6" y1={py(0)} x2={CW - 6} y2={py(0)} stroke="var(--line2)" strokeDasharray="3 4" />
+        <line x1={px(1 / 3)} y1="0" x2={px(1 / 3)} y2={CH} stroke="var(--line)" /><line x1={px(2 / 3)} y1="0" x2={px(2 / 3)} y2={CH} stroke="var(--line)" />
+        <path d={path} stroke="var(--accent)" strokeWidth="2" fill="none" vectorEffect="non-scaling-stroke" />
+        {points.map((p, i) => (
+          <circle key={i} data-i={i} cx={px(p[0])} cy={py(p[1])} r="6" fill="#fff" stroke="var(--accent)" strokeWidth="2" style={{ cursor: 'ns-resize', touchAction: 'none' }}
+            onDoubleClick={(e) => { e.stopPropagation(); if (i > 0 && i < points.length - 1) onChange(points.filter((_, j) => j !== i), true); }}
+            {...drag} />
+        ))}
+      </svg>
+      <div className="scale"><span>0</span><span>time 0 to 1</span><span>1</span></div>
+    </>
+  );
+}
+
+/* ---------- vec3 ---------- */
+
+const AXES = [['X', 'var(--ax-x)'], ['Y', 'var(--ax-y)'], ['Z', 'var(--ax-z)']] as const;
+
+function Axis({ field, n, label, color, value, onChange }: { field: Field; n: number; label: string; color: string; value: number; onChange(v: number, final: boolean): void }): JSX.Element {
+  const last = useRef(value);
+  last.current = value;
+  const drag = useDrag<number>({
+    start: () => value,
+    move: (e, s, dx) => onChange(scrubDelta(s, dx, field.min, field.max, field.step, dragScale(e)), false),
+    end: () => onChange(last.current, true),
+  });
+  return (
+    <div className="axis">
+      <label style={{ background: color }} title="Drag sideways to scrub" {...drag}>{label}</label>
+      <NumInput value={value} step={field.step} label={`${field.label} ${label}`} onCommit={(v) => onChange(v, true)} />
+    </div>
+  );
+}
+
+/* ---------- colour ---------- */
+
+const PRESETS = ['#5a9bff', '#3cc482', '#f2a43c', '#ff7a70', '#e9ebee', '#2a2e35'];
+
+/* ---------- one field ---------- */
+
+export const FieldView = memo(function FieldView({ field, value, baseline, problems, refOptions, onChange }: FieldViewProps): JSX.Element {
+  const changed = baseline !== undefined && !sameJson(value, baseline);
+  const send = useCallback((v: unknown, final = false) => onChange(field.pointer, v, final), [onChange, field.pointer]);
+  const reset = (): void => { if (baseline !== undefined) send(baseline, true); };
+  const w = field.widget;
+  const cls = `fld${changed ? ' mod' : ''}${problems.length ? ' bad' : ''}`;
+  const unit = field.unit ? <small>{field.unit}</small> : null;
+
+  if (w === 'toggle') {
+    const on = value === true;
+    return (
+      <div className={cls}>
+        <div className="fh">
+          <span className="fl" title={field.help}>{field.label}</span>
+          <button className={`tg${on ? ' on' : ''}`} role="switch" aria-checked={on} aria-label={field.label} onClick={() => send(!on, true)} />
+          <ResetButton onClick={reset} />
+        </div>
+        {field.help && <div className="help">{field.help}</div>}
+        <Problems list={problems} />
+      </div>
+    );
+  }
+
+  if (w === 'slider' || w === 'number' || w === 'dial') {
+    const v = asNum(value);
+    return (
+      <div className={cls}>
+        <div className="fh">
+          <ScrubLabel field={field} value={v} onChange={(n, final) => send(n, final)} />
+          <span className="fv"><NumInput value={v} step={field.step} label={field.label} onCommit={(n) => send(n, true)} />{unit}</span>
+          <ResetButton onClick={reset} />
+        </div>
+        {w !== 'number' && <Slider field={field} value={v} onChange={(n, final) => send(n, final)} />}
+        {field.help && <div className="help">{field.help}</div>}
+        <Problems list={problems} />
+      </div>
+    );
+  }
+
+  if (w === 'range') {
+    // A bare number is a range of one value (docs/SCHEMAS.md "numberOrRange"); dragging turns it into a pair.
+    const pair: [number, number] = Array.isArray(value) ? [asNum(value[0]), asNum(value[1])] : [asNum(value), asNum(value)];
+    const lo = Number.isFinite(field.min) ? field.min : Math.min(0, pair[0]);
+    const hi = Number.isFinite(field.max) ? field.max : Math.max(1, pair[1]);
+    const f = { ...field, min: lo, max: hi };
+    return (
+      <div className={cls}>
+        <div className="fh">
+          <span className="fl" title={field.help}>{field.label}</span>
+          <span className="fv">
+            <NumInput value={pair[0]} step={field.step} label={`${field.label} from`} onCommit={(n) => send(rangeMove(pair, 0, n, lo, hi, field.step), true)} />
+            <span style={{ color: 'var(--faint)', padding: '0 3px' }}>to</span>
+            <NumInput value={pair[1]} step={field.step} label={`${field.label} to`} onCommit={(n) => send(rangeMove(pair, 1, n, lo, hi, field.step), true)} />
+            {unit}
+          </span>
+          <ResetButton onClick={reset} />
+        </div>
+        <RangeBody field={f} pair={pair} onChange={(p, final) => send(p, final)} />
+        {field.help && <div className="help">{field.help}</div>}
+        <Problems list={problems} />
+      </div>
+    );
+  }
+
+  if (w === 'curve') {
+    const pts: CurvePoint[] = Array.isArray(value) ? (value as unknown[]).filter((p): p is CurvePoint => Array.isArray(p) && p.length === 2).map((p) => [asNum(p[0]), asNum(p[1])]) : [[0, 0], [1, 1]];
+    return (
+      <div className={cls}>
+        <div className="fh"><span className="fl" title={field.help}>{field.label}</span><ResetButton onClick={reset} /></div>
+        <CurveBody field={field} points={pts} onChange={(p, final) => send(p, final)} />
+        {field.help && <div className="help">{field.help}</div>}
+        <Problems list={problems} />
+      </div>
+    );
+  }
+
+  if (w === 'vec3') {
+    const v = Array.isArray(value) ? [asNum(value[0]), asNum(value[1]), asNum(value[2])] : [0, 0, 0];
+    return (
+      <div className={cls}>
+        <div className="fh"><span className="fl" title={field.help}>{field.label}</span>{field.unit && <span className="fv" style={{ background: 'none', padding: 0 }}>{unit}</span>}<ResetButton onClick={reset} /></div>
+        <div className="vec">
+          {AXES.map(([name, color], i) => (
+            <Axis key={name} field={field} n={i} label={name} color={color} value={v[i]!}
+              onChange={(n, final) => { const next = [...v]; next[i] = n; send(next, final); }} />
+          ))}
+        </div>
+        {field.help && <div className="help">{field.help}</div>}
+        <Problems list={problems} />
+      </div>
+    );
+  }
+
+  if (w === 'color') {
+    const hex = typeof value === 'string' ? value : '#000000';
+    const presets = PRESETS.some((p) => p.toLowerCase() === hex.toLowerCase()) ? PRESETS : [hex, ...PRESETS.slice(0, 5)];
+    return (
+      <div className={cls}>
+        <div className="fh"><span className="fl" title={field.help}>{field.label}</span><span className="fv"><span style={{ color: 'var(--muted)' }}>{hex.toLowerCase()}</span></span><ResetButton onClick={reset} /></div>
+        <div className="sws">
+          {presets.map((c) => (
+            <button key={c} className={`swc${c.toLowerCase() === hex.toLowerCase() ? ' on' : ''}`} style={{ background: c }} onClick={() => send(c, true)} aria-label={`${field.label} ${c}`} />
+          ))}
+          <input className="pick" type="color" value={/^#[0-9a-f]{6}$/i.test(hex) ? hex : '#000000'} aria-label={`${field.label}, pick any colour`}
+            onChange={(e) => send(e.target.value, false)} onBlur={(e) => send(e.target.value, true)} />
+        </div>
+        {field.help && <div className="help">{field.help}</div>}
+        <Problems list={problems} />
+      </div>
+    );
+  }
+
+  if (w === 'segments') {
+    return (
+      <div className={cls}>
+        <div className="fh"><span className="fl" title={field.help}>{field.label}</span><ResetButton onClick={reset} /></div>
+        <div className="seg full" role="group" aria-label={field.label}>
+          {field.options.map((o) => <button key={o} className={String(value) === o ? 'on' : ''} aria-pressed={String(value) === o} onClick={() => send(coerce(field, o), true)} title={o}>{o}</button>)}
+        </div>
+        {field.help && <div className="help">{field.help}</div>}
+        <Problems list={problems} />
+      </div>
+    );
+  }
+
+  if (w === 'select' || w === 'ref') {
+    const opts = w === 'ref' ? [...new Set([...refOptions, ...(typeof value === 'string' && value ? [value] : [])])] : field.options;
+    return (
+      <div className={cls}>
+        <div className="fh"><label className="fl" htmlFor={`f${field.pointer}`} title={field.help}>{field.label}</label><ResetButton onClick={reset} /></div>
+        {opts.length > 0 ? (
+          <select id={`f${field.pointer}`} className="field-in" value={String(value ?? '')} onChange={(e) => send(coerce(field, e.target.value), true)}>
+            {opts.map((o) => <option key={o} value={o}>{o}</option>)}
+          </select>
+        ) : <input id={`f${field.pointer}`} className="field-in" value={String(value ?? '')} onChange={(e) => send(e.target.value, false)} onBlur={(e) => send(e.target.value, true)} />}
+        {field.help && <div className="help">{field.help}</div>}
+        <Problems list={problems} />
+      </div>
+    );
+  }
+
+  if (w === 'text' || w === 'keys') {
+    return <TextField className={cls} field={field} value={value} send={send} reset={reset} problems={problems} />;
+  }
+
+  return <JsonField className={cls} field={field} value={value} send={send} reset={reset} problems={problems} />;
+});
+
+const coerce = (field: Field, s: string): unknown => (typeof field.value === 'number' ? Number(s) : s);
+
+function TextField({ className, field, value, send, reset, problems }: { className: string; field: Field; value: unknown; send(v: unknown, final?: boolean): void; reset(): void; problems: readonly string[] }): JSX.Element {
+  const [draft, setDraft] = useState<string | null>(null);
+  return (
+    <div className={className}>
+      <div className="fh"><label className="fl" htmlFor={`f${field.pointer}`} title={field.help}>{field.label}</label><ResetButton onClick={reset} /></div>
+      <input id={`f${field.pointer}`} className="field-in" value={draft ?? String(value ?? '')}
+        onChange={(e) => { setDraft(e.target.value); send(e.target.value, false); }}
+        onBlur={(e) => { send(e.target.value, true); setDraft(null); }}
+        onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }} />
+      {field.help && <div className="help">{field.help}</div>}
+      <Problems list={problems} />
+    </div>
+  );
+}
+
+/** Anything the mapping does not know how to draw: the JSON itself, checked as you leave the box. */
+function JsonField({ className, field, value, send, reset, problems }: { className: string; field: Field; value: unknown; send(v: unknown, final?: boolean): void; reset(): void; problems: readonly string[] }): JSX.Element {
+  const [draft, setDraft] = useState<string | null>(null);
+  const [bad, setBad] = useState<string | null>(null);
+  const commit = (): void => {
+    if (draft === null) return;
+    try { send(JSON.parse(draft), true); setBad(null); setDraft(null); }
+    catch (e) { setBad(e instanceof Error ? e.message : 'not valid JSON'); }
+  };
+  return (
+    <div className={`${className}${bad ? ' bad' : ''}`}>
+      <div className="fh"><label className="fl" htmlFor={`f${field.pointer}`} title={field.help}>{field.label}</label><ResetButton onClick={reset} /></div>
+      <textarea id={`f${field.pointer}`} className="field-in" spellCheck={false} value={draft ?? JSON.stringify(value, null, 2)}
+        onChange={(e) => setDraft(e.target.value)} onBlur={commit}
+        onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) commit(); else if (e.key === 'Escape') { setDraft(null); setBad(null); } }} />
+      {field.help && <div className="help">{field.help}</div>}
+      {bad && <div className="err" role="alert"><Icon name="warn" /><span>{bad}</span></div>}
+      <Problems list={problems} />
+    </div>
+  );
+}
