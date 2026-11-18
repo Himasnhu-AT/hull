@@ -1,0 +1,4 @@
+{
+  "files": [],
+  "references": [{ "path": "packages/hull" }, { "path": "packages/cli" }, { "path": "templates/cube" }]
+}

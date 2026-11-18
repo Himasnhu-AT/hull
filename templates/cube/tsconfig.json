@@ -1,0 +1,6 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": { "outDir": "../../.tsbuild/cube", "lib": ["ES2023", "DOM"] },
+  "include": ["src", ".hull/gen"],
+  "references": [{ "path": "../../packages/hull" }]
+}
