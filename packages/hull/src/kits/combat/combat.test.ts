@@ -125,6 +125,28 @@ describe('weapon traces', () => {
   });
 });
 
+describe('window sources', () => {
+  it('reads windows from the move-set, or from animator.inWindow when the move says so', async () => {
+    const x = await duel(1.0);
+    x.a.attack('slash');
+    x.r.step(20); // 0.33 s: inside the move-set's trace window [0.3, 0.42]
+    expect(x.a.windowOpen('trace')).toBe(true);
+    const ms = structuredClone(config.lookup('move-set', 'duelist')) as MoveSet;
+    ms.moves['slash']!.windowsFrom = 'clip';
+    expect(config.update({ path: 'config/move-set/duelist.json', text: JSON.stringify(ms) }).problems).toEqual([]);
+    const an = x.a.animator as unknown as { inWindow(n: string): boolean };
+    an.inWindow = (n: string) => n === 'cancel';
+    expect(x.a.windowOpen('trace')).toBe(false);
+    expect(x.a.windowOpen('cancel')).toBe(true);
+    // auto: the move-set's own windows win, the clip supplies the rest.
+    ms.moves['slash']!.windowsFrom = 'auto';
+    config.update({ path: 'config/move-set/duelist.json', text: JSON.stringify(ms) });
+    expect(x.a.windowOpen('trace')).toBe(true);
+    expect(x.a.windowOpen('iframe')).toBe(false);
+    config.load(sources);
+  });
+});
+
 describe('guards', () => {
   it('a perfect deflect inside the window staggers the attacker; a guard raised too early only blocks', async () => {
     const { at } = await probe('slash', 1.0);

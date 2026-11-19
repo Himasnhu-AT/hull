@@ -214,11 +214,13 @@ export class Combatant extends Behaviour {
   windowOpen(name: string): boolean {
     const m = this.move;
     if (!m) return false;
-    if (m.windowsFrom === 'clip') {
-      const a = this.bindAnimator() as unknown as { inWindow?(n: string): boolean } | null;
+    const own = m.windows?.[name];
+    // 'clip' reads the animation's windows; 'auto' reads them only for names the move-set does not list.
+    if (m.windowsFrom === 'clip' || (m.windowsFrom === 'auto' && own === undefined)) {
+      const a = this.bindAnimator();
       if (a && typeof a.inWindow === 'function') return a.inWindow(name);
     }
-    return inWindow(m.windows?.[name], this.moveT);
+    return inWindow(own, this.moveT);
   }
 
   /** Seconds of the current move until its window `name` opens, or -1 when it has none ahead. */

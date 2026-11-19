@@ -31,7 +31,7 @@ const move = Type.Object(
         ...ui({ help: 'Named ranges of the move, in seconds. trace: the blade is live. telegraph: the tell (glint or red flash). cancel: the move may be cut short. iframe: nothing can hurt. parry: reserved for a counter.' }),
       }),
     ),
-    windowsFrom: Type.Optional(Type.Union([Type.Literal('move-set'), Type.Literal('clip')], { default: 'move-set', ...ui({ widget: 'segments', help: 'move-set: the windows above. clip: the windows named inside the animation clip (animator.inWindow).' }) })),
+    windowsFrom: Type.Optional(Type.Union([Type.Literal('move-set'), Type.Literal('clip'), Type.Literal('auto')], { default: 'move-set', ...ui({ widget: 'segments', help: 'move-set: the windows above. clip: the windows named inside the animation clip (animator.inWindow). auto: the move-set\'s, and the clip\'s for names the move-set does not list.' }) })),
     cancelsInto: Type.Optional(Type.Array(Type.String(), ui({ help: 'Moves reachable in this move\'s cancel window.' }))),
     unblockable: Type.Optional(Type.Boolean({ default: false, ...ui({ help: 'A red-flash attack: guard and deflect do nothing, only a dodge avoids it.' }) })),
     guardBreak: Type.Optional(Type.Number({ minimum: 1, maximum: 10, default: 1, ...ui({ help: 'Posture multiplier against a guard (a charged heavy that breaks it).' }) })),

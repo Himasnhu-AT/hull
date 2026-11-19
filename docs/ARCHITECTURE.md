@@ -358,6 +358,17 @@ sound (recipe, code or sample) ─► voice ─► bus (sfx / ui / voice / music
   `cut` signal fires with it. `Limb` frees the shared geometry when that node is destroyed.
 * **Hits**: a character's `hits` list gives hit and collider shapes in bone space; `characterHits(def)` resolves each to a bone
   index so the game can follow it with the bone's transform (it feeds `physics` colliders).
+* **Authoring moves (M10)**: a keyframe may name an `ease` (`in`, `out`, `inOut`, `snap`, `linear`, `hold`, `smooth`) for the segment
+  it starts. A clip has named **windows** (`trace`, `parry`, `iframe`, `cancel`...) read with `animator.inWindow(name, layer?)` and
+  fired as the `windows` signal (name, entering, clip, layer) on the fixed step, from the clip time the layer's newest state is
+  at. **Root motion** (`rootMotion` on a keyframe clip) takes the root bone's x/z (or y, and yaw) out of the pose; the
+  graph blends the travel like the pose (`animator.rootMotion`, per fixed step) and `applyRootMotion` moves the node by it. A
+  state may be a **2D blend space** (`blend2d`, inverse distance), a transition may `sync` the cycle phase, a layer may take
+  its weight from a parameter (`weightFrom`). `animator.timeScale` and `hitStop(seconds)` slow or hold one character on game
+  time (a trigger set meanwhile waits). Presentation-only extras on frame time (`secondary.ts`): `springs` (chains of bones that
+  trail the body's acceleration: hair, sash), `hitReact` and `animator.hitReact(dir, strength)` (additive flinch), and
+  `ik.grips` (the off-hand two-bone IK to a socket, last in the IK order). A humanoid body may list extra `bones`.
+  Everything on the fixed step allocates nothing (a test measures the heap).
 * `previewClip`, `previewGraph` and `stopPreview` are for benches. Everything advances on game time.
 
 ### ui

@@ -109,33 +109,77 @@
                     "rotation": {
                       "type": "array",
                       "items": {
-                        "type": "array",
-                        "prefixItems": [
+                        "anyOf": [
                           {
-                            "type": "number",
-                            "minimum": 0
+                            "type": "array",
+                            "prefixItems": [
+                              {
+                                "type": "number",
+                                "minimum": 0
+                              },
+                              {
+                                "type": "array",
+                                "prefixItems": [
+                                  {
+                                    "type": "number"
+                                  },
+                                  {
+                                    "type": "number"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ],
+                                "minItems": 3,
+                                "maxItems": 3,
+                                "items": false
+                              }
+                            ],
+                            "minItems": 2,
+                            "maxItems": 2,
+                            "items": false
                           },
                           {
                             "type": "array",
                             "prefixItems": [
                               {
-                                "type": "number"
+                                "type": "number",
+                                "minimum": 0
                               },
                               {
-                                "type": "number"
+                                "type": "array",
+                                "prefixItems": [
+                                  {
+                                    "type": "number"
+                                  },
+                                  {
+                                    "type": "number"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ],
+                                "minItems": 3,
+                                "maxItems": 3,
+                                "items": false
                               },
                               {
-                                "type": "number"
+                                "enum": [
+                                  "smooth",
+                                  "linear",
+                                  "in",
+                                  "out",
+                                  "inOut",
+                                  "snap",
+                                  "hold"
+                                ]
                               }
                             ],
                             "minItems": 3,
                             "maxItems": 3,
                             "items": false
                           }
-                        ],
-                        "minItems": 2,
-                        "maxItems": 2,
-                        "items": false
+                        ]
                       },
                       "minItems": 1,
                       "x-ui": {
@@ -145,33 +189,77 @@
                     "offset": {
                       "type": "array",
                       "items": {
-                        "type": "array",
-                        "prefixItems": [
+                        "anyOf": [
                           {
-                            "type": "number",
-                            "minimum": 0
+                            "type": "array",
+                            "prefixItems": [
+                              {
+                                "type": "number",
+                                "minimum": 0
+                              },
+                              {
+                                "type": "array",
+                                "prefixItems": [
+                                  {
+                                    "type": "number"
+                                  },
+                                  {
+                                    "type": "number"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ],
+                                "minItems": 3,
+                                "maxItems": 3,
+                                "items": false
+                              }
+                            ],
+                            "minItems": 2,
+                            "maxItems": 2,
+                            "items": false
                           },
                           {
                             "type": "array",
                             "prefixItems": [
                               {
-                                "type": "number"
+                                "type": "number",
+                                "minimum": 0
                               },
                               {
-                                "type": "number"
+                                "type": "array",
+                                "prefixItems": [
+                                  {
+                                    "type": "number"
+                                  },
+                                  {
+                                    "type": "number"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ],
+                                "minItems": 3,
+                                "maxItems": 3,
+                                "items": false
                               },
                               {
-                                "type": "number"
+                                "enum": [
+                                  "smooth",
+                                  "linear",
+                                  "in",
+                                  "out",
+                                  "inOut",
+                                  "snap",
+                                  "hold"
+                                ]
                               }
                             ],
                             "minItems": 3,
                             "maxItems": 3,
                             "items": false
                           }
-                        ],
-                        "minItems": 2,
-                        "maxItems": 2,
-                        "items": false
+                        ]
                       },
                       "minItems": 1
                     }
@@ -181,6 +269,105 @@
               },
               "x-ui": {
                 "help": "Bone name to its keyframes."
+              }
+            },
+            "windows": {
+              "type": "object",
+              "patternProperties": {
+                "^.*$": {
+                  "anyOf": [
+                    {
+                      "type": "array",
+                      "prefixItems": [
+                        {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        {
+                          "type": "number",
+                          "minimum": 0
+                        }
+                      ],
+                      "minItems": 2,
+                      "maxItems": 2,
+                      "items": false
+                    },
+                    {
+                      "type": "array",
+                      "items": {
+                        "type": "array",
+                        "prefixItems": [
+                          {
+                            "type": "number",
+                            "minimum": 0
+                          },
+                          {
+                            "type": "number",
+                            "minimum": 0
+                          }
+                        ],
+                        "minItems": 2,
+                        "maxItems": 2,
+                        "items": false
+                      },
+                      "minItems": 1
+                    }
+                  ]
+                }
+              },
+              "x-ui": {
+                "help": "Named time ranges [start, end] the game reads with animator.inWindow(name): hit, parry, iframe, cancel, trace. 0 to 1 of the loop for looping clips, seconds otherwise."
+              }
+            },
+            "rootMotion": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "bone": {
+                      "type": "string",
+                      "default": "hips",
+                      "x-ui": {
+                        "help": "The bone whose travel is the character's travel."
+                      }
+                    },
+                    "axes": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "const": "xz"
+                        },
+                        {
+                          "type": "string",
+                          "const": "xyz"
+                        },
+                        {
+                          "type": "string",
+                          "const": "y"
+                        }
+                      ],
+                      "default": "xz",
+                      "x-ui": {
+                        "widget": "segments",
+                        "help": "Which offset axes of the bone move the node. The rest stay in the pose."
+                      }
+                    },
+                    "turn": {
+                      "type": "boolean",
+                      "default": false,
+                      "x-ui": {
+                        "help": "The bone's rotation about Y turns the node too."
+                      }
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              ],
+              "x-ui": {
+                "help": "The root bone's travel moves the node (when the Animator has applyRootMotion) instead of the body inside it. true = hips, x and z."
               }
             },
             "events": {

@@ -77,7 +77,7 @@ export const characterSchema = Type.Object(
         type: Type.Union([Type.Literal('generated'), Type.Literal('gltf')], { default: 'generated', ...ui({ widget: 'segments' }) }),
         recipe: Type.Optional(Type.Union([Type.Literal('humanoid'), Type.Literal('custom')], { default: 'humanoid', ...ui({ widget: 'segments', help: 'custom uses only the bones and parts listed here.' }) })),
         proportions: Type.Optional(proportions),
-        bones: Type.Optional(Type.Array(bone, { ...ui({ help: 'Custom recipe: parents before children.' }) })),
+        bones: Type.Optional(Type.Array(bone, { ...ui({ help: 'Custom recipe: the whole skeleton, parents before children. Humanoid recipe: extra bones added to it (a ponytail, a sash), with offsets for a 1.78 m body.' }) })),
         parts: Type.Optional(Type.Array(part, { ...ui({ help: 'Added to the humanoid recipe, or the whole body for custom.' }) })),
         scale: Type.Optional(Type.Number({ exclusiveMinimum: 0, maximum: 100, default: 1, ...ui({ help: 'Uniform multiplier on every length.' }) })),
         file: Type.Optional(Type.String({ ...ui({ help: 'gltf only.' }) })),

@@ -10,7 +10,7 @@ import { throttle } from '../lib/math.ts';
 import { Icon } from '../ui/Icon.tsx';
 import { loadProjectModels, type ProjectModels } from '../lib/modelsApi.ts';
 import { createStage, loadEngine, syncConfig, type Engine, type Stage } from './engine.ts';
-import { GraphView, type GraphDef, type Live } from './GraphView.tsx';
+import { GraphView, windowColor, type GraphDef, type Live } from './GraphView.tsx';
 import { buildCharacterScene, buildFxScene, buildYard, type CharacterScene, type FxScene, type YardScene } from './scenes.ts';
 import './benches.css';
 
@@ -79,7 +79,8 @@ function Metric({ label, value, unit, tone }: { label: string; value: string; un
 
 /* ---------------------------------------------------------------- character ---------------------------------------------------------------- */
 
-interface ClipInfo { length: number; loop: boolean; speed: number; travel: number; events: { name: string; time: number }[] }
+interface ClipInfo { length: number; loop: boolean; speed: number; travel: number; events: { name: string; time: number }[]; windows: { name: string; start: number; end: number }[]; root: { x: number; y: number; z: number; yaw: number } | null }
+
 
 function CharacterBench({ rpc, gameUrl, eng, items, selected }: Omit<Props, 'kind' | 'onSelect'> & { eng: Engine }): JSX.Element {
   const chars = useMemo(() => items.filter((i) => i.kind === 'character').map((i) => i.id), [items]);
@@ -125,6 +126,14 @@ function CharacterBench({ rpc, gameUrl, eng, items, selected }: Omit<Props, 'kin
   const modeRef = useRef(mode);
   const clipRef = useRef<string | null>(null);
   const lookRef = useRef(false);
+  const [rootOn, setRootOn] = useState(false);
+  const rootRef = useRef(false);
+  rootRef.current = rootOn;
+  const rootShown = useRef(false);
+  const rootOut = useMemo(() => new Float64Array(4), []);
+  const [timeScale, setTimeScale] = useState(1);
+  const [applyRoot, setApplyRoot] = useState(false);
+  useEffect(() => { const a = animRef.current; if (a) { a.timeScale = timeScale; a.applyRootMotion = applyRoot; } if (!applyRoot) stage?.scene.recentre(); }, [timeScale, applyRoot, stage, animTick]);
   const params = useRef<Record<string, number | boolean>>({});
   const lastRt = useRef<unknown>(null);
   playRef.current = playing;
@@ -172,6 +181,10 @@ function CharacterBench({ rpc, gameUrl, eng, items, selected }: Omit<Props, 'kin
           }
           if (tRef.current > c.length) tRef.current = c.length;
           a.previewClip(name, tRef.current);
+          // Root motion: the character is shown where the clip's travel has taken it.
+          if (rootRef.current && c.root) { c.root.at(tRef.current, rootOut); stage.scene.setRoot({ x: rootOut[0]!, y: rootOut[1]!, z: rootOut[2]!, yaw: rootOut[3]! }); }
+          else if (rootShown.current) stage.scene.setRoot(null);
+          rootShown.current = rootRef.current && !!c.root;
         }
       }
       if (lookRef.current) {
@@ -198,7 +211,12 @@ function CharacterBench({ rpc, gameUrl, eng, items, selected }: Omit<Props, 'kin
       const name = clipRef.current;
       const c = name ? a.clip(name) : undefined;
       if (c) {
-        setInfo({ length: c.length, loop: c.loop, speed: c.speed, travel: c.travel, events: c.events.map((e) => ({ name: e.name, time: e.time })) });
+        const tot = c.root?.total;
+        setInfo({
+          length: c.length, loop: c.loop, speed: c.speed, travel: c.travel, events: c.events.map((e) => ({ name: e.name, time: e.time })),
+          windows: c.windows.map((x) => ({ name: x.name, start: x.start, end: x.end })),
+          root: tot ? { x: tot[0]!, y: tot[1]!, z: tot[2]!, yaw: tot[3]! } : null,
+        });
         setT(tRef.current);
       } else setInfo(null);
       const rt = a.graphRuntime;
@@ -210,7 +228,10 @@ function CharacterBench({ rpc, gameUrl, eng, items, selected }: Omit<Props, 'kin
       }
       if (rt && modeRef.current === 'graph') {
         const layers: Live['layers'] = {};
-        for (const ln of Object.keys(rt.def.layers)) layers[ln] = { state: a.stateOf(ln) ?? '', weights: a.weights(ln) };
+        for (const ln of Object.keys(rt.def.layers)) {
+          const st = a.stateOf(ln) ?? '';
+          layers[ln] = { state: st, weights: a.weights(ln), progress: rt.progress(ln), windows: rt.openWindows(ln), clips: rt.clipWeights(ln, st) };
+        }
         const ps: Record<string, number> = {};
         for (const n of rt.paramNames) ps[n] = a.get(n);
         setLive({ layers, params: ps, slide: a.footSlide, stride: a.footStride, speed: rt.speed });
@@ -224,7 +245,7 @@ function CharacterBench({ rpc, gameUrl, eng, items, selected }: Omit<Props, 'kin
   useEffect(() => { tRef.current = 0; setT(0); setPlaying(true); }, [clip]);
   useEffect(() => {
     const a = animRef.current;
-    if (mode === 'graph') { a?.stopPreview(); a?.look(null); }
+    if (mode === 'graph') { a?.stopPreview(); a?.look(null); stage?.scene.setRoot(null); rootShown.current = false; }
   }, [mode]);
 
   const setAnimParam = (name: string, v: number | boolean): void => { params.current[name] = v; animRef.current?.set(name, v); };
@@ -291,6 +312,20 @@ function CharacterBench({ rpc, gameUrl, eng, items, selected }: Omit<Props, 'kin
               {!animTick?.graphRuntime && <span className="bb-dim">This character has no animation graph.</span>}
             </div>
           </div>
+          <div className="bcard">
+            <h3>Time, hits and travel</h3>
+            <div className="bb-params">
+              <label className="bb-f">
+                <span>time scale</span>
+                <input type="range" min={0} max={2} step={0.05} value={timeScale} aria-label="Animation time scale" onChange={(e) => setTimeScale(Number(e.target.value))} />
+                <b className="mono">{timeScale.toFixed(2)}</b>
+              </label>
+              <button className="btn" onClick={() => animRef.current?.hitStop(0.15)} title="Hold the animation for 0.15 s of game time">Hit-stop</button>
+              <button className="btn" onClick={() => animRef.current?.hitReact({ x: 0, y: 0, z: 1 }, 1)} title="A blow from the front: the body leans back and springs forward">Flinch (front)</button>
+              <button className="btn" onClick={() => animRef.current?.hitReact({ x: 1, y: 0, z: 0 }, 1)} title="A blow pushing the body along +x">Flinch (side)</button>
+              <label className="bb-f check"><input type="checkbox" checked={applyRoot} onChange={(e) => setApplyRoot(e.target.checked)} /><span>Root motion moves the character</span></label>
+            </div>
+          </div>
           </div>
         )}
       </div>
@@ -316,6 +351,14 @@ function CharacterBench({ rpc, gameUrl, eng, items, selected }: Omit<Props, 'kin
                   {clipDef.events.map((e, i) => (
                     <i key={i} className="bb-ev" style={{ left: `${(Math.min(e.time, clipDef.length) / clipDef.length) * 100}%` }} title={`${e.name} at ${e.time.toFixed(2)} s`} />
                   ))}
+                  {clipDef.windows.length > 0 && (
+                    <div className="bb-wins" aria-label="Windows of the clip">
+                      {clipDef.windows.map((w, i) => (
+                        <i key={i} className={`bb-win${t >= w.start && t < w.end ? ' on' : ''}`} style={{ left: `${(w.start / clipDef.length) * 100}%`, width: `${((w.end - w.start) / clipDef.length) * 100}%`, background: windowColor(w.name) }}
+                          title={`${w.name}: ${w.start.toFixed(2)} to ${w.end.toFixed(2)} s`}>{w.name}</i>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <span className="mono bb-time">{t.toFixed(2)} / {clipDef.length.toFixed(2)} s</span>
               </div>
@@ -332,7 +375,21 @@ function CharacterBench({ rpc, gameUrl, eng, items, selected }: Omit<Props, 'kin
                 </label>
                 <span className="mono bb-dim">{clipDef.travel > 0 ? `feet cover ${clipDef.travel.toFixed(2)} m/s` : 'stays in place'}</span>
                 <span className="mono bb-dim">{clipDef.events.length > 0 ? `events: ${clipDef.events.map((e) => e.name).join(', ')}` : 'no events'}</span>
+                {clipDef.root && (
+                  <button className={`chip${rootOn ? ' on' : ''}`} aria-pressed={rootOn} onClick={() => setRootOn((v) => !v)} title="Show the character where the clip's root motion carries it">
+                    Root motion {Math.hypot(clipDef.root.x, clipDef.root.z).toFixed(2)} m
+                  </button>
+                )}
               </div>
+              {clipDef.windows.length > 0 && (
+                <div className="bb-wlist">
+                  {clipDef.windows.map((w, i) => (
+                    <span key={i} className={`bb-wchip${t >= w.start && t < w.end ? ' on' : ''}`} style={{ borderColor: windowColor(w.name) }}>
+                      <i style={{ background: windowColor(w.name) }} />{w.name}<small className="mono">{w.start.toFixed(2)}-{w.end.toFixed(2)} s</small>
+                    </span>
+                  ))}
+                </div>
+              )}
               <div className="bb-dim" style={{ fontSize: 11.5 }}>Speed and Loop write to <span className="mono">{animSetId ?? '(no anim-set)'}</span>; the Inspector shows the same fields.</div>
             </>
           )}
@@ -340,7 +397,7 @@ function CharacterBench({ rpc, gameUrl, eng, items, selected }: Omit<Props, 'kin
       )}
 
       {mode === 'graph' && animTick?.graphRuntime && graphDef && (
-        <GraphView eng={eng} animator={animTick} def={graphDef} live={live} />
+        <GraphView eng={eng} animator={animTick} def={graphDef} live={live} onParam={setAnimParam} />
       )}
     </div>
   );

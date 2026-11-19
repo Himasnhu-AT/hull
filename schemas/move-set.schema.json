@@ -235,12 +235,16 @@
                 {
                   "type": "string",
                   "const": "clip"
+                },
+                {
+                  "type": "string",
+                  "const": "auto"
                 }
               ],
               "default": "move-set",
               "x-ui": {
                 "widget": "segments",
-                "help": "move-set: the windows above. clip: the windows named inside the animation clip (animator.inWindow)."
+                "help": "move-set: the windows above. clip: the windows named inside the animation clip (animator.inWindow). auto: the move-set's, and the clip's for names the move-set does not list."
               }
             },
             "cancelsInto": {

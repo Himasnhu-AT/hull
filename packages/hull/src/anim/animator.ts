@@ -14,7 +14,8 @@ import { compileClip, type Clip } from './clip.ts';
 import './generators.ts';
 import { Graph } from './graph.ts';
 import { lookAt, twoBone } from './ik.ts';
-import { clamp, qMulInv, smoothstep } from './math.ts';
+import { clamp, qMulInv, qRotate, smoothstep } from './math.ts';
+import { HitReact, Springs } from './secondary.ts';
 import { buildBody, Pose, REF_HEIGHT, Skeleton } from './skeleton.ts';
 
 interface Vec3 { x: number; y: number; z: number }
@@ -48,11 +49,17 @@ export class Animator extends Behaviour {
   /** Overrides the character's own anim-set / anim-graph. */
   animSet: string | AnimSet | undefined = undefined;
   graph: string | AnimGraph | undefined = undefined;
+  /** Game-time speed of this character's animation: 1 normal, 0.2 slow, 0 holds it (its windows and events stop too). */
+  timeScale = 1;
+  /** Moves the node by the playing clips' root motion each fixed step. Leave it off when something else (a character controller) moves the node and reads `rootMotion` itself. */
+  applyRootMotion = false;
   /** Height of the ground at a world x, z. Without it feet are not placed on the ground. */
   ground: ((x: number, z: number) => number) | null = null;
 
   /** Clip events: (event name, clip name, layer). Fired on the fixed step. */
   readonly events: Signal<[name: string, clip: string, layer: string]> = signal<[string, string, string]>();
+  /** A named window of the playing clip opens (`entering` true) or closes: (window, entering, clip, layer). Fired on the fixed step. */
+  readonly windows: Signal<[name: string, entering: boolean, clip: string, layer: string]> = signal<[string, boolean, string, string]>();
   /** Fired when a part is cut off, with the bone's name and the node that now carries it. */
   readonly cut: Signal<[bone: string, limb: Node]> = signal<[string, Node]>();
 
@@ -75,6 +82,13 @@ export class Animator extends Behaviour {
   private preview: { clip: Clip; t: number } | null = null;
   private warned = new Set<string>();
   private readonly emitEvent = (name: string, clip: string, layer: string): void => this.events.emit(name, clip, layer);
+  private readonly emitWindow = (name: string, entering: boolean, clip: string, layer: string): void => this.windows.emit(name, entering, clip, layer);
+  private freezeLeft = 0;
+  private freezeScale = 0;
+  private springs: Springs | null = null;
+  private flinch: HitReact | null = null;
+  private socketDefs = new Map<string, { bone: number; x: number; y: number; z: number }>();
+  private grips: { a: number; b: number; c: number; sb: number; ox: number; oy: number; oz: number; weight: number; wParam: number }[] = [];
 
   // IK
   private legs: [number, number, number][] = [];
@@ -128,6 +142,7 @@ export class Animator extends Behaviour {
     this.body?.dispose();
     this.body = null;
     this.sockets.clear();
+    this.socketDefs.clear();
   }
 
   /** (Re)builds everything from the files. Parameters and layer states that still exist are kept. */
@@ -170,6 +185,7 @@ export class Animator extends Behaviour {
       const o = new Object3D();
       o.name = `socket:${name}`;
       if (s.offset) o.position.set(s.offset[0], s.offset[1], s.offset[2]);
+      this.socketDefs.set(name, { bone: bi, x: s.offset?.[0] ?? 0, y: s.offset?.[1] ?? 0, z: s.offset?.[2] ?? 0 });
       this.body.bones[bi]!.add(o);
       this.sockets.set(name, o);
     }
@@ -216,6 +232,24 @@ export class Animator extends Behaviour {
     this.lookChain = Int16Array.from(order.map((k) => chain[k]!));
     this.lookWeights = Float64Array.from(order.map((k) => ws[k]!));
     this.reaches = [];
+
+    // Hands that hold a socket (the off-hand on the hilt).
+    this.grips = [];
+    const g = this.graphRt;
+    for (const [hand, gd] of Object.entries(g?.ik.grips ?? {})) {
+      const c = i(hand);
+      const b = c >= 0 ? sk.parent[c]! : -1;
+      const a = b >= 0 ? sk.parent[b]! : -1;
+      const sd = this.socketDefs.get(gd.socket);
+      if (a < 0) { this.report(`anim-graph#/ik/grips/${hand}: "${hand}" needs two bones above it.`); continue; }
+      if (!sd) { this.report(`anim-graph#/ik/grips/${hand}/socket: the character has no socket "${gd.socket}".`); continue; }
+      const wParam = gd.weightFrom !== undefined && g ? g.paramIndexOf(gd.weightFrom) : -1;
+      if (gd.weightFrom !== undefined && wParam < 0) this.report(`anim-graph#/ik/grips/${hand}/weightFrom: no parameter "${gd.weightFrom}"; the weight stays fixed.`);
+      this.grips.push({ a, b, c, sb: sd.bone, ox: sd.x, oy: sd.y, oz: sd.z, weight: gd.weight ?? 1, wParam });
+    }
+    // Secondary motion and the flinch, from the graph (a character with no graph still flinches with the defaults).
+    this.springs = g?.def.springs ? new Springs(sk, g.def.springs, 'anim-graph#', (m) => this.report(m)) : null;
+    this.flinch = new HitReact(sk, g?.def.hitReact, 'anim-graph#', (m) => this.report(m));
   }
 
   // ---- parameters ----
@@ -270,7 +304,46 @@ export class Animator extends Behaviour {
   }
 
   get animState(): unknown[] {
-    return [this.graphRt ? this.graphRt.snapshot() : [], [...this.severed].sort()];
+    return [this.graphRt ? this.graphRt.snapshot() : [], [...this.severed].sort(), this.timeScale, this.freezeLeft];
+  }
+
+  // ---- windows, root motion, time ----
+
+  /** True while the clip a layer is playing is inside the window `name` (as of the last fixed step). Any layer, or just `layer`. */
+  inWindow(name: string, layer?: string): boolean {
+    return this.graphRt ? this.graphRt.inWindow(name, layer) : false;
+  }
+
+  /** The windows that are open now (for tools and tests; it allocates). */
+  get openWindows(): string[] {
+    return this.graphRt ? this.graphRt.openWindows() : [];
+  }
+
+  /** Travel of the last fixed step from root motion: x, y, z in metres and yaw in radians, in the character's frame. Zero when no clip has root motion. */
+  get rootMotion(): Readonly<Float64Array> {
+    return this.graphRt ? this.graphRt.rootDelta : zero4;
+  }
+
+  /** Holds the animation (scale 0) or slows it for `seconds` of game time: the hit-stop. A longer one in progress wins. */
+  hitStop(seconds: number, scale = 0): void {
+    if (seconds > this.freezeLeft) { this.freezeLeft = seconds; this.freezeScale = scale; }
+  }
+
+  /** The speed the animation runs at now: the time scale, or the hit-stop's while one is on. */
+  get speedNow(): number {
+    return this.freezeLeft > 0 ? this.freezeScale : this.timeScale;
+  }
+
+  /**
+   * A blow that pushes the body along a world direction (from the attacker to the victim): the body leans away from it
+   * and springs back, whatever clip is playing. `strength` 1 is a firm hit; set the look in the graph's `hitReact`.
+   */
+  hitReact(dir: Vec3, strength = 1): void {
+    if (!this.flinch || !this.built) return;
+    this.node.object3d.getWorldQuaternion(_wq);
+    _wqa[0] = -_wq.x; _wqa[1] = -_wq.y; _wqa[2] = -_wq.z; _wqa[3] = _wq.w;
+    qRotate(_wqa, 0, dir.x, dir.y, dir.z, _wv, 0);
+    this.flinch.kick(_wv[0]!, _wv[2]!, strength);
   }
 
   // ---- IK targets (world space) ----
@@ -302,7 +375,28 @@ export class Animator extends Behaviour {
     if (this.dirty) this.build();
     this.lastDt = dt;
     if (this.frozen || this.preview) return;
-    this.graphRt?.step(dt, this.emitEvent);
+    let k = this.timeScale;
+    if (this.freezeLeft > 0) {
+      k = this.freezeScale;
+      this.freezeLeft = Math.max(0, this.freezeLeft - dt);
+    }
+    // Held: nothing advances, and a trigger set now waits for the step that follows.
+    if (k <= 0) return;
+    const g = this.graphRt;
+    if (!g) return;
+    g.step(dt * k, this.emitEvent, this.emitWindow);
+    if (this.applyRootMotion) this.moveByRoot(g.rootDelta);
+  }
+
+  private moveByRoot(d: Float64Array): void {
+    if (d[0] === 0 && d[1] === 0 && d[2] === 0 && d[3] === 0) return;
+    const n = this.node;
+    const ry = n.rotation.y;
+    const cs = Math.cos(ry), sn = Math.sin(ry);
+    n.position.x += d[0]! * cs + d[2]! * sn;
+    n.position.z += -d[0]! * sn + d[2]! * cs;
+    n.position.y += d[1]!;
+    n.rotation.y += d[3]!;
   }
 
   override update(dt: number, alpha: number): void {
@@ -332,6 +426,10 @@ export class Animator extends Behaviour {
     } else {
       pose.setRest();
     }
+    // Secondary motion on frame time, held while the animation is held (a hit-stop).
+    const sdt = dt > 0 ? dt * this.speedNow : 0;
+    if (this.flinch) this.flinch.update(sdt, pose);
+    if (this.springs) this.springs.update(sdt, pose, this.node.object3d);
     this.solveIk(dt > 0 ? dt : this.lastDt);
     body.apply(pose);
   }
@@ -348,11 +446,12 @@ export class Animator extends Behaviour {
     const lookEnabled = lookCfg?.enabled !== false && this.lookChain.length > 0;
     let anyReach = false;
     for (let i = 0; i < this.reaches.length; i++) if (this.reaches[i]!.on) anyReach = true;
+    const anyGrip = this.grips.length > 0;
     // Smoothing runs on frame time: it is a presentation detail, not game state.
     const k = Math.min(1, dt * (lookCfg?.speed ?? 8));
     this.lookStrength += ((this.lookOn && lookEnabled ? 1 : 0) - this.lookStrength) * k;
     const looking = lookEnabled && this.lookStrength > 0.001;
-    if (!feetOn && !looking && !anyReach) { this.pelvisDy = 0; return; }
+    if (!feetOn && !looking && !anyReach && !anyGrip) { this.pelvisDy = 0; return; }
 
     const node = this.node.object3d;
     node.updateWorldMatrix(true, false);
@@ -377,6 +476,17 @@ export class Animator extends Behaviour {
       const out = mp[r.a * 3]! < 0 ? -1 : 1;
       const s = sk.scale;
       twoBone(sk, pose, mq, mp, r.a, r.b, r.c, t[0]!, t[1]!, t[2]!, mp[r.b * 3]! + out * 0.3 * s, mp[r.b * 3 + 1]!, mp[r.b * 3 + 2]! + 0.6 * s, r.weight);
+    }
+    // The off-hand goes to its socket on the other hand's bone, after everything else has moved that hand.
+    for (let gi = 0; gi < this.grips.length; gi++) {
+      const gr = this.grips[gi]!;
+      const w = gr.weight * (gr.wParam >= 0 ? clamp(g!.params[gr.wParam]!, 0, 1) : 1);
+      if (w <= 0.001) continue;
+      qRotate(mq, gr.sb * 4, gr.ox, gr.oy, gr.oz, this.modelOut, 0);
+      const tx = mp[gr.sb * 3]! + this.modelOut[0]!, ty = mp[gr.sb * 3 + 1]! + this.modelOut[1]!, tz = mp[gr.sb * 3 + 2]! + this.modelOut[2]!;
+      const out = mp[gr.a * 3]! < 0 ? -1 : 1;
+      const s = sk.scale;
+      twoBone(sk, pose, mq, mp, gr.a, gr.b, gr.c, tx, ty, tz, mp[gr.b * 3]! + out * 0.3 * s, mp[gr.b * 3 + 1]!, mp[gr.b * 3 + 2]! + 0.6 * s, w);
     }
   }
 
@@ -508,4 +618,8 @@ export class Animator extends Behaviour {
 }
 
 const _qq = new Quaternion();
+const _wq = new Quaternion();
+const _wqa = new Float64Array(4);
+const _wv = new Float64Array(3);
+const zero4 = new Float64Array(4);
 const _sc = new Vector3();
