@@ -2,7 +2,7 @@
 // tunable edits made in the app arrive here and are applied to the running game without a reload, and the app sees the
 // game's tick, time and frame rate about four times a second. Dev only: a build never imports this file.
 import { config, setTunable, tuningProblems } from '../config/index.ts';
-import type { Game } from '../core/index.ts';
+import type { Game, Node } from '../core/index.ts';
 import { setTraceSink, type TraceKind } from '../core/trace.ts';
 import { createRecentFeed } from './recent.ts';
 import { input } from '../input/dom.ts';
@@ -60,10 +60,22 @@ export function connectDev(game: Game, opts: { url: string; /** Called for `rest
   setTraceSink(feed.add);
   const feeder = setInterval(() => { feed.flush(); }, FEED_MS);
 
+  // Characters built before this connection existed (connectDev runs after the game's ready, and a studio can connect any time later)
+  // never traced themselves to this ring. One walk of the tree on each connect asks them to; it is not per frame.
+  const announceActors = (): void => {
+    const stack: Node[] = [game.world.root];
+    for (let n = stack.pop(); n; n = stack.pop()) {
+      for (const b of n.behaviours) (b as { announceActor?: () => void }).announceActor?.();
+      for (const k of n.children) stack.push(k);
+    }
+  };
+
   const control = (c: GameControl): void => {
     if (c.timeScale !== undefined && Number.isFinite(c.timeScale) && c.timeScale >= 0) game.timeScale = c.timeScale;
     if (c.paused !== undefined) game.paused = c.paused;
     if (c.step !== undefined && c.step > 0) { game.paused = true; game.step(Math.floor(c.step)); }
+    // Say so at once, so a studio that just paused or resumed the game does not wait for the next report to see it.
+    if (c.paused !== undefined || c.step !== undefined || c.timeScale !== undefined) { feed.flush(); report(); }
     if (c.restart) (opts.onRestart ?? (() => location.reload()))();
   };
 
@@ -85,11 +97,13 @@ export function connectDev(game: Game, opts: { url: string; /** Called for `rest
         if (!Number.isFinite(c.n) || c.n < 0) throw new Error(`step needs a count of zero or more, got ${String(c.n)}`);
         game.paused = true;
         game.step(Math.floor(c.n));
+        feed.flush();
         return stateOf();
       case 'press': key('keydown', c.key); return {};
       case 'release': key('keyup', c.key); return {};
-      case 'state': return stateOf(c.nodes);
+      case 'state': feed.flush(); return stateOf(c.nodes);
       case 'screenshot': {
+        feed.flush();
         const view = (globalThis as { hull?: { render?: { shot(): Promise<Blob> } } }).hull?.render;
         if (!view) throw new Error('the game has no render view to capture');
         const blob = await view.shot();
@@ -167,7 +181,7 @@ export function connectDev(game: Game, opts: { url: string; /** Called for `rest
   const open = (): void => {
     if (disposed) return;
     ws = new WebSocket(url);
-    ws.onopen = () => { attempt = 0; feed.clear(); report(); reportTuning(); };
+    ws.onopen = () => { attempt = 0; feed.clear(); announceActors(); report(); reportTuning(); };
     ws.onmessage = (e) => {
       try { handle(JSON.parse(String(e.data)) as Note); } catch (err) { log('error', `dev message failed: ${(err as Error).message}`); }
     };

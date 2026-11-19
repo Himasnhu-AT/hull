@@ -24,7 +24,7 @@ describe('trace', () => {
 });
 
 describe('the recent ring', () => {
-  it('labels from the title, else the last part of the id', () => {
+  it('labels from the title, else a readable form of the id', () => {
     expect(lastPart('sound/sword/hit')).toBe('hit');
     expect(lastPart('anim-graph/hero#attack')).toBe('attack');
     const sent: RecentEvent[][] = [];
@@ -32,7 +32,7 @@ describe('the recent ring', () => {
     feed.add('sound', 'sound/sword/hit');
     feed.add('vfx', 'vfx/clash-sparks', 'Blade');
     feed.flush();
-    expect(sent[0]!.map((e) => e.label)).toEqual(['Clash', 'clash-sparks']);
+    expect(sent[0]!.map((e) => e.label)).toEqual(['Clash', 'Clash sparks']);
     expect(sent[0]![1]).toMatchObject({ kind: 'vfx', node: 'Blade' });
     expect('node' in sent[0]![0]!).toBe(false);
   });
