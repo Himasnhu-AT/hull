@@ -3,6 +3,7 @@
 // or a template starts on Play and fix; one made from an idea starts on Brief.
 
 import { useCallback, useEffect, useRef, useState, type JSX } from 'react';
+import type { GameMoment } from 'hull/dev/protocol';
 import type { OpenedProject } from '../../shared/appApi.ts';
 import { Editor } from '../editor/Editor.tsx';
 import { useProject } from '../editor/useProject.ts';
@@ -17,6 +18,7 @@ import { Everything } from './Everything.tsx';
 import { OpenSheet } from './OpenSheet.tsx';
 import { PlayScreen } from './PlayScreen.tsx';
 import { ShareScreen } from './ShareScreen.tsx';
+import { BuilderProvider } from './useBuilder.tsx';
 import { STEPS, type AttachedPiece, type PlayTab, type Step } from './types.ts';
 
 const advancedKey = (root: string): string => `hull.advanced:${root}`;
@@ -80,6 +82,7 @@ function ShellScreens({ rpc, project, platform, idea, onClose, step, setStep, ta
   const p = useProject(rpc);
   const baselines = useRef(new Map<string, unknown>());
   const [sheet, setSheet] = useState<string | null>(null);
+  const [moment, setMoment] = useState<GameMoment | null>(null);
   const changeCount = useChangeCount(rpc);
   const library = p.library;
   const open = library?.find((i) => i.id === sheet) ?? null;
@@ -89,9 +92,18 @@ function ShellScreens({ rpc, project, platform, idea, onClose, step, setStep, ta
     setSheet(null);
   }, [attached, setAttached]);
   const play = useCallback(() => { setTab('play'); setStep('play'); }, [setTab, setStep]);
-  const builder = <BuilderColumn project={project} attached={attached} onClearAttached={() => setAttached([])} />;
+  // A freeze keeps the moment and the pieces that just played for the next note; carrying on drops both.
+  const freeze = useCallback((m: GameMoment | null, pieces: AttachedPiece[]) => {
+    setMoment(m);
+    setAttached(m ? [...attached, ...pieces.filter((p) => !attached.some((a) => a.key === p.key))] : []);
+  }, [attached, setAttached]);
+  const builder = (
+    <BuilderColumn project={project} attached={attached} onClearAttached={() => setAttached([])} moment={moment} onClearMoment={() => freeze(null, [])}
+      onRemoveAttached={(k) => setAttached(attached.filter((a) => a.key !== k))} onSent={() => { setMoment(null); setAttached([]); }} />
+  );
 
   return (
+    <BuilderProvider rpc={rpc} project={project}>
     <div className="cr">
       <header className={`cr-top drag${platform === 'darwin' ? ' mac' : ''}`}>
         <button className="btn ghost nodrag" onClick={onClose} aria-label="Back to your games" title="Back to your games"><Icon name="back" size={14} /></button>
@@ -127,7 +139,8 @@ function ShellScreens({ rpc, project, platform, idea, onClose, step, setStep, ta
         {step === 'play' && (
           <div className="cr-playgrid">
             <div className="cr-pane">
-              {tab === 'play' && <PlayScreen rpc={rpc} project={project} onAttach={attach} />}
+              {/* The game stays mounted when the tab changes, so it keeps running. */}
+              <div style={{ display: tab === 'play' ? 'contents' : 'none' }}><PlayScreen rpc={rpc} project={project} onAttach={attach} active={tab === 'play'} moment={moment} onFreeze={freeze} /></div>
               {tab === 'everything' && <Everything rpc={rpc} project={project} library={library} onAttach={attach} onOpen={setSheet} />}
               {tab === 'changes' && <Changes rpc={rpc} />}
             </div>
@@ -138,5 +151,6 @@ function ShellScreens({ rpc, project, platform, idea, onClose, step, setStep, ta
 
       {open && <OpenSheet rpc={rpc} project={project} item={open} library={library ?? []} tunables={p.tunables} baselines={baselines} setTunableLocal={p.setTunableLocal} onClose={() => setSheet(null)} />}
     </div>
+    </BuilderProvider>
   );
 }
