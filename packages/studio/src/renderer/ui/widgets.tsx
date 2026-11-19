@@ -11,6 +11,7 @@ import {
 import { leaveBox } from '../lib/keys.ts';
 import { show, type Shown } from '../history/changesView.ts';
 import { Icon } from './Icon.tsx';
+import { BindingsField } from './Bindings.tsx';
 
 export type Change = (pointer: string, value: unknown, final?: boolean) => void;
 
@@ -462,6 +463,11 @@ export const FieldView = memo(function FieldView({ field, value, baseline, probl
 
   if (w === 'list') {
     return <ListField className={cls} field={field} value={value} problems={problems} refs={refs} send={send} reset={reset} onChange={onChange} />;
+  }
+
+  if (w === 'bindings') {
+    return <BindingsField field={field} value={value} problems={problems} send={send} onChange={onChange}
+      renderField={(f) => <FieldView key={f.pointer} field={f} value={f.value} baseline={undefined} problems={[]} refOptions={[]} onChange={onChange} />} />;
   }
 
   if (w === 'map') {

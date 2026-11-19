@@ -53,7 +53,7 @@ Standard JSON Schema says what is valid. `x-ui` says how to edit it in the Studi
 
 | Hint | Meaning |
 |---|---|
-| `widget` | `slider`, `dial`, `number`, `toggle`, `select`, `segments`, `color`, `curve`, `vec3`, `range`, `ref`, `text`, `keys` |
+| `widget` | `slider`, `dial`, `number`, `toggle`, `select`, `segments`, `color`, `curve`, `vec3`, `range`, `ref`, `text`, `keys`, `bindings` (a map of input actions as a table with key chips; `input-map` only) |
 | `unit` | Shown after the value: `m`, `s`, `dB`, `Hz`, `°`, `%` |
 | `step` | Slider and arrow-key step |
 | `group`, `order` | Section and position in the form |
@@ -100,6 +100,7 @@ repository's templates and kits are rewritten with it.
   "version": "0.1.0",
   "entry": "src/main.ts",
   "generators": "src/audio/generators.ts",
+  "models": "src/bench/models.ts",
   "step": 60,
   "features": ["audio", "anim", "ui", "vfx"],
   "render": { "backend": "auto" },
@@ -127,6 +128,7 @@ Schema (abridged):
     "version": { "type": "string" },
     "entry": { "type": "string" },
     "generators": { "type": "string", "x-ui": { "help": "A module that registers the game's code sound generators; its default export is called once. The Studio's sound bench loads it, so sounds with a code source render there too." } },
+    "models": { "type": "string", "x-ui": { "help": "A module that registers the bodies the game builds in code for its characters (a builder per character id, or per prefix such as \"titan-*\"): its default export is called once with register(match, build). The Studio's character bench draws those bodies, and plays the character's clips and state graph on them, instead of its rigid stand-ins." } },
     "step": { "enum": [30, 60, 120], "default": 60, "x-ui": { "unit": "Hz", "help": "Fixed simulation rate." } },
     "features": { "type": "array", "items": { "enum": ["audio", "anim", "ui", "vfx", "physics", "saves"] } },
     "render": { "type": "object", "properties": { "backend": { "enum": ["auto", "webgl2", "webgpu"], "default": "auto", "x-ui": { "widget": "select", "help": "Which renderer draws the game. auto tries WebGPU and falls back to WebGL2. A game with GLSL shader code of its own pins webgl2." } } } },

@@ -305,3 +305,41 @@ describe('vfx system', () => {
     g.dispose();
   });
 });
+
+describe('vfx on a real project (AOTT)', () => {
+  const aott = join(import.meta.dirname, '..', '..', '..', '..', 'examples', 'aott', 'config', 'vfx');
+  const docs = (): { path: string; text: string }[] => readdirSync(aott).map((f) => ({ path: `config/vfx/${f}`, text: readFileSync(join(aott, f), 'utf8') }));
+
+  it('loads every effect with no problems and plays each one (the Studio bench relies on it)', async () => {
+    const res = config.load(docs());
+    expect(res.problems).toEqual([]);
+    const g = await startGame(defineGame({ ready() {} }), { seed: 5 });
+    mountVfx(g);
+    vfx.setGround(() => 0);
+    const ids = config.ids('vfx');
+    expect(ids.length).toBe(21);
+    for (const id of ids) {
+      vfx.clear();
+      const before = vfx.stats().effects[`vfx/${id}`]?.spawned ?? 0;
+      vfx.burst(id, { x: 0, y: 0.4, z: 0 });
+      let peak = 0;
+      for (let i = 0; i < 30; i++) { g.step(1); peak = Math.max(peak, vfx.stats().effects[`vfx/${id}`]?.live ?? 0); }
+      expect(vfx.stats().effects[`vfx/${id}`]!.spawned, id).toBeGreaterThan(before);
+      expect(peak, id).toBeGreaterThan(0);
+    }
+    g.dispose();
+  });
+});
+
+describe('render runtime', () => {
+  it('a backend that shuts down late does not clear the one that replaced it (React mounts, unmounts, mounts a bench)', async () => {
+    const { renderRuntime, setRenderRuntime } = await import('../render/runtime.ts');
+    const first = {}, second = {};
+    setRenderRuntime({ backend: 'webgl2', compute: false, renderer: first });
+    setRenderRuntime({ backend: 'webgl2', compute: false, renderer: second });
+    setRenderRuntime(null, first);
+    expect(renderRuntime()?.renderer).toBe(second);
+    setRenderRuntime(null, second);
+    expect(renderRuntime()).toBeNull();
+  });
+});

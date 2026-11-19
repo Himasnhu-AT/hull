@@ -1,0 +1,58 @@
+{
+  "kind": "character",
+  "note": "AOTT's horse, for the Character bench. The game draws it from code (src/player/horse.ts, registered for the bench in src/bench/models.ts) and its gait is procedural: the bench runs the horse's own gait at the speed of the clip held (idle, walk, trot, gallop) or of the graph's speed parameter. The bones here only give the animator a skeleton; the clips name the gaits.",
+  "body": {
+    "type": "generated",
+    "recipe": "custom",
+    "bones": [
+      {
+        "name": "hips",
+        "offset": [
+          0,
+          1.3,
+          0
+        ]
+      },
+      {
+        "name": "spine",
+        "parent": "hips",
+        "offset": [
+          0,
+          0.1,
+          -0.7
+        ]
+      },
+      {
+        "name": "head",
+        "parent": "spine",
+        "offset": [
+          0,
+          0.9,
+          1.4
+        ]
+      }
+    ],
+    "parts": [
+      {
+        "bone": "hips",
+        "shape": "box",
+        "material": "coat",
+        "center": [
+          0,
+          0,
+          0
+        ],
+        "size": [
+          0.7,
+          0.8,
+          2.2
+        ]
+      }
+    ]
+  },
+  "materials": {
+    "coat": "material/soldier-jacket"
+  },
+  "animSet": "anim-set/horse",
+  "animGraph": "anim-graph/horse"
+}

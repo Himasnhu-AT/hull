@@ -9,7 +9,7 @@ import { autoStep } from './math.ts';
 
 export type Widget =
   | 'slider' | 'dial' | 'number' | 'toggle' | 'select' | 'segments' | 'color' | 'curve' | 'vec3' | 'range'
-  | 'ref' | 'text' | 'keys' | 'json' | 'map' | 'list' | 'checks';
+  | 'ref' | 'text' | 'keys' | 'json' | 'map' | 'list' | 'checks' | 'bindings';
 
 export interface Field {
   /** JSON pointer into the config value; for a tunable, the key. */
@@ -129,7 +129,9 @@ function leaf(ctx: Ctx, schema: Schema, key: string, pointer: string, value: unk
 
   let widget: Widget;
   // Few options are segments, many a select, whatever the schema asked: a bar of ten labels is unreadable.
-  if (enumVals && explicit !== 'select' && explicit !== 'ref') widget = enumVals.length <= 4 && enumVals.reduce<number>((n, o) => n + String(o).length, 0) <= 40 ? 'segments' : 'select';
+  // The input map's actions: a map the schema asks to see as a table (needs the per-action schema, like a map).
+  if (explicit === 'bindings' && mapValue) widget = 'bindings';
+  else if (enumVals && explicit !== 'select' && explicit !== 'ref') widget = enumVals.length <= 4 && enumVals.reduce<number>((n, o) => n + String(o).length, 0) <= 40 ? 'segments' : 'select';
   else if (mapValue) widget = 'map';
   else if (explicit && !(explicit === 'segments' && !enumVals)) widget = explicit;
   else if (refKind) widget = 'ref';
@@ -194,7 +196,7 @@ function walk(ctx: Ctx, schemaIn: unknown, value: unknown, pointer: string, key:
   const patterns = isObj(schema['patternProperties']) ? Object.values(schema['patternProperties']) : [];
   const asObject = typeOf(schema) === 'object' || props || addl || patterns.length > 0;
   // A map: an object whose keys the user names (sockets, materials, clips). One editor with add, remove and rename.
-  if (asObject && !props && !ui['widget'] && pointer !== '' && (addl || patterns.length > 0 || schema['additionalProperties'] === true)) {
+  if (asObject && !props && (!ui['widget'] || ui['widget'] === 'bindings') && pointer !== '' && (addl || patterns.length > 0 || schema['additionalProperties'] === true)) {
     leaf(ctx, schema, key, pointer, value, group, order, addl ?? resolve(ctx.root, patterns[0]));
     return;
   }

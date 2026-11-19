@@ -5,6 +5,7 @@
 .bb-view canvas { position: absolute; inset: 0; }
 .bb-load { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); }
 .bb-tag { position: absolute; left: 10px; top: 8px; font-size: 11px; color: rgba(255, 255, 255, 0.75); text-shadow: 0 1px 3px #000; pointer-events: none; }
+.bb-hint { position: absolute; left: 10px; bottom: 8px; font-size: 11.5px; color: rgba(255, 255, 255, 0.7); text-shadow: 0 1px 3px #000; pointer-events: none; }
 .bb-dim { color: var(--muted); font-size: 12px; }
 .bb-scrub { display: flex; align-items: center; gap: 10px; }
 .bb-track { position: relative; flex: 1; min-width: 0; }
