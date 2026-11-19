@@ -136,12 +136,12 @@
 .cx-row:hover .rs.show, .cx-row .rs.show:focus-visible { opacity: 1; }
 .cx-what { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cx-what em { color: var(--faint); font-style: normal; }
-.cx-chg { display: flex; align-items: center; gap: 8px; min-width: 0; font-variant-numeric: tabular-nums; color: var(--muted); }
+.cx-chg { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; font-variant-numeric: tabular-nums; color: var(--muted); }
 .cx-v { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
 .cx-chg .cx-v:last-of-type { color: var(--text); }
 .cx-sw { width: 14px; height: 14px; border-radius: 4px; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.18); flex: none; }
 .cx-ar { color: var(--faint); font-style: normal; }
-.cx-note { color: var(--faint); font-size: 11px; border: 1px solid var(--line2); border-radius: 99px; padding: 0 7px; }
+.cx-note { white-space: nowrap; color: var(--faint); font-size: 11px; border: 1px solid var(--line2); border-radius: 99px; padding: 0 7px; }
 .cx-patch { margin: 6px 12px 0; padding: 6px 0; border: 1px solid var(--line); border-radius: 6px; background: var(--field); font: 11.5px/1.5 var(--mono, ui-monospace, monospace); overflow: auto; max-height: 260px; }
 .cx-l { display: block; padding: 0 10px; white-space: pre; }
 .cx-l b { display: inline-block; width: 34px; color: var(--faint); font-weight: 400; }
