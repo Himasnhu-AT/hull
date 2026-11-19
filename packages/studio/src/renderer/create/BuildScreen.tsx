@@ -11,11 +11,13 @@ import type { StageId } from 'hull/dev/protocol';
 import type { OpenedProject } from '../../shared/appApi.ts';
 import type { RpcClient } from '../lib/rpc.ts';
 import { NeedsKey } from './BriefScreen.tsx';
-import { canPlay, defaultStage, readyCount, shouldStartBuild, splitPieces, STAGE_LABEL, STAGE_STATUS } from './buildView.ts';
+import { canPlay, defaultStage, previousCheckpoint, readyCount, shouldStartBuild, splitPieces, STAGE_LABEL, STAGE_STATUS } from './buildView.ts';
 import { ExplainCard } from './ExplainCard.tsx';
 import { PieceGrid } from './PieceGrid.tsx';
 import { useBuilder } from './useBuilder.tsx';
 import { useCreateState, useExplainDocs } from './useCreate.ts';
+import { useDeltas } from './useValues.ts';
+import { ValuesCard } from './ValuesCard.tsx';
 
 export interface BuildScreenProps { rpc: RpcClient; project: OpenedProject; onPlay(): void }
 
@@ -35,7 +37,9 @@ export function BuildScreen({ rpc, onPlay }: BuildScreenProps): JSX.Element {
   const stages = create?.stages ?? [];
   const sel = picked ?? defaultStage(stages);
   const stage = stages.find((s) => s.id === sel);
-  const { look, explained } = splitPieces(stage?.pieces ?? []);
+  const { look, explained, numbers } = splitPieces(stage?.pieces ?? []);
+  // What each number was before this stage: the history from the earlier stage's point to this stage's own.
+  const deltas = useDeltas(rpc, previousCheckpoint(stages, sel), stage?.checkpoint);
   const shownDocs = useMemo(() => {
     const ids = new Set(explained);
     const out = explained.map((id) => docs.find((d) => d.id === id)).filter((d): d is NonNullable<typeof d> => !!d);
@@ -86,17 +90,20 @@ export function BuildScreen({ rpc, onPlay }: BuildScreenProps): JSX.Element {
                 <div className="cr-row"><button className="btn primary" onClick={() => b.retryStage(sel)} disabled={building}>Try this stage again</button></div>
               </div>
             )}
-            {stage.status === 'ready' && look.length === 0 && shownDocs.length === 0 && <p className="cr-sub">This stage made nothing to look at or read.</p>}
+            {stage.status === 'ready' && look.length === 0 && shownDocs.length === 0 && numbers.length === 0 && <p className="cr-sub">This stage made nothing to look at or read.</p>}
             {look.length > 0 && (
               <section aria-label="Look and listen">
                 <h3 className="cr-lane">Look and listen <span className="cr-cnt">{look.length}</span></h3>
                 <PieceGrid keys={look} stage={sel} />
               </section>
             )}
-            {shownDocs.length > 0 && (
+            {shownDocs.length + numbers.length > 0 && (
               <section aria-label="Explained">
-                <h3 className="cr-lane">Explained <span className="cr-cnt">{shownDocs.length}</span></h3>
-                <div className="cr-xlist">{shownDocs.map((d) => <ExplainCard key={d.id} doc={d} />)}</div>
+                <h3 className="cr-lane">Explained <span className="cr-cnt">{shownDocs.length + numbers.length}</span></h3>
+                <div className="cr-xlist">
+                  {shownDocs.map((d) => <ExplainCard key={d.id} doc={d} />)}
+                  {numbers.map((k) => <ValuesCard key={k} pieceKey={k} stage={sel} deltas={deltas} />)}
+                </div>
               </section>
             )}
           </>

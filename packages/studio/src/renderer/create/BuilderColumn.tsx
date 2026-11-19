@@ -15,7 +15,9 @@ import { Icon } from '../ui/Icon.tsx';
 import { NeedsKey } from './BriefScreen.tsx';
 import { Composer } from './Composer.tsx';
 import { clock } from './recentStrip.ts';
+import { builderPill } from './builderState.ts';
 import { TranscriptView } from './TranscriptView.tsx';
+import { waiting } from './transcript.ts';
 import type { AttachedPiece } from './types.ts';
 import { useBuilder } from './useBuilder.tsx';
 
@@ -30,7 +32,7 @@ export function BuilderColumn({ attached, onClearAttached, moment = null, onClea
   const { prepare } = b;
   useEffect(() => { prepare(); }, [prepare]);
   const one = attached.length === 1 ? attached[0]! : null;
-  const state = b.needs ? { text: 'needs a key', cls: 'warn' } : t.running || b.starting ? { text: 'working', cls: '' } : { text: 'ready', cls: 'ok' };
+  const state = builderPill({ needs: b.needs !== null, waiting: waiting(t).length, working: t.running || b.starting });
 
   const send = (): void => {
     const text = b.draft.trim();

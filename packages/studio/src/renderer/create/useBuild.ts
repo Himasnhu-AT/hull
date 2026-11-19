@@ -20,7 +20,7 @@ export async function runBuildTool(rpc: RpcClient, root: string): Promise<BuildR
   try {
     const r = await rpc.call('tool.call', { name: 'build' }, { timeoutMs: 600_000 });
     const out = (r.output ?? {}) as { outDir?: string; files?: BuiltFile[] };
-    if (!r.ok) return { ok: false, problems: r.problems };
+    if (!r.ok) return { ok: false, problems: r.problems ?? [] };
     const files = out.files ?? [];
     return { ok: true, dir: out.outDir ?? `${root}/dist`, files, total: files.reduce((n, f) => n + f.bytes, 0) };
   } catch (e) {

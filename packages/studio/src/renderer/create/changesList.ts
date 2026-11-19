@@ -3,6 +3,7 @@
 
 import type { ChangeDelta, HistoryAuthor, HistoryChange } from 'hull/dev/protocol';
 import { ago } from '../history/plain.ts';
+import { authorName, plainLine, undoneBy } from './plainNames.ts';
 import { describe, revertOrder, type ChangeRow } from '../history/changesView.ts';
 
 export interface ChangeEntry {
@@ -11,6 +12,9 @@ export interface ChangeEntry {
   title: string;
   /** The details under it, a few lines. */
   lines: string[];
+  /** The text the title and lines were made from, for the tooltip that keeps the raw ids reachable. */
+  titleRaw: string;
+  linesRaw: string[];
   /** How many more lines there were than shown. */
   more: number;
   who: string;
@@ -21,23 +25,44 @@ export interface ChangeEntry {
   restore: boolean;
 }
 
-/** 'you' -> You; 'ai:hull' -> Hull builder; 'ai:test' -> Test builder; 'disk' -> A file edit. */
-export function whoLabel(by: HistoryAuthor | string): string {
-  if (by === 'you') return 'You';
-  if (by === 'disk') return 'A file edit';
-  const name = by.replace(/^(ai|marl):/, '');
-  return name ? `${name[0]!.toUpperCase()}${name.slice(1)} builder` : 'The builder';
+/** 'you' -> You; any agent -> Builder; 'disk' -> A file edit. */
+export const whoLabel = (by: HistoryAuthor | string): string => authorName(by);
+
+/**
+ * The changes that only put another change back, by id, each with the lines of the change it put back: the person's own
+ * change whose every value is an older change's value turned round. The list is newest first, as mainLine gives it.
+ */
+export function putBackOf(list: readonly HistoryChange[]): Map<string, string[]> {
+  const out = new Map<string, string[]>();
+  list.forEach((c, i) => {
+    if (c.by !== 'you' || c.kind === 'start') return;
+    const now = c.details.length > 0 ? c.details : [c.message];
+    for (let j = i + 1; j < list.length; j++) {
+      const p = list[j]!;
+      const undone = undoneBy(now, p.details.length > 0 ? p.details : [p.message]);
+      if (undone) { out.set(c.id, undone); return; }
+    }
+  });
+  return out;
 }
 
 const MAX_LINES = 4;
 
-export function entryOf(c: HistoryChange, now = Date.now()): ChangeEntry {
+/** `undone`: the lines of the older change this one only put back (see putBackOf); its title says "Put back" and names that change. */
+export function entryOf(c: HistoryChange, now = Date.now(), undone?: readonly string[]): ChangeEntry {
+  const putBack = undone !== undefined && undone.length > 0;
   const details = c.details.filter((d) => d && d !== c.message);
+  const titleRaw = c.kind === 'start' ? 'Project started' : c.message || 'A change';
+  // A put-back is titled by the change it put back; its own details would only say the same turned round.
+  const first = putBack ? undone[0]! : '';
+  const shown = putBack ? undone.slice(1) : details;
   return {
     id: c.id,
-    title: c.kind === 'start' ? 'Project started' : c.message || 'A change',
-    lines: details.slice(0, MAX_LINES),
-    more: Math.max(0, details.length - MAX_LINES),
+    title: putBack ? `Put back: ${plainLine(first)}` : c.kind === 'start' ? titleRaw : plainLine(titleRaw),
+    titleRaw: putBack ? first : titleRaw,
+    lines: shown.slice(0, MAX_LINES).map(plainLine),
+    linesRaw: shown.slice(0, MAX_LINES),
+    more: Math.max(0, shown.length - MAX_LINES),
     who: whoLabel(c.by),
     when: ago(c.at, now),
     start: c.kind === 'start',

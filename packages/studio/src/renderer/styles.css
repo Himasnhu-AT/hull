@@ -782,3 +782,33 @@ textarea.cr-idea-in { width: 100%; resize: vertical; min-height: 96px; font-fami
 .cr-keyform input, .cr-keyform select { height: 32px; border-radius: 6px; border: 1px solid var(--line2); background: var(--field); color: var(--text); padding: 0 9px; font: inherit; font-size: 13px; }
 @media (max-width: 1100px) { .cr-build { grid-template-columns: 220px minmax(0, 1fr); } }
 @media (prefers-reduced-motion: reduce) { .cr-ui, .cr-rchip, .cr-msg.typing::after, .cr-dot.building, .cr-st.writing::after { animation: none; } }
+
+/* ---------- create (M11): polish ---------- */
+.cr-crash { align-items: flex-start; }
+.cr-crash-text { margin: 0; padding: 10px 12px; max-width: 100%; border: 1px solid var(--line2); border-radius: 8px; background: var(--panel2); color: var(--muted); font: 11.5px/1.5 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
+.cr-vcard { display: block; max-width: 560px; }
+.cr-vcard .cr-cb { gap: 8px; }
+.cr-vals { overflow-x: auto; }
+.cr-vals table { font-variant-numeric: tabular-nums; }
+.cr-vals th[scope="row"] { font-weight: 500; color: var(--text); }
+.cr-vals .num { text-align: right; padding-right: 0; padding-left: 16px; white-space: nowrap; }
+.cr-vals tr.changed th[scope="row"], .cr-vals tr.changed td:nth-child(2) { color: var(--accent); }
+.cr-vals .cr-before { color: var(--muted); }
+.cr-vals .cr-before.same { color: var(--faint); }
+.cr-cfg { display: grid; place-items: center; padding: 32px 12px 10px; background: var(--panel2); color: var(--text); }
+.cr-sw-row { display: flex; flex-wrap: wrap; gap: 8px 10px; justify-content: center; align-items: flex-start; }
+.cr-swatch { display: flex; flex-direction: column; align-items: center; gap: 3px; width: 44px; }
+.cr-swatch i { width: 30px; height: 30px; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(128, 128, 128, 0.45); display: block; }
+.cr-swatch small, .cr-names small { font-size: 10.5px; color: var(--faint); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cr-more { color: var(--faint); font-size: 11px; }
+.cr-keys { list-style: none; margin: 0; padding: 0; width: 100%; display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
+.cr-keys li { display: flex; justify-content: space-between; gap: 10px; align-items: center; }
+.cr-keys kbd { font: 11px var(--mono); padding: 1px 6px; border-radius: 4px; border: 1px solid var(--line2); background: var(--field); color: var(--text); white-space: nowrap; }
+.cr-names { display: flex; flex-direction: column; gap: 5px; align-items: center; max-height: 100%; overflow: hidden; }
+.cr-names p { margin: 0; display: flex; flex-wrap: wrap; gap: 4px; justify-content: center; }
+/* Light theme: warm and green badges sit on mid-tone fills there, so their text turns white. */
+@media (prefers-color-scheme: light) {
+  .cr-tag.approved, .cr-tag.note { color: #fff; }
+  .cr-off { color: #fff; }
+  .cr-vals tr.changed th[scope="row"], .cr-vals tr.changed td:nth-child(2) { color: var(--accent-solid); }
+}

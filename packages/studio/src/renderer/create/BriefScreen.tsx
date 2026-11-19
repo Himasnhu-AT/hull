@@ -9,7 +9,9 @@ import { useEffect, useRef, useState, type JSX } from 'react';
 import type { OpenedProject } from '../../shared/appApi.ts';
 import type { RpcClient } from '../lib/rpc.ts';
 import { Composer } from './Composer.tsx';
+import { builderPill } from './builderState.ts';
 import { TranscriptView } from './TranscriptView.tsx';
+import { waiting } from './transcript.ts';
 import { useBuilder } from './useBuilder.tsx';
 import { useCreateState } from './useCreate.ts';
 
@@ -37,6 +39,11 @@ export function BriefScreen({ rpc, idea, onApproved }: BriefScreenProps): JSX.El
   // The idea goes to the builder once, as soon as the flow state says this brief is not approved yet.
   useEffect(() => { if (idea && create && !create.briefApproved) startBrief(idea); }, [idea, create, startBrief]);
 
+  // The idea is kept with the project, so the Idea step can show it after the app was closed and the game reopened.
+  useEffect(() => {
+    if (idea && create && create.idea.trim() === '') rpc.call('create.set', { patch: { idea, step: 'brief' }, author: 'you' }).catch(() => { /* the idea is only a bookmark */ });
+  }, [idea, create, rpc]);
+
   // Approval seen after this screen opened moves the shell on; one that was already there waits for the person.
   useEffect(() => {
     if (!create) return;
@@ -44,7 +51,7 @@ export function BriefScreen({ rpc, idea, onApproved }: BriefScreenProps): JSX.El
     if (!wasApproved.current && create.briefApproved) { wasApproved.current = true; onApproved(); }
   }, [create, onApproved]);
 
-  const state = b.needs ? { text: 'needs a key', cls: 'warn' } : t.running || b.starting ? { text: 'working', cls: '' } : { text: 'ready', cls: 'ok' };
+  const state = builderPill({ needs: b.needs !== null, waiting: waiting(t).length, working: t.running || b.starting });
   const send = (): void => { const text = b.draft.trim(); if (!text) return; b.setDraft(''); void b.send(text, { mode: 'brief' }); };
 
   return (
