@@ -27,9 +27,10 @@ export function tscPath(): string {
   return join(dirname(pkg), 'bin', 'tsc');
 }
 
-export function runTsc(root: string): Promise<Problem[]> {
+/** `fast` keeps tsc's build info under .hull/cache, so the second run after a one-file edit re-checks only what changed. */
+export function runTsc(root: string, opts: { fast?: boolean } = {}): Promise<Problem[]> {
   return new Promise((done, fail) => {
-    const child = spawn(process.execPath, [tscPath(), '--noEmit', '--pretty', 'false', '-p', resolve(root)], { cwd: root });
+    const child = spawn(process.execPath, [tscPath(), '--noEmit', '--pretty', 'false', '-p', resolve(root), ...(opts.fast ? ['--incremental', '--tsBuildInfoFile', join(resolve(root), '.hull', 'cache', 'code-tools.tsbuildinfo')] : [])], { cwd: root });
     let buf = '';
     child.stdout.on('data', (d) => (buf += d));
     child.stderr.on('data', (d) => (buf += d));

@@ -30,7 +30,8 @@ export interface McpServer {
   /** Handles one JSON-RPC message. Resolves the response, or undefined for a notification. `session` keeps the client's name for the history. */
   handle(msg: JsonRpcRequest, session?: string): Promise<JsonRpcResponse | undefined>;
   /** Starts a client session (on `initialize`); returns its id. */
-  newSession(): string;
+  /** `author` names who is on the other end when the transport knows (the x-hull-author header, HULL_MCP_AUTHOR); it wins over the client's own name. */
+  newSession(author?: string): string;
   close(): Promise<void>;
 }
 
@@ -48,6 +49,7 @@ export function createMcpServer(projectRoot: string, o: McpOptions = {}): McpSer
   let linking: Promise<ProjectLink> | undefined;
   const linked = (): Promise<ProjectLink> => (linking ??= (o.link ?? (() => openProject({ root: projectRoot, log })))());
   const authors = new Map<string, string>();
+  const pinned = new Set<string>();
   const abort = new AbortController();
   const fail = (id: JsonRpcRequest['id'], code: number, message: string): JsonRpcResponse => ({ jsonrpc: '2.0', id: id ?? null, error: { code, message } });
 
@@ -75,7 +77,13 @@ export function createMcpServer(projectRoot: string, o: McpOptions = {}): McpSer
 
   return {
     projectRoot,
-    newSession: () => { const id = randomUUID(); authors.set(id, 'ai:mcp'); return id; },
+    newSession: (named) => {
+      const id = randomUUID();
+      const clean = named?.replace(/[\x00-\x1f]/g, '').trim().slice(0, 60);
+      authors.set(id, clean ? `ai:${clean}` : 'ai:mcp');
+      if (clean) pinned.add(id);
+      return id;
+    },
     async handle(r, session) {
       const { id, method } = r;
       const isNote = id === undefined;
@@ -85,7 +93,7 @@ export function createMcpServer(projectRoot: string, o: McpOptions = {}): McpSer
           case 'initialize': {
             const asked = String(r.params?.['protocolVersion'] ?? '');
             const info = r.params?.['clientInfo'] as { name?: string } | undefined;
-            if (info?.name && session) authors.set(session, `ai:${info.name}`);
+            if (info?.name && session && !pinned.has(session)) authors.set(session, `ai:${info.name}`);
             return { jsonrpc: '2.0', id: id ?? null, result: {
               protocolVersion: (MCP_VERSIONS as readonly string[]).includes(asked) ? asked : MCP_VERSIONS[0],
               capabilities: { tools: { listChanged: false } },

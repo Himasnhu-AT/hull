@@ -583,7 +583,7 @@ The registry (`tools`) holds files-and-processes tools. Each takes a project roo
 The **project methods** (`projectTools`) go through the project's server, so an open app hears them: `project.info`,
 `library.list`, `config.read`, `config.set`, `tunables.list`, `tunables.set`, `journal.list`, `history.list`, `history.diff`,
 `history.restore`, `history.checkpoint`, `exp.start`, `exp.list`, `exp.compare`, `exp.adopt`, `exp.discard`, `game.control`,
-`game.run`, `problems.list`, and the review methods. `openProject` attaches to the server the app started (it writes
+`game.run`, `problems.list`, the review methods, and the code methods below. `openProject` attaches to the server the app started (it writes
 `.hull/server.json`) or starts one in process, so two servers never fight over one project. `allTools` is the union;
 where a name is in both lists the method wins.
 
@@ -592,6 +592,29 @@ where a name is in both lists the method wins.
 
 **Maintainer scripts** (`scripts/project.ts`, never shipped) call a tool as a function: `pnpm project:check|build|dev <dir>`, and
 `pnpm project:run <tool> <dir> [json]`. `pnpm mcp [dir]` starts the stdio server.
+
+### Code tools
+
+`code.list`, `code.read`, `code.search`, `code.edit`, `code.write` and `code.delete` are project methods (so the app, MCP and
+`@hull/agent` get the same six) that let an agent change the game's behaviour in `src/`, where `config.set` and `tunables.set` only change
+values. Their rules, in `server/code.ts` (pure, unit-tested) and the project server:
+
+* **Confined to `src/`.** A path must be `src/...` with forward slashes: no `..`, absolute path, hidden or `node_modules` folder, and no
+  symlink that resolves outside `src/` (the deepest existing part of the path is resolved with `realpath`). `config/` goes through the
+  config and asset tools. Files are text (`.ts .tsx .js .mjs .json .css .glsl .wgsl .txt .md`), at most 512 KB.
+* **`code.edit` is an exact-string replace that must match once.** `old` that is missing, empty, equal to `new` or found several times is
+  refused with the reason (and the line numbers of the copies); `all: true` replaces every copy. A CRLF file takes an LF `old`.
+* **Atomic and recorded.** A write goes to `.hull/tmp` and is renamed into place like every other server write, then `hist.touch(author)`
+  records it as a change by that author (`ai:Hull agent`, `ai:<MCP client>`). It is not dropped from HMR as a tunable write is: it is code,
+  so the open game reloads and the Studio hears `source.changed`.
+* **Type problems come back, the write stays.** After `code.edit` and `code.write` the project is type-checked with tsc (incremental,
+  build info in `.hull/cache`; `typecheck: false` skips it for the first of several related edits) and the problems in the written file return as
+  `file:line:col`; the count in other files is `elsewhere`. The result has `written: true` and `ok: false`, so a caller can tell a kept write
+  with problems from a refusal (`written: false`). The agent fixes it with another edit; the check gate in `@hull/agent` still runs `check`
+  and stops the run from ending while it fails.
+* **`code.delete` refuses while the file is in use**: every importer in `src/` (relative `import`, `export ... from`, `import()`, `require`) is
+  listed as `file:line:col`, and so is `hull.json` if it names the file. The agent asks the person first (`risky`).
+* Not built: edits inside an experiment (`exp`), only the project; whole-program impact beyond the written file's own problems.
 
 ### What the tools give an agent
 
@@ -612,6 +635,36 @@ where a name is in both lists the method wins.
   centre. They are library functions for benches; there is no `bench` tool yet.
 * **Budgets**: `hull.json` `budgets` is in the schema, and `render` and `vfx` report draw calls and frame time; the check that
   fails a build or test on them is not built.
+
+### Hull's own agent (`packages/agent`, `@hull/agent`)
+
+An ACP agent (D14, D16) that runs on the user's key: `startHullAgent({ projectRoot, provider })` speaks ACP over a pair of streams, and
+`bin/hull-agent.js [dir] [--fake script.json]` does the same on stdio for the app to start as a child process. It handles
+`initialize`, `session/new`, `session/prompt`, `session/cancel` and `session/close`, and streams `agent_message_chunk`, `plan`, `tool_call` and
+`tool_call_update` (with `diff` content for config and tunable edits), `usage_update` and `compaction_update`, and asks with
+`session/request_permission`.
+
+* **Tools**: called in-process through `createMcpServer` from `@hull/tools`, opened as client "Hull agent", so the history author is
+  `ai:Hull agent`. The agent has no file or shell tools: every write is a validated Hull edit. `session/new`'s `mcpServers` is not used.
+  Code in `src/` is changed with the code tools above (`code_edit`, `code_write`; `code_delete` is risky); the system prompt tells the model to prefer config and tunables for a value and code for behaviour.
+* **Models**: Anthropic's Messages API (`ANTHROPIC_API_KEY`, default `claude-opus-5-5`, override with `HULL_AGENT_MODEL`) or any
+  OpenAI-compatible chat endpoint (`HULL_AGENT_BASE_URL` + `HULL_AGENT_API_KEY`, which is how `ai.marlstudio.com` plugs in). Plain fetch,
+  no vendor SDK, no streaming of model tokens yet (text arrives per model call). Keys are never logged or put in an error.
+* **Prompt**: teaches the loop (look, plan, small edit, check, test, step, read state or screenshot, report what could not be judged) and
+  appends the project's `GAME.md` and `AGENTS.md`.
+* **Gates**: destructive tools (rename, move, delete, `code_delete`, restore, revert, adopt) ask first (`HULL_AGENT_PERMISSIONS`: `risky` default,
+  `writes`, `none`); after edits the loop runs `check` itself and the run cannot end while it fails, for at most three fix rounds,
+  then stops and says so (`_meta.checkFailed`); an edited run ends with a history checkpoint `hull-agent-run-N`.
+* **Compaction**: past 70% of the model's window old tool results are cut, then everything but the recent tail becomes OpenCode's
+  structured summary (MIT, see `packages/agent/NOTICES`). `HULL_AGENT_CONTEXT` sets the window size.
+* **Tests**: `fakeProvider` plays a script with no network; `agent.e2e.test.ts` runs prompt, tool calls, edit, check, done, a failing-check
+  gate, a permission denial, cancel and compaction over ACP against the arena project.
+
+### The agent panel (ACP client, `packages/studio`)
+
+The app's main process is an ACP client (`src/main/agents.ts`, official `@agentclientprotocol/sdk`). It finds agents on this Mac (Hull agent, `codex-acp`, Gemini CLI, `opencode acp`, plus any in `HULL_ACP_AGENTS`), starts the chosen one as a child process in the project folder, and hands it Hull's MCP server in `session/new` (HTTP with an `x-hull-author` header naming the agent, or the stdio launcher with `HULL_MCP_AUTHOR` when the agent has no HTTP MCP). The MCP server records every change as `ai:<agent name>` in the history. `session/update`, permission requests and the end of a run reach the renderer as plain events (`shared/agentApi.ts`): Electron sends them with `webContents.send`, the web dev mode as a server-sent stream. The panel draws the plan as a checklist, tool calls with line diffs and permission requests as approve or deny cards (`editor/agentView.ts` holds the testable part). Missing agents are listed with the command that installs them.
+
+Claude Code is never started through an SDK. The panel's Claude Code tab runs the person's own `claude` in a pseudo-terminal (`node-pty`, drawn with xterm.js) in the project folder, with their own environment, and shows the `claude mcp add` line to run once. Hull does not offer claude.ai login and never reads or stores Claude credentials (PLAN D15). `src/main/fixtures/fake-acp-agent.mjs` is a scripted ACP agent for tests.
 
 ## 10. Rules the engine enforces
 

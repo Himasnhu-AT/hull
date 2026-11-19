@@ -1,7 +1,7 @@
 // The project server: one HTTP port that serves the game's dev page (Vite) and, on the same port, the JSON-RPC
 // WebSocket of dev/protocol.ts. The app's front end and every running game connect here; nothing outside this process
 // touches the project's files (CLAUDE.md: the Studio never touches the disk).
-import { mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmdirSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmdirSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import type { IncomingMessage } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { dirname, join, relative, resolve } from 'node:path';
@@ -24,6 +24,8 @@ import { engineAliases, hullResolve, virtualModule } from './vitePlugins.ts';
 import { buildBenchAudio, buildBenchModels } from './bench.ts';
 import { findRefs, FOLDER_RE, ID_RE, planDelete, planDuplicate, planMoves, planNew, STARTERS, usesOf, type Plan, type Sources } from './assets.ts';
 import { thumbOf } from './thumbs.ts';
+import { applyEdit, importersOf, listCode, MAX_BYTES, resolveCodePath, searchCode } from './code.ts';
+import { runTsc } from '../tools/types.ts';
 
 export { createProject, listTemplates } from './templates.ts';
 export { listCommunity, openCommunity } from './community.ts';
@@ -462,6 +464,81 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
     return { ok: true, problems: [] };
   };
 
+  // ---- Code: the agent's way into src/ (ARCHITECTURE section 9) ---------------------------------------------------------
+  const refuse = (file: string, message: string, extra: Partial<Methods['code.edit']['result']> = {}): Methods['code.edit']['result'] => ({ ok: false, written: false, problems: [{ file, rule: 'code', message }], ...extra });
+  /** The type problems of the files just changed. The whole project is checked (incrementally), but only these files are reported, plus a count for the rest. */
+  const typeProblems = async (files: string[]): Promise<{ problems: Problem[]; elsewhere: number }> => {
+    const all = await runTsc(root, { fast: true });
+    const mine = all.filter((p) => files.includes(norm(p.file)));
+    return { problems: mine, elsewhere: all.length - mine.length };
+  };
+  /** One write to src/: atomic, recorded under its author, and left for Vite to reload the page from (no wroteTs entry: this is code, so the game reloads). */
+  const writeCode = async (rel: string, abs: string, text: string, by: Author, typecheck: boolean | undefined, extra: Partial<Methods['code.edit']['result']>): Promise<Methods['code.edit']['result']> => {
+    await hist.settle(by, 'main');
+    mkdirSync(dirname(abs), { recursive: true });
+    writeWhole(abs, text);
+    hist.touch(by);
+    if (typecheck === false) return { ok: true, written: true, problems: [], ...extra };
+    const t = await typeProblems([rel]);
+    return { ok: t.problems.length === 0, written: true, problems: t.problems, ...(t.elsewhere ? { elsewhere: t.elsewhere } : {}), ...extra };
+  };
+  const codeMethods = {
+    'code.list': () => ({ ok: true, problems: [], items: listCode(root) }),
+    'code.read': (p: Methods['code.read']['params']): Methods['code.read']['result'] => {
+      const r = resolveCodePath(root, p.path);
+      if (!r.ok) return { ok: false, problems: [{ file: String(p.path), rule: 'code', message: r.message }] };
+      let text: string;
+      try { if (statSync(r.abs).size > MAX_BYTES) return { ok: false, problems: [{ file: r.rel, rule: 'code', message: 'the file is over 512 KB: read a line range with from and to' }] }; text = readFileSync(r.abs, 'utf8'); } catch { return { ok: false, problems: [{ file: r.rel, rule: 'code', message: `${r.rel} does not exist (code_list shows the files)` }] }; }
+      const lines = text.split('\n');
+      if (p.from === undefined && p.to === undefined) return { ok: true, problems: [], path: r.rel, text, from: 1, to: lines.length, total: lines.length };
+      const from = Math.max(1, Math.floor(p.from ?? 1));
+      const to = Math.min(lines.length, Math.floor(p.to ?? lines.length));
+      if (from > lines.length || to < from) return { ok: false, problems: [{ file: r.rel, rule: 'code', message: `no lines ${p.from ?? 1}-${p.to ?? 'end'}: the file has ${lines.length}` }] };
+      return { ok: true, problems: [], path: r.rel, text: lines.slice(from - 1, to).join('\n'), from, to, total: lines.length };
+    },
+    'code.search': (p: Methods['code.search']['params']): Methods['code.search']['result'] => {
+      if (typeof p.pattern !== 'string' || p.pattern === '') return { ok: false, problems: [{ file: 'src', rule: 'code', message: 'pattern is empty' }], matches: [], truncated: false };
+      if (p.path !== undefined) { const r = resolveCodePath(root, p.path); if (!r.ok) return { ok: false, problems: [{ file: p.path, rule: 'code', message: r.message }], matches: [], truncated: false }; }
+      const r = searchCode(root, p.pattern, p);
+      return 'error' in r ? { ok: false, problems: [{ file: 'src', rule: 'code', message: r.error }], matches: [], truncated: false } : { ok: true, problems: [], ...r };
+    },
+    'code.edit': async (p: Methods['code.edit']['params']): Promise<Methods['code.edit']['result']> => {
+      const r = resolveCodePath(root, p.path, { file: true });
+      if (!r.ok) return refuse(String(p.path), r.message);
+      let old: string;
+      try { old = readFileSync(r.abs, 'utf8'); } catch { return refuse(r.rel, `${r.rel} does not exist: create it with code_write`); }
+      const e = applyEdit(old, p.old, p.new, p.all === true);
+      if (!e.ok) return refuse(r.rel, e.message);
+      if (Buffer.byteLength(e.text) > MAX_BYTES) return refuse(r.rel, 'the result would be over 512 KB');
+      return writeCode(r.rel, r.abs, e.text, p.author ?? 'you', p.typecheck, { line: e.line, replaced: p.all ? old.split(p.old).length - 1 : 1 });
+    },
+    'code.write': async (p: Methods['code.write']['params']): Promise<Methods['code.write']['result']> => {
+      const r = resolveCodePath(root, p.path, { file: true });
+      if (!r.ok) return refuse(String(p.path), r.message);
+      if (typeof p.text !== 'string') return refuse(r.rel, 'text must be a string');
+      if (Buffer.byteLength(p.text) > MAX_BYTES) return refuse(r.rel, 'the text is over 512 KB');
+      if (existsSync(r.abs) && statSync(r.abs).isDirectory()) return refuse(r.rel, `${r.rel} is a folder`);
+      return writeCode(r.rel, r.abs, p.text, p.author ?? 'you', p.typecheck, { created: !existsSync(r.abs) });
+    },
+    'code.delete': async (p: Methods['code.delete']['params']): Promise<Methods['code.delete']['result']> => {
+      const r = resolveCodePath(root, p.path, { file: true });
+      if (!r.ok) return refuse(String(p.path), r.message);
+      if (!existsSync(r.abs) || !statSync(r.abs).isFile()) return refuse(r.rel, `${r.rel} does not exist`);
+      const importers = importersOf(root, r.rel);
+      const manifest = readManifest(root)?.text ?? '';
+      const named = manifest.includes(r.rel) || manifest.includes(r.rel.replace(/^src\//, './src/'));
+      if (importers.length || named) {
+        return { ok: false, written: false, importers, problems: [...importers.map((i) => ({ file: i.file, line: i.line, col: i.col, rule: 'code', message: `imports ${r.rel} ("${i.specifier}"): change or remove the import first` })), ...(named ? [{ file: MANIFEST, rule: 'code', message: `hull.json names ${r.rel}` }] : [])] };
+      }
+      const by = p.author ?? 'you';
+      await hist.settle(by, 'main');
+      unlinkSync(r.abs);
+      hist.touch(by);
+      push('source.changed', { path: r.rel });
+      return { ok: true, written: true, problems: [] };
+    },
+  };
+
   const tunableWires = (): TunableWire[] => [
     ...scanTunables().map((t): TunableWire => ({ block: t.block, key: t.key, kind: t.kind, value: t.value, opts: t.opts, file: t.file, line: t.line, col: t.col, source: 'code' })),
     ...kitWires().map(({ tuningId: _id, ...w }): TunableWire => w),
@@ -647,6 +724,7 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
       mkdirSync(join(root, 'config', p.path), { recursive: true });
       return { ok: true, problems: [] };
     },
+    ...codeMethods,
     'tunables.list': tunableWires,
     'tunables.set': setTunableValue,
     'journal.list': (p) => readJournal(root, p.limit),

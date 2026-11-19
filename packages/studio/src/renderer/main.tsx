@@ -8,6 +8,8 @@ import './styles.css';
 
 // Electron's preload provides window.hullApp. In a plain browser (web dev mode) a shim calls the dev server instead.
 const app: HullApp = window.hullApp ?? webShim();
+// Panels that talk to the main process (the agent panel) read it from here, in the app and in web mode alike.
+window.hullApp ??= app;
 
 function Fatal({ message }: { message: string }): JSX.Element {
   return <div className="fatal"><div><b style={{ fontSize: 16 }}>Hull could not start</b><div className="note-err">{message}</div></div></div>;
