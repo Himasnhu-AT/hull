@@ -1,0 +1,47 @@
+{
+  "kind": "anim-graph",
+  "note": "The horse's gaits by ground speed (m/s): the bench runs the horse's own gait at this speed.",
+  "params": {
+    "speed": {
+      "type": "number",
+      "default": 0,
+      "min": 0,
+      "max": 20
+    }
+  },
+  "layers": {
+    "base": {
+      "start": "idle",
+      "states": {
+        "idle": {
+          "clip": "idle"
+        },
+        "move": {
+          "blend": {
+            "by": "speed",
+            "points": {
+              "5": "trot",
+              "19": "gallop",
+              "1.8": "walk"
+            }
+          },
+          "speedFrom": "speed"
+        }
+      },
+      "transitions": [
+        {
+          "from": "idle",
+          "to": "move",
+          "when": "speed > 0.3",
+          "blend": 0.15
+        },
+        {
+          "from": "move",
+          "to": "idle",
+          "when": "speed < 0.2",
+          "blend": 0.2
+        }
+      ]
+    }
+  }
+}

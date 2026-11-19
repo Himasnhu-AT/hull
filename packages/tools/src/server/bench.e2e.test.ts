@@ -58,3 +58,46 @@ describe('the sound bench bundle', () => {
     }
   }, 120_000);
 });
+
+// The character bench draws the bodies a project builds in code: hull.json "models" is bundled with the engine left
+// outside, to be handed in as `__hull` so the bodies are made by the bench's own three.js and read its config.
+describe('the character bench models bundle', () => {
+  it('is absent without "models", and with it registers builders against the engine it is given', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'hull-bench-'));
+    const dir = join(root, 'game');
+    try {
+      await createProject({ template: 'cube', dir, title: 'Bench models' });
+      const server = await startProjectServer({ root: dir, port: 0, historyQuietMs: 60_000 });
+      try {
+        const url = `${server.gameUrl}__hull/bench/models.js`;
+        expect((await fetch(url)).status).toBe(404);
+        writeFileSync(join(dir, 'src', 'models.ts'), [
+          "import { config } from 'hull';",
+          "import type { RegisterBenchModel } from 'hull/anim';",
+          'export default function register(reg: RegisterBenchModel): void {',
+          "  reg('titan-*', (id) => ({ object: { id, config } as never }));",
+          '}',
+          '',
+        ].join('\n'));
+        const manifest = join(dir, 'hull.json');
+        writeFileSync(manifest, JSON.stringify({ ...JSON.parse(readFileSync(manifest, 'utf8')), models: 'src/models.ts' }, null, 2));
+        let res = await fetch(url);
+        for (let i = 0; i < 50 && res.status !== 200; i++) { await new Promise((r) => setTimeout(r, 100)); res = await fetch(url); }
+        expect(res.status).toBe(200);
+        const code = await res.text();
+        const engine = { config: { marker: 1 } };
+        const mod = new Function('__hull', `${code}\nreturn HullBenchModels;`)({ hull: engine }) as (reg: (m: string, b: (id: string) => { object: { id: string; config: unknown } }) => void) => void;
+        const seen: [string, (id: string) => { object: { id: string; config: unknown } }][] = [];
+        mod((m, b) => seen.push([m, b]));
+        expect(seen[0]![0]).toBe('titan-*');
+        const made = seen[0]![1]('titan-average-M').object;
+        expect(made.id).toBe('titan-average-M');
+        expect(made.config).toBe(engine.config);
+      } finally {
+        await server.close();
+      }
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  }, 120_000);
+});
