@@ -33,6 +33,8 @@ if (project) initial = await host.openProject(resolve(process.env.INIT_CWD ?? pr
 const api: Record<string, (arg: never) => unknown> = {
   listTemplates: () => host.listTemplates(),
   scratchDir: () => scratch,
+  listCommunity: () => host.listCommunity(),
+  openCommunity: (o: { id: string; reset?: boolean }) => host.openCommunity(o.id, o.reset),
   createProject: (o: { template: string; title: string; parentDir: string }) => host.createProject(o),
   openProject: (root: string) => host.openProject(root),
   closeProject: () => host.closeProject(),

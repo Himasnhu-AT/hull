@@ -92,7 +92,7 @@ function EditorBody({ rpc, project, platform, onClose }: { rpc: RpcClient; proje
     setDockTab('console');
     p.log('info', 'Build started', 'build');
     try {
-      const r = await rpc.call('tool.call', { name: 'build' });
+      const r = await rpc.call('tool.call', { name: 'build' }, { timeoutMs: 600_000 });
       const out = (r.output ?? {}) as { outDir?: string; files?: { path: string; bytes: number; gzip?: number }[] };
       if (r.ok) {
         const dir = out.outDir ?? `${project.root}/dist`;

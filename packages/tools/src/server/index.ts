@@ -24,6 +24,8 @@ import { engineAliases, hullResolve, virtualModule } from './vitePlugins.ts';
 import { buildBenchAudio } from './bench.ts';
 
 export { createProject, listTemplates } from './templates.ts';
+export { listCommunity, openCommunity } from './community.ts';
+export type { CommunityGame } from './community.ts';
 export { buildProject } from './build.ts';
 
 export interface ProjectServer {
