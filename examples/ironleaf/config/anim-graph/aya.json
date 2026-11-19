@@ -1359,5 +1359,50 @@
       "enabled": true,
       "maxStep": 0.35
     }
+  },
+  "springs": {
+    "ponytail": {
+      "chain": [
+        "pony1",
+        "pony2",
+        "pony3"
+      ],
+      "stiffness": 90,
+      "damping": 6,
+      "drive": 0.06
+    },
+    "sashL": {
+      "chain": [
+        "sashL1",
+        "sashL2",
+        "sashL3"
+      ],
+      "stiffness": 70,
+      "damping": 5,
+      "drive": 0.05
+    },
+    "sashR": {
+      "chain": [
+        "sashR1",
+        "sashR2",
+        "sashR3"
+      ],
+      "stiffness": 70,
+      "damping": 5,
+      "drive": 0.05
+    },
+    "scarf": {
+      "chain": [
+        "scarf1",
+        "scarf2",
+        "scarf3"
+      ],
+      "stiffness": 55,
+      "damping": 4,
+      "drive": 0.07
+    }
+  },
+  "hitReact": {
+    "angle": 0.4
   }
 }

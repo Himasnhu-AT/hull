@@ -76,12 +76,20 @@ export function raiderGraph(s: RaiderSpec): J {
   return g;
 }
 
+const chain = (names: string[], stiffness: number, damping: number, drive: number): J => ({ chain: names, stiffness, damping, drive });
+const AYA_SPRINGS: Record<string, J> = {
+  ponytail: chain(['pony1', 'pony2', 'pony3'], 90, 6, 0.06),
+  sashL: chain(['sashL1', 'sashL2', 'sashL3'], 70, 5, 0.05),
+  sashR: chain(['sashR1', 'sashR2', 'sashR3'], 70, 5, 0.05),
+  scarf: chain(['scarf1', 'scarf2', 'scarf3'], 55, 4, 0.07),
+};
+
 export const RAIDERS: RaiderSpec[] = [
-  { name: 'Ashblade', hold: 'hold-sword', moves: ['sword-cut', 'sword-cross', 'sword-feint'] },
-  { name: 'Ashpike', hold: 'hold-spear', moves: ['spear-thrust', 'spear-sweep'] },
-  { name: 'Cinder Hulk', hold: 'hold-hulk', moves: ['hulk-smash', 'hulk-grab'] },
-  { name: 'Ashkite', hold: 'hold-bow', moves: ['bow-shoot'] },
-  { name: 'Kagari', hold: 'hold-duel', moves: ['duel-cut', 'duel-thrust', 'duel-sweep', 'duel-rush', 'duel-phase'] },
+  { name: 'Ashblade', hold: 'hold-sword', moves: ['sword-cut', 'sword-cross', 'sword-feint'], springs: { ragL: chain(['ragL1', 'ragL2'], 60, 5, 0.05), ragR: chain(['ragR1', 'ragR2'], 60, 5, 0.05) } },
+  { name: 'Ashpike', hold: 'hold-spear', moves: ['spear-thrust', 'spear-sweep'], springs: { ragL: chain(['ragL1', 'ragL2'], 60, 5, 0.05), flag: chain(['flag1', 'flag2'], 45, 4, 0.06) } },
+  { name: 'Cinder Hulk', hold: 'hold-hulk', moves: ['hulk-smash', 'hulk-grab'], springs: { rag: chain(['rag1', 'rag2'], 50, 5, 0.04) } },
+  { name: 'Ashkite', hold: 'hold-bow', moves: ['bow-shoot'], springs: { cape: chain(['cape1', 'cape2', 'cape3'], 50, 4, 0.06), ragL: chain(['ragL1', 'ragL2'], 60, 5, 0.05) } },
+  { name: 'Kagari', hold: 'hold-duel', moves: ['duel-cut', 'duel-thrust', 'duel-sweep', 'duel-rush', 'duel-phase'], springs: { ponytail: chain(['pony1', 'pony2', 'pony3'], 90, 6, 0.06), coatL: chain(['coatL1', 'coatL2', 'coatL3'], 45, 4, 0.06), coatR: chain(['coatR1', 'coatR2', 'coatR3'], 45, 4, 0.06) } },
 ];
 const FILES: Record<string, string> = { Ashblade: 'ashblade', Ashpike: 'ashpike', 'Cinder Hulk': 'hulk', Ashkite: 'ashkite', Kagari: 'kagari' };
 
@@ -180,6 +188,8 @@ export function ayaGraph(): J {
       breath: { additive: true, weight: 0.8, start: 'on', states: { on: { clip: 'breathe' } } },
     },
     ik: { feet: { enabled: true, maxStep: 0.35 } },
+    springs: AYA_SPRINGS,
+    hitReact: { angle: 0.4 },
   };
 }
 export function writeAyaGraph(): void {
