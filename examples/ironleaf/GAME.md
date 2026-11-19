@@ -82,7 +82,7 @@ Rules:
 - **Block**: reduces damage to 15% (a deflect takes none), adds 25% of the attack's posture damage to Aya's posture. A guard break (a charged heavy from an enemy) ignores a block.
 - **Aya's posture**: 100. Regenerates 18 per second after 1.2 s out of combat, 8 per second in combat. At 0 she is staggered for 1.0 s.
 - **Aya's health**: 100. No healing items in the first levels; a flask at each shrine.
-- **Hit-stop**: 40 to 90 ms on a clean hit (light 40, heavy 70, charged 90, finisher 90); none on a blocked hit.
+- **Hit-stop**: 40 to 90 ms on a clean hit (light 40, heavy 70, charged 90, finisher 135); a guard freezes both too, in rising order: block 40 ms, deflect 60, perfect deflect 110. Camera shake rises the same way (block 0.15, deflect 0.2, perfect 0.35; a clean hit 0.35).
 - **Blade trace**: the blade is the line from socket `katanaBase` to `katanaTip` swept between fixed steps against the enemy's hit shapes. A hit needs the trace to touch a shape: no hits from 2 m away.
 
 ## 6. Enemies and their patterns (for phase 2)

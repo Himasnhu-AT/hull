@@ -108,7 +108,8 @@ export class EncounterDirector extends Behaviour {
       const e = new Encounter(def, this.raiders.filter((r) => r.encounter === def.name));
       if (e.members.length) this.encounters.push(e);
     }
-    combatHub(w).tell.connect((who, kind) => tellEffect(who, kind), this.node);
+    // The red flash is pulsed by fixedUpdate for as long as it lasts; the glint is one star at the start of the tell.
+    combatHub(w).tell.connect((who, kind) => { if (kind !== 'unblockable') tellEffect(who, kind); }, this.node);
     combatHub(w).shot.connect((_who, shot) => arrowLook(shot), this.node);
     this.standoff = this.node.add(Standoff);
   }
@@ -134,7 +135,11 @@ export class EncounterDirector extends Behaviour {
       combatant.animator?.trigger('duel-phase');
       kitIO.play('sound/music/sting-duel');
       const q = n.position;
+      // A roar: embers off the body, a gold flash at the chest and a shake of the camera.
       vfx.burst('embers', { x: q.x, y: q.y + 1, z: q.z });
+      vfx.burst('embers', { x: q.x, y: q.y + 0.2, z: q.z });
+      vfx.burst('perfect-flash', { x: q.x, y: q.y + 1.2, z: q.z });
+      combatHub(w).shake.emit(0.55, 0.45);
     }, n);
     const enc = ENCOUNTERS.find((d) => d.match(id))?.name ?? 'camp';
     return { node: n, kind, id, encounter: enc, combatant, brain };
@@ -152,7 +157,17 @@ export class EncounterDirector extends Behaviour {
     this.started.emit(e.def.name);
   }
 
-  override fixedUpdate(): void {
+  /** Seconds until the next red pulse for each raider that is showing the red flash. */
+  private readonly pulse = new Map<Node, number>();
+
+  override fixedUpdate(dt: number): void {
+    // The red flash lasts the whole tell: one burst is gone in under half a second, the tell and the wind-up last longer.
+    for (const r of this.raiders) {
+      if (r.node.destroyed || r.combatant.isDead || r.brain.dormant) continue;
+      if (r.brain.telling !== 'unblockable') { this.pulse.delete(r.node); continue; }
+      const left = (this.pulse.get(r.node) ?? 0) - dt;
+      if (left <= 0) { tellEffect(r.combatant, 'unblockable'); this.pulse.set(r.node, 0.18); } else this.pulse.set(r.node, left);
+    }
     const me = this.world.find('player');
     if (!me) return;
     const mc = me.get(Combatant);
@@ -193,8 +208,9 @@ function tellEffect(who: Combatant, kind: string): void {
 
 /** The look of an arrow: a thin pale shaft along its flight. */
 function arrowLook(shot: Node): void {
-  shot.scale.set(0.035, 0.035, 0.9);
-  shot.add(Mesh, { shape: 'box', color: '#e6d9b8', castShadow: false });
+  // Thick and pale enough to follow with the eye at 20 m, long enough to show which way it is going.
+  shot.scale.set(0.07, 0.07, 1.3);
+  shot.add(Mesh, { shape: 'box', color: '#fff0c8', castShadow: false });
 }
 
 /** Spawns the cast. The node it returns holds the director; `encounters(world)` finds it again. */

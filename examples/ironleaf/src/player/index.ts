@@ -20,7 +20,10 @@ export interface AyaOpts { x?: number; z?: number; yaw?: number; start?: string;
 export function spawnAya(world: World, o: AyaOpts = {}): Node {
   const loc = (globalThis as { location?: { search: string } }).location;
   const pick = o.start ?? new URLSearchParams(loc?.search ?? '').get('start') ?? 'landing';
-  const [sx, sz, syaw] = STARTS[pick] ?? STARTS['landing']!;
+  let [sx, sz, syaw] = STARTS[pick] ?? STARTS['landing']!;
+  // `?at=x,z,yaw` stands her anywhere (a tester or a screenshot of the duel stairs).
+  const at = (new URLSearchParams(loc?.search ?? '').get('at') ?? '').split(',').map(Number);
+  if (at.length >= 2 && at.every(Number.isFinite)) { sx = at[0]!; sz = at[1]!; syaw = at[2] ?? syaw; }
   const x = o.x ?? sx, z = o.z ?? sz, yaw = o.yaw ?? syaw;
   const me = world.spawn('player');
   me.addTo(GROUP.player);

@@ -33,6 +33,12 @@ export const combatTuning = tunables('swordfight', {
   inputBuffer: num(0.2, { min: 0, max: 0.6, step: 0.01, unit: 's', help: 'A press during a move is remembered this long and used the moment the move allows it.' }),
   hitStopLight: num(0.05, { min: 0, max: 0.3, step: 0.005, unit: 's', help: 'Both fighters freeze this long on a clean hit.' }),
   hitStopHeavy: num(0.09, { min: 0, max: 0.3, step: 0.005, unit: 's', help: 'Freeze on a hit by a move with damage over 25.' }),
+  hitStopBlock: num(0.04, { min: 0, max: 0.3, step: 0.005, unit: 's', help: 'Freeze on a plain block: short, so a block feels heavy but not like a hit.' }),
+  hitStopDeflect: num(0.06, { min: 0, max: 0.3, step: 0.005, unit: 's', help: 'Freeze on a deflect.' }),
+  hitStopPerfect: num(0.11, { min: 0, max: 0.4, step: 0.005, unit: 's', help: 'Freeze on a perfect deflect: the longest of the guards, so it reads as the reward.' }),
+  shakeBlock: num(0.15, { min: 0, max: 1, step: 0.05, help: 'Camera shake of a plain block.' }),
+  shakeDeflect: num(0.2, { min: 0, max: 1, step: 0.05, help: 'Camera shake of a deflect.' }),
+  shakePerfect: num(0.35, { min: 0, max: 1, step: 0.05, help: 'Camera shake of a perfect deflect.' }),
   shakeHit: num(0.35, { min: 0, max: 1, step: 0.05, help: 'Camera shake of a clean hit.' }),
   bodyRadius: num(0.3, { min: 0.1, max: 1.5, step: 0.05, unit: 'm', help: 'A fighter without hit shapes is a capsule this wide and 1.7 m tall.' }),
   blockChip: num(0.15, { min: 0, max: 1, step: 0.01, widget: 'dial', help: 'Share of a blow\'s damage that gets through a plain block (a deflect stops all of it).' }),
@@ -439,7 +445,7 @@ export class Combatant extends Behaviour {
       info.outcome = deflect ? 'deflected' : 'blocked';
       info.posture = a.posture * share;
       kitIO.play(deflect ? 'sound/deflect' : 'sound/clash');
-      this.freezePair(att, 0.05);
+      this.freezePair(att, deflect ? combatTuning.hitStopDeflect : combatTuning.hitStopBlock);
       // A plain block lets a little through; a deflect none. The chip is never a hit: no stagger, no blood.
       if (!deflect && combatTuning.blockChip > 0 && a.damage > 0) {
         this.health.damage(a.damage * combatTuning.blockChip, a.zone, att?.node ?? null);
@@ -448,7 +454,7 @@ export class Combatant extends Behaviour {
       }
       if (deflect) { this.deflected.emit(info); this.hub.deflected.emit(info); }
       else { this.blocked.emit(info); this.hub.blocked.emit(info); }
-      this.hub.shake.emit(deflect ? 0.12 : 0.18, 0.12);
+      this.hub.shake.emit(deflect ? combatTuning.shakeDeflect : combatTuning.shakeBlock, 0.12);
       if (a.knockback > 0) this.push(a, a.knockback * 0.3);
       this.addPosture(info.posture, a.stance, info);
       return info.outcome;
@@ -461,10 +467,10 @@ export class Combatant extends Behaviour {
     info.outcome = 'perfect';
     info.posture = a.posture * combatTuning.perfectDrain + combatTuning.perfectFlat;
     kitIO.play('sound/deflect', { pitch: 1.25 });
-    this.freezePair(att, 0.09);
+    this.freezePair(att, combatTuning.hitStopPerfect);
     this.perfectDeflect.emit(info);
     this.hub.perfectDeflect.emit(info);
-    this.hub.shake.emit(0.25, 0.18);
+    this.hub.shake.emit(combatTuning.shakePerfect, 0.18);
     if (att) {
       att.stagger(combatTuning.perfectStagger);
       att.addPosture(info.posture, this.stance, undefined, this);

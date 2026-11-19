@@ -11,7 +11,12 @@ export class Feel extends Behaviour {
   override ready(): void {
     const hub = combatHub(this.world);
     const spot = (i: HitInfo): typeof at => { at.x = i.x; at.y = i.y; at.z = i.z; return at; };
-    hub.hit.connect((i) => { vfx.burst('vfx/blood-mist', spot(i), dir); kitIO.play('sound/hit/flesh'); }, this.node);
+    hub.hit.connect((i) => {
+      vfx.burst('vfx/blood-mist', spot(i), dir);
+      kitIO.play('sound/hit/flesh');
+      // A finisher is the payoff of a whole exchange: the gold flash of a perfect deflect on top of the blood.
+      if (i.outcome === 'finisher') { vfx.burst('vfx/perfect-flash', spot(i), dir); vfx.burst('vfx/clash-sparks', spot(i), dir); }
+    }, this.node);
     hub.blocked.connect((i) => { vfx.burst('vfx/clash-sparks', spot(i), dir); kitIO.play('sound/hit/block'); }, this.node);
     hub.deflected.connect((i) => { vfx.burst('vfx/clash-sparks', spot(i), dir); vfx.burst('vfx/deflect-flash', spot(i), dir); }, this.node);
     hub.perfectDeflect.connect((i) => {
@@ -19,7 +24,8 @@ export class Feel extends Behaviour {
       vfx.burst('vfx/perfect-flash', spot(i), dir);
       kitIO.play('sound/perfect-deflect');
     }, this.node);
-    hub.postureBroken.connect((i) => { vfx.burst('vfx/clash-sparks', spot(i), dir); }, this.node);
+    // A broken posture is the opening: sparks and the white burst so the open enemy reads from across the camp.
+    hub.postureBroken.connect((i) => { vfx.burst('vfx/clash-sparks', spot(i), dir); vfx.burst('vfx/deflect-flash', spot(i), dir); }, this.node);
     hub.moveStarted.connect((who: Combatant, move: string) => {
       if (who.team !== 'player') return;
       const p = who.node.position;

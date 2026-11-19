@@ -188,6 +188,22 @@ export class EnemyBrain extends Behaviour {
     if (ph !== this.phase) { this.phase = ph; this.cooldown = Math.max(this.cooldown, 0.6); this.phaseChanged.emit(ph); }
   }
 
+  /**
+   * What the enemy shows right now: 'unblockable' (the red flash) from the start of the tell until the blade lands, 'glint'
+   * for a blockable blow in the same span, '' otherwise. A game that wants the red flash to last the whole tell reads this.
+   */
+  get telling(): '' | 'glint' | 'unblockable' {
+    const c = this.combatant, d = this.def;
+    if (!d || c.state === 'dead') return '';
+    if (this.mode === 'tell' && this.patternIdx >= 0) {
+      const st = this.patternOf(d)?.steps[this.stepIdx];
+      if (!st?.move) return '';
+      return (st.unblockable ?? c.moveDef(st.move)?.unblockable) ? 'unblockable' : 'glint';
+    }
+    if (c.state === 'attack' && c.untilWindow('trace') > 0) return (c.unblockableOverride ?? c.move?.unblockable) ? 'unblockable' : 'glint';
+    return '';
+  }
+
   private patternOf(d: Enemy): EnemyPattern | undefined { return this.patternIdx >= 0 ? d.patterns[this.patternIdx] : undefined; }
 
   private stepSpacing(d: Enemy, c: Combatant, dx: number, dz: number, dist: number, dt: number): void {
