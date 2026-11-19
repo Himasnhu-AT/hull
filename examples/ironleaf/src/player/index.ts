@@ -4,6 +4,7 @@ import { Collider } from 'hull/physics';
 import { Camera } from 'hull/render';
 import { Combatant, FollowCamera, GROUP, Health, LAYER, LockOn, tpTuning } from 'hull/kits';
 import { Animator } from 'hull/anim';
+import { Dress } from '../models';
 import { groundHeight, STARTS } from '../world/map';
 import { Aya } from './aya';
 import { AyaHud } from './hud';
@@ -31,6 +32,7 @@ export function spawnAya(world: World, o: AyaOpts = {}): Node {
   me.add(Collider, { shape: { type: 'capsule', radius: tpTuning.radius, height: tpTuning.height, center: [0, tpTuning.height / 2, 0] }, layer: LAYER.player });
   const model = world.spawn('model', me);
   model.add(Animator, { character: 'character/aya', ground: groundHeight });
+  model.add(Dress, { kind: 'aya' });
   const cam = world.spawn('camera');
   cam.add(Camera, { fov: 60 });
   cam.add(FollowCamera, { yaw });

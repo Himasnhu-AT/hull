@@ -2,6 +2,7 @@
 // game's actions (GAME.md section 3), moves the capsule, turns toward the lock-on target, holds the stance and answers
 // the buttons with moves of config/move-set/aya. Everything runs on the fixed step and game time.
 import { Behaviour, type Node } from 'hull';
+import { Vector3 } from 'hull/three';
 import { Animator } from 'hull/anim';
 import { Collider } from 'hull/physics';
 import { Combatant, FollowCamera, LockOn, LAYER, flagsOf, footsteps, kitIO, newWalk, tpTuning, turnToward, walk, type KitFlags, type Standoff, type WalkState } from 'hull/kits';
@@ -20,7 +21,7 @@ const RIPOSTE_WINDOW = 1.0;
 const mv = { x: 0, y: 0 };
 
 export class Aya extends Behaviour {
-  static override state = ['facing', 'walk', 'held', 'stanceT', 'riposteT', 'queued', 'queuedT', 'standing', 'dodgeDir', 'lastPress'];
+  static override state = ['facing', 'walk', 'held', 'stanceT', 'riposteT', 'queued', 'queuedT', 'standing', 'dodgeDir', 'lastPress', 'stanceBlend'];
   facing = 0;
   walk: WalkState = newWalk();
   /** Seconds the heavy button has been down, or -1. */
@@ -31,6 +32,8 @@ export class Aya extends Behaviour {
   queuedT = 0;
   standing = false;
   dodgeDir = 0;
+  /** The stance number the animator sees: eased toward the stance's index so the idle poses crossfade. */
+  stanceBlend = 0;
   /** Tick of the last attack press that started a move, and the ticks it took (for the feel test). */
   lastPress = -1;
   swingLatency = -1;
@@ -41,6 +44,8 @@ export class Aya extends Behaviour {
   animator: Animator | null = null;
   c!: Combatant;
   lock: LockOn | null = null;
+  private readonly home = new Vector3();
+  private homeYaw = 0;
   private col!: Collider;
   private cam: FollowCamera | null = null;
   private flags!: KitFlags;
@@ -61,8 +66,28 @@ export class Aya extends Behaviour {
     c.perfectDeflect.connect(() => { this.animator?.trigger('deflect'); this.riposteT = RIPOSTE_WINDOW; }, this.node);
     c.dodged.connect(() => { /* a blow went through the i-frames: the feel layer plays the cue */ }, this.node);
     c.hit.connect(() => { this.held = -1; this.animator?.set('charging', false); }, this.node);
-    this.world.group('fighter');
     this.node.rotation.y = this.facing;
+    this.home.set(this.node.position.x, this.node.position.y, this.node.position.z);
+    this.homeYaw = this.facing;
+    // A fallen Aya gets up at her start after a pause (game time, so a replay does the same).
+    c.killed.connect(() => { this.world.after(3, () => this.respawn()); }, this.node);
+  }
+
+  /** Stands Aya up at her start with full health and an empty posture, and lets go of the lock-on. */
+  respawn(): void {
+    const c = this.c;
+    this.node.position.set(this.home.x, this.home.y, this.home.z);
+    this.face(this.homeYaw);
+    this.walk.vx = 0; this.walk.vz = 0; this.walk.vy = 0;
+    c.health.revive();
+    c.dead = false;
+    c.state = 'free';
+    c.posture = 0;
+    c.guarding = false;
+    this.lock?.release();
+    this.anim()?.set('dead', false);
+    this.anim()?.set('broken', false);
+    this.anim()?.trigger('cancel');
   }
 
   private anim(): Animator | null {
@@ -146,7 +171,9 @@ export class Aya extends Behaviour {
     footsteps(this.walk, dt, tpTuning.strideLength, this.stepSound);
     if (a) {
       a.set('speed', Math.hypot(this.walk.vx, this.walk.vz));
-      a.set('stance', this.stanceIndex);
+      const to = this.stanceIndex, step = 10 * dt;
+      this.stanceBlend += Math.abs(to - this.stanceBlend) <= step ? to - this.stanceBlend : Math.sign(to - this.stanceBlend) * step;
+      a.set('stance', this.stanceBlend);
     }
   }
 
@@ -207,7 +234,6 @@ export class Aya extends Behaviour {
     const c = this.c;
     c.setStance(STANCES[(this.stanceIndex + 1) % STANCES.length]!);
     this.stanceT = STANCE_TIME;
-    this.anim()?.set('stance', this.stanceIndex);
     kitIO.play('sound/sword/draw', { volume: 0.5, pitch: 1.3 });
   }
 }

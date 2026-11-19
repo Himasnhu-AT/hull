@@ -114,7 +114,7 @@ describe('Ironleaf player combat', () => {
       // The second press lands inside the first cut's cancel window (0.30 s .. 0.46 s).
       if (i === 20 + 24) return { attack: { d: 1, p: 1 } };
       if (i === 20 + 48) return { attack: { d: 1, p: 1 } };
-      if (i >= 200 && i < 200 + 40) return { heavy: { d: 1, p: i === 200 ? 1 : 0 } };
+      if (i >= 200 && i < 200 + 40) return (i === 200 ? { heavy: { d: 1, p: 1 } } : { heavy: { d: 1 } });
       return {};
     };
     const observe = (i: number, rig: Rig): void => {

@@ -1,10 +1,13 @@
-// Ironleaf: a swordswoman on the island of Hoshiro. Phase 1 is the world and its people with a placeholder swing; the
-// combat itself (stances, posture, deflects, duels) is designed in GAME.md and built in phase 2.
+// Ironleaf: a swordswoman on the island of Hoshiro. The world and its people are phase 1; the fight (Aya's stances,
+// the raiders' patterns, the duel) is phase 2 on Hull's combat kit.
 import { defineGame } from 'hull';
 import { mountVfx } from 'hull/vfx';
 import { PauseMenu } from 'hull/kits';
 import { Atmosphere, Footing } from './atmosphere';
-import { spawnAya, spawnRaiders } from './cast';
+import { spawnAya } from './player';
+import { Aya } from './player/aya';
+import { encounters, enemyHooks, spawnEncounters } from './enemies';
+import { dressFighter, isKind } from './models';
 import { spawnIsland } from './world/island';
 
 export default defineGame({
@@ -18,7 +21,11 @@ export default defineGame({
     spawnIsland(w);
     const aya = spawnAya(w);
     aya.add(Footing);
-    spawnRaiders(w);
+    // The raiders are dressed in their modelled bodies as they spawn.
+    enemyHooks.dress = (n, kind) => { if (isKind(kind)) dressFighter(n, kind); };
+    spawnEncounters(w);
+    // The camp starts with a standoff: Aya's attack button lets go of the blade.
+    aya.get(Aya)!.standoffOf = () => encounters(w)?.standoff ?? null;
     w.spawn('atmosphere').add(Atmosphere);
   },
 });
