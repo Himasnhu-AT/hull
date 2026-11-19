@@ -8,6 +8,22 @@ import { InputCore, type InputView } from './core.ts';
 import { PAD_SOURCES } from './keys.ts';
 import { wireInput } from './wire.ts';
 
+/**
+ * The `code` of a key event. Some sources (remote desktops, virtual keyboards, automation over the devtools protocol)
+ * send a key with an empty `code`; the `key` still says which one it was, so name it from that.
+ */
+export function codeOf(e: { code: string; key?: string }): string {
+  if (e.code) return e.code;
+  const k = e.key ?? '';
+  if (k.length === 1) {
+    if (k === ' ') return 'Space';
+    if (/[a-z]/i.test(k)) return `Key${k.toUpperCase()}`;
+    if (/[0-9]/.test(k)) return `Digit${k}`;
+    return '';
+  }
+  return k === 'Shift' ? 'ShiftLeft' : k === 'Control' ? 'ControlLeft' : k === 'Alt' ? 'AltLeft' : k === 'Escape' || k === 'Enter' || k === 'Tab' || k === 'Backspace' || /^Arrow(Up|Down|Left|Right)$/.test(k) ? k : '';
+}
+
 function isTextField(t: EventTarget | null): boolean {
   const e = t as HTMLElement | null;
   if (!e || !e.tagName) return false;
@@ -26,7 +42,7 @@ function isTextField(t: EventTarget | null): boolean {
 export function mountInput(game: Game, el: HTMLElement | Window, map?: string | InputMap): InputView {
   const core = new InputCore(() => game.world.tick);
   const off: (() => void)[] = [];
-  const pointerEl: HTMLElement = el instanceof Window ? el.document.documentElement : el;
+  const pointerEl: HTMLElement = typeof Window !== 'undefined' && el instanceof Window ? el.document.documentElement : (el as HTMLElement);
   const doc = pointerEl.ownerDocument;
   const win = doc.defaultView!;
 
@@ -47,21 +63,28 @@ export function mountInput(game: Game, el: HTMLElement | Window, map?: string | 
   };
 
   let locked = false;
+  let wasLocked = false;
   const lockedNow = (): boolean => doc.pointerLockElement === pointerEl;
 
   on<KeyboardEvent>(win, 'keydown', (e) => {
     if (isTextField(e.target)) return;
     if (e.metaKey || e.ctrlKey) return; // browser shortcuts (reload, copy) are not game input
-    const swallow = core.capturingNow || core.isBound(e.code) || locked;
+    const code = codeOf(e);
+    if (!code) return;
+    const swallow = core.capturingNow || core.isBound(code) || locked;
     if (swallow) e.preventDefault();
     if (e.repeat && !core.capturingNow) return;
-    core.keyDown(e.code);
+    core.keyDown(code);
   });
-  on<KeyboardEvent>(win, 'keyup', (e) => { core.keyUp(e.code); });
+  on<KeyboardEvent>(win, 'keyup', (e) => { core.keyUp(codeOf(e)); });
   on(win, 'blur', () => core.releaseAll());
   on(doc, 'visibilitychange', () => { if (doc.hidden) core.releaseAll(); });
 
   on<MouseEvent>(pointerEl, 'mousedown', (e) => {
+    // Inside an iframe (Hull's Game view) a click only moves key focus into the page if the page lets the mousedown
+    // through; the preventDefault below would stop that, and W, A, S, D would keep going to the editor around the game.
+    // So take focus ourselves, first.
+    if (!doc.hasFocus()) win.focus();
     if (core.capturingNow || core.isBound(`Mouse${e.button}`)) e.preventDefault();
     core.mouseDown(e.button);
   });
@@ -78,7 +101,13 @@ export function mountInput(game: Game, el: HTMLElement | Window, map?: string | 
   on(doc, 'pointerlockchange', () => {
     locked = lockedNow();
     // Buttons held when the lock ends may never see their mouseup: let go of everything.
-    if (!locked) core.releaseAll();
+    if (!locked) {
+      core.releaseAll();
+      // Esc (or a lost lock) in an embedded game hands the keyboard back to the page around it, so the editor's own
+      // shortcuts work again. A click in the game takes it back (mousedown above).
+      if (wasLocked && win.parent !== win) win.parent.focus();
+    }
+    wasLocked = locked;
   });
   on(doc, 'pointerlockerror', () => { if (!locked) core.lockDenied = true; });
 
@@ -165,5 +194,6 @@ export const input: InputView = {
   setOverrides: (o) => (current ?? idle).setOverrides(o),
   onBindingsChanged: (fn) => (current ?? idle).onBindingsChanged(fn),
   get problems() { return (current ?? idle).problems; },
+  heldSources: () => (current ?? idle).heldSources(),
   dispose: () => (current ?? idle).dispose(),
 };
