@@ -154,6 +154,81 @@ export const cam = tunables('cam', {
   fovMax: num(98, { min: 0, max: 392, step: 0.5 }),
   sens: num(0.0021, { min: 0, max: 0.0084, step: 0.0005 }),
   lagRate: num(22, { min: 0, max: 88, step: 0.5 }),
+  distPerSpeed: num(0.028, { min: 0, max: 0.2, step: 0.001, help: "pull back per m/s of speed" }),
+  distSpeedCap: num(90, { min: 0, max: 360, step: 1, help: "speed above this pulls no further" }),
+  distRate: num(3, { min: 0, max: 12, step: 0.1, help: "how fast the distance settles (1/s)" }),
+  clearIn: num(12, { min: 0, max: 48, step: 0.5, help: "gliding in off a wall (1/s)" }),
+  clearOut: num(4, { min: 0, max: 16, step: 0.5, help: "gliding back out once the way is clear (1/s)" }),
+  loomDist: num(1.2, { min: 0, max: 5, step: 0.05, help: "extra distance under a looming titan" }),
+  loomLower: num(0.55, { min: 0, max: 2.2, step: 0.05, help: "pivot drops this far under a looming titan" }),
+  rollPerSpeed: num(0.0048, { min: 0, max: 0.02, step: 0.0002, help: "bank into a swing, radians per m/s" }),
+  rollMax: num(0.26, { min: 0, max: 1, step: 0.01 }),
+  wallRollMax: num(0.24, { min: 0, max: 1, step: 0.01, help: "the frame leans away from a wall you run on" }),
+  fovSpeedLo: num(12, { min: 0, max: 48, step: 0.5, help: "the lens starts opening at this speed" }),
+  fovSpeedHi: num(85, { min: 0, max: 340, step: 0.5, help: "fully open at this speed" }),
+  punchFov: num(8, { min: 0, max: 32, step: 0.5, help: "snap-zoom when a rope bites" }),
+  wallRunFov: num(6, { min: 0, max: 24, step: 0.5 }),
+  rushFov: num(3, { min: 0, max: 12, step: 0.5 }),
+});
+
+// Holdout's wave clock (hull/kits waves.ts reads this block live) and what each of the four scripted waves holds.
+export const waves = tunables('waves', {
+  clearPause: num(4, { min: 0, max: 16, step: 0.1, help: "seconds from 'wave cleared' to the next wave" }),
+  clockBase: num(90, { min: 0, max: 360, step: 1, help: "a wave marches on after this many seconds minus clockPerWave each wave" }),
+  clockPerWave: num(4, { min: 0, max: 16, step: 0.1 }),
+  clockMin: num(45, { min: 0, max: 180, step: 1 }),
+  capBase: num(6, { min: 0, max: 24, step: 1, help: "most titans standing while stragglers or a clock wave may still come" }),
+  capPerWave: num(2, { min: 0, max: 8, step: 0.5 }),
+  capMax: num(22, { min: 0, max: 88, step: 1 }),
+  trickleBase: num(12, { min: 0, max: 48, step: 0.5, help: "seconds between stragglers" }),
+  trickleDrop: num(0.8, { min: 0, max: 3.2, step: 0.05 }),
+  trickleMin: num(4, { min: 0, max: 16, step: 0.5 }),
+  firstTrickle: num(6, { min: 0, max: 24, step: 0.5 }),
+  firstDelay: num(2.5, { min: 0, max: 10, step: 0.1, help: "the first wave after the title card" }),
+  growth: num(0.35, { min: 0, max: 1.4, step: 0.01, help: "each wave past the table grows by this share" }),
+  openZMin: num(45, { min: 0, max: 400, step: 1, help: "wave 1 walks up to the wall: nearest and farthest z, widest x" }),
+  openZMax: num(100, { min: 0, max: 400, step: 1 }),
+  openXMax: num(85, { min: 0, max: 340, step: 1 }),
+  breachZMin: num(45, { min: 0, max: 400, step: 1, help: "with the gate down: the field box" }),
+  breachZMax: num(170, { min: 0, max: 680, step: 1 }),
+  breachXMax: num(130, { min: 0, max: 520, step: 1 }),
+});
+
+const wave = (field: number, forest: number, town: number, abnormal: number, lo: number, hi: number) => ({
+  field: num(field, { min: 0, max: 40, step: 1 }),
+  forest: num(forest, { min: 0, max: 40, step: 1 }),
+  town: num(town, { min: 0, max: 40, step: 1 }),
+  abnormal: num(abnormal, { min: 0, max: 20, step: 1 }),
+  sizeMin: num(lo, { min: 2, max: 20, step: 0.5, unit: 'm' }),
+  sizeMax: num(hi, { min: 2, max: 30, step: 0.5, unit: 'm' }),
+});
+export const wave1 = tunables('wave1', wave(4, 0, 0, 0, 4, 9));
+export const wave2 = tunables('wave2', wave(3, 3, 0, 1, 5, 13));
+export const wave3 = tunables('wave3', wave(2, 0, 3, 1, 4, 12));
+export const wave4 = tunables('wave4', wave(1, 6, 0, 2, 6, 15));
+
+// Supply depots: stand in one until it has refilled you.
+export const depot = tunables('depot', {
+  dwell: num(0.8, { min: 0, max: 5, step: 0.05, unit: 's', help: "seconds to stand inside before it refills you" }),
+  cooldown: num(2, { min: 0, max: 10, step: 0.1, unit: 's', help: "after a refill, how long until the next" }),
+  gas: num(1, { min: 0, max: 1, step: 0.05, help: "gas is brought up to this share of full" }),
+  blades: num(1, { min: 0, max: 1, step: 0.05, help: "spare blades are brought up to this share" }),
+  bandages: num(1, { min: 0, max: 1, step: 0.05, help: "hit points are brought up to this share" }),
+});
+
+// What a hit on each part of a titan does, and the soldier's hit points.
+export const zones = tunables('zones', {
+  shallow: num(10, { min: 0, max: 40, step: 0.5, help: "a cut above this wounds (eye, limbs, nape)" }),
+  bodyShallow: num(20, { min: 0, max: 80, step: 0.5, help: "a cut on the body wounds above this" }),
+  eyeBlind: num(25, { min: 0, max: 100, step: 0.5, help: "a cut this deep puts an eye out" }),
+  blindTime: num(6, { min: 0, max: 24, step: 0.5, unit: 's' }),
+  ankleCut: num(40, { min: 0, max: 160, step: 0.5, help: "a cut this deep through an ankle takes the lower leg" }),
+  legCut: num(110, { min: 0, max: 440, step: 0.5, help: "same, through the shin" }),
+  armCut: num(140, { min: 0, max: 560, step: 0.5, help: "a cut this deep takes the forearm (arm or hand)" }),
+  napeCoverStrength: num(0.7, { min: 0, max: 1, step: 0.01, help: "a fully hunched nape takes this share off the cut" }),
+  napeCovered: num(0.3, { min: 0, max: 1, step: 0.01, help: "cover above this counts as covered" }),
+  regenDelay: num(4, { min: 0, max: 16, step: 0.1, unit: 's', help: "soldier: quiet seconds before hit points come back" }),
+  regenRate: num(0.04, { min: 0, max: 0.16, step: 0.005, help: "soldier: share of full per second" }),
 });
 
 export const combat = tunables('combat', {

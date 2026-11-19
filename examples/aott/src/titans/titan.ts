@@ -12,7 +12,8 @@ import type { Game, Cuttable, HitResult } from '../types';
 import type { TitanManager } from './titans';
 import type { TitanCollider, TitanCollision, Prey, PreyHook, PreyHorse, Comrade, MaulTarget, Quarry, Temper } from './env';
 import { R } from '../sim';
-import { titan as TT } from '../tuning';
+import { titan as TT, zones as ZN } from '../tuning';
+import { zoneEffect, coveredDamage, ZONE_CUT, ZONE_SHALLOW } from 'hull/kits';
 
 type Vec3 = THREE.Vector3;
 
@@ -489,13 +490,13 @@ export class Titan implements Cuttable {
     let effect = 'none', killed = false, covered = false;
     switch (part) {
       case 'nape': {
-        damage *= 1 - 0.7 * (this.napeCover || 0);   // hunched: the shoulders come up round the nape
-        covered = (this.napeCover || 0) > 0.3;
+        damage = coveredDamage(damage, this.napeCover || 0, ZN.napeCoverStrength);   // hunched: the shoulders come up round the nape
+        covered = (this.napeCover || 0) > ZN.napeCovered;
         if (this.isBehemoth) {
           this.napeDamage += damage;
           if (this.napeDamage >= this.napeHp) { killed = true; effect = 'kill'; } else { effect = 'shallow'; }
         } else if (damage + this.napeDamage >= this.napeHp) { killed = true; effect = 'kill'; }
-        else if (damage > 10) {
+        else if (damage > ZN.shallow) {
           // too shallow to kill: it leaves a wound that steams while it closes, and the next cut adds to it
           effect = 'shallow';
           this.napeDamage += damage * CFG.combat.napeWound;
@@ -507,11 +508,11 @@ export class Titan implements Cuttable {
         break;
       }
       case 'eye':
-        if (damage >= 25 && !this.isBehemoth) { this.blindT = 6; effect = 'blind'; this._onBlinded(); } else effect = damage > 10 ? 'shallow' : 'none';
+        if (damage >= ZN.eyeBlind && !this.isBehemoth) { this.blindT = ZN.blindTime; effect = 'blind'; this._onBlinded(); } else effect = zoneEffect(damage, 0, ZN.shallow) === ZONE_SHALLOW ? 'shallow' : 'none';
         break;
       case 'ankle': case 'leg':
         // through the ankle (easy) or the shin (a real cut): the lower leg comes off and it goes down on that knee
-        if (damage >= (part === 'ankle' ? 40 : 110) && !this.isBehemoth) {
+        if (zoneEffect(damage, part === 'ankle' ? ZN.ankleCut : ZN.legCut, ZN.shallow) === ZONE_CUT && !this.isBehemoth) {
           const side = this._legSideOfPoint(pt);
           if (this.sevLeg[side] <= 0) {
             // which way it goes over: a cut from behind pitches it onto its chest, one from in front onto its back
@@ -519,16 +520,16 @@ export class Titan implements Cuttable {
             this.sevLeg[side] = TT.legRegrow; this._onLegSevered(side, dd);
           }
           this.crippleT = Math.max(this.crippleT, this.sevLeg[side]); effect = 'cripple'; this._onCrippled();
-        } else effect = damage > 10 ? 'shallow' : 'none';
+        } else effect = zoneEffect(damage, 0, ZN.shallow) === ZONE_SHALLOW ? 'shallow' : 'none';
         break;
       case 'arm': case 'hand':
-        if (damage >= 140 && !this.isBehemoth) {
+        if (zoneEffect(damage, ZN.armCut, ZN.shallow) === ZONE_CUT && !this.isBehemoth) {
           const side = this._sideOfPoint(pt);
           if (this.severed[side] <= 0) { this.severed[side] = TT.armRegrow; this._onSevered(side, dd); }
           effect = 'sever';
-        } else effect = damage > 10 ? 'shallow' : 'none';
+        } else effect = zoneEffect(damage, 0, ZN.shallow) === ZONE_SHALLOW ? 'shallow' : 'none';
         break;
-      default: effect = damage > 20 ? 'shallow' : 'none';
+      default: effect = zoneEffect(damage, 0, ZN.bodyShallow) === ZONE_SHALLOW ? 'shallow' : 'none';
     }
     const ga = this.act as GrabAct | null;
     if ((part === 'arm' || part === 'hand') && damage > 25 && this.state === 'grab' && ga?.ally) {

@@ -113,6 +113,41 @@ describe('AOTT on Hull, headless', () => {
     d0.g.dispose();
   }, 300000);
 
+  it('reads waves, depots and hit zones from tunables, live', async () => {
+    const { g, a } = await start(5, { noAllies: true, noHorses: true, noCivilians: true });
+    // hit zones: the same 50-damage ankle cut cripples at the default threshold and only wounds when the threshold is raised
+    const spawn = (x: number) => a.titans!.spawn({ kind: 'normal', height: 8, position: new (a.player.pos.constructor as new (x: number, y: number, z: number) => typeof a.player.pos)(x, 0, 60), yaw: 0 }) as { applyHit(h: { part: string; damage: number; point: unknown }): { effect: string } };
+    const t1 = spawn(0);
+    g.step(2);
+    expect(t1.applyHit({ part: 'ankle', damage: 50, point: null }).effect).toBe('cripple');
+    expect(setTunable('zones.ankleCut', 80)).toBeNull();
+    const t2 = spawn(20);
+    g.step(2);
+    expect(t2.applyHit({ part: 'ankle', damage: 50, point: null }).effect).toBe('shallow');
+    setTunable('zones.ankleCut', 40);
+    // depot: the soldier standing in one is refilled after the dwell, and a longer dwell holds it back
+    a.flow.start('free');
+    const dep = a.world.supplyDepots[0]!;
+    const p = a.player;
+    p.reset(dep.position.clone(), 0);
+    expect(setTunable('depot.dwell', 3)).toBeNull();
+    p.odm.gas = 0.2;
+    g.step(HZ * 2);
+    expect(p.odm.gas).toBeLessThan(0.9);
+    g.step(HZ * 2);
+    expect(p.odm.gas).toBe(1);
+    setTunable('depot.dwell', 0.8);
+    // waves: the clock between waves is the tunable
+    const b = await start(5, { noAllies: true, noHorses: true, noCivilians: true });
+    expect(setTunable('waves.firstDelay', 0.5)).toBeNull();
+    b.a.flow.start('expedition');
+    b.g.step(HZ);
+    expect(b.a.flow.wave).toBe(1);
+    setTunable('waves.firstDelay', 2.5);
+    b.g.dispose();
+    g.dispose();
+  }, 120000);
+
   it('turns the soldier and the titans from tunables, live and without a restart', async () => {
     const { g, a } = await start(3, { noTitans: true, noAllies: true, noHorses: true, noCivilians: true });
     // a tuning file edit (what the Inspector writes) reaches the code that reads CFG

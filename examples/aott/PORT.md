@@ -177,6 +177,22 @@ the Holdout test measures (a new checksum) says so in its commit and updates the
 * **Done when**: each mapped behaviour reads its numbers from kit config shown in the Inspector, Holdout still advances
   its waves on the clock, and the follow camera, depots and hit zones behave as in screenshots and a recorded replay.
 
+**P6 status (done).** Hull's kits are node-based (Spawner makes its own Chaser enemies, Health and Stock sit on nodes), and AOTT's
+titans, soldier and camera are not nodes, so the kits could not be dropped in as they are. What matched was taken out of
+the kits as pure maths and clocks (additive in `packages/hull/src/kits`, each with a test and README line) and AOTT now
+reads every number from tunables shown in the Inspector (`config/tuning/<block>.json` overrides per project):
+
+* **Waves**: `hull/kits` `stepWaves`, `beginWave`, `waveScale` over the `waves` block (clear pause, clock, cap, stragglers,
+  first delay, growth, the wave-1 and gate-down spawn boxes) and `wave1`..`wave4` (counts per area, abnormals, sizes).
+* **Depots**: `stepDepot`, `fillTo` over the `depot` block (dwell, cooldown, how full gas, blades and bandages get).
+* **Hit zones and hit points**: `zoneEffect`, `coveredDamage`, `regenerate` over the `zones` block (shallow line, eye, ankle,
+  shin, arm cut depths, nape cover, blind time, soldier regen delay and rate). `titan.applyHit` keeps its shape.
+* **Camera**: `followDistance`, `followFov`, `Reach`, `damp` over the extended `cam` block (distance per speed, glide rates,
+  bank, lens opening, punch). The swoop lock-on, grab, kill-cam and cutscene shots stay as code overrides in `player.ts`.
+* **Left in code**: the banner text of each wave and the Behemoth on wave 3; the orbit camera itself (AOTT's mouse-yaw,
+  flight-path follow and pitch rules are not the kit's `FollowCamera`); what a cut limb does to a titan. Defaults equal
+  the old literals, so Holdout's clock (wave 2 at 86 s) is unchanged. Not judged by eye: no screenshots or replay were taken.
+
 ### Where the packages touch
 
 | File | Package |
