@@ -340,7 +340,7 @@ function ContentBrowserBody(p: Props): JSX.Element {
       <div key={n.key} id={`cb-${n.key}`} className={`cb-row${on ? ' sel' : ''}${isFolder && dropOn === n.dir ? ' drop' : ''}`} role="option" aria-selected={on}
         onClick={(ev) => pick(n, ev)} onDoubleClick={() => open_(n)} onContextMenu={(ev) => { ev.preventDefault(); menuFor(n, ev.clientX, ev.clientY); }} {...dragProps(n)} {...(n.t === 'folder' ? dropProps(n.dir) : {})}>
         <span className="rt">{e ? <Thumb kind={e.kind} thumb={data?.thumbs[e.key]} /> : <div className="ct ct-folder"><Icon name="folder" /></div>}</span>
-        <Name n={n} name={e ? e.name : folderName((n as { dir: string }).dir)} />
+        {Name(n, e ? e.name : folderName((n as { dir: string }).dir))}
         <span className="kd">{e ? e.kind : 'folder'}</span>
         <span className="loc">{e ? (filtering ? e.dir.replace(/^config\//, '') : '') : `${countIn(entries, (n as { dir: string }).dir)} items`}</span>
         <span className="st">{e && badges(e)}</span>
