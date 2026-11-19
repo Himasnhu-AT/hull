@@ -28,8 +28,8 @@
 .cb-ic { padding: 0 6px; }
 .cb-size { width: 84px; accent-color: var(--accent); }
 .cb-size:disabled { opacity: 0.35; }
-.btn.danger { background: #c9332a; color: #fff; }
-.btn.primary { background: var(--accent-solid); color: #fff; }
+.btn.danger { background: var(--danger); color: #fff; }
+.btn.primary { background: var(--accent-solid); color: var(--on-accent); }
 .btn:disabled { opacity: 0.45; }
 
 .cb-chips { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-bottom: 1px solid var(--line); flex: none; overflow-x: auto; scrollbar-width: none; }
@@ -54,11 +54,11 @@
 .cb-tile:hover .cb-thumb { border-color: var(--line2); }
 .cb-tile:active .cb-thumb { transform: scale(0.98); }
 .cb-tile.sel .cb-thumb, .cb-tile.sel .ct-folder { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft), 0 0 0 1px var(--accent); }
-.cb-tile.sel .nm { background: var(--accent-solid); color: #fff; }
+.cb-tile.sel .nm { background: var(--accent-solid); color: var(--on-accent); }
 .cb-tile.dragging { opacity: 0.45; }
 .cb-grid:focus-visible .cb-tile.sel .nm { box-shadow: 0 0 0 2px var(--accent-soft); }
 .cb-thumb .edot { position: absolute; top: 6px; left: 6px; width: 7px; height: 7px; box-shadow: 0 0 0 2px var(--panel2); }
-.cb-prob { position: absolute; top: 4px; right: 4px; width: 18px; height: 18px; display: grid; place-items: center; border-radius: 99px; background: var(--warn); color: #1b1305; }
+.cb-prob { position: absolute; top: 4px; right: 4px; width: 18px; height: 18px; display: grid; place-items: center; border-radius: 99px; background: var(--warn); color: #fff; }
 .cb-prob svg.i { width: 13px; height: 13px; stroke-width: 2.2; }
 
 /* previews */
@@ -130,32 +130,32 @@
 /* menus and dialogs */
 .cb-menu { position: fixed; z-index: 60; min-width: 196px; padding: 5px; border-radius: 10px; outline: 0; box-shadow: var(--shadow); backdrop-filter: blur(18px) saturate(1.4); animation: cbpop 0.14s var(--ease); transform-origin: top left; }
 @keyframes cbpop { from { opacity: 0; transform: scale(0.96); } }
-.cb-menu .mi { display: flex; align-items: center; gap: 9px; width: 100%; height: 28px; padding: 0 9px; border: 0; border-radius: 6px; background: none; color: #e9ebee; font: inherit; text-align: left; cursor: default; }
-.cb-menu .mi.on { background: var(--accent-solid); color: #fff; }
-.cb-menu .mi.danger { color: #ff9a92; }
-.cb-menu .mi.danger.on { background: #c9332a; color: #fff; }
+.cb-menu .mi { display: flex; align-items: center; gap: 9px; width: 100%; height: 28px; padding: 0 9px; border: 0; border-radius: 6px; background: none; color: var(--text); font: inherit; text-align: left; cursor: default; }
+.cb-menu .mi.on { background: var(--accent-solid); color: var(--on-accent); }
+.cb-menu .mi.danger { color: var(--danger); }
+.cb-menu .mi.danger.on { background: var(--danger); color: #fff; }
 .cb-menu .mi:disabled { opacity: 0.4; }
 .cb-menu .mi svg.i, .cb-menu .mi .gap { width: 14px; height: 14px; flex: none; }
 .cb-menu .lb { flex: 1; }
 .cb-menu kbd { font: 10.5px var(--mono); opacity: 0.6; }
 .cb-menu .sep { height: 1px; margin: 4px 6px; background: var(--glass-line); }
-.cb-scrim { position: fixed; inset: 0; z-index: 70; background: rgba(5, 6, 8, 0.45); display: grid; place-items: center; animation: fadein 0.15s var(--ease); }
-.cb-modal { width: min(460px, calc(100vw - 32px)); max-height: min(560px, calc(100vh - 48px)); display: flex; flex-direction: column; border-radius: 14px; padding: 16px 18px 14px; outline: 0; box-shadow: var(--shadow); color: #e9ebee; background: rgba(30, 33, 39, 0.92); backdrop-filter: blur(24px) saturate(1.4); animation: cbpop 0.18s var(--ease); transform-origin: center; }
+.cb-scrim { position: fixed; inset: 0; z-index: 70; background: rgba(28, 26, 22, 0.28); display: grid; place-items: center; animation: fadein 0.15s var(--ease); }
+.cb-modal { width: min(460px, calc(100vw - 32px)); max-height: min(560px, calc(100vh - 48px)); display: flex; flex-direction: column; border-radius: 14px; padding: 16px 18px 14px; outline: 0; box-shadow: var(--shadow-pop); color: var(--text); background: var(--pop); backdrop-filter: blur(24px) saturate(1.8); animation: cbpop 0.18s var(--ease); transform-origin: center; }
 .cb-modal h3 { margin: 0 0 8px; font-size: 15px; font-weight: 600; text-wrap: balance; }
 .cb-modal .mb { overflow: auto; min-height: 0; display: flex; flex-direction: column; gap: 8px; }
 .cb-modal .mf { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
-.cb-modal .mp { margin: 0; line-height: 1.5; color: #c9cfd8; }
-.cb-modal .help { color: #9aa2ad; margin: 0; }
-.cb-modal .fld-l { display: flex; flex-direction: column; gap: 4px; color: #a3aab4; font-size: 11.5px; }
+.cb-modal .mp { margin: 0; line-height: 1.5; color: var(--muted); }
+.cb-modal .help { color: var(--faint); margin: 0; }
+.cb-modal .fld-l { display: flex; flex-direction: column; gap: 4px; color: var(--muted); font-size: 11.5px; }
 .cb-reflist { border: 1px solid var(--glass-line); border-radius: 10px; overflow: auto; max-height: 260px; }
 .cb-reflist .rr { display: flex; align-items: center; gap: 8px; padding: 5px 8px 5px 10px; min-height: 32px; }
 .cb-reflist .rr + .rr { border-top: 1px solid var(--glass-line); }
-.cb-reflist .rr svg.i { width: 13px; height: 13px; color: #8a919c; flex: none; }
+.cb-reflist .rr svg.i { width: 13px; height: 13px; color: var(--faint); flex: none; }
 .cb-reflist .rr .mono { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cb-pick { display: flex; flex-direction: column; border: 1px solid var(--glass-line); border-radius: 10px; max-height: 240px; overflow: auto; padding: 4px; }
 .cb-pick button { display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 8px; border: 0; border-radius: 6px; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
-.cb-pick button:hover { background: rgba(255, 255, 255, 0.06); }
-.cb-pick button.on { background: var(--accent-solid); color: #fff; }
+.cb-pick button:hover { background: var(--hover); }
+.cb-pick button.on { background: var(--accent-solid); color: var(--on-accent); }
 .cb-pick svg.i { width: 14px; height: 14px; }
 
 /* wide: the dock covers the Library and the Inspector columns; the tree gets room */

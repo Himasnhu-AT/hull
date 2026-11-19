@@ -136,7 +136,7 @@ dependency; nobody edits another package's files.
 | A | Tools and runtime | `packages/hull/src/core/trace.ts`, the `trace` calls in `audio`, `anim`, `vfx`, `dev/runtime.ts`, `dev/protocol.ts` (folds `CreateMethods` into `Methods`), `packages/hull/src/schema` (explain), all of `packages/tools`, `docs/SCHEMAS.md` and `docs/ARCHITECTURE.md` sections 8 and 9 | 1 |
 | B | Studio: shell and shelves | `packages/studio/src/renderer/create/**` (new), `App.tsx`, `launcher/Launcher.tsx`, `styles.css` (new section only). Screens: Idea, Everything, Changes, Share, the Advanced switch, and the shell with the five-step rail. Uses only methods that exist today | 1 |
 | C | Agent | All of `packages/agent`: streaming, caching, `ui_ask` / `ui_show`, the three modes, the stage runner, the fake provider's support for all of it | 2 |
-| D | Studio: brief, build, play | `packages/studio/src/main/**`, `shared/**`, `web/**`, `renderer/lib/webShim.ts`, and under `renderer/create/` the Brief chat, the Build screen, Play and fix (Just now strip, freeze and note, builder column), the settings sheet for the key | 2 |
+| D | Studio: brief, build, play | `packages/studio/src/main/**`, `shared/**`, `web/**`, `renderer/lib/webShim.ts`, and under `renderer/create/` the Brief chat, the Build screen, Play and fix (Just now strip, freeze and note, builder column), Settings (`renderer/settings/`: the builder's keys, Claude Code and Codex, MCP) | 2 |
 
 ## 6. Done when
 

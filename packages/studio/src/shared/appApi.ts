@@ -16,7 +16,7 @@ export interface OpenedProject {
   mcp: { url: string; launcher: string };
 }
 
-import type { AgentEvent, AgentInfo, AgentSettings, AgentSettingsInput, ClaudeCodeInfo, EnsureResult, PromptOptions, TermInfo } from './agentApi.ts';
+import type { AgentEvent, AgentInfo, AgentSettings, AgentSettingsInput, ClaudeCodeInfo, CliAction, CliId, CliStatus, EnsureResult, PromptOptions, TermInfo, TermProgram } from './agentApi.ts';
 
 export interface HullApp extends HullAppAgents {
   /** 'darwin' | 'win32' | 'linux' | 'web'. The title bar leaves room for traffic lights on darwin only. */
@@ -58,8 +58,12 @@ export interface HullAppAgents {
   /** Answers a permission card. `null` denies by cancelling. */
   agentAnswer(sid: string, reqId: string, optionId: string | null): Promise<void>;
   claudeInfo(): Promise<ClaudeCodeInfo>;
-  /** Opens `claude` in a terminal in the open project's folder. Output arrives as 'term-data' events. */
-  termOpen(cols: number, rows: number): Promise<TermInfo>;
+  /** Claude Code and Codex: installed, signed in (asked of the programs themselves), connected to the open project. */
+  cliStatus(): Promise<CliStatus[]>;
+  /** Connects or disconnects the open project's tools, or signs out. Resolves with a line to show. */
+  cliRun(id: CliId, action: CliAction): Promise<string>;
+  /** Opens a terminal: `claude` in the open project's folder (the default), or Claude Code's or Codex's own sign-in. Output arrives as 'term-data' events. */
+  termOpen(cols: number, rows: number, program?: TermProgram): Promise<TermInfo>;
   termWrite(tid: string, data: string): Promise<void>;
   termResize(tid: string, cols: number, rows: number): Promise<void>;
   termKill(tid: string): Promise<void>;

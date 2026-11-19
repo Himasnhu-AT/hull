@@ -4,6 +4,7 @@ import type { OpenedProject } from '../../shared/appApi.ts';
 import { Icon } from '../ui/Icon.tsx';
 import { diffStat, lineDiff, planProgress, reduce, toolWord, type Item } from './agentView.ts';
 import { ClaudePane } from './ClaudePane.tsx';
+import { mcpLines } from '../settings/mcpLines.ts';
 
 // The agent panel: an ACP client. It lists the agents on this Mac, starts one with Hull's tools, streams what it says,
 // shows its plan as a checklist, its tool calls with diffs, and asks before anything it was not already allowed to do.
@@ -11,11 +12,6 @@ import { ClaudePane } from './ClaudePane.tsx';
 
 type Tab = 'agents' | 'claude' | 'connect';
 
-const connectLines = (m: OpenedProject['mcp'], root: string): { id: string; label: string; text: string }[] => [
-  { id: 'claude', label: 'Claude Code', text: `claude mcp add --transport http hull ${m.url}` },
-  { id: 'codex', label: 'Codex (~/.codex/config.toml)', text: `[mcp_servers.hull]\ncommand = "node"\nargs = ["${m.launcher}", "${root}"]` },
-  { id: 'url', label: 'Any MCP client (streamable HTTP)', text: m.url },
-];
 
 const useCopy = (): [string, (id: string, text: string) => void] => {
   const [copied, setCopied] = useState('');
@@ -156,7 +152,7 @@ export function AgentPanel({ project, open, onClose }: { project: OpenedProject;
 
       <div className="ag-body ag-connect" hidden={tab !== 'connect'}>
         <p className="ag-sub">The app serves this project to any local agent over MCP while it is open. Changes they make are recorded under their name and show up here live.</p>
-        {connectLines(project.mcp, project.root).map((l) => (
+        {mcpLines(project.mcp, project.root).map((l) => (
           <div key={l.id} className="ag-row-col">
             <div className="ag-h"><span>{l.label}</span><button className="btn ghost" onClick={() => copy(l.id, l.text)}>{copied === l.id ? 'Copied' : 'Copy'}</button></div>
             <pre className="mono">{l.text}</pre>

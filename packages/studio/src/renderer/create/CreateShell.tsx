@@ -8,6 +8,7 @@ import type { OpenedProject } from '../../shared/appApi.ts';
 import { Editor } from '../editor/Editor.tsx';
 import { useProject } from '../editor/useProject.ts';
 import { RpcClient, studioUrl } from '../lib/rpc.ts';
+import { useSettings } from '../settings/open.tsx';
 import { Icon } from '../ui/Icon.tsx';
 import { BriefScreen } from './BriefScreen.tsx';
 import { BuilderColumn } from './BuilderColumn.tsx';
@@ -91,6 +92,7 @@ function ShellScreens({ rpc, project, platform, idea, onClose, step, setStep, ta
   const [sheet, setSheet] = useState<string | null>(null);
   const [moment, setMoment] = useState<GameMoment | null>(null);
   const changeCount = useChangeCount(rpc);
+  const settings = useSettings();
   const library = p.library;
   const open = library?.find((i) => i.id === sheet) ?? null;
 
@@ -128,6 +130,7 @@ function ShellScreens({ rpc, project, platform, idea, onClose, step, setStep, ta
             <button role="tab" aria-selected={tab === 'changes'} className={tab === 'changes' ? 'on' : ''} onClick={() => setTab('changes')}>Changes{changeCount !== null ? <span className="cr-cnt">{changeCount}</span> : null}</button>
           </div>
         )}
+        <button className="btn ghost nodrag cr-gear" onClick={() => settings.open()} aria-label="Settings" title="Settings (⌘,)"><Icon name="gear" size={15} /></button>
         <button className="btn nodrag" onClick={() => setStep('share')}>Share</button>
         <button className="cr-switch nodrag" role="switch" aria-checked={false} onClick={onAdvanced} title="Show the full editor"><span className="cr-knob" />Advanced</button>
       </header>

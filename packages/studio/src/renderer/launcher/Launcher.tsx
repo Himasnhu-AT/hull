@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type JSX } from 'react';
 import type { CommunityGame, HullApp, OpenedProject, RecentProject, TemplateInfo } from '../../shared/appApi.ts';
+import { useSettings } from '../settings/open.tsx';
 import { Icon } from '../ui/Icon.tsx';
 
 type Pane = 'idea' | 'recent' | 'new' | 'community';
@@ -44,6 +45,7 @@ export function Launcher({ app, onOpen, startError }: { app: HullApp; onOpen(p: 
   // The game being opened or reset, and the one asking "replace your copy?".
   const [working, setWorking] = useState<{ id: string; reset: boolean } | null>(null);
   const [confirming, setConfirming] = useState<string | null>(null);
+  const settings = useSettings();
 
   useEffect(() => {
     void app.recents().then((r) => { setRecents(r); }, () => setRecents([]));
@@ -97,6 +99,7 @@ export function Launcher({ app, onOpen, startError }: { app: HullApp; onOpen(p: 
             <span className="ic"><Icon name="history" /></span><span><b>Recent projects</b><small>{recents ? `${recents.length} saved` : 'Loading'}</small></span>
           </button>
         </div>
+        <button className="l-set" onClick={() => settings.open()} title="Settings (⌘,)"><Icon name="gear" /><span>Settings</span><small>Keys, Claude Code, Codex, MCP</small></button>
         <div className="l-foot">Your games are kept by the app. You never need to pick a folder.</div>
       </div>
 

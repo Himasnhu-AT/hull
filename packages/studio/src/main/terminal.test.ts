@@ -29,4 +29,12 @@ describe('terminal', () => {
     expect(info.install).toMatch(/Install/);
     return expect(t.open(80, 24)).rejects.toThrow(/not found/);
   });
+
+  it('runs only its fixed programs', async () => {
+    const t = createTerminals({ project: () => null, emit: () => {}, command: 'sh' });
+    await expect(t.open(80, 24, 'rm -rf /' as never)).rejects.toThrow(/No terminal program/);
+    await expect(t.open(80, 24)).rejects.toThrow(/Open a project first/);
+    // Hull offers no Claude sign-in (PLAN D15).
+    await expect(t.open(80, 24, 'claude-login' as never)).rejects.toThrow(/No terminal program/);
+  });
 });

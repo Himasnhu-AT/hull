@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { createHub, type Hub } from './agents.ts';
 import { createSettingsStore, type KeyCrypto } from './agentSettings.ts';
 import { createTerminals, type Terminals } from './terminal.ts';
+import { createAccounts, type Accounts, type Runner } from './accounts.ts';
 import { pickTemplate, titleFromIdea } from './idea.ts';
 import type { AgentEvent, AgentSettings, AgentSettingsInput } from '../shared/agentApi.ts';
 import type { CommunityGame, OpenedProject, RecentProject, TemplateInfo } from '../shared/appApi.ts';
@@ -34,6 +35,8 @@ export interface HostOptions {
   env?: NodeJS.ProcessEnv;
   /** Where the builder's key can be kept safely (Electron's safeStorage). Without it the environment decides. */
   crypto?: KeyCrypto;
+  /** Runs Claude Code's and Codex's own commands for Settings (tests pass a fake). */
+  run?: Runner;
 }
 
 export interface Host {
@@ -50,6 +53,8 @@ export interface Host {
   /** Agents (ACP) and the Claude Code terminal, working on the open project. */
   agents: Hub;
   terminals: Terminals;
+  /** Claude Code and Codex as Settings sees them: installed, signed in, connected to this project. */
+  accounts: Accounts;
   /** The builder's model and key (the key itself never leaves the main process). */
   agentSettings(): Promise<AgentSettings>;
   setAgentSettings(s: AgentSettingsInput): Promise<AgentSettings>;
@@ -81,6 +86,7 @@ export function createHost(opts: HostOptions): Host {
   const settings = createSettingsStore({ dataDir: opts.dataDir, crypto: opts.crypto, env: opts.env });
   const hub = createHub({ project: current, emit, log, settings, ...(opts.env ? { env: opts.env } : {}) });
   const terminals = createTerminals({ project: current, emit, ...(opts.env ? { env: opts.env } : {}) });
+  const accounts = createAccounts({ project: current, ...(opts.env ? { env: opts.env } : {}), ...(opts.run ? { run: opts.run } : {}) });
 
   async function load(): Promise<{ mod: ServerModule; mcp: McpModule; kind: 'real' }> {
     if (loaded) return loaded;
@@ -112,6 +118,7 @@ export function createHost(opts: HostOptions): Host {
   const host: Host = {
     agents: hub,
     terminals,
+    accounts,
     agentSettings: () => settings.get(),
     async setAgentSettings(s) { const r = await settings.set(s); await hub.stopEnsured(); return r; },
     onAgentEvent(cb) { listeners.add(cb); return () => { listeners.delete(cb); }; },

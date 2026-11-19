@@ -4,7 +4,7 @@
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, safeStorage, shell } from 'electron';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { AgentSettingsInput, PromptOptions } from '../shared/agentApi.ts';
+import type { AgentSettingsInput, CliAction, CliId, PromptOptions, TermProgram } from '../shared/agentApi.ts';
 import { createHost } from './host.ts';
 
 // Dev only: lets a test driver (agent-browser) attach to the window.
@@ -49,7 +49,9 @@ function registerIpc(): void {
   handle('agentStop', (sid: string) => host.agents.stop(sid));
   handle('agentAnswer', (sid: string, reqId: string, optionId: string | null) => host.agents.answer(sid, reqId, optionId));
   handle('claudeInfo', () => host.terminals.claudeInfo());
-  handle('termOpen', (cols: number, rows: number) => host.terminals.open(cols, rows));
+  handle('cliStatus', () => host.accounts.status());
+  handle('cliRun', (id: CliId, action: CliAction) => host.accounts.run(id, action));
+  handle('termOpen', (cols: number, rows: number, program?: TermProgram) => host.terminals.open(cols, rows, program));
   handle('termWrite', (tid: string, data: string) => host.terminals.write(tid, data));
   handle('termResize', (tid: string, cols: number, rows: number) => host.terminals.resize(tid, cols, rows));
   handle('termKill', (tid: string) => host.terminals.kill(tid));
@@ -66,7 +68,7 @@ function registerIpc(): void {
 }
 
 async function createWindow(): Promise<void> {
-  nativeTheme.themeSource = 'system';
+  nativeTheme.themeSource = 'light';
   win = new BrowserWindow({
     width: 1440,
     height: 900,
@@ -76,7 +78,7 @@ async function createWindow(): Promise<void> {
     // The title bar is ours: on macOS the traffic lights sit inside it, like Xcode.
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
     trafficLightPosition: { x: 16, y: 14 },
-    backgroundColor: '#16181c',
+    backgroundColor: '#f3f2ee',
     show: false,
     webPreferences: {
       preload: join(here, 'preload.cjs'),

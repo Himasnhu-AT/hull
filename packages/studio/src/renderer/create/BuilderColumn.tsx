@@ -48,7 +48,7 @@ export function BuilderColumn({ attached, onClearAttached, moment = null, onClea
       <div className="cr-b-head">
         <b>Builder</b><span className={`pill ${state.cls}`}>{state.text}</span>
         <span style={{ flex: 1 }} />
-        <button className="btn ghost" onClick={b.openSettings} aria-label="Key settings" title="Key settings"><Icon name="sliders" size={14} /></button>
+        <button className="btn ghost" onClick={b.openSettings} aria-label="Settings" title="Settings (⌘,)"><Icon name="sliders" size={14} /></button>
       </div>
       <TranscriptView t={t} showEvents={false} label="Conversation with the builder" className="cr-b-log"
         empty={b.needs ? <NeedsKey text={b.needs} /> : <p className="cr-sub">Say what feels wrong and the builder changes it. Press Something is off (N) to freeze the game first, or pick a piece with Change on its card.</p>} />

@@ -703,6 +703,10 @@ The app's main process is an ACP client (`src/main/agents.ts`, official `@agentc
 
 Claude Code is never started through an SDK. The panel's Claude Code tab runs the person's own `claude` in a pseudo-terminal (`node-pty`, drawn with xterm.js) in the project folder, with their own environment, and shows the `claude mcp add` line to run once. Hull does not offer claude.ai login and never reads or stores Claude credentials (PLAN D15). `src/main/fixtures/fake-acp-agent.mjs` is a scripted ACP agent for tests.
 
+### Settings (`renderer/settings/`, `src/main/accounts.ts`)
+
+One sheet, opened from the launcher, both title bars, the builder's "Add a key" and Cmd+,. **Builder**: the provider in use (Anthropic or any OpenAI-compatible endpoint), the model, and one key per provider, encrypted with `safeStorage` (`agentSettings.ts`; a file from before keeps working, its single key read as its provider's). **Claude Code** and **Codex**: installed, signed in and connected, asked of the programs themselves (`claude auth status`, `codex login status`, `… mcp get hull`); only "how" ("Claude Max", "ChatGPT", "API key") reaches the page, never an email or key fragment. Connect runs the program's own `mcp add` (Claude Code: HTTP, local scope of the project folder; Codex: the stdio launcher, so it works with the app closed). Codex signs in with its own `codex login` (ChatGPT in the browser) in a terminal pane; terminals run only a fixed list of programs named by the page, never a command line from it. Claude Code gets no sign-in or sign-out button (D15): Settings only reports what it says. **MCP**: the open project's address and config lines for other clients (`settings/mcpLines.ts`, shared with the agent panel).
+
 ## 10. Rules the engine enforces
 
 | Rule | How |

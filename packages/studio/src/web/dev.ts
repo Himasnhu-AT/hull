@@ -12,7 +12,7 @@ import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { createServer } from 'vite';
 import { createHost } from '../main/host.ts';
-import type { AgentSettingsInput, PromptOptions } from '../shared/agentApi.ts';
+import type { AgentSettingsInput, CliAction, CliId, PromptOptions, TermProgram } from '../shared/agentApi.ts';
 import type { OpenedProject } from '../shared/appApi.ts';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -56,7 +56,9 @@ const api: Record<string, (arg: never) => unknown> = {
   agentStop: (o: { a: [string] }) => host.agents.stop(...o.a),
   agentAnswer: (o: { a: [string, string, string | null] }) => host.agents.answer(...o.a),
   claudeInfo: () => host.terminals.claudeInfo(),
-  termOpen: (o: { a: [number, number] }) => host.terminals.open(...o.a),
+  cliStatus: () => host.accounts.status(),
+  cliRun: (o: { a: [CliId, CliAction] }) => host.accounts.run(...o.a),
+  termOpen: (o: { a: [number, number, TermProgram | undefined] }) => host.terminals.open(...o.a),
   termWrite: (o: { a: [string, string] }) => host.terminals.write(...o.a),
   termResize: (o: { a: [string, number, number] }) => host.terminals.resize(...o.a),
   termKill: (o: { a: [string] }) => host.terminals.kill(...o.a),

@@ -1,5 +1,6 @@
 import { useEffect, useState, type JSX, type ReactNode } from 'react';
 import { Icon, type IconName } from '../ui/Icon.tsx';
+import { useSettings } from '../settings/open.tsx';
 
 export interface Panels { lib: boolean; dock: boolean; insp: boolean }
 export type BuildState = 'idle' | 'running';
@@ -100,6 +101,7 @@ export function TitleBar(p: Props): JSX.Element {
         {p.launch !== undefined && p.onLaunch && <LaunchField value={p.launch} onCommit={p.onLaunch} />}
         {p.onReload && <button className="btn ghost" onClick={p.onReload} title="Reload the game page" aria-label="Reload the game page" style={{ padding: '0 6px' }}><Icon name="reload" /></button>}
         <button className={`chip${p.agents ? ' on' : ''}`} data-agents-toggle onClick={p.onAgents} aria-expanded={p.agents} title="Connect Claude Code, Codex or another MCP client to this project"><Icon name="plug" /><span className="vl">Agents</span></button>
+        <SettingsButton />
         {p.problems > 0 && <button className="chip" onClick={p.onProblems} title="Show problems in the Console"><Icon name="warn" />Problems <span className="count">{p.problems}</span></button>}
         <button className="btn" onClick={p.onBuild} disabled={p.build === 'running' || !p.connected} title="Build one JavaScript file for the web and desktop (Cmd B)">
           <Icon name={p.build === 'running' ? 'reload' : 'build'} className={p.build === 'running' ? 'spin' : undefined} /><span className="vl">{p.build === 'running' ? 'Building' : 'Build'}</span>
@@ -111,4 +113,10 @@ export function TitleBar(p: Props): JSX.Element {
       </div>
     </header>
   );
+}
+
+/** Settings from the editor's title bar: keys, Claude Code, Codex and MCP (also Cmd+,). */
+function SettingsButton(): JSX.Element {
+  const s = useSettings();
+  return <button className="btn ghost" onClick={() => s.open()} aria-label="Settings" title="Settings (⌘,)" style={{ padding: '0 6px' }}><Icon name="gear" /></button>;
 }

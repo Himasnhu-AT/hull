@@ -83,16 +83,47 @@ export interface PromptOptions {
   about?: string[];
 }
 
-/** Which model the builder uses. The key is kept by the app and never handed back to the page. */
+export type KeyProvider = 'anthropic' | 'openai';
+
+/** Which model the builder uses. The keys are kept by the app and never handed back to the page. */
 export interface AgentSettings {
-  provider: 'anthropic' | 'openai';
+  provider: KeyProvider;
+  /** A key for the provider in use (saved, or from the environment). */
   hasKey: boolean;
+  /** Which providers have a saved key. One key per provider, so switching back and forth keeps both. Absent when the environment decides. */
+  keys?: Record<KeyProvider, boolean>;
   baseUrl?: string;
   model?: string;
   /** 'app' when the app keeps the key; 'environment' in web mode, where the shell's environment decides and nothing here can change it. */
   source?: 'app' | 'environment';
 }
-export interface AgentSettingsInput { provider: 'anthropic' | 'openai'; apiKey?: string; baseUrl?: string; model?: string }
+/** `apiKey` is saved for `provider`; an empty one keeps the key already saved. `clearKey` forgets that provider's key. */
+export interface AgentSettingsInput { provider: KeyProvider; apiKey?: string; /** Whose key `apiKey` is, when not the provider in use. */ keyFor?: KeyProvider; baseUrl?: string; model?: string; clearKey?: KeyProvider }
+
+/** The coding agents a person may already have on this Mac and sign in to themselves. */
+export type CliId = 'claude' | 'codex';
+
+/** What Settings shows for one of them. Hull asks the program itself (`claude auth status`, `codex login status`); it never reads their credential files. */
+export interface CliStatus {
+  id: CliId;
+  name: string;
+  installed: boolean;
+  version: string | null;
+  /** Null when the program could not say. */
+  signedIn: boolean | null;
+  /** How it is signed in, in a few words ("Claude Max", "ChatGPT", "API key"). Never an email, a token or a key. */
+  via: string | null;
+  /** Whether it reaches the open project's tools over MCP. Null when no project is open or it could not tell. */
+  connected: boolean | null;
+  /** How to get it when it is missing. */
+  install: string;
+}
+
+/** What Settings can ask a coding agent to do without a terminal. Codex's sign-in needs one (TermProgram); 'logout' is Codex only (PLAN D15). */
+export type CliAction = 'connect' | 'disconnect' | 'logout';
+
+/** What a terminal pane may run: the person's own `claude`, or Codex's own sign-in. Hull offers no Claude sign-in (PLAN D15). */
+export type TermProgram = 'claude' | 'codex-login';
 
 /** The answer of agentEnsure: a session ready for prompts, or what is missing first (a key). */
 export type EnsureResult = { sid: string } | { needs: string };

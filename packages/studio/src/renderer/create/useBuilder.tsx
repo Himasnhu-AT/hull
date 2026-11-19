@@ -7,7 +7,7 @@ import type { AgentMode, StageId } from 'hull/dev/protocol';
 import type { PromptOptions } from '../../shared/agentApi.ts';
 import type { OpenedProject } from '../../shared/appApi.ts';
 import type { RpcClient } from '../lib/rpc.ts';
-import { KeySheet } from './KeySheet.tsx';
+import { useSettings } from '../settings/open.tsx';
 import { emptyTranscript, reduce, waiting, type Transcript, type TranscriptEvent } from './transcript.ts';
 import { usePieces, type Pieces } from './usePieces.ts';
 
@@ -67,7 +67,7 @@ export function BuilderProvider({ rpc, project, children }: { rpc: RpcClient; pr
   const pending = useRef<(() => void) | null>(null);
   const [needs, setNeeds] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
-  const [sheet, setSheet] = useState(false);
+  const settings = useSettings();
   const [draft, setDraft] = useState('');
   const [draftNonce, setDraftNonce] = useState(0);
   const pieces = usePieces(rpc, project);
@@ -161,19 +161,18 @@ export function BuilderProvider({ rpc, project, children }: { rpc: RpcClient; pr
   const fillDraft = useCallback((s: string): void => { setDraft(s); setDraftNonce((n) => n + 1); }, []);
   const saved = useCallback((): void => {
     // The saved key reaches the builder when it starts again, so the old session is let go and the start that waited is tried again.
-    sid.current = null; setNeeds(null); setSheet(false);
+    sid.current = null; setNeeds(null);
     const p = pending.current; pending.current = null;
     if (p) p(); else void ensure();
   }, [ensure]);
 
   const value = useMemo<Builder>(() => ({
-    rpc, project, lanes, needs, starting, running, pieces, send, answer, cancel, startBrief, startBuild, retryStage, prepare: () => { void ensure(); }, openSettings: () => setSheet(true), draft, setDraft, fillDraft, draftNonce,
-  }), [rpc, project, lanes, needs, starting, running, pieces, send, answer, cancel, startBrief, startBuild, retryStage, draft, fillDraft, draftNonce, ensure]);
+    rpc, project, lanes, needs, starting, running, pieces, send, answer, cancel, startBrief, startBuild, retryStage, prepare: () => { void ensure(); }, openSettings: () => settings.open('builder', saved), draft, setDraft, fillDraft, draftNonce,
+  }), [rpc, project, lanes, needs, starting, running, pieces, send, answer, cancel, startBrief, startBuild, retryStage, draft, fillDraft, draftNonce, ensure, settings, saved]);
 
   return (
     <Ctx.Provider value={value}>
       {children}
-      {sheet && <KeySheet onClose={() => setSheet(false)} onSaved={saved} />}
     </Ctx.Provider>
   );
 }

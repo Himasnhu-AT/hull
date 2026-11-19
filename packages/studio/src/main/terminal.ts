@@ -3,9 +3,10 @@
 // thing as typing `claude` in Terminal, drawn inside the app. Nothing here imports electron.
 
 import { chmodSync, existsSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { createRequire } from 'node:module';
 import { delimiter, dirname, join } from 'node:path';
-import type { AgentEvent, ClaudeCodeInfo, TermInfo } from '../shared/agentApi.ts';
+import type { AgentEvent, ClaudeCodeInfo, TermInfo, TermProgram } from '../shared/agentApi.ts';
 import { searchPath, which, type AgentProject } from './agents.ts';
 
 interface Pty { onData(cb: (d: string) => void): unknown; onExit(cb: (e: { exitCode: number }) => void): unknown; write(d: string): void; resize(c: number, r: number): void; kill(): void }
@@ -13,7 +14,8 @@ interface PtyModule { spawn(file: string, args: string[], o: { name: string; col
 
 export interface Terminals {
   claudeInfo(): ClaudeCodeInfo;
-  open(cols: number, rows: number): Promise<TermInfo>;
+  /** `program` is one of a fixed few: the person's `claude`, or Codex's own sign-in command. */
+  open(cols: number, rows: number, program?: TermProgram): Promise<TermInfo>;
   write(tid: string, data: string): void;
   resize(tid: string, cols: number, rows: number): void;
   kill(tid: string): void;
@@ -40,6 +42,12 @@ export function createTerminals(o: { project(): AgentProject | null; emit(e: Age
   }
 
   const path = (): string | null => which(o.command ?? 'claude', env);
+  // The page names a program, never a command line: only these run. Codex's sign-in needs no project, so it starts in the home folder.
+  // There is no Claude sign-in here: Hull never offers claude.ai login (PLAN D15); Claude Code asks for it itself.
+  const programs: Record<TermProgram, { bin: string; args: string[]; project: boolean; label: string }> = {
+    claude: { bin: o.command ?? 'claude', args: [], project: true, label: 'Claude Code' },
+    'codex-login': { bin: 'codex', args: ['login'], project: false, label: 'Codex' },
+  };
 
   return {
     claudeInfo() {
@@ -51,20 +59,22 @@ export function createTerminals(o: { project(): AgentProject | null; emit(e: Age
         mcpAdd: p ? `claude mcp add --transport http hull ${p.mcp.url}` : '',
       };
     },
-    async open(cols, rows) {
+    async open(cols, rows, program = 'claude') {
+      const spec = programs[program];
+      if (!spec) throw new Error(`No terminal program called ${String(program)}.`);
       const p = o.project();
-      if (!p) throw new Error('Open a project first.');
-      const exe = path();
-      if (!exe) throw new Error(`${o.command ?? 'claude'} was not found on this Mac. Install Claude Code first.`);
+      if (spec.project && !p) throw new Error('Open a project first.');
+      const exe = which(spec.bin, env);
+      if (!exe) throw new Error(`${spec.bin} was not found on this Mac. Install ${spec.label} first.`);
       const tid = `t${next++}`;
-      const t = loadPty().spawn(exe, [], {
-        name: 'xterm-256color', cols: Math.max(20, cols), rows: Math.max(5, rows), cwd: p.root,
+      const t = loadPty().spawn(exe, spec.args, {
+        name: 'xterm-256color', cols: Math.max(20, cols), rows: Math.max(5, rows), cwd: p?.root ?? homedir(),
         env: { ...(env as Record<string, string>), PATH: searchPath(env).join(delimiter), TERM: 'xterm-256color', COLORTERM: 'truecolor' },
       });
       ttys.set(tid, t);
       t.onData((data) => o.emit({ type: 'term-data', tid, data }));
       t.onExit((e) => { ttys.delete(tid); o.emit({ type: 'term-exit', tid, code: e.exitCode }); });
-      return { tid, command: exe };
+      return { tid, command: [exe, ...spec.args].join(' ') };
     },
     write(tid, data) { ttys.get(tid)?.write(data); },
     resize(tid, cols, rows) { try { ttys.get(tid)?.resize(Math.max(20, cols), Math.max(5, rows)); } catch { /* exited between the check and the call */ } },

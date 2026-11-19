@@ -42,7 +42,7 @@ describe('settings', () => {
       expect(await store.get()).toMatchObject({ provider: 'anthropic', hasKey: false, source: 'app' });
       expect(await store.needs({})).toBe(NEEDS_KEY);
       const saved = await store.set({ provider: 'openai', apiKey: 'sk-secret-123', baseUrl: 'https://ai.example.com/v1', model: 'm1' });
-      expect(saved).toEqual({ provider: 'openai', hasKey: true, baseUrl: 'https://ai.example.com/v1', model: 'm1', source: 'app' });
+      expect(saved).toEqual({ provider: 'openai', hasKey: true, keys: { anthropic: false, openai: true }, baseUrl: 'https://ai.example.com/v1', model: 'm1', source: 'app' });
       expect(JSON.stringify(await store.get())).not.toContain('sk-secret');
       // On disk the key is encrypted.
       expect(readFileSync(join(dir, 'agent-settings.json'), 'utf8')).not.toContain('sk-secret');
@@ -50,9 +50,29 @@ describe('settings', () => {
       expect(env).toMatchObject({ HULL_AGENT_BASE_URL: 'https://ai.example.com/v1', HULL_AGENT_API_KEY: 'sk-secret-123', HULL_AGENT_MODEL: 'm1' });
       expect(env['ANTHROPIC_API_KEY']).toBeUndefined();
       expect(await store.needs({})).toBeNull();
-      // Saving again without a key keeps the old one; switching to Anthropic changes the names.
+      // Each provider keeps its own key: switching to Anthropic, which has none, needs one; switching back finds the old one.
       await store.set({ provider: 'anthropic' });
-      expect(await store.env({ HULL_AGENT_BASE_URL: 'x' })).toMatchObject({ ANTHROPIC_API_KEY: 'sk-secret-123' });
+      expect(await store.needs({})).toBe(NEEDS_KEY);
+      await store.set({ provider: 'anthropic', apiKey: 'sk-ant-456' });
+      expect(await store.env({ HULL_AGENT_BASE_URL: 'x' })).toMatchObject({ ANTHROPIC_API_KEY: 'sk-ant-456' });
+      // A key saved for the provider not in use waits for it.
+      await store.set({ provider: 'anthropic', apiKey: 'sk-new-789', keyFor: 'openai' });
+      expect((await store.env({}))['ANTHROPIC_API_KEY']).toBe('sk-ant-456');
+      await store.set({ provider: 'openai' });
+      expect(await store.env({})).toMatchObject({ HULL_AGENT_API_KEY: 'sk-new-789' });
+      // Removing a key forgets it.
+      expect((await store.set({ provider: 'openai', clearKey: 'openai' })).keys).toEqual({ anthropic: true, openai: false });
+      expect(await store.needs({})).toBe(NEEDS_KEY);
+      expect(readFileSync(join(dir, 'agent-settings.json'), 'utf8')).not.toMatch(/sk-(ant|new)/);
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  });
+  it('reads the single key an older version saved as the key of its provider', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'hull-set-'));
+    try {
+      writeFileSync(join(dir, 'agent-settings.json'), JSON.stringify({ provider: 'openai', key: crypto.encrypt('sk-old') }));
+      const store = createSettingsStore({ dataDir: dir, crypto, env: {} });
+      expect((await store.get()).keys).toEqual({ anthropic: false, openai: true });
+      expect(await store.env({})).toMatchObject({ HULL_AGENT_API_KEY: 'sk-old' });
     } finally { rmSync(dir, { recursive: true, force: true }); }
   });
   it('in web mode the environment decides and a save says so', async () => {

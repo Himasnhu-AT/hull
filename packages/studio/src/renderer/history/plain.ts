@@ -122,5 +122,5 @@ export function layout(changes: readonly HistoryChange[], exps: readonly ExpInfo
 }
 
 /** The colour of a lane: main is the accent, the others cycle through a few more hues. */
-export const LANE_COLORS = ['var(--accent)', '#b48cf2', 'var(--ok)', 'var(--warn)', '#4cc3d9', '#f27fb0'];
+export const LANE_COLORS = ['var(--accent)', '#7457c9', 'var(--ok)', 'var(--warn)', '#1f8a9c', '#c44d86'];
 export const laneColor = (lane: number): string => LANE_COLORS[lane % LANE_COLORS.length]!;

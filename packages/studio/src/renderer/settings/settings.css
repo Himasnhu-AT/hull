@@ -1,0 +1,76 @@
+/* Settings: a sheet like a Mac's settings window. Sidebar of sections, grouped inset lists on the right.
+   Section switches do not animate (they are frequent and often keyboard-driven); only the sheet itself arrives. */
+
+.st-back { position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; background: rgba(28, 26, 22, 0.24); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); animation: fadein 0.16s ease; }
+.st {
+  position: relative; width: min(920px, calc(100vw - 48px)); height: min(640px, calc(100vh - 48px)); display: grid; grid-template-columns: 232px minmax(0, 1fr);
+  border-radius: 14px; overflow: hidden; background: var(--panel); box-shadow: var(--shadow-pop); outline: none;
+  animation: pop-in 0.2s var(--ease); transform-origin: center;
+}
+/* The sheet takes focus so Tab starts inside it; that is not a place to draw a ring. */
+.st:focus, .st:focus-visible { outline: none; }
+
+.st-side { background: var(--panel2); border-right: 1px solid var(--line); padding: 20px 10px; display: flex; flex-direction: column; gap: 14px; min-height: 0; overflow-y: auto; }
+.st-side h2 { margin: 0 8px; font-size: 17px; font-weight: 650; letter-spacing: -0.015em; }
+.st-side ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.st-side li button {
+  width: 100%; display: flex; align-items: center; gap: 10px; padding: 7px 8px; border: 0; border-radius: 8px; background: transparent; text-align: left; color: var(--text);
+  transition: background-color 0.12s ease, transform 0.12s var(--ease);
+}
+.st-side li button:hover { background: var(--hover); }
+.st-side li button:active { transform: scale(0.985); }
+.st-side li button.on { background: var(--panel); box-shadow: var(--shadow-sm), 0 0 0 0.5px var(--line2); }
+.st-ic { width: 26px; height: 26px; border-radius: 7px; display: grid; place-items: center; background: var(--panel); color: var(--text); box-shadow: 0 0 0 0.5px var(--line2); flex: none; }
+.st-side li button.on .st-ic { background: var(--accent-solid); color: var(--on-accent); box-shadow: none; }
+.st-nl { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.st-nl b { font-size: 12.5px; font-weight: 600; }
+.st-nl small { font-size: 11px; color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.st-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+.st-dot.ok { background: var(--ok); }
+.st-dot.warn { background: var(--warn); }
+
+.st-main { position: relative; min-width: 0; min-height: 0; overflow-y: auto; }
+.st-x { position: absolute; top: 12px; right: 12px; width: 28px; padding: 0; z-index: 1; }
+.st-pane { max-width: 600px; padding: 28px 32px 32px; display: flex; flex-direction: column; gap: 20px; }
+.st-h h3 { margin: 0; font-size: 20px; font-weight: 650; letter-spacing: -0.018em; }
+.st-h p { margin: 6px 0 0; color: var(--muted); font-size: 13px; line-height: 1.5; max-width: 60ch; text-wrap: pretty; }
+
+.st-group { display: flex; flex-direction: column; gap: 6px; }
+.st-group h4 { margin: 0 4px; font-size: 11.5px; font-weight: 600; color: var(--muted); letter-spacing: 0.01em; }
+.st-list { background: #fff; border-radius: 12px; box-shadow: 0 0 0 0.5px var(--line2), var(--shadow-sm); overflow: hidden; }
+:root[data-theme='dark'] .st-list { background: var(--panel2); }
+.st-foot { margin: 2px 4px 0; color: var(--faint); font-size: 11.5px; line-height: 1.45; text-wrap: pretty; }
+.st-row { display: flex; align-items: center; gap: 14px; min-height: 48px; padding: 9px 14px; }
+.st-row + .st-row { border-top: 1px solid var(--line); }
+.st-rl { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.st-rl > span { font-size: 13px; font-weight: 500; }
+.st-rl small { color: var(--faint); font-size: 11.5px; line-height: 1.4; overflow-wrap: anywhere; }
+.st-rl code { font-size: 11px; color: var(--muted); user-select: all; }
+.st-rc { display: flex; align-items: center; gap: 6px; flex: none; }
+.st-in { width: 240px; height: 28px; }
+.st-keyf { display: flex; align-items: center; gap: 6px; }
+.st-keyf .field-in { width: 210px; height: 28px; font-family: var(--mono); font-size: 12px; }
+.st-rc .btn, .st-keyf .btn { height: 28px; }
+
+.st-state { display: inline-flex; align-items: center; gap: 6px; color: var(--faint); }
+.st-state i { width: 6px; height: 6px; border-radius: 50%; background: var(--track); }
+.st-state.ok { color: var(--muted); }
+.st-state.ok i { background: var(--ok); }
+
+.st-code { flex-wrap: wrap; align-items: flex-start; }
+.st-code .st-rl { flex: 1 1 100%; }
+.st-code pre { flex: 1; min-width: 0; margin: 0; padding: 8px 10px; border-radius: 8px; background: var(--panel2); box-shadow: inset 0 0 0 0.5px var(--line); font-size: 11.5px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; user-select: all; }
+.st-code .btn { align-self: flex-start; height: 28px; }
+
+.st-callout { padding: 10px 12px; border-radius: 10px; background: color-mix(in srgb, var(--warn) 6%, var(--panel)); box-shadow: inset 0 0 0 0.5px color-mix(in srgb, var(--warn) 35%, transparent); font-size: 12.5px; line-height: 1.5; color: var(--text); }
+.st-callout code { font-family: var(--mono); font-size: 11.5px; }
+.st-status { min-height: 18px; color: var(--ok); font-size: 12px; }
+.st-status:empty { display: none; }
+
+.st-login { border-radius: 12px; overflow: hidden; box-shadow: 0 0 0 0.5px var(--line2), var(--shadow); animation: pop-in 0.18s var(--ease); transform-origin: top center; }
+.st-login-h { display: flex; align-items: center; gap: 10px; padding: 8px 8px 8px 14px; background: #fff; border-bottom: 1px solid var(--line); }
+.st-login-h span { flex: 1; color: var(--faint); font-size: 12px; }
+.st-termwrap { background: #161513; }
+.st-term { height: 240px; padding: 8px 4px 4px 10px; }
+
+@media (prefers-reduced-motion: reduce) { .st, .st-back, .st-login { animation: none; } }

@@ -4,16 +4,26 @@
 
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import type { AgentSettings, AgentSettingsInput } from '../shared/agentApi.ts';
+import type { AgentSettings, AgentSettingsInput, KeyProvider } from '../shared/agentApi.ts';
 
 /** Electron's safeStorage, reduced to what this needs (so tests can pass a stand-in). */
 export interface KeyCrypto { available(): boolean; encrypt(plain: string): string; decrypt(cipher: string): string }
 
-interface Stored { provider: 'anthropic' | 'openai'; baseUrl?: string; model?: string; key?: string }
+/** On disk. `keys` holds one encrypted key per provider; `key` is the single key older versions kept, read as the key of `provider`. */
+interface Stored { provider: KeyProvider; baseUrl?: string; model?: string; keys?: Partial<Record<KeyProvider, string>>; key?: string }
+
+const PROVIDERS: readonly KeyProvider[] = ['anthropic', 'openai'];
+const isProvider = (p: unknown): p is KeyProvider => p === 'anthropic' || p === 'openai';
+/** The encrypted keys, with an older file's single key moved under its provider. */
+const cipherKeys = (s: Stored | null): Partial<Record<KeyProvider, string>> => {
+  const out: Partial<Record<KeyProvider, string>> = { ...(s?.keys ?? {}) };
+  if (s?.key && !out[s.provider]) out[s.provider] = s.key;
+  return out;
+};
 
 /** Env names that already give the Hull agent a model. */
 export const KEY_ENV = ['ANTHROPIC_API_KEY', 'HULL_AGENT_API_KEY', 'HULL_AGENT_FAKE'] as const;
-export const NEEDS_KEY = 'The builder needs an API key. Add one in the key settings (Anthropic, or any OpenAI-compatible endpoint).';
+export const NEEDS_KEY = 'The builder needs an API key. Add one in Settings (Cmd+,) under Builder: Anthropic, or any OpenAI-compatible endpoint.';
 
 export interface SettingsStore {
   get(): Promise<AgentSettings>;
@@ -56,35 +66,44 @@ export function createSettingsStore(o: { dataDir: string; crypto?: KeyCrypto | u
   async function read(): Promise<Stored | null> {
     try {
       const j = JSON.parse(await readFile(file, 'utf8')) as Stored;
-      return j && (j.provider === 'anthropic' || j.provider === 'openai') ? j : null;
+      return j && isProvider(j.provider) ? j : null;
     } catch { return null; }
   }
-  const keyOf = (s: Stored | null): string | null => {
-    if (!s?.key || !crypto) return null;
-    try { return crypto.decrypt(s.key) || null; } catch { return null; }
+  const keyFor = (s: Stored | null, p: KeyProvider): string | null => {
+    const c = cipherKeys(s)[p];
+    if (!c || !crypto) return null;
+    try { return crypto.decrypt(c) || null; } catch { return null; }
   };
+  const keyOf = (s: Stored | null): string | null => (s ? keyFor(s, s.provider) : null);
 
   return {
     async get() {
       if (!crypto) return envSettings(procEnv());
       const s = await read();
       const envHas = KEY_ENV.some((k) => !!procEnv()[k]);
+      const keys = { anthropic: keyFor(s, 'anthropic') !== null, openai: keyFor(s, 'openai') !== null };
       return {
-        provider: s?.provider ?? 'anthropic', hasKey: keyOf(s) !== null || envHas,
+        provider: s?.provider ?? 'anthropic', hasKey: keyOf(s) !== null || envHas, keys,
         ...(s?.baseUrl ? { baseUrl: s.baseUrl } : {}), ...(s?.model ? { model: s.model } : {}), source: 'app',
       };
     },
     async set(input) {
       if (!crypto) throw new Error(o.crypto ? 'This computer has no safe place to keep a key (no keychain). Set ANTHROPIC_API_KEY in the environment instead.' : 'In web mode the environment decides which key the builder uses: set ANTHROPIC_API_KEY (or HULL_AGENT_BASE_URL and HULL_AGENT_API_KEY) and restart.');
-      if (input.provider !== 'anthropic' && input.provider !== 'openai') throw new Error('The provider must be anthropic or openai.');
+      if (!isProvider(input.provider)) throw new Error('The provider must be anthropic or openai.');
+      if (input.clearKey !== undefined && !isProvider(input.clearKey)) throw new Error('clearKey must be anthropic or openai.');
+      if (input.keyFor !== undefined && !isProvider(input.keyFor)) throw new Error('keyFor must be anthropic or openai.');
       const prev = await read();
       const next: Stored = { provider: input.provider };
       const baseUrl = input.baseUrl?.trim(); const model = input.model?.trim();
       if (baseUrl) next.baseUrl = baseUrl;
       if (model) next.model = model;
-      // An empty key field keeps the key already saved; a new one replaces it.
+      // Each provider keeps its own key. An empty key field keeps the one already saved; a new one replaces it.
+      const keys = cipherKeys(prev);
       const typed = input.apiKey?.trim();
-      if (typed) next.key = crypto.encrypt(typed); else if (prev?.key) next.key = prev.key;
+      if (typed) keys[input.keyFor ?? input.provider] = crypto.encrypt(typed);
+      if (input.clearKey) delete keys[input.clearKey];
+      const kept = Object.fromEntries(PROVIDERS.filter((p) => keys[p]).map((p) => [p, keys[p]!])) as Partial<Record<KeyProvider, string>>;
+      if (Object.keys(kept).length > 0) next.keys = kept;
       await mkdir(dirname(file), { recursive: true });
       await writeFile(file, JSON.stringify(next, null, 2) + '\n', { mode: 0o600 });
       return this.get();

@@ -27,6 +27,8 @@ contextBridge.exposeInMainWorld('hullApp', {
   agentStop: call('agentStop'),
   agentAnswer: call('agentAnswer'),
   claudeInfo: call('claudeInfo'),
+  cliStatus: call('cliStatus'),
+  cliRun: call('cliRun'),
   termOpen: call('termOpen'),
   termWrite: call('termWrite'),
   termResize: call('termResize'),
