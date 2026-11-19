@@ -11,7 +11,7 @@
     "build:renderer": "vite build"
   },
   "dependencies": {
-    "@hull/cli": "workspace:*",
+    "@hull/tools": "workspace:*",
     "hull": "workspace:*",
     "react": "19.3.1",
     "react-dom": "19.3.1"

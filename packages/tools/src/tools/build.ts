@@ -17,7 +17,6 @@ export const build = defineTool<BuildInput, BuildOutput>({
   summary: 'Builds dist/web: game.js (one file, config inside, no dev code) and index.html.',
   input: { type: 'object', properties: { skipCheck: { type: 'boolean', description: 'Skip types, schemas and house rules.' } }, additionalProperties: false },
   output: { type: 'object', required: ['ok', 'problems'] },
-  cli: { options: [{ name: 'skipCheck', flags: '--skip-check', description: 'Do not run the check first' }] },
   format: (o) => (o.ok ? [`Built ${o.outDir}`, ...(o.files ?? []).map((f) => `  ${f.path}: ${f.bytes} bytes${f.gzip ? ` (${f.gzip} gzip)` : ''}`)] : []),
   async run(ctx, input) {
     if (!input.skipCheck) {

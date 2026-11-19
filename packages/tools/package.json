@@ -1,17 +1,17 @@
 {
-  "name": "@hull/cli",
+  "name": "@hull/tools",
   "version": "0.0.0",
   "private": true,
   "type": "module",
   "bin": {
-    "hull": "./bin/hull.js"
+    "hull-mcp": "./bin/hull-mcp.js"
   },
   "exports": {
     ".": "./src/index.ts",
-    "./server": "./src/server/index.ts"
+    "./server": "./src/server/index.ts",
+    "./mcp": "./src/mcp/index.ts"
   },
   "dependencies": {
-    "commander": "15.1.0",
     "hull": "workspace:*",
     "typescript": "7.0.2",
     "typescript6": "npm:typescript@6.0.3",

@@ -4,9 +4,14 @@
 
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { OpenedProject, RecentProject, TemplateInfo } from '../shared/appApi.ts';
 
 interface ProjectServer { url: string; gameUrl: string; close(): Promise<void> }
+interface McpModule {
+  createMcpServer(root: string, o?: { log?: (line: string) => void }): { close(): Promise<void> };
+  startMcpHttp(server: unknown, o?: { port?: number }): Promise<{ url: string; close(): Promise<void> }>;
+}
 interface ServerModule {
   startProjectServer(opts: { root: string; port?: number; log?: (line: string) => void }): Promise<ProjectServer>;
   listTemplates(): TemplateInfo[];
@@ -40,12 +45,12 @@ export function slug(title: string): string {
 export function createHost(opts: HostOptions): Host {
   const log = opts.log ?? (() => {});
   const recentsFile = join(opts.dataDir, 'recents.json');
-  let loaded: { mod: ServerModule; kind: 'real' } | null = null;
-  let running: { root: string; server: ProjectServer } | null = null;
+  let loaded: { mod: ServerModule; mcp: McpModule; kind: 'real' } | null = null;
+  let running: { root: string; server: ProjectServer; mcp: { url: string; close(): Promise<void> }; mcpServer: { close(): Promise<void> } } | null = null;
 
-  async function load(): Promise<{ mod: ServerModule; kind: 'real' }> {
+  async function load(): Promise<{ mod: ServerModule; mcp: McpModule; kind: 'real' }> {
     if (loaded) return loaded;
-    return (loaded = { mod: (await import('@hull/cli/server')) as ServerModule, kind: 'real' });
+    return (loaded = { mod: (await import('@hull/tools/server')) as ServerModule, mcp: (await import('@hull/tools/mcp')) as McpModule, kind: 'real' });
   }
 
   async function readRecents(): Promise<RecentProject[]> {
@@ -81,10 +86,17 @@ export function createHost(opts: HostOptions): Host {
 
     async openProject(root) {
       await host.closeProject();
-      const { mod } = await load();
+      const { mod, mcp: mcpMod } = await load();
       const server = await mod.startProjectServer({ root, log });
-      running = { root, server };
-      const opened: OpenedProject = { root, title: await titleOf(root), url: server.url, gameUrl: server.gameUrl };
+      // The app hosts the MCP server for the open project, so a local agent works on the project the person has open.
+      // A port that depends on the folder keeps `claude mcp add` valid across restarts; if it is taken, any free one will do.
+      const mcpServer = mcpMod.createMcpServer(root, { log });
+      let preferred = 0; for (const c of root) preferred = (preferred * 31 + c.charCodeAt(0)) % 100;
+      const http = await mcpMod.startMcpHttp(mcpServer, { port: 5400 + preferred }).catch(() => mcpMod.startMcpHttp(mcpServer, { port: 0 }));
+      running = { root, server, mcp: http, mcpServer };
+      const launcher = fileURLToPath(new URL('../../../tools/bin/hull-mcp.js', import.meta.url));
+      log(`MCP for agents: ${http.url}`);
+      const opened: OpenedProject = { root, title: await titleOf(root), url: server.url, gameUrl: server.gameUrl, mcp: { url: http.url, launcher } };
       await remember(opened);
       return opened;
     },
@@ -92,7 +104,7 @@ export function createHost(opts: HostOptions): Host {
     async closeProject() {
       const r = running;
       running = null;
-      if (r) await r.server.close();
+      if (r) { await r.mcp.close(); await r.mcpServer.close(); await r.server.close(); }
     },
 
     recents: readRecents,

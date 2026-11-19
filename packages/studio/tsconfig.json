@@ -2,5 +2,5 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": { "outDir": "../../.tsbuild/studio", "lib": ["ES2023", "DOM", "DOM.Iterable"], "jsx": "react-jsx", "types": ["node"] },
   "include": ["src"],
-  "references": [{ "path": "../hull" }, { "path": "../cli" }]
+  "references": [{ "path": "../hull" }, { "path": "../tools" }]
 }

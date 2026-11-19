@@ -10,7 +10,7 @@ import { createProject, startProjectServer } from './server/index.ts';
 
 // Project methods over MCP on a temp arena: with no server the MCP process starts one in-process; with one running
 // (the app) it attaches to it, so there is only ever one.
-const bin = join(import.meta.dirname, '..', 'bin', 'hull.js');
+const bin = join(import.meta.dirname, '..', 'bin', 'hull-mcp.js');
 const hasBrowser = spawnSync('agent-browser', ['--version']).status === 0;
 
 class Mcp {
@@ -18,7 +18,7 @@ class Mcp {
   private waiting = new Map<number, (m: any) => void>();
   private proc;
   constructor(dir: string, readonly name = 'probe') {
-    this.proc = spawn(process.execPath, [bin, 'mcp', '--root', dir], { stdio: ['pipe', 'pipe', 'ignore'] });
+    this.proc = spawn(process.execPath, [bin, dir], { stdio: ['pipe', 'pipe', 'ignore'] });
     createInterface({ input: this.proc.stdout }).on('line', (l) => { const m = JSON.parse(l); this.waiting.get(m.id)?.(m); });
   }
   rpc(method: string, params: unknown = {}): Promise<any> {

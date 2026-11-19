@@ -7,7 +7,11 @@ export interface TemplateInfo { name: string; title: string; description: string
 export interface RecentProject { root: string; title: string; openedAt: string }
 
 /** A project the main process has started a server for. The renderer talks only to `url` (protocol) and shows `gameUrl`. */
-export interface OpenedProject { root: string; title: string; url: string; gameUrl: string }
+export interface OpenedProject {
+  root: string; title: string; url: string; gameUrl: string;
+  /** How a local agent (Claude Code, Codex, any MCP client) reaches this project: the app's MCP endpoint, and the stdio launcher for when the app is closed. */
+  mcp: { url: string; launcher: string };
+}
 
 export interface HullApp {
   /** 'darwin' | 'win32' | 'linux' | 'web'. The title bar leaves room for traffic lights on darwin only. */

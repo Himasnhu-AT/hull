@@ -45,10 +45,6 @@ export const play = defineTool<PlayInput, PlayReport>({
     additionalProperties: false,
   },
   output: { type: 'object', required: ['ok', 'steps'] },
-  cli: {
-    args: [{ name: 'file', description: 'JSON step script, relative to the project' }],
-    options: [{ name: 'update', flags: '--update', description: 'Rewrite golden images' }, { name: 'browser', flags: '--browser <cmd>', description: 'agent-browser executable' }],
-  },
   format: (o) => [
     ...o.steps.map((s) => `${s.ok ? 'ok  ' : 'FAIL'} ${s.index} ${JSON.stringify(s.step)} @tick ${s.tick}${s.detail ? `  ${s.detail}` : ''}`),
     `${o.ok ? 'played' : 'failed'}: tick ${o.tick}, checksum ${o.checksum}`,

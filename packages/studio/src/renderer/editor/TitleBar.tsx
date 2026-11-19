@@ -21,6 +21,8 @@ interface Props {
   onBuild(): void;
   onProblems(): void;
   onClose(): void;
+  agents: boolean;
+  onAgents(): void;
 }
 
 const SPEEDS: [number, string][] = [[0.25, '¼×'], [1, '1×'], [2, '2×']];
@@ -50,6 +52,7 @@ export function TitleBar(p: Props): JSX.Element {
         </div>
       </div>
       <div className="r">
+        <button className={`chip${p.agents ? ' on' : ''}`} data-agents-toggle onClick={p.onAgents} aria-expanded={p.agents} title="Connect Claude Code, Codex or another MCP client to this project"><Icon name="plug" />Agents</button>
         {p.problems > 0 && <button className="chip" onClick={p.onProblems} title="Show problems in the Console"><Icon name="warn" />Problems <span className="count">{p.problems}</span></button>}
         <button className="btn" onClick={p.onBuild} disabled={p.build === 'running' || !p.connected} title="Build one JavaScript file for the web and desktop (Cmd B)">
           <Icon name={p.build === 'running' ? 'reload' : 'build'} className={p.build === 'running' ? 'spin' : undefined} />{p.build === 'running' ? 'Building' : 'Build'}
