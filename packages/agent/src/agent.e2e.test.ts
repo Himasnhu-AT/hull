@@ -95,6 +95,47 @@ describe('Hull agent over ACP', () => {
     expect(hist.items.some((i) => i.by === 'ai:Hull agent')).toBe(true);
   }, 120_000);
 
+  it('edits code end to end: writes src/, sees the type problem, fixes it, passes the gate; delete asks and can be refused', async () => {
+    const extra = join(dir, 'src', 'extra.ts');
+    const script: FakeStep[] = [
+      { tools: [{ name: 'code.list' }, { name: 'code.write', input: { path: 'src/extra.ts', text: 'export const bonus = 1;\n' } }] },
+      { tools: [{ name: 'code.edit', input: { path: 'src/extra.ts', old: 'bonus = 1', new: 'bonus: string = 1' } }] },
+      { text: 'Added bonus.' }, // the gate runs check here and the type error fails it
+      { tools: [{ name: 'code.edit', input: { path: 'src/extra.ts', old: 'bonus: string = 1', new: 'bonus: number = 2' } }] },
+      { text: 'bonus is 2 and check passes.' },
+    ];
+    const fake = fakeProvider(script);
+    await session(fake, () => 'allow', async (c) => {
+      const res = await c.prompt('Add a bonus constant in code');
+      expect(res.stopReason).toBe('end_turn');
+      expect((res._meta as { checkFailed: boolean }).checkFailed).toBe(false);
+      expect(readFileSync(extra, 'utf8')).toBe('export const bonus: number = 2;\n');
+      // The type problem came back to the model at file:line:col and the write was kept.
+      const seen = JSON.stringify(fake.calls[2]!.messages);
+      expect(seen).toContain('src/extra.ts:1:14');
+      expect(seen).toContain('TS2322');
+      expect(c.seen.asked).toHaveLength(0); // code_edit and code_write do not ask
+      const diff = c.seen.updates.filter((u) => u.sessionUpdate === 'tool_call_update').flatMap((u) => (u as { content?: acp.ToolCallContent[] }).content ?? []).find((x) => x.type === 'diff' && x.path.endsWith('src/extra.ts'));
+      expect(diff).toBeTruthy();
+      expect(toolsStarted(c.seen).filter((t) => t.startsWith('check'))).toEqual(['check (required after edits)', 'check (required after edits)']);
+    });
+    expect(fake.calls[0]!.tools.map((t) => t.name)).toEqual(expect.arrayContaining(['code_list', 'code_read', 'code_search', 'code_edit', 'code_write', 'code_delete']));
+    expect(fake.calls[0]!.system).toContain('code_edit');
+    const hist = (await (await import('@hull/tools')).runTool(dir, 'history.list', { limit: 10 })) as { items: { by: string; details?: string[] }[] };
+    expect(hist.items.some((i) => i.by === 'ai:Hull agent' && (i.details ?? []).join('\n').includes('src/extra.ts'))).toBe(true);
+    // code.delete is risky: it asks, and a refusal leaves the file.
+    await session(fakeProvider([{ tools: [{ name: 'code.delete', input: { path: 'src/extra.ts' } }] }, { text: 'Left it.' }]), (r) => (r.toolCall.title?.startsWith('code.delete') ? 'reject' : 'allow'), async (c) => {
+      await c.prompt('Remove the bonus file');
+      expect(c.seen.asked).toHaveLength(1);
+      expect(existsSync(extra)).toBe(true);
+    });
+    await session(fakeProvider([{ tools: [{ name: 'code.delete', input: { path: 'src/extra.ts' } }] }, { tools: [{ name: 'check' }] }, { text: 'Removed.' }]), () => 'allow', async (c) => {
+      await c.prompt('Remove the bonus file');
+      expect(c.seen.asked).toHaveLength(1);
+      expect(existsSync(extra)).toBe(false);
+    });
+  }, 180_000);
+
   it('cannot end a run while check fails, and ends once the model fixes it', async () => {
     const bad = readFileSync(thud(), 'utf8').replace('"level": -5', '"level": "loud"');
     const good = readFileSync(thud(), 'utf8');

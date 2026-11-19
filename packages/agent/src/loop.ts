@@ -65,6 +65,10 @@ async function snapshot(tools: HullTools, name: string, input: unknown): Promise
       const r = await tools.call('config.read', { id: i['id'] });
       return r.ok ? { path: String(asRecord(r.value)['path'] ?? i['id']), text: String(asRecord(r.value)['text'] ?? '') } : undefined;
     }
+    if (name === 'code.edit' || name === 'code.write') {
+      const r = await tools.call('code.read', { path: i['path'] });
+      return { path: String(i['path']), text: r.ok ? String(asRecord(r.value)['text'] ?? '') : '' };
+    }
     if (name === 'tunables.set') {
       const r = await tools.call('tunables.list', {});
       const hit = ((asRecord(r.value)['items'] ?? []) as Record<string, unknown>[]).find((t) => t['block'] === i['block'] && t['key'] === i['key']);
@@ -195,9 +199,11 @@ export async function run(s: SessionState, prompt: Msg['parts'], io: RunIo, sign
       io.toolEnd({ id: call.id, ok: false, content: [{ type: 'text', text }], output: null });
       return fail(text);
     }
-    if (write && r.ok) { result.wrote = true; dirty = true; }
+    // A code write with type problems is kept (ok is false), so the check gate must still run.
+    const kept = r.ok || asRecord(r.value)['written'] === true;
+    if (write && kept) { result.wrote = true; dirty = true; }
     if (name === 'check' && r.ok) dirty = false;
-    const content: ToolContent[] = write && r.ok ? await diffOf(s.tools, name, call.input, before) : [];
+    const content: ToolContent[] = write && kept ? await diffOf(s.tools, name, call.input, before) : [];
     content.push({ type: 'text', text: r.text.length > 4000 ? `${r.text.slice(0, 4000)}\n... (${r.text.length} characters)` : r.text });
     io.toolEnd({ id: call.id, ok: r.ok, content, output: r.value });
     return { type: 'tool_result', id: call.id, text: r.text, ...(r.images.length ? { images: r.images } : {}), isError: !r.ok };
