@@ -15,6 +15,7 @@ let server: ProjectServer;
 let studio: Rpc;
 let game: WebSocket;
 const controls: unknown[] = [];
+let paused = false;
 
 class Rpc {
   private next = 1;
@@ -55,7 +56,14 @@ beforeAll(async () => {
   game = await open(server.url, 'game');
   game.on('message', (d) => {
     const m = JSON.parse(String(d));
-    if (m.method === 'game.control') controls.push(m.params);
+    if (m.method === 'game.control') {
+      controls.push(m.params);
+      // Like the dev runtime: a pause or resume is reported at once, not at the next quarter second.
+      if (typeof m.params.paused === 'boolean') {
+        paused = m.params.paused;
+        game.send(JSON.stringify({ jsonrpc: '2.0', method: 'game.report', params: { tick: 120, time: 2, paused, timeScale: 1, fps: 60 } }));
+      }
+    }
     if (m.method === 'game.rpc') {
       const op = m.params.control.op;
       const result = op === 'state' ? { tick: 120, time: 2, checksum: 'x', paused: true, nodes: {}, held: [] } : { png: 'AAAA', width: 2, height: 1 };
@@ -87,13 +95,13 @@ describe('game.recent and game.moment', () => {
     setTraceSink(null);
     game.send(JSON.stringify({ jsonrpc: '2.0', method: 'game.report', params: { tick: 450, time: 7.5, paused: false, timeScale: 1, fps: 60, checksum: 'b' } }));
     const push = await studio.until('game.recent');
-    expect(push.items.map((e: any) => e.label)).toEqual(['aya', 'Clash', 'clash-sparks', 'attack']);
+    expect(push.items.map((e: any) => e.label)).toEqual(['Aya', 'Clash', 'Clash sparks', 'Attack']);
     const r = await studio.call('game.recent', { seconds: 4 });
-    expect(r.items.map((e: any) => e.label)).toEqual(['attack', 'clash-sparks']);
+    expect(r.items.map((e: any) => e.label)).toEqual(['Attack', 'Clash sparks']);
     expect(r.items[0]).toMatchObject({ at: 7.5, kind: 'anim', id: 'anim-graph/hero#attack', node: 'Aya' });
     const wide = await studio.call('game.recent', { seconds: 100 });
     expect(wide.items).toHaveLength(4);
-    expect(wide.items.at(-1)).toMatchObject({ label: 'aya', kind: 'actor', at: 1 });
+    expect(wide.items.at(-1)).toMatchObject({ label: 'Aya', kind: 'actor', at: 1 });
   });
 
   it('game.moment pauses the game and returns the frame with the recent events', async () => {
@@ -101,6 +109,17 @@ describe('game.recent and game.moment', () => {
     expect(m).toMatchObject({ tick: 120, time: 2, png: 'AAAA', width: 2, height: 1 });
     expect(m.recent.length).toBeGreaterThan(0);
     expect(controls).toContainEqual({ paused: true });
+  });
+
+  it('shows paused to the studio while frozen, and a later game.control resumes it', async () => {
+    expect(paused).toBe(true);
+    await studio.until('game.report', (p) => p.paused === true);
+    studio.pushes.length = 0;
+    await studio.call('game.control', { paused: false });
+    expect(controls.at(-1)).toEqual({ paused: false });
+    expect(paused).toBe(false);
+    const resumed = await studio.until('game.report', (p) => p.paused === false);
+    expect(resumed.client).toBe('g1');
   });
 
   it('says plainly when no game is connected', async () => {

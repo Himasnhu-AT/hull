@@ -460,7 +460,8 @@ export class Graph {
 
   /** The hook for the "Just now" feed: a state change decided by the graph (not a live rebuild putting a state back), once per change. */
   private note(l: LayerRT, to: number): void {
-    if (isTracing()) trace('anim', `${this.traceId}#${l.states[to]!.name}`, this.traceNode);
+    // A state with nothing to play (an upper-body layer at rest) is not something a person sees, so it is not a chip.
+    if (isTracing() && l.states[to]!.clips.length > 0) trace('anim', `${this.traceId}#${l.states[to]!.name}`, this.traceNode);
   }
 
   /** Where in its cycle a state is, 0 to 1 (a clip that plays once reports how far through it is). */

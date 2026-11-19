@@ -2,17 +2,14 @@
 // batches. Pure (no window, no clock of its own): the runtime gives it the game's time and a way to send, so it runs in
 // a test the same as in the page.
 import type { TraceKind } from '../core/trace.ts';
+import { feedLabel, lastPart } from './labels.ts';
 import type { RecentEvent } from './protocol.ts';
+
+export { lastPart };
 
 export const RING = 64;
 
 interface Slot { at: number; kind: TraceKind; id: string; node: string | undefined }
-
-/** A chip's plain name when the config has no title: the last part of the id ('sound/sword/hit' -> 'hit', 'anim-graph/hero#attack' -> 'attack'). */
-export function lastPart(id: string): string {
-  const parts = id.split(/[/#]/).filter((p) => p !== '');
-  return parts[parts.length - 1] ?? id;
-}
 
 export interface RecentFeed {
   /** The trace sink. Writes one slot of the ring; allocates nothing. */
@@ -33,14 +30,19 @@ export function createRecentFeed(o: { time(): number; title(kind: TraceKind, id:
   let sent = 0;
 
   const event = (s: Slot): RecentEvent => {
-    const e: RecentEvent = { at: s.at, kind: s.kind, id: s.id, label: o.title(s.kind, s.id) ?? lastPart(s.id) };
+    const e: RecentEvent = { at: s.at, kind: s.kind, id: s.id, label: feedLabel(s.kind, s.id, s.node, o.title(s.kind, s.id)) };
     if (s.node !== undefined) e.node = s.node;
     return e;
   };
   return {
     add(kind, id, node) {
+      // The same thing at the same game time is one chip: a graph with two layers that both enter 'stone-1' on one step, or three
+      // identical enemies spawned together, would otherwise print the same word several times.
+      const last = added > 0 ? ring[(added - 1) % RING]! : null;
+      const now = o.time();
+      if (last && last.at === now && last.kind === kind && last.id === id && last.node === node) return;
       const s = ring[added % RING]!;
-      s.at = o.time(); s.kind = kind; s.id = id; s.node = node;
+      s.at = now; s.kind = kind; s.id = id; s.node = node;
       added++;
     },
     flush() {
