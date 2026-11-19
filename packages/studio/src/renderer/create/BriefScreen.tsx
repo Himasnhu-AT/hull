@@ -9,7 +9,7 @@ import { useEffect, useRef, useState, type JSX } from 'react';
 import type { OpenedProject } from '../../shared/appApi.ts';
 import type { RpcClient } from '../lib/rpc.ts';
 import { BuilderSetup, ViaButton } from './BuilderSetup.tsx';
-import { ClaudeChat } from './ClaudeChat.tsx';
+import { ExternalAgent } from './ExternalAgent.tsx';
 import { Composer } from './Composer.tsx';
 import { ModelPicker } from './ModelPicker.tsx';
 import { builderPill } from './builderState.ts';
@@ -69,7 +69,7 @@ export function BriefScreen({ rpc, project, idea, onApproved, home = false }: Br
         {create?.briefApproved ? <button className="btn primary" onClick={onApproved}>Go to Build</button> : <button className="btn ghost" onClick={onApproved} title="Skip the brief and go to Build">{home ? 'Open the game' : 'Skip the brief'}</button>}
       </header>
       {setup && <div className="chat-center"><BuilderSetup onDone={() => setChoosing(false)} /></div>}
-      {!setup && b.via === 'claude' && <ClaudeChat prompt={claudeBriefPrompt(idea || create?.idea || '')} />}
+      {!setup && b.via === 'claude' && <ExternalAgent root={project.root} prompt={claudeBriefPrompt(idea || create?.idea || '')} />}
       {!setup && b.via !== 'claude' && empty && (
         <div className="chat-hero">
           <h2>{idea ? 'Reading your idea...' : 'What are we making?'}</h2>

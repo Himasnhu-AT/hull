@@ -944,9 +944,6 @@ textarea.cr-idea-in { width: 100%; resize: vertical; min-height: 96px; font-fami
 .bs-opt > .btn { flex: none; height: 30px; align-self: center; }
 .bs-wait { color: var(--faint); font-size: 12px; padding: 0 2px; }
 .bs-again { align-self: flex-start; }
-.cr-builder .bs-h b { font-size: 15px; }
-.cr-builder .bs-opt { flex-wrap: wrap; padding: 12px; }
-.cr-builder .bs-opt > .btn { margin-left: 44px; align-self: flex-start; }
 
 /* Claude Code as the builder */
 .cc-chat { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; padding: 0 16px 14px; animation: chat-rise 0.25s var(--ease) both; }
@@ -1073,3 +1070,38 @@ textarea.cr-idea-in { width: 100%; resize: vertical; min-height: 96px; font-fami
 .ccard .g-note { -webkit-line-clamp: 2; }
 .ccard .g-acts { margin-top: 6px; }
 @media (prefers-reduced-motion: reduce) { .ccard { animation: none; } .ccard .cover img, .cplay { transition: none; } }
+
+/* the chooser in a narrow column (the builder beside the game): text gets the width, the button sits under it */
+.bs { container-type: inline-size; }
+@container (max-width: 460px) {
+  .bs-h b { font-size: 15px; }
+  .bs-h span { font-size: 12px; }
+  .bs-opt { display: grid; grid-template-columns: 32px minmax(0, 1fr); column-gap: 12px; row-gap: 10px; padding: 12px; }
+  .bs-opt > .btn { grid-column: 2; justify-self: start; align-self: start; margin: 0; }
+  .bs-copy { flex-wrap: wrap; }
+  .bs-copy code { overflow-wrap: anywhere; word-break: normal; white-space: normal; }
+}
+
+/* the builder is the person's own Claude Code: a card, not a terminal */
+.ext { flex: 1; min-height: 0; overflow-y: auto; display: flex; justify-content: center; align-items: flex-start; padding: 6vh 16px 16px; container-type: inline-size; }
+.ext-card { width: min(560px, 100%); display: flex; flex-direction: column; gap: 10px; padding: 20px; border-radius: var(--radius); background: #fff; box-shadow: 0 0 0 0.5px var(--line2), var(--shadow-sm); animation: chat-rise 0.3s var(--ease) both; }
+.ext-ic { width: 40px; height: 40px; border-radius: 999px; display: grid; place-items: center; background: var(--panel2); box-shadow: 0 0 0 0.5px var(--line2); }
+.ext-card > b { font-size: 16px; font-weight: 600; letter-spacing: -0.01em; }
+.ext-card > p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
+.ext-steps { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; border-radius: 12px; box-shadow: 0 0 0 0.5px var(--line2); counter-reset: s; }
+.ext-steps li { display: flex; align-items: center; gap: 12px; padding: 10px 12px; counter-increment: s; }
+.ext-steps li + li { border-top: 1px solid var(--line); }
+.ext-steps li::before { content: counter(s); width: 22px; height: 22px; flex: none; border-radius: 999px; display: grid; place-items: center; background: var(--panel2); font: 600 11px var(--mono); color: var(--muted); }
+.ext-steps li.done::before { background: var(--ok); color: #fff; }
+.ext-steps li > span { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.ext-steps li b { font-size: 13px; font-weight: 600; }
+.ext-steps li small { font-size: 11.5px; color: var(--faint); overflow-wrap: anywhere; }
+.ext-steps li .btn { flex: none; }
+.ext-back { align-self: flex-start; }
+@container (max-width: 460px) {
+  .ext { padding: 4px 10px 12px; }
+  .ext-card { padding: 16px; }
+  .ext-steps li { display: grid; grid-template-columns: 22px minmax(0, 1fr); column-gap: 12px; row-gap: 8px; }
+  .ext-steps li .btn, .ext-steps li > svg.i { grid-column: 2; justify-self: start; }
+}
+@media (prefers-reduced-motion: reduce) { .ext-card { animation: none; } }

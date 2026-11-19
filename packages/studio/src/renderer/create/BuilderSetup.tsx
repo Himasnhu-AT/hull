@@ -37,7 +37,7 @@ export function BuilderSetup({ onDone }: { onDone?: () => void }): JSX.Element {
   const choices: Choice[] = [
     {
       via: 'claude', icon: 'terminal', title: 'Your Claude Code',
-      sub: claude?.signedIn ? `Signed in${claude.via ? ` with ${claude.via}` : ''}. Runs here, in the project, with Hull's tools.` : 'Runs your own claude here, with Hull\'s tools.',
+      sub: claude?.signedIn ? `Signed in${claude.via ? ` with ${claude.via}` : ''}. You talk to it in Claude Code; its changes show up here.` : 'You talk to it in Claude Code; its changes show up here.',
       ready: !!claude?.installed && claude.signedIn !== false, action: claude?.connected === false ? 'Connect and use' : 'Use Claude Code',
       ...(!claude?.installed ? { why: 'Claude Code is not installed.', copy: claude?.install } : claude.signedIn === false ? { why: 'Not signed in: run claude in Terminal once to sign in.' } : {}),
     },

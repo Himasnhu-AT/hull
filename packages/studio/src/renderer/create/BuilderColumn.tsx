@@ -13,7 +13,7 @@ import type { GameMoment } from 'hull/dev/protocol';
 import type { OpenedProject } from '../../shared/appApi.ts';
 import { Icon } from '../ui/Icon.tsx';
 import { BuilderSetup, ViaButton } from './BuilderSetup.tsx';
-import { ClaudeChat } from './ClaudeChat.tsx';
+import { ExternalAgent } from './ExternalAgent.tsx';
 import { Composer } from './Composer.tsx';
 import { ModelPicker } from './ModelPicker.tsx';
 import { clock } from './recentStrip.ts';
@@ -28,7 +28,7 @@ export interface BuilderColumnProps {
   moment?: GameMoment | null; onClearMoment?: () => void; onRemoveAttached?: (key: string) => void; onSent?: () => void;
 }
 
-export function BuilderColumn({ attached, onClearAttached, moment = null, onClearMoment, onRemoveAttached, onSent }: BuilderColumnProps): JSX.Element {
+export function BuilderColumn({ project, attached, onClearAttached, moment = null, onClearMoment, onRemoveAttached, onSent }: BuilderColumnProps): JSX.Element {
   const b = useBuilder();
   const t = b.lanes.fix;
   const { prepare } = b;
@@ -56,7 +56,7 @@ export function BuilderColumn({ attached, onClearAttached, moment = null, onClea
         <button className="btn ghost" onClick={b.openSettings} aria-label="Settings" title="Settings (⌘,)"><Icon name="gear" size={14} /></button>
       </div>
       {setup && <div className="cr-b-setup"><BuilderSetup onDone={() => setChoosing(false)} /></div>}
-      {!setup && b.via === 'claude' && <ClaudeChat />}
+      {!setup && b.via === 'claude' && <ExternalAgent root={project.root} prompt="Play this game with Hull's tools (game.run, game.moment) and fix what feels wrong. Use the hull MCP tools for every change." />}
       {!setup && b.via !== 'claude' && (
         <>
           <TranscriptView t={t} showEvents={false} thinking={t.running && waiting(t).length === 0} label="Conversation with the builder" className="cr-b-log"
