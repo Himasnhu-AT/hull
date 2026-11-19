@@ -126,7 +126,8 @@
 .ob-chip.done { color: var(--bg, #fff); background: var(--text, #1a1d21); border-color: var(--text, #1a1d21); }
 .ob-chip.cur { color: var(--text, #1a1d21); border-color: var(--signal, #2f5fbf); border-width: 2.5px; }
 .ob-say-title { margin-top: 6px; font-size: 17px; font-weight: 600; }
-.ob-say-text { margin: 3px 0 0; max-width: 78ch; font-size: 14.5px; line-height: 1.5; color: var(--muted, #4f5762); }
+/* Two lines are kept for the narration, so the board above does not jump when a step's text runs longer. */
+.ob-say-text { min-height: calc(2 * 1.5em); margin: 3px 0 0; max-width: 78ch; font-size: 14.5px; line-height: 1.5; color: var(--muted, #4f5762); }
 
 .ob-controls { display: flex; align-items: center; gap: 8px; }
 .ob-spacer { flex: 1; }
