@@ -228,5 +228,16 @@
       "enabled": true,
       "maxStep": 0.35
     }
+  },
+  "springs": {
+    "rag": {
+      "chain": [
+        "rag1",
+        "rag2"
+      ],
+      "stiffness": 50,
+      "damping": 5,
+      "drive": 0.04
+    }
   }
 }

@@ -23,6 +23,8 @@ export interface Frame {
   left: 'grip' | V3;
   /** Left hand's own blade-like axis when free (the way its fingers point); default straight down the forearm. */
   leftDir: V3 | null;
+  /** The left hand holds a bow upright, its limb turned right by this much (null: no bow). */
+  bow: number | null;
   /** Ankles: [r, height above ground, f] in the clip's own frame (planted feet stay put while the hips travel). */
   footL: V3; footR: V3;
   footPitchL: number; footPitchR: number; footTurnL: number; footTurnR: number;
@@ -58,8 +60,11 @@ export class Rig {
   /** Blade tip distance along the blade from the hand (metres). */
   tipLen: number;
   baseLen: number;
+  /** Where the left hand holds the weapon: metres along the blade from the right hand (negative: behind it). */
+  grip = -0.13;
 
-  constructor(charFile: string, tip = 0.91, base = 0.14) {
+  constructor(charFile: string, tip = 0.91, base = 0.14, grip = -0.13) {
+    this.grip = grip;
     const c = JSON.parse(readFileSync(charFile, 'utf8'));
     this.sk = buildBody(c.body).skeleton;
     this.names = this.sk.names;
@@ -77,7 +82,7 @@ export class Rig {
     const hx = d.hipX ?? 0.08;
     const f: Frame = {
       hips: [0, 0, 0], hipsR: [0, 0, 0], spine: [0, 0, 0], chest: [0, 0, 0], neck: [0, 0, 0], head: [0, 0, 0],
-      hand: [0.12, 0.3, 0.45], blade: [0, 0.55, 0.83], roll: 0, left: 'grip', leftDir: null,
+      hand: [0.12, 0.3, 0.45], blade: [0, 0.55, 0.83], roll: 0, left: 'grip', leftDir: null, bow: null,
       footL: [-hx - 0.1, d.footH ?? 0.075, 0], footR: [hx + 0.1, d.footH ?? 0.075, 0],
       footPitchL: 0, footPitchR: 0, footTurnL: 0, footTurnR: 0,
       elbR: [0.35, -0.5, -0.25], elbL: [-0.35, -0.5, -0.25], kneeR: [0.12, -0.1, 0.6], kneeL: [-0.12, -0.1, 0.6],
@@ -157,11 +162,16 @@ export class Rig {
     twoBone(sk, pose, mq, mp, sA, sB, aimR, handPos[0], handPos[1], handPos[2], mp[sA * 3]! + f.elbR[0], mp[sA * 3 + 1]! + f.elbR[1], mp[sA * 3 + 2]! - f.elbR[2]);
     this.aimHand(aimR, bladeD, f.roll);
     let lt: V3, ld: V3 | null;
-    if (f.left === 'grip') { lt = [handPos[0] - bladeD[0] * 0.13, handPos[1] - bladeD[1] * 0.13, handPos[2] - bladeD[2] * 0.13]; ld = bladeD; }
+    if (f.left === 'grip') { lt = [handPos[0] + bladeD[0] * this.grip, handPos[1] + bladeD[1] * this.grip, handPos[2] + bladeD[2] * this.grip]; ld = bladeD; }
     else { lt = pivot(f.left); ld = f.leftDir ? [f.leftDir[0], f.leftDir[1], -f.leftDir[2]] : null; }
     const lA = ix.armL!, lB = ix.forearmL!, lC = ix.handL!;
     twoBone(sk, pose, mq, mp, lA, lB, lC, lt[0], lt[1], lt[2], mp[lA * 3]! + f.elbL[0], mp[lA * 3 + 1]! + f.elbL[1], mp[lA * 3 + 2]! - f.elbL[2]);
-    if (ld) this.aimHand(lC, ld, f.roll);
+    if (f.bow !== null) {
+      qFromEuler(this.q, 0, Math.PI / 2, 0, 0);
+      qFromEuler(this.q, 4, 0, -f.bow, 0);
+      qMul(this.q, 0, this.q, 4, this.q, 0);
+      this.setModelRot(lC, this.q, 0);
+    } else if (ld) this.aimHand(lC, ld, f.roll);
   }
 
   private setModelRot(bone: number, q: Float64Array, o: number): void {

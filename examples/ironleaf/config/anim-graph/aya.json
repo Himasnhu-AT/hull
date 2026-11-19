@@ -1,11 +1,24 @@
 {
   "kind": "anim-graph",
+  "note": "Aya. stance (0 stone, 1 water, 2 wind) blends the idle, hold and guard clips; every move is a trigger named like its clip; dodgeDir picks the dodge; the base layer plays the whole body, the upper layer repeats each action on the arms so they follow it, and holds or guards while she walks.",
   "params": {
     "speed": {
       "type": "number",
       "default": 0,
       "min": 0,
       "max": 12
+    },
+    "stance": {
+      "type": "number",
+      "default": 0,
+      "min": 0,
+      "max": 2
+    },
+    "dodgeDir": {
+      "type": "number",
+      "default": 0,
+      "min": 0,
+      "max": 3
     },
     "grounded": {
       "type": "boolean",
@@ -15,15 +28,27 @@
       "type": "boolean",
       "default": false
     },
-    "attack": {
-      "type": "trigger"
-    },
-    "heavy": {
-      "type": "trigger"
-    },
-    "block": {
+    "guarding": {
       "type": "boolean",
       "default": false
+    },
+    "broken": {
+      "type": "boolean",
+      "default": false
+    },
+    "standoff": {
+      "type": "boolean",
+      "default": false
+    },
+    "hitHeavy": {
+      "type": "boolean",
+      "default": false
+    },
+    "hit": {
+      "type": "trigger"
+    },
+    "stagger": {
+      "type": "trigger"
     },
     "deflect": {
       "type": "trigger"
@@ -31,10 +56,73 @@
     "dodge": {
       "type": "trigger"
     },
-    "hit": {
+    "cancel": {
       "type": "trigger"
     },
-    "jump": {
+    "stone-1": {
+      "type": "trigger"
+    },
+    "stone-2": {
+      "type": "trigger"
+    },
+    "stone-3": {
+      "type": "trigger"
+    },
+    "stone-heavy": {
+      "type": "trigger"
+    },
+    "stone-charge": {
+      "type": "trigger"
+    },
+    "water-1": {
+      "type": "trigger"
+    },
+    "water-2": {
+      "type": "trigger"
+    },
+    "water-3": {
+      "type": "trigger"
+    },
+    "water-4": {
+      "type": "trigger"
+    },
+    "water-heavy": {
+      "type": "trigger"
+    },
+    "water-charge": {
+      "type": "trigger"
+    },
+    "wind-1": {
+      "type": "trigger"
+    },
+    "wind-2": {
+      "type": "trigger"
+    },
+    "wind-heavy": {
+      "type": "trigger"
+    },
+    "wind-charge": {
+      "type": "trigger"
+    },
+    "finisher-stone": {
+      "type": "trigger"
+    },
+    "finisher-water": {
+      "type": "trigger"
+    },
+    "finisher-wind": {
+      "type": "trigger"
+    },
+    "riposte": {
+      "type": "trigger"
+    },
+    "draw": {
+      "type": "trigger"
+    },
+    "sheathe": {
+      "type": "trigger"
+    },
+    "quickdraw": {
       "type": "trigger"
     }
   },
@@ -43,7 +131,14 @@
       "start": "idle",
       "states": {
         "idle": {
-          "clip": "idle"
+          "blend": {
+            "by": "stance",
+            "points": {
+              "0": "idle-stone",
+              "1": "idle-water",
+              "2": "idle-wind"
+            }
+          }
         },
         "move": {
           "blend": {
@@ -55,13 +150,169 @@
           },
           "speedFrom": "speed"
         },
-        "dodge": {
-          "clip": "dodge",
+        "stone-1": {
+          "clip": "stone-1",
+          "exit": "idle",
+          "exitBlend": 0.12
+        },
+        "stone-2": {
+          "clip": "stone-2",
+          "exit": "idle",
+          "exitBlend": 0.12
+        },
+        "stone-3": {
+          "clip": "stone-3",
+          "exit": "idle",
+          "exitBlend": 0.12
+        },
+        "stone-heavy": {
+          "clip": "stone-heavy",
+          "exit": "idle",
+          "exitBlend": 0.12
+        },
+        "stone-charge": {
+          "clip": "stone-charge",
+          "exit": "idle",
+          "exitBlend": 0.12
+        },
+        "water-1": {
+          "clip": "water-1",
+          "exit": "idle",
+          "exitBlend": 0.12
+        },
+        "water-2": {
+          "clip": "water-2",
+          "exit": "idle",
+          "exitBlend": 0.12
+        },
+        "water-3": {
+          "clip": "water-3",
+          "exit": "idle",
+          "exitBlend": 0.12
+        },
+        "water-4": {
+          "clip": "water-4",
+          "exit": "idle",
+          "exitBlend": 0.12
+        },
+        "water-heavy": {
+          "clip": "water-heavy",
+          "exit": "idle",
+          "exitBlend": 0.12
+        },
+        "water-charge": {
+          "clip": "water-charge",
+          "exit": "idle",
+          "exitBlend": 0.12
+        },
+        "wind-1": {
+          "clip": "wind-1",
+          "exit": "idle",
+          "exitBlend": 0.12
+        },
+        "wind-2": {
+          "clip": "wind-2",
+          "exit": "idle",
+          "exitBlend": 0.12
+        },
+        "wind-heavy": {
+          "clip": "wind-heavy",
+          "exit": "idle",
+          "exitBlend": 0.12
+        },
+        "wind-charge": {
+          "clip": "wind-charge",
+          "exit": "idle",
+          "exitBlend": 0.12
+        },
+        "finisher-stone": {
+          "clip": "finisher-stone",
+          "exit": "idle",
+          "exitBlend": 0.12
+        },
+        "finisher-water": {
+          "clip": "finisher-water",
+          "exit": "idle",
+          "exitBlend": 0.12
+        },
+        "finisher-wind": {
+          "clip": "finisher-wind",
+          "exit": "idle",
+          "exitBlend": 0.12
+        },
+        "riposte": {
+          "clip": "riposte",
+          "exit": "idle",
+          "exitBlend": 0.12
+        },
+        "quickdraw": {
+          "clip": "quickdraw",
+          "exit": "idle",
+          "exitBlend": 0.12
+        },
+        "deflect": {
+          "clip": "deflect",
+          "exit": "idle",
+          "exitBlend": 0.12
+        },
+        "dodge-roll": {
+          "clip": "roll",
           "exit": "idle",
           "exitBlend": 0.1
         },
-        "air": {
-          "clip": "idle"
+        "dodge-l": {
+          "clip": "dodge-l",
+          "exit": "idle",
+          "exitBlend": 0.1
+        },
+        "dodge-r": {
+          "clip": "dodge-r",
+          "exit": "idle",
+          "exitBlend": 0.1
+        },
+        "dodge-back": {
+          "clip": "dodge-back",
+          "exit": "idle",
+          "exitBlend": 0.1
+        },
+        "hit-light": {
+          "clip": "hit-light",
+          "exit": "idle",
+          "exitBlend": 0.15
+        },
+        "hit-heavy": {
+          "clip": "hit-heavy",
+          "exit": "idle",
+          "exitBlend": 0.15
+        },
+        "guard-broken": {
+          "clip": "guard-broken",
+          "exit": "idle",
+          "exitBlend": 0.12
+        },
+        "draw": {
+          "clip": "draw",
+          "exit": "idle",
+          "exitBlend": 0.12
+        },
+        "sheathe": {
+          "clip": "sheathe",
+          "exit": "sheathed",
+          "exitBlend": 0.1
+        },
+        "sheathed": {
+          "clip": "sheathed"
+        },
+        "standoff": {
+          "clip": "standoff"
+        },
+        "posture-broken": {
+          "clip": "stagger",
+          "exit": "broken-hold",
+          "exitBlend": 0.15
+        },
+        "broken-hold": {
+          "clip": "broken"
         },
         "dead": {
           "clip": "death"
@@ -72,13 +323,403 @@
           "from": "*",
           "to": "dead",
           "when": "dead",
-          "blend": 0.12
+          "blend": 0.1
         },
         {
           "from": "*",
-          "to": "dodge",
+          "to": "posture-broken",
+          "when": "broken",
+          "blend": 0.08
+        },
+        {
+          "from": "posture-broken",
+          "to": "idle",
+          "when": "!broken",
+          "blend": 0.15
+        },
+        {
+          "from": "broken-hold",
+          "to": "idle",
+          "when": "!broken",
+          "blend": 0.2
+        },
+        {
+          "from": "*",
+          "to": "guard-broken",
+          "when": "stagger && hitHeavy && guarding",
+          "blend": 0.04
+        },
+        {
+          "from": "*",
+          "to": "hit-heavy",
+          "when": "stagger && hitHeavy",
+          "blend": 0.04
+        },
+        {
+          "from": "*",
+          "to": "hit-light",
+          "when": "stagger",
+          "blend": 0.04
+        },
+        {
+          "from": "*",
+          "to": "hit-light",
+          "when": "hit",
+          "blend": 0.04
+        },
+        {
+          "from": "*",
+          "to": "deflect",
+          "when": "deflect",
+          "blend": 0.03
+        },
+        {
+          "from": "*",
+          "to": "dodge-roll",
+          "when": "dodge && dodgeDir < 0.5",
+          "blend": 0.04
+        },
+        {
+          "from": "*",
+          "to": "dodge-l",
+          "when": "dodge && dodgeDir < 1.5",
+          "blend": 0.04
+        },
+        {
+          "from": "*",
+          "to": "dodge-r",
+          "when": "dodge && dodgeDir < 2.5",
+          "blend": 0.04
+        },
+        {
+          "from": "*",
+          "to": "dodge-back",
           "when": "dodge",
           "blend": 0.04
+        },
+        {
+          "from": "standoff",
+          "to": "quickdraw",
+          "when": "quickdraw",
+          "blend": 0.04
+        },
+        {
+          "from": "sheathed",
+          "to": "draw",
+          "when": "draw",
+          "blend": 0.06
+        },
+        {
+          "from": "*",
+          "to": "stone-1",
+          "when": "stone-1",
+          "blend": 0.05
+        },
+        {
+          "from": "*",
+          "to": "stone-2",
+          "when": "stone-2",
+          "blend": 0.05
+        },
+        {
+          "from": "*",
+          "to": "stone-3",
+          "when": "stone-3",
+          "blend": 0.05
+        },
+        {
+          "from": "*",
+          "to": "stone-heavy",
+          "when": "stone-heavy",
+          "blend": 0.05
+        },
+        {
+          "from": "*",
+          "to": "stone-charge",
+          "when": "stone-charge",
+          "blend": 0.1
+        },
+        {
+          "from": "*",
+          "to": "water-1",
+          "when": "water-1",
+          "blend": 0.05
+        },
+        {
+          "from": "*",
+          "to": "water-2",
+          "when": "water-2",
+          "blend": 0.05
+        },
+        {
+          "from": "*",
+          "to": "water-3",
+          "when": "water-3",
+          "blend": 0.05
+        },
+        {
+          "from": "*",
+          "to": "water-4",
+          "when": "water-4",
+          "blend": 0.05
+        },
+        {
+          "from": "*",
+          "to": "water-heavy",
+          "when": "water-heavy",
+          "blend": 0.05
+        },
+        {
+          "from": "*",
+          "to": "water-charge",
+          "when": "water-charge",
+          "blend": 0.1
+        },
+        {
+          "from": "*",
+          "to": "wind-1",
+          "when": "wind-1",
+          "blend": 0.05
+        },
+        {
+          "from": "*",
+          "to": "wind-2",
+          "when": "wind-2",
+          "blend": 0.05
+        },
+        {
+          "from": "*",
+          "to": "wind-heavy",
+          "when": "wind-heavy",
+          "blend": 0.05
+        },
+        {
+          "from": "*",
+          "to": "wind-charge",
+          "when": "wind-charge",
+          "blend": 0.1
+        },
+        {
+          "from": "*",
+          "to": "finisher-stone",
+          "when": "finisher-stone",
+          "blend": 0.05
+        },
+        {
+          "from": "*",
+          "to": "finisher-water",
+          "when": "finisher-water",
+          "blend": 0.05
+        },
+        {
+          "from": "*",
+          "to": "finisher-wind",
+          "when": "finisher-wind",
+          "blend": 0.05
+        },
+        {
+          "from": "*",
+          "to": "riposte",
+          "when": "riposte",
+          "blend": 0.05
+        },
+        {
+          "from": "*",
+          "to": "draw",
+          "when": "draw",
+          "blend": 0.05
+        },
+        {
+          "from": "*",
+          "to": "quickdraw",
+          "when": "quickdraw",
+          "blend": 0.05
+        },
+        {
+          "from": "*",
+          "to": "sheathe",
+          "when": "sheathe",
+          "blend": 0.08
+        },
+        {
+          "from": "stone-1",
+          "to": "idle",
+          "when": "cancel",
+          "blend": 0.08
+        },
+        {
+          "from": "stone-2",
+          "to": "idle",
+          "when": "cancel",
+          "blend": 0.08
+        },
+        {
+          "from": "stone-3",
+          "to": "idle",
+          "when": "cancel",
+          "blend": 0.08
+        },
+        {
+          "from": "stone-heavy",
+          "to": "idle",
+          "when": "cancel",
+          "blend": 0.08
+        },
+        {
+          "from": "stone-charge",
+          "to": "idle",
+          "when": "cancel",
+          "blend": 0.08
+        },
+        {
+          "from": "water-1",
+          "to": "idle",
+          "when": "cancel",
+          "blend": 0.08
+        },
+        {
+          "from": "water-2",
+          "to": "idle",
+          "when": "cancel",
+          "blend": 0.08
+        },
+        {
+          "from": "water-3",
+          "to": "idle",
+          "when": "cancel",
+          "blend": 0.08
+        },
+        {
+          "from": "water-4",
+          "to": "idle",
+          "when": "cancel",
+          "blend": 0.08
+        },
+        {
+          "from": "water-heavy",
+          "to": "idle",
+          "when": "cancel",
+          "blend": 0.08
+        },
+        {
+          "from": "water-charge",
+          "to": "idle",
+          "when": "cancel",
+          "blend": 0.08
+        },
+        {
+          "from": "wind-1",
+          "to": "idle",
+          "when": "cancel",
+          "blend": 0.08
+        },
+        {
+          "from": "wind-2",
+          "to": "idle",
+          "when": "cancel",
+          "blend": 0.08
+        },
+        {
+          "from": "wind-heavy",
+          "to": "idle",
+          "when": "cancel",
+          "blend": 0.08
+        },
+        {
+          "from": "wind-charge",
+          "to": "idle",
+          "when": "cancel",
+          "blend": 0.08
+        },
+        {
+          "from": "finisher-stone",
+          "to": "idle",
+          "when": "cancel",
+          "blend": 0.08
+        },
+        {
+          "from": "finisher-water",
+          "to": "idle",
+          "when": "cancel",
+          "blend": 0.08
+        },
+        {
+          "from": "finisher-wind",
+          "to": "idle",
+          "when": "cancel",
+          "blend": 0.08
+        },
+        {
+          "from": "riposte",
+          "to": "idle",
+          "when": "cancel",
+          "blend": 0.08
+        },
+        {
+          "from": "quickdraw",
+          "to": "idle",
+          "when": "cancel",
+          "blend": 0.08
+        },
+        {
+          "from": "deflect",
+          "to": "idle",
+          "when": "cancel",
+          "blend": 0.08
+        },
+        {
+          "from": "dodge-roll",
+          "to": "idle",
+          "when": "cancel",
+          "blend": 0.08
+        },
+        {
+          "from": "dodge-l",
+          "to": "idle",
+          "when": "cancel",
+          "blend": 0.08
+        },
+        {
+          "from": "dodge-r",
+          "to": "idle",
+          "when": "cancel",
+          "blend": 0.08
+        },
+        {
+          "from": "dodge-back",
+          "to": "idle",
+          "when": "cancel",
+          "blend": 0.08
+        },
+        {
+          "from": "hit-light",
+          "to": "idle",
+          "when": "cancel",
+          "blend": 0.08
+        },
+        {
+          "from": "hit-heavy",
+          "to": "idle",
+          "when": "cancel",
+          "blend": 0.08
+        },
+        {
+          "from": "guard-broken",
+          "to": "idle",
+          "when": "cancel",
+          "blend": 0.08
+        },
+        {
+          "from": "standoff",
+          "to": "idle",
+          "when": "!standoff",
+          "blend": 0.15
+        },
+        {
+          "from": "*",
+          "to": "standoff",
+          "when": "standoff && !dead",
+          "blend": 0.2
         },
         {
           "from": "idle",
@@ -104,45 +745,239 @@
       "start": "hold",
       "states": {
         "hold": {
-          "clip": "hold"
+          "blend": {
+            "by": "stance",
+            "points": {
+              "0": "hold-stone",
+              "1": "hold-water",
+              "2": "hold-wind"
+            }
+          }
         },
-        "slash-a": {
-          "clip": "slash-a",
+        "guard": {
+          "blend": {
+            "by": "stance",
+            "points": {
+              "0": "guard-stone",
+              "1": "guard-water",
+              "2": "guard-wind"
+            }
+          }
+        },
+        "stone-1": {
+          "clip": "stone-1",
           "exit": "hold",
           "exitBlend": 0.12
         },
-        "slash-b": {
-          "clip": "slash-b",
+        "stone-2": {
+          "clip": "stone-2",
           "exit": "hold",
           "exitBlend": 0.12
         },
-        "heavy": {
-          "clip": "heavy",
+        "stone-3": {
+          "clip": "stone-3",
           "exit": "hold",
-          "exitBlend": 0.15
+          "exitBlend": 0.12
         },
-        "block": {
-          "clip": "block"
+        "stone-heavy": {
+          "clip": "stone-heavy",
+          "exit": "hold",
+          "exitBlend": 0.12
+        },
+        "stone-charge": {
+          "clip": "stone-charge",
+          "exit": "hold",
+          "exitBlend": 0.12
+        },
+        "water-1": {
+          "clip": "water-1",
+          "exit": "hold",
+          "exitBlend": 0.12
+        },
+        "water-2": {
+          "clip": "water-2",
+          "exit": "hold",
+          "exitBlend": 0.12
+        },
+        "water-3": {
+          "clip": "water-3",
+          "exit": "hold",
+          "exitBlend": 0.12
+        },
+        "water-4": {
+          "clip": "water-4",
+          "exit": "hold",
+          "exitBlend": 0.12
+        },
+        "water-heavy": {
+          "clip": "water-heavy",
+          "exit": "hold",
+          "exitBlend": 0.12
+        },
+        "water-charge": {
+          "clip": "water-charge",
+          "exit": "hold",
+          "exitBlend": 0.12
+        },
+        "wind-1": {
+          "clip": "wind-1",
+          "exit": "hold",
+          "exitBlend": 0.12
+        },
+        "wind-2": {
+          "clip": "wind-2",
+          "exit": "hold",
+          "exitBlend": 0.12
+        },
+        "wind-heavy": {
+          "clip": "wind-heavy",
+          "exit": "hold",
+          "exitBlend": 0.12
+        },
+        "wind-charge": {
+          "clip": "wind-charge",
+          "exit": "hold",
+          "exitBlend": 0.12
+        },
+        "finisher-stone": {
+          "clip": "finisher-stone",
+          "exit": "hold",
+          "exitBlend": 0.12
+        },
+        "finisher-water": {
+          "clip": "finisher-water",
+          "exit": "hold",
+          "exitBlend": 0.12
+        },
+        "finisher-wind": {
+          "clip": "finisher-wind",
+          "exit": "hold",
+          "exitBlend": 0.12
+        },
+        "riposte": {
+          "clip": "riposte",
+          "exit": "hold",
+          "exitBlend": 0.12
+        },
+        "quickdraw": {
+          "clip": "quickdraw",
+          "exit": "hold",
+          "exitBlend": 0.12
         },
         "deflect": {
           "clip": "deflect",
           "exit": "hold",
+          "exitBlend": 0.12
+        },
+        "dodge-roll": {
+          "clip": "roll",
+          "exit": "hold",
           "exitBlend": 0.1
+        },
+        "dodge-l": {
+          "clip": "dodge-l",
+          "exit": "hold",
+          "exitBlend": 0.1
+        },
+        "dodge-r": {
+          "clip": "dodge-r",
+          "exit": "hold",
+          "exitBlend": 0.1
+        },
+        "dodge-back": {
+          "clip": "dodge-back",
+          "exit": "hold",
+          "exitBlend": 0.1
+        },
+        "hit-light": {
+          "clip": "hit-light",
+          "exit": "hold",
+          "exitBlend": 0.15
+        },
+        "hit-heavy": {
+          "clip": "hit-heavy",
+          "exit": "hold",
+          "exitBlend": 0.15
+        },
+        "guard-broken": {
+          "clip": "guard-broken",
+          "exit": "hold",
+          "exitBlend": 0.12
         },
         "draw": {
           "clip": "draw",
-          "exit": "hold"
-        },
-        "hit": {
-          "clip": "hit",
           "exit": "hold",
+          "exitBlend": 0.12
+        },
+        "sheathe": {
+          "clip": "sheathe",
+          "exit": "sheathed",
           "exitBlend": 0.1
+        },
+        "sheathed": {
+          "clip": "sheathed"
+        },
+        "standoff": {
+          "clip": "standoff"
+        },
+        "posture-broken": {
+          "clip": "stagger",
+          "exit": "broken-hold",
+          "exitBlend": 0.15
+        },
+        "broken-hold": {
+          "clip": "broken"
+        },
+        "dead": {
+          "clip": "death"
         }
       },
       "transitions": [
         {
           "from": "*",
-          "to": "hit",
+          "to": "dead",
+          "when": "dead",
+          "blend": 0.1
+        },
+        {
+          "from": "*",
+          "to": "posture-broken",
+          "when": "broken",
+          "blend": 0.08
+        },
+        {
+          "from": "posture-broken",
+          "to": "hold",
+          "when": "!broken",
+          "blend": 0.15
+        },
+        {
+          "from": "broken-hold",
+          "to": "hold",
+          "when": "!broken",
+          "blend": 0.2
+        },
+        {
+          "from": "*",
+          "to": "guard-broken",
+          "when": "stagger && hitHeavy && guarding",
+          "blend": 0.04
+        },
+        {
+          "from": "*",
+          "to": "hit-heavy",
+          "when": "stagger && hitHeavy",
+          "blend": 0.04
+        },
+        {
+          "from": "*",
+          "to": "hit-light",
+          "when": "stagger",
+          "blend": 0.04
+        },
+        {
+          "from": "*",
+          "to": "hit-light",
           "when": "hit",
           "blend": 0.04
         },
@@ -154,32 +989,356 @@
         },
         {
           "from": "*",
-          "to": "heavy",
-          "when": "heavy",
-          "blend": 0.05
-        },
-        {
-          "from": "slash-a",
-          "to": "slash-b",
-          "when": "attack",
+          "to": "dodge-roll",
+          "when": "dodge && dodgeDir < 0.5",
           "blend": 0.04
         },
         {
           "from": "*",
-          "to": "slash-a",
-          "when": "attack",
+          "to": "dodge-l",
+          "when": "dodge && dodgeDir < 1.5",
           "blend": 0.04
         },
         {
           "from": "*",
-          "to": "block",
-          "when": "block",
+          "to": "dodge-r",
+          "when": "dodge && dodgeDir < 2.5",
+          "blend": 0.04
+        },
+        {
+          "from": "*",
+          "to": "dodge-back",
+          "when": "dodge",
+          "blend": 0.04
+        },
+        {
+          "from": "sheathed",
+          "to": "draw",
+          "when": "draw",
           "blend": 0.06
         },
         {
-          "from": "block",
+          "from": "*",
+          "to": "stone-1",
+          "when": "stone-1",
+          "blend": 0.05
+        },
+        {
+          "from": "*",
+          "to": "stone-2",
+          "when": "stone-2",
+          "blend": 0.05
+        },
+        {
+          "from": "*",
+          "to": "stone-3",
+          "when": "stone-3",
+          "blend": 0.05
+        },
+        {
+          "from": "*",
+          "to": "stone-heavy",
+          "when": "stone-heavy",
+          "blend": 0.05
+        },
+        {
+          "from": "*",
+          "to": "stone-charge",
+          "when": "stone-charge",
+          "blend": 0.1
+        },
+        {
+          "from": "*",
+          "to": "water-1",
+          "when": "water-1",
+          "blend": 0.05
+        },
+        {
+          "from": "*",
+          "to": "water-2",
+          "when": "water-2",
+          "blend": 0.05
+        },
+        {
+          "from": "*",
+          "to": "water-3",
+          "when": "water-3",
+          "blend": 0.05
+        },
+        {
+          "from": "*",
+          "to": "water-4",
+          "when": "water-4",
+          "blend": 0.05
+        },
+        {
+          "from": "*",
+          "to": "water-heavy",
+          "when": "water-heavy",
+          "blend": 0.05
+        },
+        {
+          "from": "*",
+          "to": "water-charge",
+          "when": "water-charge",
+          "blend": 0.1
+        },
+        {
+          "from": "*",
+          "to": "wind-1",
+          "when": "wind-1",
+          "blend": 0.05
+        },
+        {
+          "from": "*",
+          "to": "wind-2",
+          "when": "wind-2",
+          "blend": 0.05
+        },
+        {
+          "from": "*",
+          "to": "wind-heavy",
+          "when": "wind-heavy",
+          "blend": 0.05
+        },
+        {
+          "from": "*",
+          "to": "wind-charge",
+          "when": "wind-charge",
+          "blend": 0.1
+        },
+        {
+          "from": "*",
+          "to": "finisher-stone",
+          "when": "finisher-stone",
+          "blend": 0.05
+        },
+        {
+          "from": "*",
+          "to": "finisher-water",
+          "when": "finisher-water",
+          "blend": 0.05
+        },
+        {
+          "from": "*",
+          "to": "finisher-wind",
+          "when": "finisher-wind",
+          "blend": 0.05
+        },
+        {
+          "from": "*",
+          "to": "riposte",
+          "when": "riposte",
+          "blend": 0.05
+        },
+        {
+          "from": "*",
+          "to": "draw",
+          "when": "draw",
+          "blend": 0.05
+        },
+        {
+          "from": "*",
+          "to": "quickdraw",
+          "when": "quickdraw",
+          "blend": 0.05
+        },
+        {
+          "from": "*",
+          "to": "sheathe",
+          "when": "sheathe",
+          "blend": 0.08
+        },
+        {
+          "from": "stone-1",
           "to": "hold",
-          "when": "!block",
+          "when": "cancel",
+          "blend": 0.08
+        },
+        {
+          "from": "stone-2",
+          "to": "hold",
+          "when": "cancel",
+          "blend": 0.08
+        },
+        {
+          "from": "stone-3",
+          "to": "hold",
+          "when": "cancel",
+          "blend": 0.08
+        },
+        {
+          "from": "stone-heavy",
+          "to": "hold",
+          "when": "cancel",
+          "blend": 0.08
+        },
+        {
+          "from": "stone-charge",
+          "to": "hold",
+          "when": "cancel",
+          "blend": 0.08
+        },
+        {
+          "from": "water-1",
+          "to": "hold",
+          "when": "cancel",
+          "blend": 0.08
+        },
+        {
+          "from": "water-2",
+          "to": "hold",
+          "when": "cancel",
+          "blend": 0.08
+        },
+        {
+          "from": "water-3",
+          "to": "hold",
+          "when": "cancel",
+          "blend": 0.08
+        },
+        {
+          "from": "water-4",
+          "to": "hold",
+          "when": "cancel",
+          "blend": 0.08
+        },
+        {
+          "from": "water-heavy",
+          "to": "hold",
+          "when": "cancel",
+          "blend": 0.08
+        },
+        {
+          "from": "water-charge",
+          "to": "hold",
+          "when": "cancel",
+          "blend": 0.08
+        },
+        {
+          "from": "wind-1",
+          "to": "hold",
+          "when": "cancel",
+          "blend": 0.08
+        },
+        {
+          "from": "wind-2",
+          "to": "hold",
+          "when": "cancel",
+          "blend": 0.08
+        },
+        {
+          "from": "wind-heavy",
+          "to": "hold",
+          "when": "cancel",
+          "blend": 0.08
+        },
+        {
+          "from": "wind-charge",
+          "to": "hold",
+          "when": "cancel",
+          "blend": 0.08
+        },
+        {
+          "from": "finisher-stone",
+          "to": "hold",
+          "when": "cancel",
+          "blend": 0.08
+        },
+        {
+          "from": "finisher-water",
+          "to": "hold",
+          "when": "cancel",
+          "blend": 0.08
+        },
+        {
+          "from": "finisher-wind",
+          "to": "hold",
+          "when": "cancel",
+          "blend": 0.08
+        },
+        {
+          "from": "riposte",
+          "to": "hold",
+          "when": "cancel",
+          "blend": 0.08
+        },
+        {
+          "from": "quickdraw",
+          "to": "hold",
+          "when": "cancel",
+          "blend": 0.08
+        },
+        {
+          "from": "deflect",
+          "to": "hold",
+          "when": "cancel",
+          "blend": 0.08
+        },
+        {
+          "from": "dodge-roll",
+          "to": "hold",
+          "when": "cancel",
+          "blend": 0.08
+        },
+        {
+          "from": "dodge-l",
+          "to": "hold",
+          "when": "cancel",
+          "blend": 0.08
+        },
+        {
+          "from": "dodge-r",
+          "to": "hold",
+          "when": "cancel",
+          "blend": 0.08
+        },
+        {
+          "from": "dodge-back",
+          "to": "hold",
+          "when": "cancel",
+          "blend": 0.08
+        },
+        {
+          "from": "hit-light",
+          "to": "hold",
+          "when": "cancel",
+          "blend": 0.08
+        },
+        {
+          "from": "hit-heavy",
+          "to": "hold",
+          "when": "cancel",
+          "blend": 0.08
+        },
+        {
+          "from": "guard-broken",
+          "to": "hold",
+          "when": "cancel",
+          "blend": 0.08
+        },
+        {
+          "from": "standoff",
+          "to": "hold",
+          "when": "!standoff",
+          "blend": 0.15
+        },
+        {
+          "from": "*",
+          "to": "standoff",
+          "when": "standoff && !dead",
+          "blend": 0.2
+        },
+        {
+          "from": "hold",
+          "to": "guard",
+          "when": "guarding",
+          "blend": 0.06
+        },
+        {
+          "from": "guard",
+          "to": "hold",
+          "when": "!guarding",
           "blend": 0.1
         }
       ]
@@ -200,5 +1359,50 @@
       "enabled": true,
       "maxStep": 0.35
     }
+  },
+  "springs": {
+    "ponytail": {
+      "chain": [
+        "pony1",
+        "pony2",
+        "pony3"
+      ],
+      "stiffness": 90,
+      "damping": 6,
+      "drive": 0.06
+    },
+    "sashL": {
+      "chain": [
+        "sashL1",
+        "sashL2",
+        "sashL3"
+      ],
+      "stiffness": 70,
+      "damping": 5,
+      "drive": 0.05
+    },
+    "sashR": {
+      "chain": [
+        "sashR1",
+        "sashR2",
+        "sashR3"
+      ],
+      "stiffness": 70,
+      "damping": 5,
+      "drive": 0.05
+    },
+    "scarf": {
+      "chain": [
+        "scarf1",
+        "scarf2",
+        "scarf3"
+      ],
+      "stiffness": 55,
+      "damping": 4,
+      "drive": 0.07
+    }
+  },
+  "hitReact": {
+    "angle": 0.4
   }
 }

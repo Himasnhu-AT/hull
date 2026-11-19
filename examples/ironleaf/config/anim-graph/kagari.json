@@ -339,5 +339,37 @@
       "enabled": true,
       "maxStep": 0.35
     }
+  },
+  "springs": {
+    "ponytail": {
+      "chain": [
+        "pony1",
+        "pony2",
+        "pony3"
+      ],
+      "stiffness": 90,
+      "damping": 6,
+      "drive": 0.06
+    },
+    "coatL": {
+      "chain": [
+        "coatL1",
+        "coatL2",
+        "coatL3"
+      ],
+      "stiffness": 45,
+      "damping": 4,
+      "drive": 0.06
+    },
+    "coatR": {
+      "chain": [
+        "coatR1",
+        "coatR2",
+        "coatR3"
+      ],
+      "stiffness": 45,
+      "damping": 4,
+      "drive": 0.06
+    }
   }
 }
