@@ -480,3 +480,11 @@ textarea.field-in { height: auto; min-height: 76px; padding: 6px 8px; font-famil
 .bsrc { display: flex; gap: 8px; }
 .bsrc label { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; color: var(--muted); font-size: 11px; }
 .bbody .fld::before { display: none; }
+/* ---------- nav in the title bar ---------- */
+.seg.views button { min-width: 28px; padding: 0 8px; }
+.seg.views .vc { color: var(--faint); font-size: 11px; }
+.top .vl { display: none; }
+@media (min-width: 1560px) { .top .vl { display: inline; } }
+.top .r .chip:has(.vl), .top .r .btn:has(.vl) { padding: 0 8px; }
+.live { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); flex: none; margin: 0 4px; }
+.live.on { background: var(--ok, #3ecf8e); }
