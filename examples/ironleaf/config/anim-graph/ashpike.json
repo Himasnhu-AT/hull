@@ -1,5 +1,6 @@
 {
   "kind": "anim-graph",
+  "note": "Ashpike: a trigger per move (named like the clip), full-body in the base layer and the same clip on the upper body so the arms win over the walk swing.",
   "params": {
     "speed": {
       "type": "number",
@@ -7,43 +8,37 @@
       "min": 0,
       "max": 12
     },
-    "grounded": {
-      "type": "boolean",
-      "default": true
-    },
     "dead": {
       "type": "boolean",
       "default": false
     },
-    "attack": {
-      "type": "trigger"
-    },
-    "heavy": {
-      "type": "trigger"
-    },
-    "block": {
+    "guarding": {
       "type": "boolean",
       "default": false
     },
-    "deflect": {
+    "broken": {
+      "type": "boolean",
+      "default": false
+    },
+    "hit": {
+      "type": "trigger"
+    },
+    "stagger": {
       "type": "trigger"
     },
     "dodge": {
       "type": "trigger"
     },
-    "hit": {
+    "cancel": {
       "type": "trigger"
     },
-    "jump": {
+    "backstep": {
       "type": "trigger"
     },
-    "attack2": {
+    "spear-thrust": {
       "type": "trigger"
     },
-    "attack3": {
-      "type": "trigger"
-    },
-    "stagger": {
+    "spear-sweep": {
       "type": "trigger"
     }
   },
@@ -66,6 +61,21 @@
         },
         "dead": {
           "clip": "death"
+        },
+        "back-step": {
+          "clip": "back-step",
+          "exit": "idle",
+          "exitBlend": 0.12
+        },
+        "spear-thrust": {
+          "clip": "spear-thrust",
+          "exit": "idle",
+          "exitBlend": 0.12
+        },
+        "spear-sweep": {
+          "clip": "spear-sweep",
+          "exit": "idle",
+          "exitBlend": 0.12
         }
       },
       "transitions": [
@@ -74,6 +84,36 @@
           "to": "dead",
           "when": "dead",
           "blend": 0.12
+        },
+        {
+          "from": "*",
+          "to": "back-step",
+          "when": "backstep",
+          "blend": 0.06
+        },
+        {
+          "from": "*",
+          "to": "spear-thrust",
+          "when": "spear-thrust",
+          "blend": 0.05
+        },
+        {
+          "from": "*",
+          "to": "spear-sweep",
+          "when": "spear-sweep",
+          "blend": 0.05
+        },
+        {
+          "from": "spear-thrust",
+          "to": "idle",
+          "when": "cancel",
+          "blend": 0.1
+        },
+        {
+          "from": "spear-sweep",
+          "to": "idle",
+          "when": "cancel",
+          "blend": 0.1
         },
         {
           "from": "idle",
@@ -98,7 +138,6 @@
       ],
       "start": "hold",
       "states": {
-        "none": {},
         "hold": {
           "clip": "hold-spear"
         },
@@ -111,6 +150,11 @@
           "clip": "stagger",
           "exit": "hold",
           "exitBlend": 0.2
+        },
+        "back-step": {
+          "clip": "back-step",
+          "exit": "hold",
+          "exitBlend": 0.12
         },
         "spear-thrust": {
           "clip": "spear-thrust",
@@ -138,15 +182,33 @@
         },
         {
           "from": "*",
+          "to": "back-step",
+          "when": "backstep",
+          "blend": 0.06
+        },
+        {
+          "from": "*",
           "to": "spear-thrust",
-          "when": "attack",
+          "when": "spear-thrust",
           "blend": 0.05
         },
         {
           "from": "*",
           "to": "spear-sweep",
-          "when": "attack2",
+          "when": "spear-sweep",
           "blend": 0.05
+        },
+        {
+          "from": "spear-thrust",
+          "to": "hold",
+          "when": "cancel",
+          "blend": 0.1
+        },
+        {
+          "from": "spear-sweep",
+          "to": "hold",
+          "when": "cancel",
+          "blend": 0.1
         }
       ]
     },

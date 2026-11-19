@@ -1,5 +1,6 @@
 {
   "kind": "anim-graph",
+  "note": "Kagari: a trigger per move (named like the clip), full-body in the base layer and the same clip on the upper body so the arms win over the walk swing.",
   "params": {
     "speed": {
       "type": "number",
@@ -7,43 +8,46 @@
       "min": 0,
       "max": 12
     },
-    "grounded": {
-      "type": "boolean",
-      "default": true
-    },
     "dead": {
       "type": "boolean",
       "default": false
     },
-    "attack": {
-      "type": "trigger"
-    },
-    "heavy": {
-      "type": "trigger"
-    },
-    "block": {
+    "guarding": {
       "type": "boolean",
       "default": false
     },
-    "deflect": {
+    "broken": {
+      "type": "boolean",
+      "default": false
+    },
+    "hit": {
+      "type": "trigger"
+    },
+    "stagger": {
       "type": "trigger"
     },
     "dodge": {
       "type": "trigger"
     },
-    "hit": {
+    "cancel": {
       "type": "trigger"
     },
-    "jump": {
+    "backstep": {
       "type": "trigger"
     },
-    "attack2": {
+    "duel-cut": {
       "type": "trigger"
     },
-    "attack3": {
+    "duel-thrust": {
       "type": "trigger"
     },
-    "stagger": {
+    "duel-sweep": {
+      "type": "trigger"
+    },
+    "duel-rush": {
+      "type": "trigger"
+    },
+    "duel-phase": {
       "type": "trigger"
     }
   },
@@ -66,6 +70,36 @@
         },
         "dead": {
           "clip": "death"
+        },
+        "back-step": {
+          "clip": "back-step",
+          "exit": "idle",
+          "exitBlend": 0.12
+        },
+        "duel-cut": {
+          "clip": "duel-cut",
+          "exit": "idle",
+          "exitBlend": 0.12
+        },
+        "duel-thrust": {
+          "clip": "duel-thrust",
+          "exit": "idle",
+          "exitBlend": 0.12
+        },
+        "duel-sweep": {
+          "clip": "duel-sweep",
+          "exit": "idle",
+          "exitBlend": 0.12
+        },
+        "duel-rush": {
+          "clip": "duel-rush",
+          "exit": "idle",
+          "exitBlend": 0.12
+        },
+        "duel-phase": {
+          "clip": "duel-phase",
+          "exit": "idle",
+          "exitBlend": 0.12
         }
       },
       "transitions": [
@@ -74,6 +108,72 @@
           "to": "dead",
           "when": "dead",
           "blend": 0.12
+        },
+        {
+          "from": "*",
+          "to": "back-step",
+          "when": "backstep",
+          "blend": 0.06
+        },
+        {
+          "from": "*",
+          "to": "duel-cut",
+          "when": "duel-cut",
+          "blend": 0.05
+        },
+        {
+          "from": "*",
+          "to": "duel-thrust",
+          "when": "duel-thrust",
+          "blend": 0.05
+        },
+        {
+          "from": "*",
+          "to": "duel-sweep",
+          "when": "duel-sweep",
+          "blend": 0.05
+        },
+        {
+          "from": "*",
+          "to": "duel-rush",
+          "when": "duel-rush",
+          "blend": 0.05
+        },
+        {
+          "from": "*",
+          "to": "duel-phase",
+          "when": "duel-phase",
+          "blend": 0.05
+        },
+        {
+          "from": "duel-cut",
+          "to": "idle",
+          "when": "cancel",
+          "blend": 0.1
+        },
+        {
+          "from": "duel-thrust",
+          "to": "idle",
+          "when": "cancel",
+          "blend": 0.1
+        },
+        {
+          "from": "duel-sweep",
+          "to": "idle",
+          "when": "cancel",
+          "blend": 0.1
+        },
+        {
+          "from": "duel-rush",
+          "to": "idle",
+          "when": "cancel",
+          "blend": 0.1
+        },
+        {
+          "from": "duel-phase",
+          "to": "idle",
+          "when": "cancel",
+          "blend": 0.1
         },
         {
           "from": "idle",
@@ -98,7 +198,6 @@
       ],
       "start": "hold",
       "states": {
-        "none": {},
         "hold": {
           "clip": "hold-duel"
         },
@@ -112,6 +211,11 @@
           "exit": "hold",
           "exitBlend": 0.2
         },
+        "back-step": {
+          "clip": "back-step",
+          "exit": "hold",
+          "exitBlend": 0.12
+        },
         "duel-cut": {
           "clip": "duel-cut",
           "exit": "hold",
@@ -124,6 +228,16 @@
         },
         "duel-sweep": {
           "clip": "duel-sweep",
+          "exit": "hold",
+          "exitBlend": 0.12
+        },
+        "duel-rush": {
+          "clip": "duel-rush",
+          "exit": "hold",
+          "exitBlend": 0.12
+        },
+        "duel-phase": {
+          "clip": "duel-phase",
           "exit": "hold",
           "exitBlend": 0.12
         }
@@ -143,21 +257,69 @@
         },
         {
           "from": "*",
+          "to": "back-step",
+          "when": "backstep",
+          "blend": 0.06
+        },
+        {
+          "from": "*",
           "to": "duel-cut",
-          "when": "attack",
+          "when": "duel-cut",
           "blend": 0.05
         },
         {
           "from": "*",
           "to": "duel-thrust",
-          "when": "attack2",
+          "when": "duel-thrust",
           "blend": 0.05
         },
         {
           "from": "*",
           "to": "duel-sweep",
-          "when": "attack3",
+          "when": "duel-sweep",
           "blend": 0.05
+        },
+        {
+          "from": "*",
+          "to": "duel-rush",
+          "when": "duel-rush",
+          "blend": 0.05
+        },
+        {
+          "from": "*",
+          "to": "duel-phase",
+          "when": "duel-phase",
+          "blend": 0.05
+        },
+        {
+          "from": "duel-cut",
+          "to": "hold",
+          "when": "cancel",
+          "blend": 0.1
+        },
+        {
+          "from": "duel-thrust",
+          "to": "hold",
+          "when": "cancel",
+          "blend": 0.1
+        },
+        {
+          "from": "duel-sweep",
+          "to": "hold",
+          "when": "cancel",
+          "blend": 0.1
+        },
+        {
+          "from": "duel-rush",
+          "to": "hold",
+          "when": "cancel",
+          "blend": 0.1
+        },
+        {
+          "from": "duel-phase",
+          "to": "hold",
+          "when": "cancel",
+          "blend": 0.1
         }
       ]
     },
