@@ -2,7 +2,8 @@
 // with blending, IK, and the Animator behaviour that runs them on game time.
 export { Animator, Limb } from './animator.ts';
 export { registerGenerator, generatorNames, compileClip, sampleClip, evalCurve } from './clip.ts';
-export type { Clip, ClipEvent, Generated, GeneratorFactory } from './clip.ts';
+export type { Clip, ClipEvent, ClipWindow, ClipRoot, Generated, GeneratorFactory } from './clip.ts';
+export { Springs, HitReact } from './secondary.ts';
 export { Graph, compileCondition } from './graph.ts';
 export { twoBone, lookAt } from './ik.ts';
 export type { BenchView, BenchModel, BenchModelBuilder, RegisterBenchModel } from './bench.ts';

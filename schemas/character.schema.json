@@ -164,7 +164,7 @@
             "additionalProperties": false
           },
           "x-ui": {
-            "help": "Custom recipe: parents before children."
+            "help": "Custom recipe: the whole skeleton, parents before children. Humanoid recipe: extra bones added to it (a ponytail, a sash), with offsets for a 1.78 m body."
           }
         },
         "parts": {
