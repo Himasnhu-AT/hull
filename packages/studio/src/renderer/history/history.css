@@ -116,3 +116,35 @@
 
 /* the lane drawing may paint its stroke caps outside the box, so a merge curve is not cut at the top edge of its row */
 .hx-lanes { overflow: visible; }
+
+/* Changes tab (cx-): the diff since a starting point, file by file. */
+.cx { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.cx-since { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; }
+.cx-body { flex: 1; min-height: 0; display: grid; grid-template-columns: 230px minmax(0, 1fr); }
+.cx-files { overflow: auto; border-right: 1px solid var(--line); padding: 4px 0; }
+.cx-file { display: flex; align-items: center; gap: 8px; width: 100%; height: 28px; padding: 0 10px; border: 0; background: transparent; color: var(--text); text-align: left; }
+.cx-file:hover { background: var(--hover); }
+.cx-file.sel { background: var(--accent-soft); }
+.cx-fn { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cx-n { color: var(--faint); font-size: 11px; }
+.cx-detail { overflow: auto; min-height: 0; padding: 4px 0 10px; }
+.cx-dh { display: flex; align-items: center; gap: 6px; padding: 2px 12px 6px; }
+.cx-path { flex: 1; color: var(--faint); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cx-row { display: grid; grid-template-columns: minmax(120px, 220px) minmax(0, 1fr) 24px; align-items: center; gap: 10px; padding: 3px 12px; min-height: 28px; }
+.cx-row:hover { background: var(--hover); }
+.cx-row .rs.show { opacity: 0; pointer-events: auto; }
+.cx-row:hover .rs.show, .cx-row .rs.show:focus-visible { opacity: 1; }
+.cx-what { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cx-what em { color: var(--faint); font-style: normal; }
+.cx-chg { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; font-variant-numeric: tabular-nums; color: var(--muted); }
+.cx-v { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.cx-chg .cx-v:last-of-type { color: var(--text); }
+.cx-sw { width: 14px; height: 14px; border-radius: 4px; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.18); flex: none; }
+.cx-ar { color: var(--faint); font-style: normal; }
+.cx-note { white-space: nowrap; color: var(--faint); font-size: 11px; border: 1px solid var(--line2); border-radius: 99px; padding: 0 7px; }
+.cx-patch { margin: 6px 12px 0; padding: 6px 0; border: 1px solid var(--line); border-radius: 6px; background: var(--field); font: 11.5px/1.5 var(--mono, ui-monospace, monospace); overflow: auto; max-height: 260px; }
+.cx-l { display: block; padding: 0 10px; white-space: pre; }
+.cx-l b { display: inline-block; width: 34px; color: var(--faint); font-weight: 400; }
+.cx-l.add { background: color-mix(in srgb, var(--ok, #3cc482) 14%, transparent); }
+.cx-l.del { background: color-mix(in srgb, var(--danger, #ff7a70) 14%, transparent); }
+.cx-l.gap, .cx-ctx { color: var(--faint); }

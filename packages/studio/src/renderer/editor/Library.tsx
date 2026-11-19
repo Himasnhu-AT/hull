@@ -15,9 +15,11 @@ interface Props {
   selected: string | null;
   changed: ReadonlySet<string>;
   onSelect(id: string): void;
+  /** Called as well as onSelect when a file is clicked while the Changed filter is on: show what changed in it. */
+  onOpenChanged?(id: string): void;
 }
 
-export const Library = forwardRef<HTMLInputElement, Props>(function Library({ items, error, selected, changed, onSelect }, searchRef): JSX.Element {
+export const Library = forwardRef<HTMLInputElement, Props>(function Library({ items, error, selected, changed, onSelect, onOpenChanged }, searchRef): JSX.Element {
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<LibraryFilter>('all');
   const [closed, setClosed] = useState<ReadonlySet<Domain>>(new Set());
@@ -58,7 +60,7 @@ export const Library = forwardRef<HTMLInputElement, Props>(function Library({ it
               {open && g.rows.map((r) => r.type === 'sub'
                 ? <div key={`s:${g.domain}:${r.label}`} className="sub">{r.label}</div>
                 : (
-                  <button key={r.item.id} className={`row${r.item.id === selected ? ' sel' : ''}${r.item.path ? '' : ''}`} aria-pressed={r.item.id === selected} onClick={() => onSelect(r.item.id)} title={r.item.note ?? r.item.path}>
+                  <button key={r.item.id} className={`row${r.item.id === selected ? ' sel' : ''}${r.item.path ? '' : ''}`} aria-pressed={r.item.id === selected} onClick={() => { onSelect(r.item.id); if (filter === 'changed') onOpenChanged?.(r.item.id); }} title={r.item.note ?? r.item.path}>
                     <span className="nm">{r.short}</span><span className="kd">{r.item.kind}</span>
                     {changed.has(r.item.id) && <span className="edot" title="Changed in this session" />}
                     {r.item.problems > 0 && <span className="st-warn" title={`${r.item.problems} problem${r.item.problems === 1 ? '' : 's'}`}><Icon name="warn" /></span>}

@@ -229,6 +229,10 @@ export interface Methods {
   'history.diff': { params: { from?: string; to: string }; result: { from: string | null; to: string; deltas: ChangeDelta[] } };
   /** Puts the project back as it was at `id`. Itself a new change, so it can be undone. */
   'history.restore': { params: { id: string; author?: Author }; result: { ok: boolean; problems: Problem[]; change?: HistoryChange } };
+  /** The compact line diff of one file between two states (`to` may be 'main': the project as it is now). */
+  'history.patch': { params: { from?: string; to: string; file: string }; result: { file: string; lines: { op: 'ctx' | 'add' | 'del' | 'gap'; n: number; text: string }[]; binary: boolean } };
+  /** Puts one file, or one field of a config file (`pointer`), back as it was at `from`. Validated like `history.restore`; a new change, so it can be undone. */
+  'history.revert': { params: { from: string; file: string; pointer?: string; author?: Author }; result: { ok: boolean; problems: Problem[]; change?: HistoryChange } };
   'history.checkpoint': { params: { name: string; id?: string }; result: { name: string; id: string } };
   /** Makes a working copy under .hull/exp/<name>/ from `from` (default: the project's newest change). */
   'exp.start': { params: { name: string; from?: string; author?: Author }; result: ExpInfo };

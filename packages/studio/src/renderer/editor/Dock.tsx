@@ -25,10 +25,12 @@ interface Props {
   history?: ReactNode;
   /** The Content Browser (content/ContentBrowser). */
   content?: ReactNode;
+  /** The Changes panel (history/ChangesPanel): the diff since the Studio opened. Without it the tab lists the journal. */
+  changes?: ReactNode;
   flagged?: number;
 }
 
-export function Dock({ tab, onTab, logs, problems, journal, onClear, onOpen, history, content, flagged = 0 }: Props): JSX.Element {
+export function Dock({ tab, onTab, logs, problems, journal, onClear, onOpen, history, changes, content, flagged = 0 }: Props): JSX.Element {
   const body = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
   useEffect(() => { const b = body.current; if (b && stick.current && tab === 'console') b.scrollTop = b.scrollHeight; }, [logs, problems, tab]);
@@ -54,7 +56,8 @@ export function Dock({ tab, onTab, logs, problems, journal, onClear, onOpen, his
       </div>
       {tab === 'history' && <div className="dock-b" style={{ overflow: 'hidden' }}>{history}</div>}
       {content && <div className="dock-b" style={{ overflow: 'hidden' }} hidden={tab !== 'content'}>{content}</div>}
-      <div className="dock-b" hidden={tab === 'history' || tab === 'content'} ref={body} onScroll={(e) => { const t = e.currentTarget; stick.current = t.scrollHeight - t.scrollTop - t.clientHeight < 24; }}>
+      {tab === 'changes' && changes && <div className="dock-b" style={{ overflow: 'hidden' }}>{changes}</div>}
+      <div className="dock-b" hidden={tab === 'history' || tab === 'content' || (tab === 'changes' && !!changes)} ref={body} onScroll={(e) => { const t = e.currentTarget; stick.current = t.scrollHeight - t.scrollTop - t.clientHeight < 24; }}>
         {tab === 'console' && (
           <div role="log" aria-live="polite">
             {problems.map((p, i) => {

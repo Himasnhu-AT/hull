@@ -653,6 +653,8 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
     'history.list': (p) => hist.list(p),
     'history.diff': (p) => hist.diff(p),
     'history.restore': (p) => hist.restore(p.id, p.author ?? 'you'),
+    'history.patch': (p) => hist.patch(p),
+    'history.revert': (p) => hist.revert(p.from, p.file, p.author ?? 'you', p.pointer),
     'history.checkpoint': (p) => hist.checkpoint(p.name, p.id),
     'exp.start': (p) => hist.expStart(p.name, p.from, p.author ?? 'you'),
     'exp.list': () => hist.expList(),
