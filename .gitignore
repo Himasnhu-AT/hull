@@ -10,3 +10,7 @@ dist
 .tsbuild/
 .hull/
 .claude/worktrees/
+
+# Hull backend: local database and real settings.
+backend/data/
+backend/.env
