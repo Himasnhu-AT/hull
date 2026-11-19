@@ -1,6 +1,6 @@
 {
   "kind": "material",
-  "color": "#ece6d6",
-  "roughness": 0.45,
+  "color": "#d8d0bc",
+  "roughness": 0.6,
   "metalness": 0
 }

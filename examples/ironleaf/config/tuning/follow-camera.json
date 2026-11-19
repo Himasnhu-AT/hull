@@ -9,5 +9,6 @@
   "fovPerSpeed": 0.35,
   "fovMaxExtra": 8,
   "distancePerSpeed": 0.05,
-  "distanceMaxExtra": 1
+  "distanceMaxExtra": 1,
+  "lockSlope": 0.5
 }

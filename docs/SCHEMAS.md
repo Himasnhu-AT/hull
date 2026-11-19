@@ -292,7 +292,9 @@ game registers with `registerGenerator`. The mixer has buses and a master compre
 ```
 
 A bus has a `level` in dB (-60 to 12) and `to`, the bus it feeds. `master.compressor` is `threshold` (dB) and `ratio`;
-`master.limiter` is a ceiling in dB. Without a mixer file, `defaultMixer` applies.
+`master.limiter` is a ceiling in dB. A bus may also have its own `compressor` (`threshold`, `ratio`, and optional `attack`, `release` in
+seconds), placed after the bus's gain and low-pass: it tames that bus alone, so the loud sounds on it (a clash, a deflect) can be
+turned up without the whole mix clipping. Without a mixer file, `defaultMixer` applies.
 
 Not built: ducking rules and snapshots in the file (a game calls `duck` and `setBusLowpass` at run time) and the `music` kind
 (layers that come in on an intensity value).

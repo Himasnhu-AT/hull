@@ -1,0 +1,7 @@
+{
+ "kind": "tuning",
+ "note": "The camp fight: at most two raiders attack at once, with a breather between attackers (GAME.md section 6).",
+ "maxAttackers": 2,
+ "breather": 0.7,
+ "attackGap": 0.5
+}

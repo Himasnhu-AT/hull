@@ -41,6 +41,7 @@ export const combatTuning = tunables('swordfight', {
   shakePerfect: num(0.35, { min: 0, max: 1, step: 0.05, help: 'Camera shake of a perfect deflect.' }),
   shakeHit: num(0.35, { min: 0, max: 1, step: 0.05, help: 'Camera shake of a clean hit.' }),
   bodyRadius: num(0.3, { min: 0.1, max: 1.5, step: 0.05, unit: 'm', help: 'A fighter without hit shapes is a capsule this wide and 1.7 m tall.' }),
+  zoneDamage: num(1, { min: 0, max: 1, step: 0.05, help: 'How much of the Health hit-zone multipliers (head 2x, nape 3x, limb 0.5x) a blow takes: 1 all of it, 0 none, so a move always does its listed damage.' }),
   blockChip: num(0.15, { min: 0, max: 1, step: 0.01, widget: 'dial', help: 'Share of a blow\'s damage that gets through a plain block (a deflect stops all of it).' }),
   resistMult: num(0.7, { min: 0, max: 1, step: 0.05, help: 'Posture multiplier when the attacker\'s stance is what the target resists (the wrong stance).' }),
   fightRange: num(10, { min: 1, max: 40, step: 1, unit: 'm', help: 'A living enemy this close puts a fighter "in combat": its posture comes back at the in-combat rate.' }),
@@ -448,7 +449,7 @@ export class Combatant extends Behaviour {
       this.freezePair(att, deflect ? combatTuning.hitStopDeflect : combatTuning.hitStopBlock);
       // A plain block lets a little through; a deflect none. The chip is never a hit: no stagger, no blood.
       if (!deflect && combatTuning.blockChip > 0 && a.damage > 0) {
-        this.health.damage(a.damage * combatTuning.blockChip, a.zone, att?.node ?? null);
+        this.health.damage(this.zoned(a.damage * combatTuning.blockChip, a.zone), a.zone, att?.node ?? null);
         info.damage = a.damage * combatTuning.blockChip;
         if (this.health.dead) { this.die(); return info.outcome; }
       }
@@ -478,11 +479,17 @@ export class Combatant extends Behaviour {
     return 'perfect';
   }
 
+  /** `amount` rescaled so that Health's zone multiplier lands at the share `zoneDamage` allows. */
+  private zoned(amount: number, zone: string): number {
+    const m = this.health.multiplier(zone);
+    return m === 1 || combatTuning.zoneDamage >= 1 ? amount : (amount * (1 + (m - 1) * combatTuning.zoneDamage)) / m;
+  }
+
   private takeHit(a: Attack, att: Combatant | null): Outcome {
     const info = this.info;
     let amount = a.damage;
     if (this.state === 'broken') amount *= combatTuning.brokenDamage;
-    const applied = this.health.damage(amount, a.zone, att?.node ?? null);
+    const applied = this.health.damage(this.zoned(amount, a.zone), a.zone, att?.node ?? null);
     info.damage = applied;
     info.posture = a.posture * combatTuning.hitPosture;
     info.outcome = 'hit';

@@ -17,12 +17,13 @@ follow camera. Its default config uses the materials and sounds of the third-per
 - **Outcomes of a blow**, in order: an i-frame (dodge, or a move's `iframe` window) avoids it; a guard held in front stops
   a blockable one: raised within `perfectWindow` of the blow is a *perfect deflect* (attacker staggers and loses
   posture, you lose none), within `deflectWindow` a *deflect* (35% of the posture), otherwise a *block* (all of it, times
-  the move's `guardBreak`); anything else is a clean hit (damage by hit zone, a stagger, hit-stop). Unblockable moves
+  the move's `guardBreak`); anything else is a clean hit (damage by hit zone, a stagger, hit-stop; `zoneDamage` 0 turns the zone multipliers off so a move does the damage it lists). Unblockable moves
   skip the guard and can only be dodged. Posture that fills breaks: the fighter is open for `brokenSeconds` and a move with
   `finisher: true` (it only starts when someone is broken in reach) takes `finisherDamage` of full health.
   A stance the target is `weakTo` multiplies posture damage by `weakBonus`; one it `resists` (the wrong stance) by `resistMult` (0.7).
   A plain block lets `blockChip` (15%) of the damage through (never a stagger); a deflect lets none. A fighter with
   `postureRecoverFight` set regains posture at that rate while a living enemy is within `fightRange`, else at `postureRecover`.
+  The attack queue (`enemyBrain` tunables) holds `maxAttackers`; `breather` is the quiet time after an attacker finishes before another may start, `attackGap` the least time between two starts (both 0 by default).
   An enemy pattern with `rest: true` sets the brain's `streak` back to 0; `when.streak: [min, max]` limits a pattern to a
   streak of patterns in a row (a boss that resets after three); an interruption clears the streak too.
 - **Traces** (`trace.ts`): in a move's `trace` window the blade (two points in a socket's space) is sampled every fixed

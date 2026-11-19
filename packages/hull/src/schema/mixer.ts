@@ -6,6 +6,17 @@ const bus = Type.Object(
   {
     to: Type.Optional(Type.String({ ...ui({ widget: 'text', help: 'The bus this one feeds. Default: master.' }) })),
     level: Type.Optional(Type.Number({ minimum: -60, maximum: 12, default: 0, ...ui({ widget: 'slider', unit: 'dB', step: 0.5 }) })),
+    compressor: Type.Optional(
+      Type.Object(
+        {
+          threshold: Type.Number({ minimum: -60, maximum: 0, default: -12, ...ui({ widget: 'dial', unit: 'dB', help: 'Above this level the bus is turned down.' }) }),
+          ratio: Type.Number({ minimum: 1, maximum: 20, default: 6, ...ui({ widget: 'dial', step: 0.5, help: 'How hard: 20 is almost a wall.' }) }),
+          attack: Type.Optional(Type.Number({ minimum: 0, maximum: 0.2, default: 0.003, ...ui({ unit: 's', step: 0.001, help: 'How fast it clamps down on a loud hit; short keeps the front of a clash.' }) })),
+          release: Type.Optional(Type.Number({ minimum: 0.01, maximum: 1, default: 0.12, ...ui({ unit: 's', step: 0.01 }) })),
+        },
+        { additionalProperties: false, ...ui({ help: 'Tames this bus alone, so its loud sounds can be turned up without the whole mix clipping.' }) },
+      ),
+    ),
   },
   { additionalProperties: false },
 );

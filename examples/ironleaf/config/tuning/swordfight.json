@@ -15,5 +15,6 @@
  "modelYaw": 0,
  "blockChip": 0.15,
  "resistMult": 0.7,
- "fightRange": 10
+ "fightRange": 10,
+ "zoneDamage": 0
 }

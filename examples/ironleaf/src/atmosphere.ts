@@ -3,8 +3,8 @@
 // everything about how it is lit and graded is tuned there; this file only says which look is on and what the air does.
 import { Behaviour, type Node } from 'hull';
 import { vfx, type TrailHandle } from 'hull/vfx';
-import { kitIO } from 'hull/kits';
-import { windU } from './world/wind';
+import { Combatant, FIGHTERS, LockOn, kitIO } from 'hull/kits';
+import { clearU, windU } from './world/wind';
 import { groundHeight, surfaceAt } from './world/map';
 import { Aya } from './player/aya';
 
@@ -84,7 +84,34 @@ export class Atmosphere extends Behaviour {
     // Late-arriving audio: the page mounts it after the game starts, and the browser only lets it run after a first click.
     if (this.applied === this.index && !this.audioTried && v?.audio) { this.audioTried = true; this.startLoops(); }
     const p = this.player;
+    if (p) this.clearGrass(p);
     if (p) for (const t of this.trails) t.node.position.set(p.position.x, p.position.y + t.lift, p.position.z);
+  }
+
+  /**
+   * Tells the pampas where the camera, Aya and the enemy she fights are, so the grass between them and around the fight is
+   * cut low (the third-person camera sits behind her and the grass is as tall as she is). The enemy is her lock-on target,
+   * or else the nearest awake raider within 12 m.
+   */
+  private clearGrass(p: Node): void {
+    const cam = this.world.find('camera');
+    if (cam) clearU.uCamPos.value.set(cam.position.x, cam.position.y, cam.position.z);
+    clearU.uFocus.value.set(p.position.x, p.position.y, p.position.z);
+    let foe: Node | null = p.get(LockOn)?.target ?? null;
+    if (foe && (foe.destroyed || foe.get(Combatant)?.isDead)) foe = null;
+    if (!foe) {
+      let best = 144;
+      const g = this.world.group(FIGHTERS);
+      for (let i = 0; i < g.length; i++) {
+        const n = g[i]!;
+        if (n === p || n.destroyed) continue;
+        const c = n.get(Combatant);
+        if (!c || c.isDead || c.team === 'player') continue;
+        const d = (n.position.x - p.position.x) ** 2 + (n.position.z - p.position.z) ** 2;
+        if (d < best) { best = d; foe = n; }
+      }
+    }
+    if (foe) { clearU.uFoe.value.set(foe.position.x, foe.position.y, foe.position.z); clearU.uFoeOn.value = 1; } else clearU.uFoeOn.value = 0;
   }
 
   private apply(): void {

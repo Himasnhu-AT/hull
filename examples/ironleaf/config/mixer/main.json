@@ -6,7 +6,13 @@
     },
     "sfx": {
       "to": "master",
-      "level": 0
+      "level": 0,
+      "compressor": {
+        "threshold": -12,
+        "ratio": 8,
+        "attack": 0.002,
+        "release": 0.12
+      }
     },
     "ui": {
       "to": "master",

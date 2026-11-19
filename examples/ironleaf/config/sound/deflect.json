@@ -2,7 +2,7 @@
   "kind": "sound",
   "note": "A deflect: the blades meet and slide, and a clean high ring hangs after.",
   "bus": "sfx",
-  "level": -9,
+  "level": -2.5,
   "pitch": [
     0.97,
     1.03

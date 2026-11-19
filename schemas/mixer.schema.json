@@ -37,6 +37,62 @@
                 "unit": "dB",
                 "step": 0.5
               }
+            },
+            "compressor": {
+              "type": "object",
+              "required": [
+                "threshold",
+                "ratio"
+              ],
+              "properties": {
+                "threshold": {
+                  "type": "number",
+                  "minimum": -60,
+                  "maximum": 0,
+                  "default": -12,
+                  "x-ui": {
+                    "widget": "dial",
+                    "unit": "dB",
+                    "help": "Above this level the bus is turned down."
+                  }
+                },
+                "ratio": {
+                  "type": "number",
+                  "minimum": 1,
+                  "maximum": 20,
+                  "default": 6,
+                  "x-ui": {
+                    "widget": "dial",
+                    "step": 0.5,
+                    "help": "How hard: 20 is almost a wall."
+                  }
+                },
+                "attack": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 0.2,
+                  "default": 0.003,
+                  "x-ui": {
+                    "unit": "s",
+                    "step": 0.001,
+                    "help": "How fast it clamps down on a loud hit; short keeps the front of a clash."
+                  }
+                },
+                "release": {
+                  "type": "number",
+                  "minimum": 0.01,
+                  "maximum": 1,
+                  "default": 0.12,
+                  "x-ui": {
+                    "unit": "s",
+                    "step": 0.01
+                  }
+                }
+              },
+              "additionalProperties": false,
+              "x-ui": {
+                "help": "Tames this bus alone, so its loud sounds can be turned up without the whole mix clipping."
+              }
             }
           },
           "additionalProperties": false

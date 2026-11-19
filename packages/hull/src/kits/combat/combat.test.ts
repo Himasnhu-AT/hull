@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { config, defineGame } from '../../index.ts';
+import { setTunable } from '../../config/index.ts';
 import { ALL_KITS, kitSources, projectSources, runScenario, startRig, type Rig } from '../testing.ts';
 import { FollowCamera } from '../follow-camera/follow-camera.ts';
 import { validateAgainst } from '../../config/validate.ts';
@@ -341,6 +342,26 @@ describe('chip, resistance and in-combat posture', () => {
     expect(blocked).toBe(1);
     expect(x.d.health.hp).toBeCloseTo(100 - full * combatTuning.blockChip, 6);
     expect(x.d.state).toBe('free');
+  });
+
+  it('zoneDamage 0 makes a head hit do the move\'s listed damage; 1 keeps the head multiplier', async () => {
+    const hit = async (zone: string, share: number): Promise<number> => {
+      const was = combatTuning.zoneDamage;
+      const x = await duel(5);
+      setTunable('swordfight.zoneDamage', share);
+      try {
+        const a = newAttack();
+        a.attacker = x.a; a.damage = 14; a.posture = 1; a.zone = zone; a.fromX = 0; a.fromZ = -5;
+        x.d.receive(a);
+        const lost = 100 - x.d.health.hp;
+        x.r.g.dispose();
+        return lost;
+      } finally { setTunable('swordfight.zoneDamage', was); }
+    };
+    expect(await hit('head', 1)).toBeCloseTo(28, 6);
+    expect(await hit('head', 0)).toBeCloseTo(14, 6);
+    expect(await hit('head', 0.5)).toBeCloseTo(21, 6);
+    expect(await hit('limb:arm', 0)).toBeCloseTo(14, 6);
   });
 
   it('the wrong stance costs less posture, the right one more', async () => {

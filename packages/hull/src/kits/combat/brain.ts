@@ -8,26 +8,42 @@ import { combatHub, type CombatHub } from './hub.ts';
 export const brainTuning = tunables('enemyBrain', {
   maxAttackers: num(2, { min: 1, max: 6, step: 1, widget: 'dial', help: 'How many enemies may be in an attack at once; the rest circle and wait.' }),
   circleFlip: num(2.4, { min: 0.5, max: 10, step: 0.1, unit: 's', help: 'Average time before a circling enemy changes direction.' }),
+  breather: num(0, { min: 0, max: 5, step: 0.1, unit: 's', help: 'After an attacker finishes, no other enemy may start an attack for this long: a breather for the player.' }),
+  attackGap: num(0, { min: 0, max: 5, step: 0.1, unit: 's', help: 'Least time between two enemies starting an attack, so a second attacker never lands on the first one\'s heels.' }),
   separation: num(1.1, { min: 0, max: 4, step: 0.1, unit: 'm', help: 'Enemies closer than this push each other apart.' }),
 });
 
 /** Who may attack right now. One per world; an enemy takes a place before it starts a pattern and gives it back after. */
 export class AttackTokens {
   private readonly holders: Node[] = [];
+  private lastRelease = -1e9;
+  private lastAcquire = -1e9;
+  private lastHolder: Node | null = null;
+  constructor(private readonly world: World | null = null) {}
+  private get now(): number { return this.world ? this.world.tick * this.world.dt : 0; }
   /** Does the node hold a place. */
   has(n: Node): boolean { return this.holders.indexOf(n) >= 0; }
   get count(): number { return this.holders.length; }
   /** Whether a place is free for a node that has none. */
-  free(): boolean { this.sweep(); return this.holders.length < brainTuning.maxAttackers; }
+  free(n?: Node): boolean {
+    this.sweep();
+    if (this.holders.length >= brainTuning.maxAttackers) return false;
+    // The breather and the gap are between different attackers: the one that just finished is held back by its own recovery.
+    if (this.world === null || (n !== undefined && n === this.lastHolder)) return true;
+    const now = this.now;
+    return now - this.lastRelease >= brainTuning.breather && now - this.lastAcquire >= brainTuning.attackGap;
+  }
   acquire(n: Node): boolean {
     if (this.has(n)) return true;
-    if (!this.free()) return false;
+    if (!this.free(n)) return false;
     this.holders.push(n);
+    this.lastHolder = n;
+    this.lastAcquire = this.now;
     return true;
   }
   release(n: Node): void {
     const i = this.holders.indexOf(n);
-    if (i >= 0) this.holders.splice(i, 1);
+    if (i >= 0) { this.holders.splice(i, 1); this.lastRelease = this.now; }
   }
   private sweep(): void {
     for (let i = this.holders.length - 1; i >= 0; i--) if (this.holders[i]!.destroyed) this.holders.splice(i, 1);
@@ -37,7 +53,7 @@ export class AttackTokens {
 const tokens = new WeakMap<World, AttackTokens>();
 export function attackTokens(world: World): AttackTokens {
   let t = tokens.get(world);
-  if (!t) { t = new AttackTokens(); tokens.set(world, t); }
+  if (!t) { t = new AttackTokens(world); tokens.set(world, t); }
   return t;
 }
 
@@ -209,7 +225,7 @@ export class EnemyBrain extends Behaviour {
   private stepSpacing(d: Enemy, c: Combatant, dx: number, dz: number, dist: number, dt: number): void {
     if (c.state !== 'free') return;
     const tk = attackTokens(this.world);
-    const waiting = !(tk.has(this.node) || tk.free()) && d.spacing?.wait !== undefined;
+    const waiting = !(tk.has(this.node) || tk.free(this.node)) && d.spacing?.wait !== undefined;
     const lo = waiting ? d.spacing!.wait![0] : (d.spacing?.min ?? 1.6), hi = waiting ? d.spacing!.wait![1] : (d.spacing?.max ?? 3);
     const walk = dist > hi + 1.5 && d.speed?.run ? d.speed.run : (d.speed?.walk ?? 2.4), circle = d.speed?.circle ?? 1.4;
     const nx = dist > 1e-6 ? dx / dist : 0, nz = dist > 1e-6 ? dz / dist : -1;
@@ -250,7 +266,7 @@ export class EnemyBrain extends Behaviour {
 
   private consider(d: Enemy, c: Combatant, dist: number): void {
     const tk = attackTokens(this.world);
-    const hold = tk.has(this.node) || tk.free();
+    const hold = tk.has(this.node) || tk.free(this.node);
     const frac = c.health.fraction;
     const el = this.eligible;
     el.length = 0;

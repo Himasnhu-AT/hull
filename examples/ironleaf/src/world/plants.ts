@@ -152,7 +152,7 @@ export function buildPlants(): Plants {
       pampas.push({ x, y: groundHeight(x, z) - 0.02, z, yaw: r() * 6.28, s: 1.0 + r() * 0.7 * (0.6 + m), tint: r() });
     }
   }
-  const pm = windify(new THREE.MeshStandardMaterial({ vertexColors: true, side: THREE.DoubleSide, roughness: 0.9 }), { bendH: 1.4, amp: 1.0 });
+  const pm = windify(new THREE.MeshStandardMaterial({ vertexColors: true, side: THREE.DoubleSide, roughness: 0.9 }), { bendH: 1.4, amp: 1.0, clear: true });
   group.add(scatter(pampasGeometry(), pm, pampas, false, ['#cfc7ae', '#ffffff']));
   counts['pampas'] = pampas.length;
 
