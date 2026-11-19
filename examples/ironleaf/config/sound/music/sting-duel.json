@@ -1,0 +1,104 @@
+{
+  "kind": "sound",
+  "note": "Two drums and a low drone under a high ring: a duel is called.",
+  "bus": "music",
+  "level": -2,
+  "source": {
+    "type": "synth",
+    "length": 4,
+    "layers": {
+      "taiko1": {
+        "from": {
+          "osc": "sine",
+          "freq": [
+            80,
+            90
+          ],
+          "glideTo": 0.4,
+          "glideTime": 0.5
+        },
+        "then": [
+          {
+            "envelope": {
+              "attack": 0.004,
+              "decay": 0.9
+            }
+          },
+          {
+            "gain": 3
+          }
+        ]
+      },
+      "taiko2": {
+        "at": 0.7,
+        "from": {
+          "osc": "sine",
+          "freq": [
+            70,
+            78
+          ],
+          "glideTo": 0.4,
+          "glideTime": 0.5
+        },
+        "then": [
+          {
+            "envelope": {
+              "attack": 0.004,
+              "decay": 1
+            }
+          },
+          {
+            "gain": 4
+          }
+        ]
+      },
+      "drone": {
+        "from": {
+          "osc": "sawtooth",
+          "freq": 73.4
+        },
+        "then": [
+          {
+            "filter": "lowpass",
+            "freq": 420,
+            "q": 2
+          },
+          {
+            "envelope": {
+              "attack": 0.8,
+              "decay": 2.6
+            }
+          },
+          {
+            "gain": -10
+          }
+        ]
+      },
+      "bell": {
+        "at": 1.4,
+        "from": {
+          "modes": [
+            587,
+            880,
+            1320,
+            1760
+          ],
+          "decay": 2,
+          "tilt": 0.5
+        },
+        "then": [
+          {
+            "envelope": {
+              "attack": 0.002,
+              "decay": 2
+            }
+          },
+          {
+            "gain": -10
+          }
+        ]
+      }
+    },
+    "reverb": 0.3
+  }
+}

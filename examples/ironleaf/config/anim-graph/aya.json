@@ -1,0 +1,204 @@
+{
+  "kind": "anim-graph",
+  "params": {
+    "speed": {
+      "type": "number",
+      "default": 0,
+      "min": 0,
+      "max": 12
+    },
+    "grounded": {
+      "type": "boolean",
+      "default": true
+    },
+    "dead": {
+      "type": "boolean",
+      "default": false
+    },
+    "attack": {
+      "type": "trigger"
+    },
+    "heavy": {
+      "type": "trigger"
+    },
+    "block": {
+      "type": "boolean",
+      "default": false
+    },
+    "deflect": {
+      "type": "trigger"
+    },
+    "dodge": {
+      "type": "trigger"
+    },
+    "hit": {
+      "type": "trigger"
+    },
+    "jump": {
+      "type": "trigger"
+    }
+  },
+  "layers": {
+    "base": {
+      "start": "idle",
+      "states": {
+        "idle": {
+          "clip": "idle"
+        },
+        "move": {
+          "blend": {
+            "by": "speed",
+            "points": {
+              "1.44": "walk",
+              "4.82": "run"
+            }
+          },
+          "speedFrom": "speed"
+        },
+        "dodge": {
+          "clip": "dodge",
+          "exit": "idle",
+          "exitBlend": 0.1
+        },
+        "air": {
+          "clip": "idle"
+        },
+        "dead": {
+          "clip": "death"
+        }
+      },
+      "transitions": [
+        {
+          "from": "*",
+          "to": "dead",
+          "when": "dead",
+          "blend": 0.12
+        },
+        {
+          "from": "*",
+          "to": "dodge",
+          "when": "dodge",
+          "blend": 0.04
+        },
+        {
+          "from": "idle",
+          "to": "move",
+          "when": "speed > 0.3",
+          "blend": 0.15
+        },
+        {
+          "from": "move",
+          "to": "idle",
+          "when": "speed < 0.2",
+          "blend": 0.2
+        }
+      ]
+    },
+    "upper": {
+      "mask": [
+        "spine",
+        "armL",
+        "armR",
+        "head"
+      ],
+      "start": "hold",
+      "states": {
+        "hold": {
+          "clip": "hold"
+        },
+        "slash-a": {
+          "clip": "slash-a",
+          "exit": "hold",
+          "exitBlend": 0.12
+        },
+        "slash-b": {
+          "clip": "slash-b",
+          "exit": "hold",
+          "exitBlend": 0.12
+        },
+        "heavy": {
+          "clip": "heavy",
+          "exit": "hold",
+          "exitBlend": 0.15
+        },
+        "block": {
+          "clip": "block"
+        },
+        "deflect": {
+          "clip": "deflect",
+          "exit": "hold",
+          "exitBlend": 0.1
+        },
+        "draw": {
+          "clip": "draw",
+          "exit": "hold"
+        },
+        "hit": {
+          "clip": "hit",
+          "exit": "hold",
+          "exitBlend": 0.1
+        }
+      },
+      "transitions": [
+        {
+          "from": "*",
+          "to": "hit",
+          "when": "hit",
+          "blend": 0.04
+        },
+        {
+          "from": "*",
+          "to": "deflect",
+          "when": "deflect",
+          "blend": 0.03
+        },
+        {
+          "from": "*",
+          "to": "heavy",
+          "when": "heavy",
+          "blend": 0.05
+        },
+        {
+          "from": "slash-a",
+          "to": "slash-b",
+          "when": "attack",
+          "blend": 0.04
+        },
+        {
+          "from": "*",
+          "to": "slash-a",
+          "when": "attack",
+          "blend": 0.04
+        },
+        {
+          "from": "*",
+          "to": "block",
+          "when": "block",
+          "blend": 0.06
+        },
+        {
+          "from": "block",
+          "to": "hold",
+          "when": "!block",
+          "blend": 0.1
+        }
+      ]
+    },
+    "breath": {
+      "additive": true,
+      "weight": 0.8,
+      "start": "on",
+      "states": {
+        "on": {
+          "clip": "breathe"
+        }
+      }
+    }
+  },
+  "ik": {
+    "feet": {
+      "enabled": true,
+      "maxStep": 0.35
+    }
+  }
+}

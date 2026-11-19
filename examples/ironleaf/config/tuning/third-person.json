@@ -1,0 +1,13 @@
+{
+  "kind": "tuning",
+  "note": "Aya on foot: a quicker walk than the template and a camera-relative run. Heights are for her 1.66 m.",
+  "runSpeed": 5.2,
+  "sprintSpeed": 8.6,
+  "accel": 45,
+  "turnRate": 12,
+  "radius": 0.32,
+  "height": 1.66,
+  "strideLength": 1.7,
+  "jumpHeight": 1,
+  "modelYaw": 0
+}

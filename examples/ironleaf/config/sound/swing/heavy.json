@@ -1,0 +1,69 @@
+{
+  "kind": "sound",
+  "note": "A slower, heavier cut: the air has more weight in it.",
+  "bus": "sfx",
+  "level": -1,
+  "pitch": [
+    0.95,
+    1.05
+  ],
+  "limit": {
+    "minGap": 0.1,
+    "voices": 3
+  },
+  "spatial": {
+    "ref": 5,
+    "max": 50
+  },
+  "source": {
+    "type": "synth",
+    "length": 0.62,
+    "layers": {
+      "air": {
+        "from": {
+          "noise": "pink"
+        },
+        "then": [
+          {
+            "filter": "bandpass",
+            "freq": 300,
+            "q": 1.4,
+            "glideTo": 8,
+            "glideTime": 0.279
+          },
+          {
+            "envelope": {
+              "attack": 0.217,
+              "decay": 0.31,
+              "curve": "linear"
+            }
+          },
+          {
+            "gain": 7
+          }
+        ]
+      },
+      "hiss": {
+        "from": {
+          "noise": "white"
+        },
+        "then": [
+          {
+            "filter": "highpass",
+            "freq": 3800
+          },
+          {
+            "envelope": {
+              "attack": 0.248,
+              "decay": 0.217,
+              "curve": "linear"
+            }
+          },
+          {
+            "gain": -6
+          }
+        ]
+      }
+    }
+  }
+}

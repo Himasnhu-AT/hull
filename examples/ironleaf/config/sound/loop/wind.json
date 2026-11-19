@@ -1,0 +1,62 @@
+{
+  "kind": "sound",
+  "note": "A light sea wind that swells and falls.",
+  "bus": "sfx",
+  "level": -14,
+  "loop": true,
+  "limit": {
+    "voices": 1,
+    "over": "skip"
+  },
+  "source": {
+    "type": "synth",
+    "length": 7,
+    "layers": {
+      "low": {
+        "from": {
+          "noise": "pink"
+        },
+        "then": [
+          {
+            "filter": "lowpass",
+            "freq": 420
+          },
+          {
+            "envelope": {
+              "attack": 2.5,
+              "decay": 3.5,
+              "curve": "linear"
+            }
+          },
+          {
+            "gain": 2
+          }
+        ]
+      },
+      "hiss": {
+        "from": {
+          "noise": "white"
+        },
+        "then": [
+          {
+            "filter": "bandpass",
+            "freq": 1600,
+            "q": 0.7,
+            "glideTo": 1.5,
+            "glideTime": 3
+          },
+          {
+            "envelope": {
+              "attack": 3,
+              "decay": 3.5,
+              "curve": "linear"
+            }
+          },
+          {
+            "gain": -14
+          }
+        ]
+      }
+    }
+  }
+}

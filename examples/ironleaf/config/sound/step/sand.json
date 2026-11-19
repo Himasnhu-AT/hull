@@ -1,0 +1,69 @@
+{
+  "kind": "sound",
+  "note": "A step on sand: a soft crunch with no thump.",
+  "bus": "sfx",
+  "level": -5,
+  "pitch": [
+    0.88,
+    1.12
+  ],
+  "limit": {
+    "minGap": 0.12,
+    "voices": 4,
+    "over": "skip"
+  },
+  "spatial": {
+    "ref": 3,
+    "max": 28
+  },
+  "source": {
+    "type": "synth",
+    "length": 0.26,
+    "layers": {
+      "crunch": {
+        "from": {
+          "noise": "white"
+        },
+        "then": [
+          {
+            "filter": "bandpass",
+            "freq": [
+              1800,
+              2600
+            ],
+            "q": 0.7
+          },
+          {
+            "envelope": {
+              "attack": 0.01,
+              "decay": 0.16
+            }
+          },
+          {
+            "gain": -6
+          }
+        ]
+      },
+      "low": {
+        "from": {
+          "noise": "brown"
+        },
+        "then": [
+          {
+            "filter": "lowpass",
+            "freq": 300
+          },
+          {
+            "envelope": {
+              "attack": 0.01,
+              "decay": 0.12
+            }
+          },
+          {
+            "gain": -2
+          }
+        ]
+      }
+    }
+  }
+}

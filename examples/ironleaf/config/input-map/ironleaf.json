@@ -1,0 +1,145 @@
+{
+  "kind": "input-map",
+  "note": "WASD moves relative to the camera, the mouse turns it, Shift sprints, Space dodges, F or click swings (placeholder), L changes the look, Esc pauses.",
+  "actions": {
+    "move": {
+      "type": "axis2",
+      "keys": {
+        "up": [
+          "W"
+        ],
+        "down": [
+          "S"
+        ],
+        "left": [
+          "A"
+        ],
+        "right": [
+          "D"
+        ]
+      },
+      "pad": "stickL"
+    },
+    "look": {
+      "type": "axis2",
+      "mouse": "delta"
+    },
+    "lookPad": {
+      "type": "axis2",
+      "keys": {
+        "up": [
+          "ArrowUp"
+        ],
+        "down": [
+          "ArrowDown"
+        ],
+        "left": [
+          "ArrowLeft"
+        ],
+        "right": [
+          "ArrowRight"
+        ]
+      },
+      "pad": "stickR"
+    },
+    "jump": {
+      "type": "button",
+      "keys": [
+        "KeyJ"
+      ],
+      "pad": "south"
+    },
+    "sprint": {
+      "type": "button",
+      "keys": [
+        "ShiftLeft"
+      ],
+      "pad": "stickLPress"
+    },
+    "dodge": {
+      "type": "button",
+      "keys": [
+        "Space"
+      ],
+      "pad": "east"
+    },
+    "attack": {
+      "type": "button",
+      "keys": [
+        "Mouse0",
+        "KeyF"
+      ],
+      "pad": "west"
+    },
+    "heavy": {
+      "type": "button",
+      "keys": [
+        "Mouse2",
+        "KeyR"
+      ],
+      "pad": "triggerR"
+    },
+    "block": {
+      "type": "button",
+      "keys": [
+        "KeyQ"
+      ],
+      "pad": "triggerL"
+    },
+    "stance": {
+      "type": "button",
+      "keys": [
+        "Tab",
+        "KeyC"
+      ],
+      "pad": "north"
+    },
+    "lockOn": {
+      "type": "button",
+      "keys": [
+        "KeyT",
+        "Mouse1"
+      ],
+      "pad": "stickRPress"
+    },
+    "looks": {
+      "type": "button",
+      "keys": [
+        "KeyL"
+      ],
+      "pad": "back"
+    },
+    "pause": {
+      "type": "button",
+      "keys": [
+        "Escape",
+        "KeyP"
+      ],
+      "pad": "start",
+      "rebind": false
+    }
+  },
+  "groups": {
+    "Move": [
+      "move",
+      "sprint",
+      "dodge",
+      "jump"
+    ],
+    "Look": [
+      "look",
+      "lookPad",
+      "lockOn"
+    ],
+    "Fight": [
+      "attack",
+      "heavy",
+      "block",
+      "stance"
+    ],
+    "Game": [
+      "looks",
+      "pause"
+    ]
+  }
+}

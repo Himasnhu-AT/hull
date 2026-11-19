@@ -1,0 +1,80 @@
+{
+  "kind": "sound",
+  "note": "A deflect: the blades meet and slide, and a clean high ring hangs after.",
+  "bus": "sfx",
+  "level": -6,
+  "pitch": [
+    0.97,
+    1.03
+  ],
+  "limit": {
+    "minGap": 0.08,
+    "voices": 3
+  },
+  "spatial": {
+    "ref": 6,
+    "max": 70
+  },
+  "source": {
+    "type": "synth",
+    "length": 1.4,
+    "layers": {
+      "ring": {
+        "from": {
+          "modes": [
+            2400,
+            3620,
+            5410,
+            7180
+          ],
+          "decay": 0.95,
+          "tilt": 0.4
+        }
+      },
+      "scrape": {
+        "from": {
+          "noise": "white"
+        },
+        "then": [
+          {
+            "filter": "bandpass",
+            "freq": 4200,
+            "q": 3,
+            "glideTo": 2.2,
+            "glideTime": 0.15
+          },
+          {
+            "envelope": {
+              "attack": 0.002,
+              "decay": 0.18
+            }
+          },
+          {
+            "gain": -8
+          }
+        ]
+      },
+      "tick": {
+        "from": {
+          "noise": "white"
+        },
+        "then": [
+          {
+            "filter": "highpass",
+            "freq": 3500
+          },
+          {
+            "envelope": {
+              "attack": 0.001,
+              "decay": 0.04
+            }
+          },
+          {
+            "gain": -6
+          }
+        ]
+      }
+    },
+    "reverb": 0.18
+  }
+}

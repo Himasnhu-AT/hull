@@ -1,0 +1,23 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "../../.tsbuild/ironleaf",
+    "lib": [
+      "ES2023",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "noUncheckedIndexedAccess": false,
+    "verbatimModuleSyntax": false,
+    "types": []
+  },
+  "include": [
+    "src",
+    ".hull/gen"
+  ],
+  "references": [
+    {
+      "path": "../../packages/hull"
+    }
+  ]
+}

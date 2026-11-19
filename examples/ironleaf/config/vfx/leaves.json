@@ -1,0 +1,85 @@
+{
+  "kind": "vfx",
+  "note": "Dry leaves tumbling in the wind: a burst for gusts or a brush through the bamboo.",
+  "emit": {
+    "count": [
+      10,
+      10
+    ],
+    "shape": {
+      "box": [
+        3,
+        1.5,
+        3
+      ]
+    }
+  },
+  "particle": {
+    "life": [
+      1.6,
+      3.2
+    ],
+    "speed": [
+      1,
+      4
+    ],
+    "direction": {
+      "cone": [
+        0.8,
+        0.4,
+        0.5
+      ],
+      "angleDeg": 70
+    },
+    "gravity": -2.4,
+    "drag": 1.2,
+    "flutter": 6,
+    "spin": [
+      -6,
+      6
+    ],
+    "size": [
+      [
+        0,
+        0.18
+      ],
+      [
+        1,
+        0.18
+      ]
+    ],
+    "sizeScale": [
+      0.7,
+      1.3
+    ],
+    "color": [
+      [
+        0,
+        "#8a9a3a"
+      ],
+      [
+        1,
+        "#a07a34"
+      ]
+    ],
+    "alpha": [
+      [
+        0,
+        1
+      ],
+      [
+        0.8,
+        1
+      ],
+      [
+        1,
+        0
+      ]
+    ],
+    "ground": "die",
+    "sprite": "leaf"
+  },
+  "budget": {
+    "max": 300
+  }
+}

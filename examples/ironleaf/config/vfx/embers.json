@@ -1,0 +1,67 @@
+{
+  "kind": "vfx",
+  "note": "Embers rising off a fire in the raider camp.",
+  "emit": {
+    "rate": 14,
+    "shape": {
+      "disc": 0.4
+    }
+  },
+  "particle": {
+    "life": [
+      1.2,
+      2.6
+    ],
+    "speed": [
+      0.8,
+      2
+    ],
+    "direction": {
+      "cone": [
+        0,
+        1,
+        0
+      ],
+      "angleDeg": 22
+    },
+    "gravity": 0.8,
+    "drag": 0.4,
+    "flutter": 1.2,
+    "size": [
+      [
+        0,
+        0.035
+      ],
+      [
+        1,
+        0.01
+      ]
+    ],
+    "color": [
+      [
+        0,
+        "#ffd27a"
+      ],
+      [
+        1,
+        "#ff4a10"
+      ]
+    ],
+    "alpha": [
+      [
+        0,
+        1
+      ],
+      [
+        1,
+        0
+      ]
+    ],
+    "glow": 2.2,
+    "sprite": "soft",
+    "blend": "additive"
+  },
+  "budget": {
+    "max": 200
+  }
+}
