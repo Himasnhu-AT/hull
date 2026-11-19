@@ -391,7 +391,7 @@ None of these blocks M0 to M7. Each has the assumption the plan is written on.
 | Q2 | How a maker sees the game in the hosted Studio | You said streamed. Since the share link serves the same build anyway, a server-built bundle run in the maker's browser would be far cheaper and have no lag. Both are kept as sources of the game view; the spike before M8 picks the default. |
 | Q3 | Whether a customer can ever take their code out | Held by Marl by default; export is a paid step (your earlier answer). |
 | Q4 | What "support for other 3D engines" means | Not designed yet: either exporting a Hull game to another engine, or Hull's tools and Studio driving one. |
-| Q5 | Which models Hull's agent offers on Marl credits | `ai.marlstudio.com` is Marl's own gateway (built separately by the owner), priced by Marl; the list is chosen there. Hull treats it as one OpenAI-compatible provider. |
+| Q5 | Which models Hull's agent offers on Marl credits | The gateway is `backend/` in this repo (owner, 19 Nov 2026): a Go server holding Marl's Anthropic key, with email and password accounts, a browser sign-in for apps (OAuth 2.0 code flow with PKCE and a loopback redirect), and both an Anthropic-compatible (`/v1/messages`) and an OpenAI-compatible (`/v1/chat/completions`) API, so Hull and other apps use it by base URL and token. Hull signs in from Settings and uses it as the "Hull account" provider. Pricing and the model list are chosen there. |
 
 ## 11. Risks
 
