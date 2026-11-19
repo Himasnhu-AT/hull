@@ -5,6 +5,7 @@ import { Animator } from 'hull/anim';
 import { Collider } from 'hull/physics';
 import { Health, LAYER, GROUP } from 'hull/kits';
 import { groundHeight, CAST } from './world/map';
+import { Dress, isKind } from './models';
 
 /** Hit points by kind: what the placeholder swing (40 a hit) has to get through. */
 const HP: Record<string, number> = { ashblade: 80, ashpike: 90, hulk: 240, ashkite: 60, kagari: 400 };
@@ -32,6 +33,7 @@ export class Stander extends Behaviour {
     this.model = this.world.spawn('model', this.node);
     this.model.rotation.y = this.facing;
     this.animator = this.model.add(Animator, { character: `character/${this.kind}`, ground: groundHeight });
+    if (isKind(this.kind)) this.model.add(Dress, { kind: this.kind });
     this.health.damaged.connect(() => this.animator.trigger('hit'), this.node);
     this.health.died.connect(() => {
       this.fallen = true;

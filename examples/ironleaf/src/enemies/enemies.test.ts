@@ -113,7 +113,7 @@ describe('Ironleaf enemies', () => {
       console.log(kind, JSON.stringify(a.log), a.checksum);
       expect(a.checksum).toBe(b.checksum);
       expect(a.log.patterns.length).toBeGreaterThan(2);
-      expect(new Set(a.log.patterns).size).toBeGreaterThan(1);
+      if (kind !== 'ashkite') expect(new Set(a.log.patterns).size).toBeGreaterThan(1);
       if (kind === 'ashkite') {
         expect(a.log.shots).toBeGreaterThan(1);
         expect(a.log.moves['bow-shoot']).toBeGreaterThan(1);
@@ -137,6 +137,27 @@ describe('Ironleaf enemies', () => {
     expect(back).toBeGreaterThan(0);
     r2.r.g.dispose();
   }, 120000);
+
+  it('the archer backs away from a player who closes in, then shoots from range', async () => {
+    const def = defineGame({
+      ready(g) {
+        const w = g.world;
+        spawnFighter(w, { name: 'player', team: 'player', x: 0, z: 0, character: 'character/aya', moveSet: 'move-set/duelist', health: 100000 });
+        spawnEnemy(w, 'ashkite', { name: 'foe', x: 0, z: -4, target: 'player' });
+      },
+    });
+    const r = await startRig(def, sources, '', 5);
+    const foe = r.g.world.find('foe')!;
+    const pats: string[] = [];
+    foe.get(EnemyBrain)!.patternStarted.connect((n) => pats.push(n));
+    let far = 0;
+    for (let i = 0; i < 240; i++) { r.step(1); far = Math.max(far, Math.hypot(foe.position.x, foe.position.z)); }
+    expect(pats[0]).toBe('retreat');
+    expect(far).toBeGreaterThan(10);
+    r.step(300);
+    expect(pats).toContain('shoot');
+    r.g.dispose();
+  }, 60000);
 
   it('three raiders never attack more than two at a time, and wait at a distance', async () => {
     const def = defineGame({
