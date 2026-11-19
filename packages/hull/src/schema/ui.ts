@@ -3,7 +3,7 @@
 
 export type Widget =
   | 'slider' | 'dial' | 'number' | 'toggle' | 'select' | 'segments' | 'color'
-  | 'curve' | 'vec3' | 'range' | 'ref' | 'text' | 'keys';
+  | 'curve' | 'vec3' | 'range' | 'ref' | 'text' | 'keys' | 'bindings';
 
 export interface UiHints {
   widget?: Widget;
