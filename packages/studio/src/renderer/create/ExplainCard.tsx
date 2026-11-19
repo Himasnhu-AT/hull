@@ -16,7 +16,7 @@ export function ExplainCard({ doc, compact }: { doc: ExplainDoc; compact?: boole
   const tag = b.pieces.tag(key);
   const [changing, setChanging] = useState(false);
   return (
-    <article className={`cr-xcard${compact ? ' compact' : ''}`} aria-label={doc.title}>
+    <article className={`cr-xcard${compact || doc.body.type === 'flow' ? ' compact' : ''}`} aria-label={doc.title}>
       <div className="cr-xfig"><ExplainDrawing body={doc.body} uid={doc.id} /></div>
       <div className="cr-cb">
         <div className="cr-name"><b>{doc.title}</b><span className={`cr-tag inline ${tag}`}>{TAG_TEXT[tag]}</span></div>

@@ -744,7 +744,7 @@ textarea.cr-idea-in { width: 100%; resize: vertical; min-height: 96px; font-fami
 .cr-tag.inline { position: static; }
 .cr-card.compact, .cr-grid.compact { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); }
 .cr-missing { padding: 4px 0; }
-.cr-flow { display: block; width: 100%; height: auto; }
+.cr-flow { display: block; height: auto; }
 .cr-flow rect { fill: var(--panel); stroke: var(--line2); }
 .cr-flow .ask rect { fill: var(--accent-soft); stroke: var(--accent); }
 .cr-flow .end rect { stroke: var(--ok); }
@@ -752,6 +752,7 @@ textarea.cr-idea-in { width: 100%; resize: vertical; min-height: 96px; font-fami
 .cr-flow .lbl { fill: var(--faint); font-size: 11px; }
 .cr-flow .edge { stroke: var(--faint); stroke-width: 1.4; }
 .cr-flow .ah { fill: var(--faint); }
+.cr-map { max-width: 480px; }
 .cr-map-pic { position: relative; width: 100%; background: var(--stage); border-radius: 8px; overflow: hidden; }
 .cr-map-pic img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .cr-mark { position: absolute; transform: translate(-50%, -50%); width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; background: var(--accent-solid); color: #fff; font: 600 11px var(--mono); box-shadow: 0 0 0 2px rgba(0,0,0,.4); }

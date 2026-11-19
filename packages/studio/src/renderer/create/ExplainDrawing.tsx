@@ -11,7 +11,7 @@ function Flow({ body, uid }: { body: Extract<ExplainBody, { type: 'flow' }>; uid
   const f = useMemo(() => layoutFlow(body), [body]);
   const marker = `ah-${uid}`;
   return (
-    <svg className="cr-flow" viewBox={`0 0 ${f.width} ${f.height}`} role="img" aria-label={`Flowchart: ${body.nodes.map((n) => n.text).join(', then ')}`} style={{ minWidth: Math.min(f.width, 720) }}>
+    <svg className="cr-flow" viewBox={`0 0 ${f.width} ${f.height}`} role="img" aria-label={`Flowchart: ${body.nodes.map((n) => n.text).join(', then ')}`} width={f.width} height={f.height} style={{ width: f.width, maxWidth: 'none' }}>
       <defs><marker id={marker} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" className="ah" /></marker></defs>
       {f.edges.map((e, i) => (
         <g key={i}>

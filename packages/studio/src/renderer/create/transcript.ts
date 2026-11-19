@@ -39,8 +39,10 @@ export function reduce(t: Transcript, e: TranscriptEvent): Transcript {
       if (e.role !== 'agent') return t;
       const last = t.items[t.items.length - 1];
       if (last && last.k === 'agent' && last.live) return { ...t, items: [...t.items.slice(0, -1), { ...last, text: last.text + e.text, chunks: last.chunks + 1 }] };
-      if (e.text === '') return t;
-      return next([...stop(t.items), { k: 'agent', key: key(), text: e.text, live: true, chunks: 1 }], { running: true });
+      // A blank line between model calls must not open a gap above the next paragraph.
+      const first = e.text.replace(/^\s+/, '');
+      if (first === '') return t;
+      return next([...stop(t.items), { k: 'agent', key: key(), text: first, live: true, chunks: 1 }], { running: true });
     }
     case 'ui': {
       const at = t.items.findIndex((i) => i.k === 'ui' && i.block.id === e.block.id);
