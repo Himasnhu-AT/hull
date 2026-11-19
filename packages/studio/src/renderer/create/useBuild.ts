@@ -18,13 +18,15 @@ export const placeOf = (pr: Problem): string => `${pr.file}${pr.line ? `:${pr.li
 
 export async function runBuildTool(rpc: RpcClient, root: string): Promise<BuildResult> {
   try {
-    const r = await rpc.call('tool.call', { name: 'build' }, { timeoutMs: 600_000 });
+    // A build that has not answered in three minutes is reported, not waited on: the person gets the screen back.
+    const r = await rpc.call('tool.call', { name: 'build' }, { timeoutMs: 180_000 });
     const out = (r.output ?? {}) as { outDir?: string; files?: BuiltFile[] };
     if (!r.ok) return { ok: false, problems: r.problems ?? [] };
     const files = out.files ?? [];
     return { ok: true, dir: out.outDir ?? `${root}/dist`, files, total: files.reduce((n, f) => n + f.bytes, 0) };
   } catch (e) {
-    return { ok: false, problems: [], error: e instanceof Error ? e.message : String(e) };
+    const m = e instanceof Error ? e.message : String(e);
+    return { ok: false, problems: [], error: /time(d)? ?out/i.test(m) ? 'The build did not answer in three minutes, so it was stopped waiting for.' : m };
   }
 }
 

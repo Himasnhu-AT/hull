@@ -16,6 +16,7 @@ import type { ContentBlock } from '@agentclientprotocol/sdk';
 import type { UiBlock } from 'hull/dev/protocol';
 import type { AgentEvent, AgentInfo, EnsureResult, PermissionOption, PromptOptions, ToolContent, ToolView } from '../shared/agentApi.ts';
 import { KEY_ENV, NEEDS_KEY, type SettingsStore } from './agentSettings.ts';
+import { nodeChildEnv } from '@hull/tools';
 
 // The keys Hull adds to ACP messages (HULL_META in hull/dev/protocol). Spelled out here because this file runs in Node
 // without the engine package's runtime exports.
@@ -250,7 +251,8 @@ export function createHub(o: HubOptions): Hub {
 
     // Hull's own agent gets the key from the app's settings; other agents keep their own sign-in and get the plain environment.
     const base = spec.kind === 'hull' && o.settings ? await o.settings.env(env) : env;
-    const childEnv = { ...base, PATH: searchPath(env).join(delimiter) } as NodeJS.ProcessEnv;
+    // Hull's agent is this program run as Node (Electron in the app); other agents are their own programs.
+    const childEnv = { ...(spec.kind === 'hull' ? nodeChildEnv(base) : base), PATH: searchPath(env).join(delimiter) } as NodeJS.ProcessEnv;
     const args = spec.kind === 'hull' ? [...spec.args, project.root] : spec.args;
     const child = spawn(exe, args, { cwd: project.root, env: childEnv, stdio: ['pipe', 'pipe', 'pipe'] });
     const stderr: string[] = [];
@@ -286,7 +288,7 @@ export function createHub(o: HubOptions): Hub {
       // The author header tells Hull's MCP server who made each change, so the history names the agent, not "mcp".
       const mcp: McpServer = init.agentCapabilities?.mcpCapabilities?.http
         ? { type: 'http', name: 'hull', url: project.mcp.url, headers: [{ name: 'x-hull-author', value: spec.name }] }
-        : { name: 'hull', command: process.execPath, args: [project.mcp.launcher, project.root], env: [{ name: 'HULL_MCP_AUTHOR', value: spec.name }] };
+        : { name: 'hull', command: process.execPath, args: [project.mcp.launcher, project.root], env: [{ name: 'HULL_MCP_AUTHOR', value: spec.name }, { name: 'ELECTRON_RUN_AS_NODE', value: '1' }] };
       const created = await Promise.race([conn.agent.request(methods.agent.session.new, { cwd: project.root, mcpServers: [mcp] }), exited]);
       s = { sid: created.sessionId, agent: spec, child, conn, tools: new Map(), perms: new Map(), running: false, closed: false, stderr };
       sessions.set(s.sid, s);

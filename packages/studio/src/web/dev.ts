@@ -9,12 +9,15 @@ import { watch } from 'node:fs';
 import { mkdir, mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createRequire } from 'node:module';
 import { createServer } from 'vite';
 import { createHost } from '../main/host.ts';
 import type { AgentSettingsInput, CliAction, CliId, PromptOptions, TermProgram } from '../shared/agentApi.ts';
 import type { OpenedProject } from '../shared/appApi.ts';
+
+// tsx by its exact file, so a child that inherits NODE_OPTIONS and starts in another folder (a game's) still finds it.
+const TSX = pathToFileURL(createRequire(import.meta.url).resolve('tsx')).href;
 
 const here = dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2).filter((a) => a !== '--');
@@ -115,7 +118,7 @@ if (has('electron')) {
   let child: ChildProcess | null = null;
   let restarting = false;
   const launch = (): void => {
-    const c = spawn(electron, [join(here, '../main/main.ts')], { stdio: 'inherit', env: { ...process.env, HULL_APP_URL: url, NODE_OPTIONS: '--import tsx' }, cwd: join(here, '../..') });
+    const c = spawn(electron, [join(here, '../main/main.ts')], { stdio: 'inherit', env: { ...process.env, HULL_APP_URL: url, NODE_OPTIONS: `--import ${TSX}` }, cwd: join(here, '../..') });
     child = c;
     c.on('exit', async () => {
       if (restarting) { restarting = false; launch(); return; }

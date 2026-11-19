@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { dirname, join, relative, resolve } from 'node:path';
 import type { Problem } from 'hull';
+import { nodeChildEnv } from '../childEnv.ts';
 
 // tsc prints `path(line,col): error TS1234: message`. Continuation lines are indented.
 const lineRe = /^(.+?)\((\d+),(\d+)\): (?:error|warning) (TS\d+): (.*)$/;
@@ -30,7 +31,7 @@ export function tscPath(): string {
 /** `fast` keeps tsc's build info under .hull/cache, so the second run after a one-file edit re-checks only what changed. */
 export function runTsc(root: string, opts: { fast?: boolean } = {}): Promise<Problem[]> {
   return new Promise((done, fail) => {
-    const child = spawn(process.execPath, [tscPath(), '--noEmit', '--pretty', 'false', '-p', resolve(root), ...(opts.fast ? ['--incremental', '--tsBuildInfoFile', join(resolve(root), '.hull', 'cache', 'code-tools.tsbuildinfo')] : [])], { cwd: root });
+    const child = spawn(process.execPath, [tscPath(), '--noEmit', '--pretty', 'false', '-p', resolve(root), ...(opts.fast ? ['--incremental', '--tsBuildInfoFile', join(resolve(root), '.hull', 'cache', 'code-tools.tsbuildinfo')] : [])], { cwd: root, env: nodeChildEnv() });
     let buf = '';
     child.stdout.on('data', (d) => (buf += d));
     child.stderr.on('data', (d) => (buf += d));
