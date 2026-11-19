@@ -100,8 +100,12 @@ export function build(c: Ctx): Built {
     slab([-hr[0] * 0.98, h * 0.52, -hr[2] * 0.35], [hr[0] * 0.14, h * 0.42, hr[2] * 0.72]), slab([hr[0] * 0.98, h * 0.52, -hr[2] * 0.35], [hr[0] * 0.14, h * 0.42, hr[2] * 0.72]),
     // The knot where the hair is gathered.
     ball([0, h * 0.84, hr[2] * 0.82], [h * 0.11, h * 0.1, h * 0.1], 7, 5));
-  b.add('head', 'eye', slab([-h * 0.17, hy - h * 0.01, -hr[2] * 0.98], [h * 0.09, h * 0.045, h * 0.02]), slab([h * 0.17, hy - h * 0.01, -hr[2] * 0.98], [h * 0.09, h * 0.045, h * 0.02]),
-    slab([-h * 0.17, hy + h * 0.1, -hr[2] * 0.99], [h * 0.14, h * 0.02, h * 0.02], [0, 0, 0.12]), slab([h * 0.17, hy + h * 0.1, -hr[2] * 0.99], [h * 0.14, h * 0.02, h * 0.02], [0, 0, -0.12]));
+  // Eyes at low-poly scale need three things to read from the camera: a pale white to set the dark iris against,
+  // a brow heavy enough to carry an expression, and a nose that catches the key light so the face has a front.
+  b.add('head', 'cloth-ivory', slab([-h * 0.17, hy - h * 0.01, -hr[2] * 0.97], [h * 0.13, h * 0.07, h * 0.02]), slab([h * 0.17, hy - h * 0.01, -hr[2] * 0.97], [h * 0.13, h * 0.07, h * 0.02]));
+  b.add('head', 'eye', slab([-h * 0.17, hy - h * 0.01, -hr[2] * 1.0], [h * 0.065, h * 0.075, h * 0.02]), slab([h * 0.17, hy - h * 0.01, -hr[2] * 1.0], [h * 0.065, h * 0.075, h * 0.02]));
+  b.add('head', 'hair-black', slab([-h * 0.17, hy + h * 0.095, -hr[2] * 0.99], [h * 0.17, h * 0.035, h * 0.025], [0, 0, 0.14]), slab([h * 0.17, hy + h * 0.095, -hr[2] * 0.99], [h * 0.17, h * 0.035, h * 0.025], [0, 0, -0.14]));
+  b.add('head', 'skin', ball([0, hy - h * 0.1, -hr[2] * 1.0], [h * 0.05, h * 0.07, h * 0.06], 6, 4));
   b.add('head', 'sash-red', slab([0, hy - h * 0.24, -hr[2] * 0.97], [h * 0.07, h * 0.025, h * 0.02]), tube([0, h * 0.8, hr[2] * 0.95], [0, h * 0.9, hr[2] * 0.96], h * 0.13, h * 0.13, 8));
   const pony = ['pony1', 'pony2', 'pony3'];
   pony.forEach((n, i) => {

@@ -2,7 +2,7 @@
   "kind": "sound",
   "note": "Two drums and a low drone under a high ring: a duel is called.",
   "bus": "music",
-  "level": -2,
+  "level": -6,
   "source": {
     "type": "synth",
     "length": 4,

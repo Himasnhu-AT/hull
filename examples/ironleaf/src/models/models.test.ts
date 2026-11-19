@@ -3,7 +3,7 @@
 // draw-call budget for a crowd of eight.
 import { fileURLToPath } from 'node:url';
 import * as THREE from 'hull/three';
-import { defineGame, type Node } from 'hull';
+import { config, defineGame, type Node } from 'hull';
 import { Animator } from 'hull/anim';
 import { projectSources, runScenario } from 'hull/kits/testing';
 import { describe, expect, it } from 'vitest';
@@ -103,5 +103,44 @@ describe('Ironleaf models', () => {
     aya.update();
     expect(sword.parent).toBe(hand);
     run.rig.g.dispose();
+  }, 60000);
+
+  it('every spring chain (ponytails, sashes, scarf, banner, cape, coat panels) swings when its body moves and settles after', async () => {
+    const nodes = new Map<Kind, Node>();
+    const def = defineGame({
+      stepRate: 60,
+      ready(game) {
+        let i = 0;
+        for (const k of KINDS) {
+          const n = game.world.spawn('c-' + k);
+          n.position.x = i++ * 3;
+          const m = game.world.spawn('model', n);
+          m.add(Animator, { character: 'character/' + k });
+          m.add(Dress, { kind: k });
+          nodes.set(k, n);
+        }
+      },
+    });
+    const run = await runScenario({ def, sources, inputMap: 'ironleaf', steps: 2, input: () => ({}) });
+    const g = run.rig.g;
+    for (const k of KINDS) {
+      const model = nodes.get(k)!.children.find((c) => c.name === 'model')!;
+      const a = model.get(Animator)!;
+      const graph = config.lookup('anim-graph', k) as unknown as { springs: Record<string, { chain: string[] }> };
+      const mids = Object.entries(graph.springs).map(([name, s]) => ({ name, bone: s.chain[1] ?? s.chain[0]! }));
+      expect(mids.length, k + ' has springs').toBeGreaterThan(0);
+      const lean = (b: string): number => { const q = a.bone(b)!.quaternion; return Math.abs(q.x) + Math.abs(q.y) + Math.abs(q.z); };
+      for (let i = 0; i < 60; i++) { g.step(1); a.render(1, 1 / 60); }
+      const rest = mids.map((m) => lean(m.bone));
+      const peak = mids.map(() => 0);
+      // Run along x for a third of a second, then stop dead: the chains lag behind and then catch up.
+      const n = nodes.get(k)!;
+      for (let i = 0; i < 20; i++) { n.position.x += 0.12; g.step(1); a.render(1, 1 / 60); mids.forEach((m, j) => { peak[j] = Math.max(peak[j]!, lean(m.bone)); }); }
+      for (let i = 0; i < 12; i++) { g.step(1); a.render(1, 1 / 60); mids.forEach((m, j) => { peak[j] = Math.max(peak[j]!, lean(m.bone)); }); }
+      mids.forEach((m, j) => expect(peak[j]! - rest[j]!, k + ' ' + m.name + ' swings').toBeGreaterThan(0.01));
+      for (let i = 0; i < 300; i++) { g.step(1); a.render(1, 1 / 60); }
+      mids.forEach((m, j) => expect(Math.abs(lean(m.bone) - rest[j]!), k + ' ' + m.name + ' settles').toBeLessThan(0.02));
+    }
+    g.dispose();
   }, 60000);
 });

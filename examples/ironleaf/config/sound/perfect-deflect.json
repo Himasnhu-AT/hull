@@ -2,7 +2,7 @@
   "kind": "sound",
   "note": "The perfect deflect: a sharp ring that the whole island hears, a deep boom under it, and a second ring.",
   "bus": "sfx",
-  "level": -7,
+  "level": -11.3,
   "limit": {
     "minGap": 0.2,
     "voices": 2

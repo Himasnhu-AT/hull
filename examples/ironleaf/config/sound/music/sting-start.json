@@ -2,7 +2,7 @@
   "kind": "sound",
   "note": "A short plucked phrase on a pentatonic scale, and one deep drum: the fight begins.",
   "bus": "music",
-  "level": -2,
+  "level": -4.5,
   "source": {
     "type": "synth",
     "length": 3.2,
