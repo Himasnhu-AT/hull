@@ -286,7 +286,7 @@ export class WebGL2Backend implements Backend {
   }
 
   dispose(): void {
-    setRenderRuntime(null);
+    setRenderRuntime(null, this.renderer);
     this.releaseWorld();
     debugLines.detach();
     this.scene.remove(debugLines.object);

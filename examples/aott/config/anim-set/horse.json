@@ -1,0 +1,114 @@
+{
+  "kind": "anim-set",
+  "note": "Gaits of the horse. Each is an empty clip: the horse's code runs the real gait; the bench reads which clip is held to pick the speed (idle 0, walk 1.8, trot 5, gallop 19 m/s).",
+  "clips": {
+    "idle": {
+      "type": "keyframes",
+      "length": 2,
+      "loop": true,
+      "tracks": {
+        "hips": {
+          "offset": [
+            [
+              0,
+              [
+                0,
+                0,
+                0
+              ]
+            ],
+            [
+              2,
+              [
+                0,
+                0,
+                0
+              ]
+            ]
+          ]
+        }
+      }
+    },
+    "walk": {
+      "type": "keyframes",
+      "length": 1,
+      "loop": true,
+      "tracks": {
+        "hips": {
+          "offset": [
+            [
+              0,
+              [
+                0,
+                0,
+                0
+              ]
+            ],
+            [
+              1,
+              [
+                0,
+                0,
+                0
+              ]
+            ]
+          ]
+        }
+      }
+    },
+    "trot": {
+      "type": "keyframes",
+      "length": 0.7,
+      "loop": true,
+      "tracks": {
+        "hips": {
+          "offset": [
+            [
+              0,
+              [
+                0,
+                0,
+                0
+              ]
+            ],
+            [
+              0.7,
+              [
+                0,
+                0,
+                0
+              ]
+            ]
+          ]
+        }
+      }
+    },
+    "gallop": {
+      "type": "keyframes",
+      "length": 0.5,
+      "loop": true,
+      "tracks": {
+        "hips": {
+          "offset": [
+            [
+              0,
+              [
+                0,
+                0,
+                0
+              ]
+            ],
+            [
+              0.5,
+              [
+                0,
+                0,
+                0
+              ]
+            ]
+          ]
+        }
+      }
+    }
+  }
+}

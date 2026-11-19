@@ -21,7 +21,7 @@ import { listReview, noteReview, setReview } from '../review/store.ts';
 import { findTunables, rewriteTunable, type FoundTunable } from './tsTunables.ts';
 import { kitImports, kitTunables } from './kitTunables.ts';
 import { engineAliases, hullResolve, virtualModule } from './vitePlugins.ts';
-import { buildBenchAudio } from './bench.ts';
+import { buildBenchAudio, buildBenchModels } from './bench.ts';
 import { findRefs, FOLDER_RE, ID_RE, planDelete, planDuplicate, planMoves, planNew, STARTERS, usesOf, type Plan, type Sources } from './assets.ts';
 import { thumbOf } from './thumbs.ts';
 
@@ -168,6 +168,26 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
     }
   };
 
+  // ---- The character bench's models: the game's own body builders (hull.json "models"), bundled (bench.ts).
+  const BENCH_MODELS = '/__hull/bench/models.js';
+  let benchModels: Promise<string> | null = null;
+  const serveBenchModels = async (res: import('node:http').ServerResponse): Promise<void> => {
+    res.setHeader('access-control-allow-origin', '*');
+    res.setHeader('cache-control', 'no-store');
+    const models = (JSON.parse(readManifest(root)!.text) as { models?: string }).models;
+    if (!models) { res.statusCode = 404; res.end('hull.json has no "models"'); return; }
+    try {
+      benchModels ??= buildBenchModels(root, models);
+      const code = await benchModels;
+      res.setHeader('content-type', 'text/javascript');
+      res.end(code);
+    } catch (e) {
+      benchModels = null;
+      res.statusCode = 500;
+      res.end(`The models module ${models} did not bundle: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  };
+
   // ---- Vite: the game's dev page --------------------------------------------------------------------------------
   const vite: ViteDevServer = await createServer({
     root,
@@ -194,6 +214,7 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
             // The path only: a query like ?hull-paused (the play tool's) still gets the page.
             const path = req.url?.split('?')[0];
             if (path === BENCH_AUDIO) return void (await serveBenchAudio(res));
+            if (path === BENCH_MODELS) return void (await serveBenchModels(res));
             if (path !== '/' && path !== '/index.html') return next();
             res.setHeader('content-type', 'text/html');
             res.setHeader('cache-control', 'no-store');
@@ -717,7 +738,7 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
       try { text = readFileSync(abs, 'utf8'); } catch { return; }
       if (texts.get(rel) === text) return;
       hist.touch('disk');
-      if (rel === MANIFEST) benchAudio = null;
+      if (rel === MANIFEST) { benchAudio = null; benchModels = null; }
       invalidateBoot();
       revalidate();
       // A file with problems is reported, not pushed: the running game keeps its last good value. A tuning value a kit
@@ -731,6 +752,7 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
       wroteTs.delete(abs);
       hist.touch('disk');
       benchAudio = null;
+      benchModels = null;
       push('source.changed', { path: rel });
     } else if (rel.startsWith('src/') || rel.startsWith('assets/')) {
       hist.touch('disk');

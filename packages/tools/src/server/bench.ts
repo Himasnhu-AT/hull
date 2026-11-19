@@ -48,3 +48,37 @@ export async function buildBenchAudio(root: string, generators: string): Promise
   if (!chunk || chunk.type !== 'chunk') throw new Error('the bench bundle produced no code');
   return chunk.code;
 }
+
+/** The character bench's models: the project's module (hull.json "models") bundled as one script that takes the Studio's own copies of the engine (hull, hull/render, hull/three...) as `__hull`, so the bodies it builds are made by the same three.js the bench draws with, and read the config the bench has loaded. Evaluate it as `new Function('__hull', code + '\nreturn HullBenchModels;')`; the result is the module's default export. */
+export async function buildBenchModels(root: string, models: string): Promise<string> {
+  const entry = join(root, '.hull', 'cache', 'bench-models-entry.ts');
+  mkdirSync(join(root, '.hull', 'cache'), { recursive: true });
+  writeFileSync(entry, `import * as project from ${JSON.stringify(join(root, models))};\nexport default project.default;\n`);
+  const out = await viteBuild({
+    root,
+    configFile: false,
+    logLevel: 'silent',
+    appType: 'custom',
+    cacheDir: join(root, '.hull', 'cache', 'vite'),
+    plugins: [hullResolve()],
+    resolve: { alias: engineAliases() },
+    build: {
+      write: false,
+      target: 'es2023',
+      minify: false,
+      assetsInlineLimit: Number.MAX_SAFE_INTEGER,
+      cssCodeSplit: false,
+      chunkSizeWarningLimit: Number.MAX_SAFE_INTEGER,
+      lib: { entry, formats: ['iife'], name: 'HullBenchModels', fileName: 'models' },
+      rollupOptions: {
+        // The engine is the Studio's, not a second copy: instanceof holds across the two, and the config is the live one.
+        external: [/^hull(\/|$)/, /^three(\/|$)/],
+        output: { codeSplitting: false, globals: (id: string) => `__hull[${JSON.stringify(id.startsWith('three') ? 'hull/three' : id)}]` },
+      },
+    },
+  });
+  const outputs = (Array.isArray(out) ? out : [out]).flatMap((o) => ('output' in o ? o.output : []));
+  const chunk = outputs.find((o) => o.type === 'chunk');
+  if (!chunk || chunk.type !== 'chunk') throw new Error('the models bundle produced no code');
+  return chunk.code;
+}

@@ -19,7 +19,13 @@ export function renderRuntime(): RenderRuntime | null {
   return current;
 }
 
-export function setRenderRuntime(r: RenderRuntime | null): void {
+/**
+ * Sets the running backend. When a backend that is shutting down clears it (r null), it passes its own renderer: if a
+ * newer backend has taken over meanwhile (a page that mounts, unmounts and mounts again), the clear is ignored, or the
+ * newer one would lose its particles.
+ */
+export function setRenderRuntime(r: RenderRuntime | null, owner?: unknown): void {
+  if (r === null && owner !== undefined && current !== null && current.renderer !== owner) return;
   current = r;
   for (const l of [...listeners]) l();
 }
