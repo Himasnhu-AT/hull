@@ -25,6 +25,7 @@ import { grainMaterial, clothGrainCanvas, SURF, type Surface } from './materials
 import { EMBLEM_BONE, EMBLEM_GREEN, EMBLEM_GRAPHITE } from '../ui/emblem';
 import { R } from '../sim';
 import { makeCanvas, makePath } from '../canvas';
+import { config } from 'hull';
 
 // Math.hypot is variadic and boxes its arguments in hot loops (it was the top source of garbage); this doesn't.
 const hypot = (a: number, b: number, c = 0): number => Math.sqrt(a * a + b * b + c * c);
@@ -517,14 +518,70 @@ function faceTexture(): THREE.CanvasTexture {
 const _fdown = new THREE.Vector3(0, -1, 0);
 const SOLE = 0.075;   // ankle joint height above the sole
 // leg geometry (see _build): hip joint → knee 0.43, knee → ankle 0.4; standing, the hip is LEG_H above the ankle
-const THIGH = 0.43, SHIN = 0.4, LEG_REACH = 0.815, LEG_H = 0.805, FOOT_BALL = 0.15, MOVE_V = 0.35;
+// (THIGH, SHIN and the leg numbers that follow them are the rest values below, rescaled to the leg config/character/soldier.json gives)
+const LEG_DEFAULT = { thigh: 0.43, shin: 0.4, reach: 0.815, legH: 0.805, hipH: 0.88, kneeReach: 0.8 };
+let THIGH = LEG_DEFAULT.thigh, SHIN = LEG_DEFAULT.shin, LEG_REACH = LEG_DEFAULT.reach, LEG_H = LEG_DEFAULT.legH;
+const FOOT_BALL = 0.15, MOVE_V = 0.35;
 const _l1 = new THREE.Vector3(), _l2 = new THREE.Vector3(), _l3 = new THREE.Vector3(), _l4 = new THREE.Vector3(), _l5 = new THREE.Vector3();
 const _l6 = new THREE.Vector3(), _lv = new THREE.Vector3(), _l1b = new THREE.Vector3(), _lm = new THREE.Matrix4(), _lq = new THREE.Quaternion(), _lq2 = new THREE.Quaternion();
 const _sol = { hx: 0, hz: 0, kx: 0 };
 const _up = new THREE.Vector3(0, 1, 0);
 const HEEL = 0.06;          // heel contact behind the ankle joint
-const HIP_H = 0.88;         // hip joint above the ground, standing
-const REACH = 0.8;          // hip → ankle with the knee just off straight (touchdown / toe-off)
+let HIP_H = LEG_DEFAULT.hipH;         // hip joint above the ground, standing
+let REACH = LEG_DEFAULT.kneeReach;    // hip → ankle with the knee just off straight (touchdown / toe-off)
+
+// ───────────────────────────── the soldier's skeleton: config/character/soldier.json ─────────────────────────────
+// The joint offsets and the launcher and blade-box mounts are data. The file is in the engine's frame (facing -Z, the
+// soldier's left on -X), the model's is +Z with the left on +X, so x and z change sign on the way in. A project
+// without the file, or with one that is wrong, gets the numbers the model was drawn with.
+type V3T = readonly [number, number, number];
+export interface SoldierRig { spine: V3T; head: V3T; shoulder: V3T; elbow: V3T; wrist: V3T; hip: V3T; knee: V3T; ankle: V3T; launcher: V3T; bladeBox: V3T }
+export const SOLDIER_DEFAULT: SoldierRig = {
+  spine: [0, 0.08, 0], head: [0, 0.455, 0], shoulder: [0.215, 0.405, 0], elbow: [0, -0.28, 0], wrist: [0, -0.26, 0],
+  hip: [0.09, -0.02, 0], knee: [0, -0.43, 0], ankle: [0, -0.4, 0], launcher: [0.205, 0.035, 0], bladeBox: [0.215, -0.21, -0.09],
+};
+const flip = (n: number): number => (n === 0 ? 0 : -n);
+const inFrame = (t: readonly number[]): V3T => [flip(t[0]!), t[1]!, flip(t[2]!)];
+const BONE_OF: Record<Exclude<keyof SoldierRig, 'launcher' | 'bladeBox'>, string> = { spine: 'spine', head: 'head', shoulder: 'armL', elbow: 'forearmL', wrist: 'handL', hip: 'legL', knee: 'shinL', ankle: 'footL' };
+/** Reads the soldier's rig from config (or the defaults), and rescales the leg numbers of the gait to its leg length. */
+export function soldierRig(): SoldierRig {
+  const out: SoldierRig = { ...SOLDIER_DEFAULT };
+  const id = 'character/soldier';
+  if (config.has(id)) {
+    try {
+      const c = config.lookup('character', 'soldier');
+      const bones = new Map((c.body.bones ?? []).map((b) => [b.name, b.offset]));
+      for (const k of Object.keys(BONE_OF) as (keyof typeof BONE_OF)[]) {
+        const off = bones.get(BONE_OF[k]);
+        if (!off) throw new Error(`${id}#/body/bones: the soldier needs a bone "${BONE_OF[k]}"`);
+        out[k] = inFrame(off);
+      }
+      const sock = c.sockets ?? {};
+      if (sock['launcherL']?.offset) out.launcher = inFrame(sock['launcherL'].offset);
+      if (sock['bladeBoxL']?.offset) out.bladeBox = inFrame(sock['bladeBoxL'].offset);
+    } catch (e) {
+      console.warn(String(e));
+      return soldierRigApply({ ...SOLDIER_DEFAULT });
+    }
+  }
+  return soldierRigApply(out);
+}
+function soldierRigApply(r: SoldierRig): SoldierRig {
+  const thigh = Math.abs(r.knee[1]), shin = Math.abs(r.ankle[1]);
+  const k = (thigh + shin) / (LEG_DEFAULT.thigh + LEG_DEFAULT.shin);
+  THIGH = thigh; SHIN = shin;
+  LEG_REACH = LEG_DEFAULT.reach * k; LEG_H = LEG_DEFAULT.legH * k; HIP_H = LEG_DEFAULT.hipH * k; REACH = LEG_DEFAULT.kneeReach * k;
+  return r;
+}
+
+/** A part material: the project's material/soldier-<name> if it has one (colour, roughness, metalness), else the literals. */
+function cfgMat(name: string, color: THREE.ColorRepresentation, surf: Surface, emissive: THREE.ColorRepresentation = 0x000000): PartMaterial {
+  const id = `soldier-${name}`;
+  if (!config.has(`material/${id}`)) return partMat(color, surf, emissive);
+  const m = config.lookup('material', id);
+  return partMat(m.color, { roughness: m.roughness ?? surf.roughness, metalness: m.metalness ?? surf.metalness, grain: surf.grain }, emissive);
+}
+export const SOLDIER_MATERIALS = ['jacket', 'jacketDark', 'trousers', 'boot', 'skin', 'hair', 'strap', 'brass', 'steel', 'steelDark', 'cravat', 'cape', 'blade', 'edge', 'grip'] as const;
 const SKID_V = 13.5;        // on the ground faster than a run (a landing off the wires): a skid
 /** Where the ankle sits relative to the contact point for a foot pitch (+ = toe down, pivot on the ball; − = toe up,
  *  pivot on the heel): f = along the foot (− = behind the ball), u = up. Written to _ao. */
@@ -751,8 +808,14 @@ export class PlayerModel {
     this.root.name = 'PlayerModel';
     this.pivot = group(this.root);
     if (game && game.scene) game.scene.add(this.root);       // idempotent: the core may add it again
-    this._build();
     this.cape = new CapeSim();
+    this._construct();
+    this._follow();
+  }
+
+  /** Builds the body, the cloak mesh, the face and the loose locks (again, on a config change). */
+  _construct(): void {
+    this._build();
     this._buildCapeMesh();
     if (this._face) this.j.head.add(this._face);
     // loose locks on top of the baked hair: they stream back with speed and flutter in the air
@@ -773,15 +836,16 @@ export class PlayerModel {
   // ───────────────────────────── construction ─────────────────────────────
   _build(): void {
     const M = this.mats = {
-      jacket: partMat(0x86684a, SURF.cloth), jacketDark: partMat(0x5c4630, SURF.leather), trousers: partMat(0xd6cfbe, SURF.cloth),
-      boot: partMat(0x34251a, SURF.leather), skin: partMat(0xd2a283, SURF.skin), hair: partMat(0x2a1f18, SURF.hair),
-      strap: partMat(0x2c1e15, SURF.leather), brass: partMat(0xa8894c, SURF.brass),
-      steel: partMat(0xa9b1b9, SURF.steel), steelDark: partMat(0x4b5159, SURF.darkSteel),
-      cravat: partMat(0xe0dccf, SURF.cloth), cape: partMat(0x2b4433, SURF.wool),
-      blade: partMat(0xc8d0d8, SURF.blade), edge: partMat(0xeef2f6, { roughness: 0.12, metalness: 1, grain: 0.05 }), grip: partMat(0x1f1b18, SURF.leather),
+      jacket: cfgMat('jacket', 0x86684a, SURF.cloth), jacketDark: cfgMat('jacketDark', 0x5c4630, SURF.leather), trousers: cfgMat('trousers', 0xd6cfbe, SURF.cloth),
+      boot: cfgMat('boot', 0x34251a, SURF.leather), skin: cfgMat('skin', 0xd2a283, SURF.skin), hair: cfgMat('hair', 0x2a1f18, SURF.hair),
+      strap: cfgMat('strap', 0x2c1e15, SURF.leather), brass: cfgMat('brass', 0xa8894c, SURF.brass),
+      steel: cfgMat('steel', 0xa9b1b9, SURF.steel), steelDark: cfgMat('steelDark', 0x4b5159, SURF.darkSteel),
+      cravat: cfgMat('cravat', 0xe0dccf, SURF.cloth), cape: cfgMat('cape', 0x2b4433, SURF.wool),
+      blade: cfgMat('blade', 0xc8d0d8, SURF.blade), edge: cfgMat('edge', 0xeef2f6, { roughness: 0.12, metalness: 1, grain: 0.05 }), grip: cfgMat('grip', 0x1f1b18, SURF.leather),
     };
     this.jetMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, fog: false });
     const P = this.pivot;
+    const S = soldierRig();
     const J = {} as Joints;
     this.j = J;
     // the head is a little narrower than it is tall or deep (an adult's, not a child's)
@@ -792,7 +856,7 @@ export class PlayerModel {
     mesh(new THREE.CylinderGeometry(0.165, 0.17, 0.05, 18), M.strap, P, 0, 0.05, 0).scale.set(1.0, 1, 0.74);
 
     // ── spine / chest
-    J.spine = group(P, 0, 0.08, 0);
+    J.spine = group(P, ...S.spine);
     const chest = J.chest = group(J.spine, 0, 0, 0);
     const jacket = mesh(new THREE.CylinderGeometry(0.168, 0.15, 0.42, 20), M.jacket, chest, 0, 0.21, 0);
     jacket.scale.set(1.18, 1, 0.8);
@@ -804,7 +868,7 @@ export class PlayerModel {
     for (const sx of [1, -1]) mesh(new THREE.SphereGeometry(0.052, 12, 10), M.jacket, chest, sx * 0.215, 0.405, 0);
 
     // ── head
-    const head = J.head = group(chest, 0, 0.455, 0.0);
+    const head = J.head = group(chest, ...S.head);
     mesh(new THREE.CylinderGeometry(0.043, 0.049, 0.08, 12), M.skin, head, 0, 0.0, 0);                    // neck
     const skull = mesh(new THREE.SphereGeometry(0.1, 24, 18), M.skin, head, 0, 0.145, 0.008);
     skull.scale.set(0.96 * HSX, 1.08, 1.0);
@@ -859,13 +923,13 @@ export class PlayerModel {
     // ── arms
     const arm = (side: 0 | 1): ArmJoints => {
       const sx = side === 0 ? 1 : -1;
-      const sh = group(chest, sx * 0.215, 0.405, 0);
+      const sh = group(chest, sx * S.shoulder[0], S.shoulder[1], S.shoulder[2]);
       mesh(new THREE.CylinderGeometry(0.043, 0.037, 0.28, 12), M.jacket, sh, 0, -0.14, 0);
-      const el = group(sh, 0, -0.28, 0);
+      const el = group(sh, ...S.elbow);
       mesh(new THREE.SphereGeometry(0.04, 10, 8), M.jacket, el, 0, 0, 0);
       mesh(new THREE.CylinderGeometry(0.037, 0.031, 0.26, 12), M.jacket, el, 0, -0.13, 0);
       mesh(new THREE.CylinderGeometry(0.036, 0.036, 0.04, 12), M.strap, el, 0, -0.235, 0);  // cuff
-      const wr = group(el, 0, -0.26, 0);
+      const wr = group(el, ...S.wrist);
       mesh(new THREE.SphereGeometry(0.042, 12, 10), M.skin, wr, 0, -0.025, 0.0).scale.set(0.85, 1.15, 1.1);   // fist
       // grip + guard + blade (blade points along the forearm: -Y)
       const grip = mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.15, 8), M.grip, wr, 0, -0.03, 0);
@@ -899,14 +963,14 @@ export class PlayerModel {
     // ── legs
     const leg = (side: 0 | 1): LegJoints => {
       const sx = side === 0 ? 1 : -1;
-      const hip = group(P, sx * 0.09, -0.02, 0);
+      const hip = group(P, sx * S.hip[0], S.hip[1], S.hip[2]);
       mesh(new THREE.CylinderGeometry(0.083, 0.063, 0.43, 14), M.trousers, hip, 0, -0.215, 0);
-      const kn = group(hip, 0, -0.43, 0);
+      const kn = group(hip, ...S.knee);
       mesh(new THREE.SphereGeometry(0.064, 12, 8), M.trousers, kn, 0, 0, 0);
       mesh(new THREE.CylinderGeometry(0.06, 0.048, 0.1, 12), M.trousers, kn, 0, -0.05, 0);
       mesh(new THREE.CylinderGeometry(0.064, 0.05, 0.3, 14), M.boot, kn, 0, -0.2, 0);           // boot shaft
       mesh(new THREE.CylinderGeometry(0.07, 0.066, 0.025, 14), M.boot, kn, 0, -0.055, 0);       // boot cuff
-      const an = group(kn, 0, -0.4, 0);
+      const an = group(kn, ...S.ankle);
       mesh(new THREE.BoxGeometry(0.088, 0.065, 0.25), M.boot, an, 0, -0.02, 0.06);
       mesh(new THREE.BoxGeometry(0.09, 0.02, 0.255), M.strap, an, 0, -0.05, 0.06);              // sole
       // harness: thigh rings + front strap, shin strap
@@ -946,7 +1010,7 @@ export class PlayerModel {
       // frame arm from the unit round the hip to the launcher
       tube([new THREE.Vector3(sx * 0.11, 0.0, -0.14), new THREE.Vector3(sx * 0.17, 0.02, -0.1), new THREE.Vector3(sx * 0.2, 0.03, -0.04)], 0.014, M.steelDark, gear);
       // launcher at the hip, barrel forward
-      const lh = group(gear, sx * 0.205, 0.035, 0.0);
+      const lh = group(gear, sx * S.launcher[0], S.launcher[1], S.launcher[2]);
       const drum = mesh(new THREE.CylinderGeometry(0.048, 0.048, 0.06, 14), M.steelDark, lh, 0, 0, -0.01);
       drum.rotation.z = Math.PI / 2;
       mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.066, 12), M.brass, drum, 0, 0, 0);
@@ -956,7 +1020,7 @@ export class PlayerModel {
       const tip = new THREE.Object3D(); tip.position.set(0, 0.005, 0.165); lh.add(tip);
       if (sx > 0) this.launcherL = tip; else this.launcherR = tip;
       // blade box: a long bevel-nosed steel case, raked down towards the back and splayed a little at the tail
-      const bx = group(gear, sx * 0.215, -0.21, -0.09);
+      const bx = group(gear, sx * S.bladeBox[0], S.bladeBox[1], S.bladeBox[2]);
       bx.rotation.set(-0.3, -sx * 0.1, 0);
       this.bladeBoxes.push(bx);
       const BL = 0.56, BH = 0.15, BW = 0.064;
@@ -1088,8 +1152,33 @@ export class PlayerModel {
     this.capeOuter.castShadow = true;
   }
 
+  // The model follows config/character/soldier.json and config/material/soldier-*.json while the game runs: a change
+  // marks it, and the next update() builds the body again from the new numbers. The cloak's cloth state is kept.
+  _dirty = false;
+  _unwatch: (() => void)[] = [];
+  _follow(): void {
+    const mark = (): void => { this._dirty = true; };
+    for (const id of ['character/soldier', ...SOLDIER_MATERIALS.map((m) => `material/soldier-${m}`)]) this._unwatch.push(config.watch(id, mark));
+  }
+  /** Takes the built body apart and builds it from the current config. Same root, same pivot, same cloak simulation. */
+  rebuild(): void {
+    this._dirty = false;
+    const geos = new Set<THREE.BufferGeometry>();
+    this.root.traverse((o) => { const g = (o as THREE.Mesh).geometry; if (g && g !== this.capeGeo) geos.add(g); });
+    this.pivot.clear();
+    for (const c of [...this.root.children]) if (c !== this.pivot) this.root.remove(c);
+    for (const g of geos) g.dispose();
+    if (this.skeleton) this.skeleton.dispose();
+    if (this.bladeMat) this.bladeMat.dispose();
+    this.capeGeo?.dispose();
+    this.locks.length = 0; this.bladeBoxes.length = 0; this.pins.length = 0; this.col.length = 0;
+    this._construct();
+  }
+
   setVisible(v: boolean): void { this.root.visible = v; }
   dispose(): void {
+    for (const u of this._unwatch) u();
+    this._unwatch.length = 0;
     this.root.traverse((o) => { const g = (o as THREE.Mesh).geometry; if (g) g.dispose(); });
     if (this.skeleton) this.skeleton.dispose();
     if (this.bladeMat) this.bladeMat.dispose();
@@ -1356,6 +1445,7 @@ export class PlayerModel {
 
   // ───────────────────────────── per-frame ─────────────────────────────
   update(dt: number, s: ModelState): void {
+    if (this._dirty) this.rebuild();
     dt = clamp(finite(dt), 0, 0.05);
     if (dt <= 0) dt = 1e-4;
     this.time += dt;

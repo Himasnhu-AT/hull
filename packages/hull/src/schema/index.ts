@@ -2,7 +2,7 @@
 // (hull.json, kind 'game'), tuning and material. Runs in Node and the browser.
 import { animGraphSchema, type AnimGraph } from './anim-graph.ts';
 import { animSetSchema, type AnimSet } from './anim-set.ts';
-import { characterSchema, type Character } from './character.ts';
+import { characterSchema, type Character, type CharacterHit } from './character.ts';
 import { lookSchema, type Look } from './look.ts';
 import { inputMapSchema, type InputMap } from './input-map.ts';
 import { materialSchema, type Material } from './material.ts';
@@ -15,7 +15,7 @@ import { uiThemeSchema, type UiTheme } from './ui-theme.ts';
 import { vfxSchema, type Vfx } from './vfx.ts';
 
 export { animGraphSchema, animSetSchema, characterSchema, inputMapSchema, lookSchema, manifestSchema, materialSchema, mixerSchema, soundSchema, tuningSchema, uiScreenSchema, uiThemeSchema, vfxSchema };
-export type { AnimGraph, AnimSet, Character, InputMap, Look, Manifest, Material, Mixer, Sound, Tuning, UiScreenDef, UiTheme, Vfx };
+export type { AnimGraph, AnimSet, Character, CharacterHit, InputMap, Look, Manifest, Material, Mixer, Sound, Tuning, UiScreenDef, UiTheme, Vfx };
 export * from './ui.ts';
 
 /** Kinds that live under config/<kind>/. The manifest is separate: it is hull.json at the project root. */

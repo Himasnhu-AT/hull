@@ -207,7 +207,7 @@ export function sizeClass(h: number): SizeClass { return h < 6 ? 'S' : h < 10 ? 
 // head radius per size class: small titans keep an oversized head (uncanny), but not a cartoon one
 const HEAD_R: Record<SizeClass, number> = { S: 1.22, M: 1.12, L: 1.04, XL: 1.0 };
 
-function makeDims(build: BuildKey, size: SizeClass): Dims {
+export function makeDims(build: BuildKey, size: SizeClass): Dims {
   const B = BUILDS[build];
   const headR = HEAD_R[size] * B.head;
   const thighLen = 2.15 * B.legs, shinLen = 1.75 * B.legs, ankleH = 0.34;

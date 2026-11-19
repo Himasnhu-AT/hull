@@ -1,0 +1,702 @@
+{
+  "kind": "character",
+  "note": "A female titan, size class M: the skeleton and hit shapes AOTT's rig is built from, in the engine's frame (facing -Z) and unscaled units. The parts are a rigid stand-in for the bench; the game draws its own modelled body on these bones.",
+  "body": {
+    "type": "generated",
+    "recipe": "custom",
+    "bones": [
+      {
+        "name": "hips",
+        "offset": [
+          0,
+          4.863999999999999,
+          0
+        ]
+      },
+      {
+        "name": "spine",
+        "parent": "hips",
+        "offset": [
+          0,
+          0.45,
+          0
+        ]
+      },
+      {
+        "name": "neck",
+        "parent": "spine",
+        "offset": [
+          0,
+          2.75,
+          -0.05
+        ]
+      },
+      {
+        "name": "head",
+        "parent": "neck",
+        "offset": [
+          0,
+          0.55,
+          -0.05
+        ]
+      },
+      {
+        "name": "jaw",
+        "parent": "head",
+        "offset": [
+          0,
+          0.5758394880000002,
+          0.28896
+        ]
+      },
+      {
+        "name": "armL",
+        "parent": "spine",
+        "offset": [
+          -1.0487999999999997,
+          2.4,
+          0
+        ]
+      },
+      {
+        "name": "forearmL",
+        "parent": "armL",
+        "offset": [
+          0,
+          -2.322,
+          0
+        ]
+      },
+      {
+        "name": "handL",
+        "parent": "forearmL",
+        "offset": [
+          0,
+          -2.214,
+          0
+        ]
+      },
+      {
+        "name": "armR",
+        "parent": "spine",
+        "offset": [
+          1.0487999999999997,
+          2.4,
+          0
+        ]
+      },
+      {
+        "name": "forearmR",
+        "parent": "armR",
+        "offset": [
+          0,
+          -2.322,
+          0
+        ]
+      },
+      {
+        "name": "handR",
+        "parent": "forearmR",
+        "offset": [
+          0,
+          -2.214,
+          0
+        ]
+      },
+      {
+        "name": "legL",
+        "parent": "hips",
+        "offset": [
+          -0.496,
+          -0.05,
+          0
+        ]
+      },
+      {
+        "name": "shinL",
+        "parent": "legL",
+        "offset": [
+          0,
+          -2.4939999999999998,
+          0
+        ]
+      },
+      {
+        "name": "footL",
+        "parent": "shinL",
+        "offset": [
+          0,
+          -2.03,
+          0
+        ]
+      },
+      {
+        "name": "legR",
+        "parent": "hips",
+        "offset": [
+          0.496,
+          -0.05,
+          0
+        ]
+      },
+      {
+        "name": "shinR",
+        "parent": "legR",
+        "offset": [
+          0,
+          -2.4939999999999998,
+          0
+        ]
+      },
+      {
+        "name": "footR",
+        "parent": "shinR",
+        "offset": [
+          0,
+          -2.03,
+          0
+        ]
+      }
+    ],
+    "parts": [
+      {
+        "bone": "head",
+        "shape": "sphere",
+        "material": "skin",
+        "center": [
+          0,
+          0.9188928000000002,
+          -0.135584
+        ],
+        "radius": 0.8495424
+      },
+      {
+        "bone": "spine",
+        "shape": "box",
+        "material": "skin",
+        "center": [
+          0,
+          1.45,
+          0
+        ],
+        "size": [
+          1.8399999999999999,
+          3,
+          1.64
+        ]
+      },
+      {
+        "bone": "hips",
+        "shape": "box",
+        "material": "skin",
+        "center": [
+          0,
+          0.2,
+          0
+        ],
+        "size": [
+          1.4080000000000001,
+          1.24,
+          1.32
+        ]
+      },
+      {
+        "bone": "armL",
+        "shape": "limb",
+        "material": "skin",
+        "from": [
+          0,
+          0,
+          0
+        ],
+        "to": [
+          0,
+          -2.322,
+          0
+        ],
+        "radius": 0.48
+      },
+      {
+        "bone": "forearmL",
+        "shape": "limb",
+        "material": "skin",
+        "from": [
+          0,
+          0,
+          0
+        ],
+        "to": [
+          0,
+          -1.7503190752252147,
+          0
+        ],
+        "radius": 0.394
+      },
+      {
+        "bone": "handL",
+        "shape": "sphere",
+        "material": "skin",
+        "center": [
+          0,
+          -0.05,
+          0
+        ],
+        "radius": 0.5636809247747852
+      },
+      {
+        "bone": "legL",
+        "shape": "limb",
+        "material": "skin",
+        "from": [
+          0,
+          0,
+          0
+        ],
+        "to": [
+          0,
+          -2.4939999999999998,
+          0
+        ],
+        "radius": 0.5732
+      },
+      {
+        "bone": "shinL",
+        "shape": "limb",
+        "material": "skin",
+        "from": [
+          0,
+          0,
+          0
+        ],
+        "to": [
+          0,
+          -2.03,
+          0
+        ],
+        "radius": 0.374
+      },
+      {
+        "bone": "footL",
+        "shape": "limb",
+        "material": "skin",
+        "from": [
+          0,
+          -0.1,
+          -0.12
+        ],
+        "to": [
+          0,
+          -0.1,
+          -0.9
+        ],
+        "radius": 0.350387699378384
+      },
+      {
+        "bone": "armR",
+        "shape": "limb",
+        "material": "skin",
+        "from": [
+          0,
+          0,
+          0
+        ],
+        "to": [
+          0,
+          -2.322,
+          0
+        ],
+        "radius": 0.48
+      },
+      {
+        "bone": "forearmR",
+        "shape": "limb",
+        "material": "skin",
+        "from": [
+          0,
+          0,
+          0
+        ],
+        "to": [
+          0,
+          -1.7503190752252147,
+          0
+        ],
+        "radius": 0.394
+      },
+      {
+        "bone": "handR",
+        "shape": "sphere",
+        "material": "skin",
+        "center": [
+          0,
+          -0.05,
+          0
+        ],
+        "radius": 0.5636809247747852
+      },
+      {
+        "bone": "legR",
+        "shape": "limb",
+        "material": "skin",
+        "from": [
+          0,
+          0,
+          0
+        ],
+        "to": [
+          0,
+          -2.4939999999999998,
+          0
+        ],
+        "radius": 0.5732
+      },
+      {
+        "bone": "shinR",
+        "shape": "limb",
+        "material": "skin",
+        "from": [
+          0,
+          0,
+          0
+        ],
+        "to": [
+          0,
+          -2.03,
+          0
+        ],
+        "radius": 0.374
+      },
+      {
+        "bone": "footR",
+        "shape": "limb",
+        "material": "skin",
+        "from": [
+          0,
+          -0.1,
+          -0.12
+        ],
+        "to": [
+          0,
+          -0.1,
+          -0.9
+        ],
+        "radius": 0.350387699378384
+      }
+    ]
+  },
+  "materials": {
+    "skin": "material/titan-skin",
+    "behemoth": "material/titan-behemoth"
+  },
+  "hits": [
+    {
+      "bone": "head",
+      "shape": "sphere",
+      "part": "head",
+      "group": "body",
+      "c": [
+        0,
+        0.9188928000000002,
+        -0.135584
+      ],
+      "r": 0.8495424
+    },
+    {
+      "bone": "spine",
+      "shape": "box",
+      "part": "torso",
+      "group": "body",
+      "c": [
+        0,
+        1.45,
+        0
+      ],
+      "h": [
+        0.9199999999999999,
+        1.5,
+        0.82
+      ]
+    },
+    {
+      "bone": "hips",
+      "shape": "box",
+      "part": "pelvis",
+      "group": "body",
+      "c": [
+        0,
+        0.2,
+        0
+      ],
+      "h": [
+        0.7040000000000001,
+        0.62,
+        0.66
+      ]
+    },
+    {
+      "bone": "armL",
+      "shape": "capsule",
+      "part": "arm",
+      "group": "arm",
+      "a": [
+        0,
+        0,
+        0
+      ],
+      "b": [
+        0,
+        -2.322,
+        0
+      ],
+      "r": 0.48
+    },
+    {
+      "bone": "forearmL",
+      "shape": "capsule",
+      "part": "arm",
+      "group": "arm",
+      "a": [
+        0,
+        0,
+        0
+      ],
+      "b": [
+        0,
+        -1.7503190752252147,
+        0
+      ],
+      "r": 0.394
+    },
+    {
+      "bone": "handL",
+      "shape": "sphere",
+      "part": "hand",
+      "group": "hand",
+      "c": [
+        0,
+        -0.05,
+        0
+      ],
+      "r": 0.5636809247747852
+    },
+    {
+      "bone": "legL",
+      "shape": "capsule",
+      "part": "leg",
+      "group": "body",
+      "a": [
+        0,
+        0,
+        0
+      ],
+      "b": [
+        0,
+        -2.4939999999999998,
+        0
+      ],
+      "r": 0.5732
+    },
+    {
+      "bone": "shinL",
+      "shape": "capsule",
+      "part": "leg",
+      "group": "body",
+      "a": [
+        0,
+        0,
+        0
+      ],
+      "b": [
+        0,
+        -2.03,
+        0
+      ],
+      "r": 0.374
+    },
+    {
+      "bone": "footL",
+      "shape": "capsule",
+      "part": "foot",
+      "group": "body",
+      "a": [
+        0,
+        -0.1,
+        -0.12
+      ],
+      "b": [
+        0,
+        -0.1,
+        -0.9
+      ],
+      "r": 0.350387699378384
+    },
+    {
+      "bone": "footL",
+      "shape": "sphere",
+      "part": "ankle",
+      "group": "ankle",
+      "collide": false,
+      "c": [
+        0,
+        0.1,
+        0.05
+      ],
+      "r": 0.48600000000000004
+    },
+    {
+      "bone": "armR",
+      "shape": "capsule",
+      "part": "arm",
+      "group": "arm",
+      "a": [
+        0,
+        0,
+        0
+      ],
+      "b": [
+        0,
+        -2.322,
+        0
+      ],
+      "r": 0.48
+    },
+    {
+      "bone": "forearmR",
+      "shape": "capsule",
+      "part": "arm",
+      "group": "arm",
+      "a": [
+        0,
+        0,
+        0
+      ],
+      "b": [
+        0,
+        -1.7503190752252147,
+        0
+      ],
+      "r": 0.394
+    },
+    {
+      "bone": "handR",
+      "shape": "sphere",
+      "part": "hand",
+      "group": "hand",
+      "c": [
+        0,
+        -0.05,
+        0
+      ],
+      "r": 0.5636809247747852
+    },
+    {
+      "bone": "legR",
+      "shape": "capsule",
+      "part": "leg",
+      "group": "body",
+      "a": [
+        0,
+        0,
+        0
+      ],
+      "b": [
+        0,
+        -2.4939999999999998,
+        0
+      ],
+      "r": 0.5732
+    },
+    {
+      "bone": "shinR",
+      "shape": "capsule",
+      "part": "leg",
+      "group": "body",
+      "a": [
+        0,
+        0,
+        0
+      ],
+      "b": [
+        0,
+        -2.03,
+        0
+      ],
+      "r": 0.374
+    },
+    {
+      "bone": "footR",
+      "shape": "capsule",
+      "part": "foot",
+      "group": "body",
+      "a": [
+        0,
+        -0.1,
+        -0.12
+      ],
+      "b": [
+        0,
+        -0.1,
+        -0.9
+      ],
+      "r": 0.350387699378384
+    },
+    {
+      "bone": "footR",
+      "shape": "sphere",
+      "part": "ankle",
+      "group": "ankle",
+      "collide": false,
+      "c": [
+        0,
+        0.1,
+        0.05
+      ],
+      "r": 0.48600000000000004
+    },
+    {
+      "bone": "head",
+      "shape": "sphere",
+      "part": "eye",
+      "group": "eye",
+      "collide": false,
+      "c": [
+        0.34790784,
+        1.0209920000000001,
+        -1.0155395021641673
+      ],
+      "r": 0.3
+    },
+    {
+      "bone": "head",
+      "shape": "sphere",
+      "part": "eye",
+      "group": "eye",
+      "collide": false,
+      "c": [
+        -0.34790784,
+        1.0209920000000001,
+        -1.0155395021641673
+      ],
+      "r": 0.3
+    },
+    {
+      "bone": "head",
+      "shape": "box",
+      "part": "nape",
+      "group": "nape",
+      "collide": false,
+      "c": [
+        0,
+        0.06,
+        0.45809792
+      ],
+      "h": [
+        0.36,
+        0.46,
+        0.27
+      ]
+    }
+  ],
+  "animSet": "anim-set/humanoid",
+  "animGraph": "anim-graph/titan"
+}
