@@ -7,7 +7,7 @@ import { Atmosphere, Footing } from './atmosphere';
 import { spawnAya } from './player';
 import { Aya } from './player/aya';
 import { encounters, enemyHooks, spawnEncounters } from './enemies';
-import { dressFighter } from './models';
+import { dressFighter, isKind } from './models';
 import { spawnIsland } from './world/island';
 
 export default defineGame({
@@ -22,7 +22,7 @@ export default defineGame({
     const aya = spawnAya(w);
     aya.add(Footing);
     // The raiders are dressed in their modelled bodies as they spawn.
-    enemyHooks.dress = dressFighter;
+    enemyHooks.dress = (n, kind) => { if (isKind(kind)) dressFighter(n, kind); };
     spawnEncounters(w);
     // The camp starts with a standoff: Aya's attack button lets go of the blade.
     aya.get(Aya)!.standoffOf = () => encounters(w)?.standoff ?? null;
