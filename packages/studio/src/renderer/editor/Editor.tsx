@@ -167,28 +167,16 @@ function EditorBody({ rpc, project, platform, onClose }: { rpc: RpcClient; proje
         onProblems={() => { setPanels((s) => ({ ...s, dock: true })); setDockTab('console'); }}
         onClose={onClose}
         agents={agentsOpen} onAgents={() => setAgentsOpen((v) => !v)}
+        view={view} onView={(v) => setView(v as View)} compareCount={h.exps.filter((e) => e.status === 'active').length}
+        note={view === 'game' ? (openInfo ? `Experiment ${openInfo.name}: edits go to it, not to main` : gameNote) : view === 'compare' ? 'Two lines running side by side' : view === 'sound' ? 'Rendered offline from the file' : 'Runs the real engine; edits show live'}
+        branch={view === 'game' ? <ExpSwitch h={h} openExp={openInfo ? openInfo.name : null} onOpenExp={setOpenExp} /> : undefined}
+        onReload={view === 'game' ? () => setGameKey((k) => k + 1) : undefined}
       />
       {agentsOpen && <AgentPanel project={project} onClose={() => setAgentsOpen(false)} />}
 
       {lib && <Library ref={search} items={p.library} error={p.libraryError} selected={selected} changed={changed} onSelect={select} />}
 
       <main className="view">
-        <div className="bar">
-          <div className="tabs" role="tablist">
-            <button role="tab" aria-selected={view === 'game'} className={`tab${view === 'game' ? ' on' : ''}`} onClick={() => setView('game')}><Icon name="game" />Game</button>
-            <button role="tab" aria-selected={view === 'compare'} className={`tab${view === 'compare' ? ' on' : ''}`} onClick={() => setView('compare')}><Icon name="compare" />Compare{h.exps.some((e) => e.status === 'active') && <span style={{ color: 'var(--faint)', fontSize: 11 }}>{h.exps.filter((e) => e.status === 'active').length}</span>}</button>
-            <button role="tab" aria-selected={view === 'sound'} className={`tab${view === 'sound' ? ' on' : ''}`} onClick={() => setView('sound')}><Icon name="audio" />Sound</button>
-            {/* w3-app-benches */}
-            <button role="tab" aria-selected={view === 'character'} className={`tab${view === 'character' ? ' on' : ''}`} onClick={() => setView('character')}><Icon name="characters" />Character</button>
-            <button role="tab" aria-selected={view === 'vfx'} className={`tab${view === 'vfx' ? ' on' : ''}`} onClick={() => setView('vfx')}><Icon name="world" />VFX</button>
-            <button role="tab" aria-selected={view === 'look'} className={`tab${view === 'look' ? ' on' : ''}`} onClick={() => setView('look')}><Icon name="sliders" />Look</button>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-            <span className="note">{view === 'game' ? (openInfo ? `Experiment ${openInfo.name}: edits go to it, not to main` : gameNote) : view === 'compare' ? 'Two lines running side by side' : view === 'sound' ? 'Rendered offline from the file' : 'Runs the real engine; edits show live'}</span>
-            {view === 'game' && <ExpSwitch h={h} openExp={openInfo ? openInfo.name : null} onOpenExp={setOpenExp} />}
-            {view === 'game' && <button className="btn ghost" onClick={() => setGameKey((k) => k + 1)} title="Reload the game page" aria-label="Reload the game page" style={{ padding: '0 6px' }}><Icon name="reload" /></button>}
-          </div>
-        </div>
         <div className="stage">
           {view === 'game' && (
             <>
