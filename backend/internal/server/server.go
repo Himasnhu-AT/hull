@@ -39,6 +39,7 @@ type Server struct {
 	params passwords.Params
 	limit  *ratelimit.Limiter // login and signup, per IP
 	client *http.Client       // to Anthropic; no overall timeout because replies stream
+	google *http.Client       // to Google's token endpoint; a short timeout because a person is waiting
 
 	dummyOnce sync.Once
 	dummyHash string
@@ -49,7 +50,8 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger) *Server {
 	// Models can think a long time before the first byte, but a dead upstream should not hold a request forever.
 	tr.ResponseHeaderTimeout = 10 * time.Minute
 	return &Server{cfg: cfg, st: st, log: log, now: time.Now, params: passwords.Default,
-		limit: ratelimit.New(10), client: &http.Client{Transport: tr}}
+		limit: ratelimit.New(10), client: &http.Client{Transport: tr},
+		google: &http.Client{Timeout: 10 * time.Second}}
 }
 
 func (s *Server) Handler() http.Handler {
@@ -63,6 +65,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /login", s.loginPage)
 	mux.HandleFunc("POST /login", s.loginSubmit)
 	mux.HandleFunc("POST /logout", s.logout)
+	mux.HandleFunc("GET /auth/google/start", s.googleStart)
+	mux.HandleFunc("GET "+googleCallbackPath, s.googleCallback)
 	mux.HandleFunc("GET /{$}", s.accountPage)
 	mux.HandleFunc("POST /tokens/{id}/revoke", s.revokeToken)
 

@@ -18,7 +18,22 @@ type Config struct {
 	AnthropicBaseURL string
 	AllowSignup      bool
 	DefaultModel     string
+
+	// Google sign-in is on only when both are set. The secret must never be logged or printed.
+	GoogleClientID     string
+	GoogleClientSecret string
+	// Google's endpoints are fields so tests can point them at a fake; the environment cannot change them.
+	GoogleAuthURL  string
+	GoogleTokenURL string
 }
+
+const (
+	DefaultGoogleAuthURL  = "https://accounts.google.com/o/oauth2/v2/auth"
+	DefaultGoogleTokenURL = "https://oauth2.googleapis.com/token"
+)
+
+// GoogleEnabled reports whether the Google sign-in routes and button are on.
+func (c Config) GoogleEnabled() bool { return c.GoogleClientID != "" && c.GoogleClientSecret != "" }
 
 // Load builds a Config from getenv (os.Getenv in production, a map in tests).
 func Load(getenv func(string) string) (Config, error) {
@@ -36,6 +51,18 @@ func Load(getenv func(string) string) (Config, error) {
 		AnthropicBaseURL: strings.TrimRight(def("ANTHROPIC_BASE_URL", "https://api.anthropic.com"), "/"),
 		DefaultModel:     def("DEFAULT_MODEL", "claude-opus-5-5"),
 		AllowSignup:      true,
+
+		GoogleClientID:     strings.TrimSpace(getenv("GOOGLE_CLIENT_ID")),
+		GoogleClientSecret: strings.TrimSpace(getenv("GOOGLE_CLIENT_SECRET")),
+		GoogleAuthURL:      DefaultGoogleAuthURL,
+		GoogleTokenURL:     DefaultGoogleTokenURL,
+	}
+	// One half alone is a mistake that would silently leave the button off, so stop at startup.
+	if c.GoogleClientID == "" && c.GoogleClientSecret != "" {
+		return c, fmt.Errorf("env GOOGLE_CLIENT_ID: not set, but GOOGLE_CLIENT_SECRET is; set both or neither")
+	}
+	if c.GoogleClientID != "" && c.GoogleClientSecret == "" {
+		return c, fmt.Errorf("env GOOGLE_CLIENT_SECRET: not set, but GOOGLE_CLIENT_ID is; set both or neither")
 	}
 	if v := strings.TrimSpace(getenv("ALLOW_SIGNUP")); v != "" {
 		b, err := strconv.ParseBool(v)

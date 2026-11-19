@@ -15,7 +15,12 @@ import (
 const minPassword = 10
 
 func (s *Server) authData(w http.ResponseWriter, r *http.Request, signup bool) pageData {
-	d := pageData{CSRF: s.csrf(w, r), Next: safeNext(r.FormValue("next")), MinLen: minPassword}
+	return s.authDataNext(w, r, signup, safeNext(r.FormValue("next")))
+}
+
+// authDataNext is authData with next already decided, for the Google callback where it comes from the cookie.
+func (s *Server) authDataNext(w http.ResponseWriter, r *http.Request, signup bool, next string) pageData {
+	d := pageData{CSRF: s.csrf(w, r), Next: next, MinLen: minPassword}
 	q := ""
 	if d.Next != "/" {
 		q = "?next=" + url.QueryEscape(d.Next)
@@ -29,6 +34,9 @@ func (s *Server) authData(w http.ResponseWriter, r *http.Request, signup bool) p
 		d.MinLen = 0
 	}
 	d.Action += q
+	if s.cfg.GoogleEnabled() {
+		d.Google, d.GoogleHref = true, "/auth/google/start"+q
+	}
 	return d
 }
 
@@ -139,10 +147,12 @@ func (s *Server) loginSubmit(w http.ResponseWriter, r *http.Request) {
 	pw := r.PostFormValue("password")
 	u, err := s.st.UserByEmail(email)
 	hash := u.PassHash
-	if err != nil || len(pw) > 512 {
+	// An account with no password (Google only) takes the same slow path and the same answer as an unknown email.
+	noPass := err != nil || hash == ""
+	if noPass || len(pw) > 512 {
 		hash = s.fakeHash()
 	}
-	ok := passwords.Verify(pw, hash) && err == nil && len(pw) <= 512
+	ok := passwords.Verify(pw, hash) && !noPass && len(pw) <= 512
 	if !ok {
 		d.Error = "The email or password is wrong."
 		s.render(w, http.StatusUnauthorized, "auth", d)
@@ -181,7 +191,7 @@ func (s *Server) accountPage(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
-	d := pageData{Title: "Account", Wide: true, CSRF: s.csrf(w, r), Email: u.Email}
+	d := pageData{Title: "Account", Wide: true, CSRF: s.csrf(w, r), Email: u.Email, GoogleLinked: u.GoogleSub != ""}
 	toks, err := s.st.ListTokens(u.ID)
 	if err != nil {
 		s.log.Error("listing tokens", "err", err)

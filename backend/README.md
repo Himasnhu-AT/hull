@@ -25,9 +25,32 @@ Without `ANTHROPIC_API_KEY` the server still starts: sign-in works and the AI ro
 | `ANTHROPIC_BASE_URL` | `https://api.anthropic.com` | Where requests are forwarded. |
 | `ALLOW_SIGNUP` | `true` | Set `false` to close sign-up. |
 | `DEFAULT_MODEL` | `claude-opus-5-5` | Used by `/v1/chat/completions` when the model is not a `claude-*` name. |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | none | Turn on "Continue with Google". Set both or neither; one alone stops the server at startup. |
 
 Test: `go vet ./... && go test ./...`. Behind a reverse proxy, note that the per-IP limit on login and sign-up uses the
 connection's address, not `X-Forwarded-For`.
+
+## Google sign-in
+
+1. In Google Cloud Console, make an OAuth client (type Web application) and set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`.
+2. Add `PUBLIC_URL` + `/api/v1/auth/google/callback` to the client's Authorized redirect URIs. For a local run that is
+   `http://127.0.0.1:8787/api/v1/auth/google/callback`. The URI must match exactly, so `localhost` and `127.0.0.1` are different.
+
+Without both variables there is no Google button and `/auth/google/start` answers 503. With them, the login and sign-up pages
+show the button, which goes `/auth/google/start?next=...` (same `next` rule as `/login`) to Google and back to
+`/api/v1/auth/google/callback`; the app sign-in works through it unchanged. State and the PKCE verifier wait in a 10-minute
+HttpOnly cookie. The id token is read, not signature-checked, because it comes straight from Google over TLS in answer to a request
+that carries the client secret; issuer, audience, expiry and a verified email are checked.
+
+Which account signs in:
+
+1. The account already linked to that Google user.
+2. Else an account with that email. It is linked only when Google is the authority for the address: it ends in
+   `@gmail.com` or `@googlemail.com`, or the token's `hd` (Workspace domain) equals the address's domain. Otherwise it is
+   refused ("Sign in with your password"), so an unproven Google address cannot take over a password account.
+3. Else a new account with no password (refused when `ALLOW_SIGNUP=false`).
+
+A Google-only account cannot log in with a password. An existing database is migrated on start (a nullable, unique `google_sub` column).
 
 ## Protocol
 

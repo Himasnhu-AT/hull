@@ -15,6 +15,7 @@ import (
 var (
 	ErrNotFound   = errors.New("not found")
 	ErrEmailTaken = errors.New("email already registered")
+	ErrSubTaken   = errors.New("google account already linked")
 )
 
 type Store struct{ db *sql.DB }
@@ -22,7 +23,8 @@ type Store struct{ db *sql.DB }
 type User struct {
 	ID        int64
 	Email     string
-	PassHash  string
+	PassHash  string // empty for an account that signed up with Google and has no password
+	GoogleSub string // empty when the account is not linked to Google
 	CreatedAt time.Time
 }
 
@@ -76,7 +78,41 @@ func Open(path string) (*Store, error) {
 		db.Close()
 		return nil, fmt.Errorf("store: migrating %s: %w", path, err)
 	}
+	if err := migrateGoogleSub(db); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("store: migrating %s: %w", path, err)
+	}
 	return &Store{db: db}, nil
+}
+
+// migrateGoogleSub adds users.google_sub to a database made before Google sign-in. SQLite cannot drop NOT NULL,
+// so an account without a password keeps an empty password_hash, which no password can match.
+func migrateGoogleSub(db *sql.DB) error {
+	rows, err := db.Query("SELECT name FROM pragma_table_info('users')")
+	if err != nil {
+		return err
+	}
+	has := false
+	for rows.Next() {
+		var n string
+		if err := rows.Scan(&n); err != nil {
+			rows.Close()
+			return err
+		}
+		has = has || n == "google_sub"
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	if !has {
+		if _, err := db.Exec("ALTER TABLE users ADD COLUMN google_sub TEXT"); err != nil {
+			return err
+		}
+	}
+	// Unique over a nullable column: any number of accounts may have no Google link.
+	_, err = db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS users_google_sub ON users(google_sub)")
+	return err
 }
 
 func (s *Store) Close() error { return s.db.Close() }
@@ -95,10 +131,39 @@ func (s *Store) CreateUser(email, passHash string, now time.Time) (User, error) 
 	return User{ID: id, Email: email, PassHash: passHash, CreatedAt: time.Unix(ts(now), 0)}, nil
 }
 
+// CreateGoogleUser makes an account that has no password, linked to a Google subject.
+func (s *Store) CreateGoogleUser(email, sub string, now time.Time) (User, error) {
+	res, err := s.db.Exec("INSERT INTO users(email,password_hash,google_sub,created_at) VALUES(?,?,?,?)", email, "", sub, ts(now))
+	if err != nil {
+		if strings.Contains(err.Error(), "UNIQUE") {
+			if strings.Contains(err.Error(), "google_sub") {
+				return User{}, ErrSubTaken
+			}
+			return User{}, ErrEmailTaken
+		}
+		return User{}, fmt.Errorf("store: creating google user: %w", err)
+	}
+	id, _ := res.LastInsertId()
+	return User{ID: id, Email: email, GoogleSub: sub, CreatedAt: time.Unix(ts(now), 0)}, nil
+}
+
+// LinkGoogle ties an existing account to a Google subject.
+func (s *Store) LinkGoogle(userID int64, sub string) error {
+	_, err := s.db.Exec("UPDATE users SET google_sub=? WHERE id=?", sub, userID)
+	if err != nil && strings.Contains(err.Error(), "UNIQUE") {
+		return ErrSubTaken
+	}
+	return err
+}
+
+func (s *Store) UserByGoogleSub(sub string) (User, error) {
+	return scanUser(s.db.QueryRow("SELECT id,email,password_hash,created_at,COALESCE(google_sub,'') FROM users WHERE google_sub=?", sub))
+}
+
 func scanUser(row *sql.Row) (User, error) {
 	var u User
 	var created int64
-	err := row.Scan(&u.ID, &u.Email, &u.PassHash, &created)
+	err := row.Scan(&u.ID, &u.Email, &u.PassHash, &created, &u.GoogleSub)
 	if errors.Is(err, sql.ErrNoRows) {
 		return User{}, ErrNotFound
 	}
@@ -110,11 +175,11 @@ func scanUser(row *sql.Row) (User, error) {
 }
 
 func (s *Store) UserByEmail(email string) (User, error) {
-	return scanUser(s.db.QueryRow("SELECT id,email,password_hash,created_at FROM users WHERE email=?", email))
+	return scanUser(s.db.QueryRow("SELECT id,email,password_hash,created_at,COALESCE(google_sub,'') FROM users WHERE email=?", email))
 }
 
 func (s *Store) UserByID(id int64) (User, error) {
-	return scanUser(s.db.QueryRow("SELECT id,email,password_hash,created_at FROM users WHERE id=?", id))
+	return scanUser(s.db.QueryRow("SELECT id,email,password_hash,created_at,COALESCE(google_sub,'') FROM users WHERE id=?", id))
 }
 
 func (s *Store) CreateSession(hash string, userID int64, expires time.Time) error {
@@ -123,7 +188,7 @@ func (s *Store) CreateSession(hash string, userID int64, expires time.Time) erro
 }
 
 func (s *Store) SessionUser(hash string, now time.Time) (User, error) {
-	return scanUser(s.db.QueryRow(`SELECT u.id,u.email,u.password_hash,u.created_at FROM sessions s
+	return scanUser(s.db.QueryRow(`SELECT u.id,u.email,u.password_hash,u.created_at,COALESCE(u.google_sub,'') FROM sessions s
 		JOIN users u ON u.id=s.user_id WHERE s.hash=? AND s.expires_at>?`, hash, ts(now)))
 }
 
@@ -168,7 +233,7 @@ func (s *Store) TokenUser(hash string, now time.Time) (User, int64, error) {
 		}
 		return User{}, 0, fmt.Errorf("store: reading token: %w", err)
 	}
-	u, err := scanUser(s.db.QueryRow(`SELECT u.id,u.email,u.password_hash,u.created_at FROM tokens t
+	u, err := scanUser(s.db.QueryRow(`SELECT u.id,u.email,u.password_hash,u.created_at,COALESCE(u.google_sub,'') FROM tokens t
 		JOIN users u ON u.id=t.user_id WHERE t.id=?`, id))
 	if err != nil {
 		return User{}, 0, err
