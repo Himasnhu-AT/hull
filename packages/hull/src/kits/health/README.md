@@ -10,5 +10,5 @@ Hit points with hit zones, and a weapon that hurts them.
   `Weapon` fields: `action`, `damage`, `range`, `rate`, `radius`, `height`, `sound`, `mask`; signals `hit`, `fired`.
 - **Config**: `ui-theme/hud`, `sound/hit`.
 - **Bench**: `bench.ts` (a gun and three enemies). **Test**: `health.test.ts`.
-'- **Zones as numbers** (`zones.ts`): `zoneEffect(damage, cutAt, shallowAt)` gives `ZONE_CUT`, `ZONE_SHALLOW` or `ZONE_NONE`;
-  `coveredDamage`; `regenerate` (hit points as a fraction of full, after a quiet spell). AOTT'\''s titan parts and soldier use them. Test: `zones.test.ts`.'
+- **Zones as numbers** (`zones.ts`): `zoneEffect(damage, cutAt, shallowAt)` gives `ZONE_CUT`, `ZONE_SHALLOW` or `ZONE_NONE`;
+  `coveredDamage`; `regenerate` (hit points as a fraction of full, after a quiet spell). AOTT's titan parts and soldier use them. Test: `zones.test.ts`.

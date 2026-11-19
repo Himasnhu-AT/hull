@@ -15,6 +15,10 @@ public methods and tunables. Each folder has a README, default config, a bench s
 | `pause` | pause menu |
 | `saves` | save slots |
 
+Four kits also export pure helpers (no nodes) for a game that builds its own player or enemies: `spawner/waves` (the wave
+clock), `pickups/depot` (a supply zone), `health/zones` (hit zone, cover and regeneration maths) and `follow-camera/glide`
+(chase-camera maths). Each is documented in its kit's README and in `docs/ARCHITECTURE.md`.
+
 Shared rules: tunables are `tunables()` blocks (Inspector widgets); no allocation in a step; game time and the world's random
 streams only; sound, input and the UI go through `kitIO` so a test can swap them (`hull/kits/testing`).
 `templates/fps` and `templates/third-person` are whole games under 30 lines of code each.
