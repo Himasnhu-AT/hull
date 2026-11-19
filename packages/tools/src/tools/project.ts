@@ -47,6 +47,10 @@ interface Spec {
   format?(out: unknown): string[];
 }
 
+const assetRef: Schema = obj({ kind: { enum: ['config', 'code'] }, file: str(), id: str(), pointer: str(), line: num(), col: num() }, ['kind', 'file', 'line', 'col']);
+const assetResult: Schema = obj({ ok: { type: 'boolean' }, problems, refs: arr(assetRef), created: arr(str()), gone: arr(str()) }, ['ok', 'problems']);
+const refLines = (o: unknown): string[] => ((o as { refs?: { file: string; pointer?: string; line: number; col: number }[] }).refs ?? []).map((r) => `  ${r.file}${r.pointer ? '#' + r.pointer : ''}:${r.line}:${r.col}`);
+
 const SPECS: Spec[] = [
   { method: 'project.info', summary: 'The project: root, title, manifest and where its game page is served.', input: empty, output: obj({ root: str(), title: str(), gameUrl: str(), manifest: {} }, ['root', 'title', 'gameUrl']) },
   { method: 'library.list', summary: 'Every config file and tunables block in the project, with its problem count.', input: empty, output: list(obj({ id: str(), kind: str(), path: str(), title: str(), note: str(), problems: num() }, ['id', 'kind', 'path', 'title', 'problems'])),
@@ -59,6 +63,15 @@ const SPECS: Spec[] = [
     format: (o) => (o as { items: { block: string; key: string; value: unknown }[] }).items.map((t) => `${t.block}.${t.key} = ${JSON.stringify(t.value)}`) },
   { method: 'tunables.set', summary: 'Change a tunable: rewrites its literal in the .ts file (re-parsed and type-checked first) and updates running games without a reload.', input: obj({ block: str('The tunables block, like player.'), key: str(), value: anyValue('The new value.'), author, exp }, ['block', 'key', 'value']), output: writeResult,
  },
+  { method: 'content.list', summary: 'The Content Browser data: every folder under config/, the code files in src/, the kinds that can be created from nothing, and a preview (colours, levels) per asset.', input: empty, output: obj({ folders: arr(str()), code: arr(obj({ path: str(), bytes: num() }, ['path', 'bytes'])), creatable: arr(str()), thumbs: { type: 'object', additionalProperties: true } }, ['folders', 'code', 'creatable', 'thumbs']) },
+  { method: 'asset.refs', summary: "Who names an asset (other configs by JSON pointer, string literals in src/) and which assets its own file names.", input: obj({ id: str("Config id like 'material/soldier-jacket'.") }, ['id']), output: obj({ ok: { type: 'boolean' }, problems, referencedBy: arr(assetRef), uses: arr(obj({ id: str(), pointer: str() }, ['id'])) }, ['ok', 'problems', 'referencedBy', 'uses']),
+    format: (o) => { const r = o as { referencedBy: { file: string; line: number; col: number }[]; uses: { id: string }[] }; return [`referenced by ${r.referencedBy.length}`, ...r.referencedBy.map((x) => `  ${x.file}:${x.line}:${x.col}`), `uses ${r.uses.length}`, ...r.uses.map((u) => `  ${u.id}`)]; } },
+  { method: 'asset.new', summary: 'Create a config asset from its kind\'s starter document (material, look, sound, vfx, tuning, input-map). Validated, recorded in the history with its author.', input: obj({ kind: str(), id: str("The new id, like 'sound/combat/clash'."), author }, ['kind', 'id']), output: assetResult, format: (o) => [...((o as { created?: string[] }).created ?? []).map((i) => `created ${i}`)] },
+  { method: 'asset.duplicate', summary: 'Copy an asset to a new id (default: <id>-copy).', input: obj({ id: str(), to: str(), author }, ['id']), output: assetResult, format: (o) => [...((o as { created?: string[] }).created ?? []).map((i) => `created ${i}`)] },
+  { method: 'asset.rename', summary: 'Change an asset id, or a folder path. Every reference in other configs and in src/ string literals is rewritten in the same step; refused if the target exists or the kind would change.', input: obj({ id: str('An asset id or a folder like sound/combat.'), to: str('The new id or folder path.'), author }, ['id', 'to']), output: assetResult, format: (o) => ['renamed', ...refLines(o)] },
+  { method: 'asset.move', summary: 'Move assets or folders into a folder of the same kind (sound/combat). References are rewritten like a rename.', input: obj({ ids: arr(str()), folder: str(), author }, ['ids', 'folder']), output: assetResult, format: (o) => ['moved', ...refLines(o)] },
+  { method: 'asset.delete', summary: 'Delete assets or whole folders. Refused, with every place that still names one, while any reference exists.', input: obj({ ids: arr(str()), author }, ['ids']), output: assetResult, format: (o) => ['deleted'] },
+  { method: 'folder.new', summary: 'Create an empty folder inside a config kind, like sound/combat.', input: obj({ path: str(), author }, ['path']), output: writeResult },
   { method: 'journal.list', summary: 'The recent changes made through the server, newest last.', input: obj({ limit: num() }), output: list({ type: 'object', properties: { at: str(), by: str(), target: str(), path: str(), from: {}, to: {} }, required: ['at', 'by', 'target', 'path'], additionalProperties: true }),
  },
   { method: 'history.list', summary: 'The timeline, newest first, across the main line and every experiment. `by` says who made each change.', input: obj({ limit: num(), line: str("'main' or an experiment name.") }), output: list(historyChange),

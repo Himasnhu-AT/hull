@@ -6,6 +6,7 @@ import type { OpenedProject } from '../../shared/appApi.ts';
 import { RpcClient, studioUrl } from '../lib/rpc.ts';
 import { Icon } from '../ui/Icon.tsx';
 import { Dock, type DockTab } from './Dock.tsx';
+import { ContentBrowser } from '../content/ContentBrowser.tsx';
 import { Inspector } from './Inspector.tsx';
 import { Library } from './Library.tsx';
 import { BenchView, type BenchKind } from '../benches/Benches.tsx'; // w3-app-benches
@@ -47,6 +48,8 @@ function EditorBody({ rpc, project, platform, onClose }: { rpc: RpcClient; proje
   const [agentsOpen, setAgentsOpen] = useState(false);
   const [view, setView] = useState<View>('game');
   const [dockTab, setDockTab] = useState<DockTab>('console');
+  // The Content Browser can pop out to the full window width, over the Library and the Inspector columns.
+  const [dockWide, setDockWide] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
   const [build, setBuild] = useState<BuildState>('idle');
   const [toast, setToast] = useState<Toast | null>(null);
@@ -138,6 +141,14 @@ function EditorBody({ rpc, project, platform, onClose }: { rpc: RpcClient; proje
   const problemCount = Math.max(allProblems.length, items.reduce((n, i) => n + i.problems, 0));
 
   const select = useCallback((id: string) => setSelected(id), []);
+  // Double-click or Enter in the Content Browser: select it, show the Inspector and open the bench that matches its kind.
+  const openAsset = useCallback((id: string) => {
+    setSelected(id);
+    setPanels((s) => ({ ...s, insp: true }));
+    const kind = (p.library ?? []).find((i) => i.id === id)?.kind;
+    if (kind === 'sound') setView('sound');
+    else if (kind === 'character' || kind === 'vfx' || kind === 'look') setView(kind);
+  }, [p.library]);
   const openFromConsole = useCallback((id: string) => { setSelected(id); setPanels((s) => ({ ...s, insp: true })); }, []);
 
   const { lib, insp, dock } = panels;
@@ -148,7 +159,7 @@ function EditorBody({ rpc, project, platform, onClose }: { rpc: RpcClient; proje
   const areas = [
     `"${mid.map(() => 'top').join(' ')}"`,
     `"${mid.join(' ')}"`,
-    ...(dock ? [`"${mid.map((m) => (m === 'view' ? 'dock' : m)).join(' ')}"`] : []),
+    ...(dock ? [`"${mid.map((m) => (dockWide ? 'dock' : m === 'view' ? 'dock' : m)).join(' ')}"`] : []),
   ].join(' ');
 
   const gameNote = p.status !== 'open' ? 'Connecting...' : p.report ? 'Live: edits apply while it runs' : 'Waiting for the game to start';
@@ -204,11 +215,12 @@ function EditorBody({ rpc, project, platform, onClose }: { rpc: RpcClient; proje
 
       {dock && <Dock tab={dockTab} onTab={setDockTab} logs={p.logs} problems={allProblems} journal={p.journal} onClear={p.clearLogs} onOpen={openFromConsole}
         flagged={h.flagged.size}
+        content={<ContentBrowser rpc={rpc} items={p.library} error={p.libraryError} selected={selected} changed={changed} onSelect={select} onOpen={openAsset} onReveal={reveal} notify={notify} wide={dockWide} onWide={() => setDockWide((v) => !v)} />}
         history={<HistoryPanel h={h} openExp={openInfo ? openInfo.name : null} onOpenExp={setOpenExp} onCompare={compareExps} onProblems={() => setDockTab('console')} />} />}
 
       {lib && <div className={`splitter v${split.active === 'lib' ? ' drag' : ''}`} style={{ left: w.lib - 3 }} {...split.bind('lib', 1, 200, 420)} role="separator" aria-orientation="vertical" aria-label="Resize Library" />}
       {insp && <div className={`splitter v${split.active === 'insp' ? ' drag' : ''}`} style={{ right: w.insp - 3 }} {...split.bind('insp', -1, 260, 560)} role="separator" aria-orientation="vertical" aria-label="Resize Inspector" />}
-      {dock && <div className={`splitter h${split.active === 'dock' ? ' drag' : ''}`} style={{ bottom: w.dock - 3, left: lib ? w.lib : 0, right: insp ? w.insp : 0 }} {...split.bind('dock', -1, 120, 520, 'y')} role="separator" aria-orientation="horizontal" aria-label="Resize Dock" />}
+      {dock && <div className={`splitter h${split.active === 'dock' ? ' drag' : ''}`} style={{ bottom: w.dock - 3, left: lib && !dockWide ? w.lib : 0, right: insp && !dockWide ? w.insp : 0 }} {...split.bind('dock', -1, 120, Math.max(520, window.innerHeight - 160), 'y')} role="separator" aria-orientation="horizontal" aria-label="Resize Dock" />}
 
       <AdoptDialog h={h} />
 

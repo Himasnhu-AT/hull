@@ -41,6 +41,14 @@ const P = {
   compare: <><rect x="3" y="5" width="8" height="14" rx="1.5" /><rect x="13" y="5" width="8" height="14" rx="1.5" /></>,
   flag: <><path d="M5 21V4" /><path d="M5 4h11l-2 4 2 4H5" /></>,
   sliders: <><line x1="4" y1="7" x2="20" y2="7" /><line x1="4" y1="17" x2="20" y2="17" /><circle cx="9" cy="7" r="2.2" /><circle cx="15" cy="17" r="2.2" /></>,
+  grid: <><rect x="4" y="4" width="7" height="7" rx="1.5" /><rect x="13" y="4" width="7" height="7" rx="1.5" /><rect x="4" y="13" width="7" height="7" rx="1.5" /><rect x="13" y="13" width="7" height="7" rx="1.5" /></>,
+  list: <><line x1="8" y1="6" x2="20" y2="6" /><line x1="8" y1="12" x2="20" y2="12" /><line x1="8" y1="18" x2="20" y2="18" /><circle cx="4" cy="6" r="0.6" /><circle cx="4" cy="12" r="0.6" /><circle cx="4" cy="18" r="0.6" /></>,
+  copy: <><rect x="8" y="8" width="12" height="12" rx="2" /><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" /></>,
+  edit: <><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16z" /><line x1="13.5" y1="6.5" x2="17.5" y2="10.5" /></>,
+  expand: <><polyline points="15 4 20 4 20 9" /><polyline points="9 20 4 20 4 15" /><line x1="20" y1="4" x2="14" y2="10" /><line x1="4" y1="20" x2="10" y2="14" /></>,
+  shrink: <><polyline points="20 9 15 9 15 4" /><polyline points="4 15 9 15 9 20" /><line x1="15" y1="9" x2="21" y2="3" /><line x1="9" y1="15" x2="3" y2="21" /></>,
+  newfolder: <><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /><line x1="12" y1="10.5" x2="12" y2="15.5" /><line x1="9.5" y1="13" x2="14.5" y2="13" /></>,
+  move: <><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /><polyline points="11 11.5 14 13 11 14.5" /></>,
 } satisfies Record<string, JSX.Element>;
 
 export type IconName = keyof typeof P;
