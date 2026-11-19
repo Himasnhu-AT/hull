@@ -3,9 +3,8 @@
 import { Behaviour, type Node, type World } from 'hull';
 import { Animator } from 'hull/anim';
 import { Collider } from 'hull/physics';
-import { Health, ThirdPerson, FollowCamera, HealthHud, Weapon, AimFollow, LAYER, GROUP, kitIO } from 'hull/kits';
-import { Camera } from 'hull/render';
-import { groundHeight, STARTS, CAST } from './world/map';
+import { Health, LAYER, GROUP } from 'hull/kits';
+import { groundHeight, CAST } from './world/map';
 
 /** Hit points by kind: what the placeholder swing (40 a hit) has to get through. */
 const HP: Record<string, number> = { ashblade: 80, ashpike: 90, hulk: 240, ashkite: 60, kagari: 400 };
@@ -71,26 +70,4 @@ export function spawnRaiders(world: World): Node[] {
   return CAST.map((c) => spawnRaider(world, c.id, c.kind, c.x, c.z, c.yaw));
 }
 
-/** Aya, her camera and her HUD: the third-person kit's body with the placeholder swing. */
-export function spawnAya(world: World): Node {
-  const me = world.spawn('player');
-  const loc = (globalThis as { location?: { search: string } }).location;
-  const pick = new URLSearchParams(loc?.search ?? '').get('start') ?? 'landing';
-  const [sx, sz, syaw] = STARTS[pick] ?? STARTS['landing']!;
-  me.position.set(sx, groundHeight(sx, sz), sz);
-  me.add(Health, { max: 100, hp: 100 });
-  const cam = world.spawn('camera');
-  const tp = me.add(ThirdPerson, { character: 'character/aya', facing: syaw });
-  cam.add(Camera, { fov: 60 });
-  cam.add(FollowCamera, { yaw: syaw });
-  me.add(HealthHud);
-  // The swing starts at the chest and goes where the body faces. Phase 2 swaps it for the combat kit's blade trace.
-  const aim = world.spawn('aim', me);
-  aim.add(AimFollow, { source: tp });
-  aim.add(Weapon, { action: 'attack', damage: 40, range: 2.3, rate: 2.4, radius: 0.7, height: 1.1, sound: 'sound/swing/light', mask: LAYER.world | LAYER.enemy });
-  const w = aim.get(Weapon)!;
-  w.fired.connect(() => tp.animator?.trigger('attack'), aim);
-  w.hit.connect((_t, _z, _a) => kitIO.play('sound/hit/flesh'), aim);
-  tp.stepSound = 'sound/step/grass';
-  return me;
-}
+export { spawnAya } from './player';

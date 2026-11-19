@@ -6,7 +6,7 @@ import { vfx, type TrailHandle } from 'hull/vfx';
 import { kitIO } from 'hull/kits';
 import { windU } from './world/wind';
 import { groundHeight, surfaceAt } from './world/map';
-import { ThirdPerson } from 'hull/kits';
+import { Aya } from './player/aya';
 
 export const LOOKS = ['dusk', 'rain', 'night'] as const;
 export type LookName = (typeof LOOKS)[number];
@@ -119,9 +119,9 @@ export class Atmosphere extends Behaviour {
 
 /** Sets the footstep sound from what Aya stands on, and from the weather (mud when it rains on dirt). */
 export class Footing extends Behaviour {
-  private tp!: ThirdPerson;
+  private tp!: Aya;
   private weather: Atmosphere | null = null;
-  override ready(): void { this.tp = this.node.get(ThirdPerson)!; }
+  override ready(): void { this.tp = this.node.get(Aya)!; }
   override fixedUpdate(): void {
     this.weather ??= this.world.find('atmosphere')?.get(Atmosphere) ?? null;
     let s = surfaceAt(this.node.position.x, this.node.position.z);
