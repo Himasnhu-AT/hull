@@ -4,7 +4,6 @@
 import * as THREE from 'hull/three';
 import { Geo } from './geo';
 import { GATE, SHRINE, VILLAGE, groundHeight } from './map';
-import { mulberry } from './rng';
 
 export interface Block { x: number; y: number; z: number; sx: number; sy: number; sz: number }
 
@@ -30,7 +29,6 @@ export function buildVillage(): VillageParts {
   const blocks: Block[] = [];
   const lights: { x: number; y: number; z: number }[] = [];
   const ground = (x: number, z: number): number => groundHeight(x, z);
-  const r = mulberry(77);
 
   for (const hs of HOUSES) {
     const x = VILLAGE.x + hs.dx, z = VILLAGE.z + hs.dz;
@@ -136,7 +134,6 @@ export function buildVillage(): VillageParts {
     }
     blocks.push({ x: sx, y: top + 1.5, z: sz - 1, sx: 6.6, sy: 3.5, sz: 4.8 });
   }
-  void r;
 
   const group = new THREE.Group();
   const sm = new THREE.Mesh(solid.build(), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.92, side: THREE.DoubleSide }));

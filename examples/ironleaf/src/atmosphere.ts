@@ -69,7 +69,7 @@ export class Atmosphere extends Behaviour {
 
   override update(): void {
     const v = views();
-    this.player ??= this.world.find('player');
+    this.player ??= this.world.find('player') ?? null;
     if (this.index !== this.applied) {
       if (v?.render) {
         v.render.setLook('look/' + this.look);

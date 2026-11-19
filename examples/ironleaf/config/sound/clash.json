@@ -2,7 +2,7 @@
   "kind": "sound",
   "note": "Steel on steel: a bright ring with a hard tick and a short low knock.",
   "bus": "sfx",
-  "level": -3,
+  "level": -9,
   "pitch": [
     0.93,
     1.07

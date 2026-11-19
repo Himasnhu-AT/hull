@@ -1,8 +1,8 @@
 // The island's ground: one coloured mesh, a sea plane, and the same heights as a physics heightfield, so what Aya stands on
 // is what is drawn. The colours say what the ground is (grass, pampas straw, trodden dirt, sand, rock) without a texture.
 import * as THREE from 'hull/three';
-import { clamp, fbm, lerp, smoothstep } from './rng';
-import { GROVES, PAMPAS, SEA, SHRINE, VILLAGE, bambooAmount, groundHeight, pampasAmount, pathDistance } from './map';
+import { fbm, smoothstep } from './rng';
+import { SEA, VILLAGE, bambooAmount, groundHeight, pampasAmount, pathDistance } from './map';
 
 export const CELL = 1.2;
 export const COLS = 257;
@@ -35,7 +35,6 @@ function paint(out: THREE.Color, x: number, z: number, h: number, slope: number)
   // sand by the water and rock on the steep
   grass.lerp(lerpHex(col, '#d4c08e', '#c1ad7c', n), 1 - smoothstep(0.6, 1.4, h));
   grass.lerp(lerpHex(col, '#7c786f', '#66625a', n), smoothstep(0.55, 0.95, slope));
-  void SHRINE; void GROVES; void PAMPAS; void clamp; void lerp;
 }
 
 /** The island and its sea, as one Group under whatever node holds it. */

@@ -30,7 +30,7 @@ function pampasGeometry(): THREE.BufferGeometry {
     const base: [number, number, number] = [0, 0, 0];
     const tip: [number, number, number] = [Math.cos(a) * lean, len, Math.sin(a) * lean];
     g.leaf(base, tip, 0.03, '#a89a58', '#e6d9a8');
-    g.leaf([tip[0], tip[1] - 0.28, tip[2]], [tip[0] + Math.cos(a) * 0.05, tip[1] + 0.12, tip[2] + Math.sin(a) * 0.05], 0.16, '#d9c98f', '#f2e9c8');
+    g.leaf([tip[0], tip[1] - 0.28, tip[2]], [tip[0] + Math.cos(a) * 0.05, tip[1] + 0.12, tip[2] + Math.sin(a) * 0.05], 0.1, '#d9c98f', '#f2e9c8');
   }
   return g.build();
 }

@@ -7,7 +7,15 @@ export interface Spot { x: number; z: number; r: number }
 /** The island's sea level: the ground is 0 at the water's edge. */
 export const SEA = 0;
 /** Where Aya starts: the landing beach. */
-export const LANDING = { x: -84, z: 30, yaw: -Math.PI / 2 };
+export const LANDING = { x: -70, z: 26, yaw: -Math.PI / 2 };
+/** Places a tester can start at with `?start=camp` (and so can a screenshot): [x, z, yaw]. */
+export const STARTS: Record<string, [number, number, number]> = {
+  landing: [LANDING.x, LANDING.z, LANDING.yaw],
+  camp: [-36, 14, -1.45],
+  gate: [36, -10, -1.5],
+  village: [56, -8, -0.4],
+  shrine: [80, -46, 2.9],
+};
 export const VILLAGE: Spot = { x: 62, z: -20, r: 30 };
 export const SHRINE: Spot = { x: 90, z: -64, r: 22 };
 export const GROVES: Spot[] = [{ x: -55, z: -60, r: 30 }, { x: 22, z: 64, r: 26 }, { x: 104, z: 24, r: 20 }];

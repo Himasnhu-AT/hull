@@ -8,5 +8,6 @@
   "radius": 0.32,
   "height": 1.66,
   "strideLength": 1.7,
-  "jumpHeight": 1
+  "jumpHeight": 1,
+  "modelYaw": 0
 }

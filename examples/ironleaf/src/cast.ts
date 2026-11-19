@@ -5,7 +5,7 @@ import { Animator } from 'hull/anim';
 import { Collider } from 'hull/physics';
 import { Health, ThirdPerson, FollowCamera, HealthHud, Weapon, AimFollow, LAYER, GROUP, kitIO } from 'hull/kits';
 import { Camera } from 'hull/render';
-import { groundHeight, LANDING, CAST } from './world/map';
+import { groundHeight, STARTS, CAST } from './world/map';
 
 /** Hit points by kind: what the placeholder swing (40 a hit) has to get through. */
 const HP: Record<string, number> = { ashblade: 80, ashpike: 90, hulk: 240, ashkite: 60, kagari: 400 };
@@ -31,7 +31,7 @@ export class Stander extends Behaviour {
     this.node.addTo(GROUP.enemy);
     this.health = this.node.get(Health)!;
     this.model = this.world.spawn('model', this.node);
-    this.model.rotation.y = this.facing + Math.PI;
+    this.model.rotation.y = this.facing;
     this.animator = this.model.add(Animator, { character: `character/${this.kind}`, ground: groundHeight });
     this.health.damaged.connect(() => this.animator.trigger('hit'), this.node);
     this.health.died.connect(() => {
@@ -44,7 +44,7 @@ export class Stander extends Behaviour {
 
   override fixedUpdate(dt: number): void {
     if (this.fallen) return;
-    this.target ??= this.world.find('player');
+    this.target ??= this.world.find('player') ?? null;
     const p = this.target;
     if (!p) return;
     const dx = p.position.x - this.node.position.x, dz = p.position.z - this.node.position.z;
@@ -53,7 +53,7 @@ export class Stander extends Behaviour {
     if (d > Math.PI) d -= TAU; else if (d < -Math.PI) d += TAU;
     const step = this.turnRate * dt;
     this.facing += Math.abs(d) <= step ? d : Math.sign(d) * step;
-    this.model.rotation.y = this.facing + Math.PI;
+    this.model.rotation.y = this.facing;
   }
 }
 
@@ -74,12 +74,15 @@ export function spawnRaiders(world: World): Node[] {
 /** Aya, her camera and her HUD: the third-person kit's body with the placeholder swing. */
 export function spawnAya(world: World): Node {
   const me = world.spawn('player');
-  me.position.set(LANDING.x, groundHeight(LANDING.x, LANDING.z), LANDING.z);
+  const loc = (globalThis as { location?: { search: string } }).location;
+  const pick = new URLSearchParams(loc?.search ?? '').get('start') ?? 'landing';
+  const [sx, sz, syaw] = STARTS[pick] ?? STARTS['landing']!;
+  me.position.set(sx, groundHeight(sx, sz), sz);
   me.add(Health, { max: 100, hp: 100 });
   const cam = world.spawn('camera');
-  const tp = me.add(ThirdPerson, { character: 'character/aya', facing: LANDING.yaw });
+  const tp = me.add(ThirdPerson, { character: 'character/aya', facing: syaw });
   cam.add(Camera, { fov: 60 });
-  cam.add(FollowCamera);
+  cam.add(FollowCamera, { yaw: syaw });
   me.add(HealthHud);
   // The swing starts at the chest and goes where the body faces. Phase 2 swaps it for the combat kit's blade trace.
   const aim = world.spawn('aim', me);
