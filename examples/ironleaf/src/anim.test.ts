@@ -24,10 +24,10 @@ const RAIDER = [
 interface Kit { name: string; set: string; clips: Map<string, Clip>; sk: ReturnType<typeof buildBody>['skeleton']; graph: AnimGraph }
 
 function kit(character: string): Kit {
-  const def = config.lookup('character', character) as { body: never; animSet: string; animGraph: string };
+  const def = config.lookup('character', character) as unknown as { body: never; animSet: string; animGraph: string };
   const sk = buildBody(def.body).skeleton;
   const setName = def.animSet.replace('anim-set/', '');
-  const set = config.lookup('anim-set', setName) as { clips: Record<string, never> };
+  const set = config.lookup('anim-set', setName) as unknown as { clips: Record<string, never> };
   const problems: string[] = [];
   const clips = new Map<string, Clip>();
   for (const [n, d] of Object.entries(set.clips)) {
@@ -35,7 +35,7 @@ function kit(character: string): Kit {
     if (c) clips.set(n, c);
   }
   expect(problems).toEqual([]);
-  return { name: character, set: setName, clips, sk, graph: config.lookup('anim-graph', def.animGraph.replace('anim-graph/', '')) as AnimGraph };
+  return { name: character, set: setName, clips, sk, graph: config.lookup('anim-graph', def.animGraph.replace('anim-graph/', '')) as unknown as AnimGraph };
 }
 
 /** Where the blade tip is (hand joint plus 0.91 along its -Y, in model space) for a pose. */
