@@ -243,10 +243,13 @@ export class AottHost extends Behaviour {
     type FsEl = HTMLElement & { webkitRequestFullscreen?: () => void };
     const isFull = () => !!(document.fullscreenElement || (document as FsDoc).webkitFullscreenElement);
     const params = new URLSearchParams(location.search);
+    let embedded = false;
+    try { embedded = window.self !== window.top; } catch { embedded = true; }
     game.fullscreen = () => {
       // the whole page, not the canvas: the HUD is a sibling of it and would be left behind
       const el = document.documentElement as FsEl;
-      if (isFull() || params.has('window')) return;
+      // Inside Hull's app the game is a panel of the editor: taking the whole screen would hide the Inspector.
+      if (isFull() || params.has('window') || embedded) return;
       try {
         if (el.requestFullscreen) el.requestFullscreen({ navigationUI: 'hide' }).catch(() => { /* refused */ });
         else el.webkitRequestFullscreen?.();

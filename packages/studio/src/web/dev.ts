@@ -27,7 +27,8 @@ const host = createHost({ dataDir, log: (l) => console.log(`[hull] ${l}`) });
 
 let initial: OpenedProject | null = null;
 const project = flag('project');
-if (project) initial = await host.openProject(resolve(project));
+// pnpm runs this script inside packages/studio, so a relative --project is taken from where the command was typed.
+if (project) initial = await host.openProject(resolve(process.env.INIT_CWD ?? process.cwd(), project));
 
 const api: Record<string, (arg: never) => unknown> = {
   listTemplates: () => host.listTemplates(),

@@ -39,7 +39,9 @@ export const dev = defineTool<DevInput, DevOutput>({
       load: (id) => (id === RESOLVED_BOOT ? bootModule(entry, readConfigFiles(ctx.root)) : undefined),
       configureServer(server) {
         server.middlewares.use(async (req, res, next) => {
-          if (req.url !== '/' && req.url !== '/index.html') return next();
+          // Compare the path only: a page address with a query (`/?play=free`) is still the game page.
+          const path = (req.url ?? '').split('?')[0];
+          if (path !== '/' && path !== '/index.html') return next();
           res.setHeader('content-type', 'text/html');
           res.end(await server.transformIndexHtml('/', PAGE));
         });
