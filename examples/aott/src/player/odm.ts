@@ -332,7 +332,7 @@ export class TetherGear {
       // catch feel: a bite flash + a glint up the wire on attach, a twang wave when it snaps taut
       if (h.bite) { w.bite(); h.bite = 0; }
       if (h.twang > 0) { w.pluck(Math.min(1, h.twang / 22)); h.twang = 0; }
-      w.update(origins[i], h.tip, camera, wobble, time + i * 1.7, sag, h.attached, this.game.world?.sun);
+      w.update(origins[i], h.tip, camera, wobble, time + i * 1.7, sag, h.attached, this.game.world?.sunDirection);
     }
   }
 }
@@ -410,7 +410,7 @@ export class Wire {
   pluck(k: number): void { if (k > this.twang * Math.exp(-this.twangAge * 7)) { this.twang = k; this.twangAge = 0; } }
 
   update(a: THREE.Vector3, b: THREE.Vector3, camera: THREE.Camera, wobble: number, time: number, sag = 0, attached = false,
-    sun: THREE.DirectionalLight | null = null): void {
+    sunDir: THREE.Vector3 | null = null): void {
     this.mesh.visible = true;
     let dt = time - this.lastTime; this.lastTime = time;
     dt = dt > 0 && dt < 0.1 ? dt : 1 / 60;
@@ -431,8 +431,8 @@ export class Wire {
     // glint: sunlit highlight sliding along the wire. A steel cylinder shows a highlight where the half vector between
     // the sun and the eye is square to its axis; a periodic glint runs up an anchored wire
     let sheen = 0;
-    if (sun) {
-      _sunD.subVectors(sun.position, sun.target.position).normalize();
+    if (sunDir) {
+      _sunD.copy(sunDir);
       _hv.subVectors(cam, mid).normalize().add(_sunD).normalize();
       sheen = Math.pow(1 - Math.abs(_hv.dot(dir)), 6);
     }

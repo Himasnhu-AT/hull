@@ -15,25 +15,25 @@ import { buildGrass, paintGroundMaterial } from './grass';
 import type { GrassHandle } from './grass';
 
 /**
- * One atmosphere (world.setAtmosphere). sky: dome horizon / mid / zenith; fog: colour, near, far; sun and hemi: light
- * colours and strengths (tuned for ACES filmic at exposure 1 with the sky IBL at 0.4 adding to the hemisphere); glow: the colour of
+ * One atmosphere (world.setAtmosphere). sky: dome horizon / mid / zenith; fog: colour, near, far; glow: the colour of
  * the sun disc and its halo; tint: multiplies the mountains and clouds; canopy: tints the haze under the forest canopy.
+ * The sun and the hemisphere light are not here: they belong to the engine's look of the same name
+ * (config/look/<name>.json), which also carries the shadows. look.test.ts keeps the two in step.
  */
 interface Atmosphere {
-  sky: [number, number, number]; fog: [number, number, number]; sun: [number, number]; hemi: [number, number, number];
+  sky: [number, number, number]; fog: [number, number, number];
   glow: number; tint: number; canopy: number;
 }
 const ATMOS: Record<string, Atmosphere> = {
   // clear midday: warm sun, cool sky fill, a pale blue-grey haze on the horizon
-  day: { sky: [FOG_COLOR, 0x8fb2d6, 0x3d6aa8], fog: [FOG_COLOR, 140, 1500], sun: [0xffeddb, 3.2], hemi: [0xbfd2e8, 0x857c64, 1.0], glow: 0xfff0d8, tint: 0xffffff, canopy: 0xffffff },
+  day: { sky: [FOG_COLOR, 0x8fb2d6, 0x3d6aa8], fog: [FOG_COLOR, 140, 1500], glow: 0xfff0d8, tint: 0xffffff, canopy: 0xffffff },
   // Varn under attack: a smoke-hazed amber afternoon, the light thick and warm, the far town lost in haze
-  varn: { sky: [0x9c8c7c, 0x928883, 0x56606f], fog: [0x9c8c7c, 150, 1900], sun: [0xffc893, 2.9], hemi: [0xd6bea6, 0x786652, 0.95], glow: 0xffc890, tint: 0xb8a28e, canopy: 0xd8c0a0 },
+  varn: { sky: [0x9c8c7c, 0x928883, 0x56606f], fog: [0x9c8c7c, 150, 1900], glow: 0xffc890, tint: 0xb8a28e, canopy: 0xd8c0a0 },
   // the expedition rides out in the early morning: low golden light, a pale sky, a long soft haze
-  dawn: { sky: [0xdcc3ab, 0xb2b6c2, 0x52709c], fog: [0xd6c1ac, 90, 1200], sun: [0xffc58c, 3.0], hemi: [0xd4cfcc, 0x7a745e, 0.95], glow: 0xffc890, tint: 0xeed7c2, canopy: 0xf2e4cc },
+  dawn: { sky: [0xdcc3ab, 0xb2b6c2, 0x52709c], fog: [0xd6c1ac, 90, 1200], glow: 0xffc890, tint: 0xeed7c2, canopy: 0xf2e4cc },
 };
 
 export interface World extends WorldHandle {
-  hemi: THREE.HemisphereLight;
   sunDirection: THREE.Vector3;
   fogColor: THREE.Color;
   inFoliage(pos: THREE.Vector3): boolean;
@@ -52,20 +52,7 @@ export function buildWorld(game: Game): World {
   const ctx = createContext(game);
   const scene = game.scene;
 
-  // ---- lights ----
-  const A0 = ATMOS.day;
-  const hemi = new THREE.HemisphereLight(A0.hemi[0], A0.hemi[1], A0.hemi[2]);
-  scene.add(hemi);
-  const sun = new THREE.DirectionalLight(A0.sun[0], A0.sun[1]);
-  sun.position.copy(SUN_DIR).multiplyScalar(320);
-  sun.target.position.set(0, 0, 0);
-  sun.castShadow = true;
-  // the frustum's extent and map size follow the quality setting (set by the renderer's owner)
-  const sc = sun.shadow.camera;
-  sc.near = 20; sc.far = 800;
-  sun.shadow.bias = -0.0006; sun.shadow.normalBias = 0.06;
-  scene.add(sun, sun.target);
-
+  // No lights here: the sun, the hemisphere and the shadows come from the engine's look (config/look/*.json).
   const skyRefs = buildSky(ctx);
   buildGround(ctx);
   paintGroundMaterial(ctx.mat.grass);
@@ -81,7 +68,7 @@ export function buildWorld(game: Game): World {
     playerSpawn: { position: new THREE.Vector3(0, 50.6, 0), yaw: 0 },   // wall-top surface (y = 50) + 0.6
     supplyDepots: ctx.depots,
     titanSpawns: ctx.titanSpawns,
-    sun, hemi, sunDirection: SUN_DIR.clone(), fogColor: new THREE.Color(FOG_COLOR),
+    sunDirection: SUN_DIR.clone(), fogColor: new THREE.Color(FOG_COLOR),
     inFoliage: (pos) => ctx.foliage.test(pos),
     /** Thin out leaves between the camera and `pos` (the soldier); null turns it off (menus). */
     setFoliageFocus(pos) { if (pos) foliageFade.focus.value.copy(pos); foliageFade.fade.value = pos ? 1 : 0; },
@@ -106,8 +93,6 @@ export function buildWorld(game: Game): World {
       fog.color.copy(ctx.atmo.fog); fog.near = a.fog[1]; fog.far = a.fog[2];
       bg.copy(ctx.atmo.fog);
       world.fogColor.copy(ctx.atmo.fog);
-      sun.color.set(a.sun[0]); sun.intensity = a.sun[1];
-      hemi.color.set(a.hemi[0]); hemi.groundColor.set(a.hemi[1]); hemi.intensity = a.hemi[2];
       skyRefs.tint.set(a.tint);
     },
     update(dt, camPos) {

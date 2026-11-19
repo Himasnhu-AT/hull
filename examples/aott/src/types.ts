@@ -62,9 +62,9 @@ export interface WorldHandle {
   playerSpawn: { position: THREE.Vector3; yaw: number };
   supplyDepots: { position: THREE.Vector3; radius: number }[];
   titanSpawns: { center: THREE.Vector3; radius: number; area: 'field' | 'forest' | 'town' | string }[];
-  sun: THREE.DirectionalLight;
-  /** Sky/ground fill light and the current horizon (fog) colour: main.ts builds the image-based light from them. */
-  hemi?: THREE.HemisphereLight;
+  /** Direction from the scene towards the sun (the look's sun points the same way; the wire's glint reads it). */
+  sunDirection?: THREE.Vector3;
+  /** The current horizon (fog) colour. */
   fogColor?: THREE.Color;
   /** Name of the current atmosphere (set by setAtmosphere). */
   atmosphere?: string | null;
