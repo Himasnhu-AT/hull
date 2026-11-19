@@ -26,8 +26,8 @@ describe('labels', () => {
     expect(feedLabel('vfx', 'vfx/clash-sparks', undefined)).toBe('Clash sparks');
     expect(feedLabel('sound', 'sound/sword/hit', undefined)).toBe('Sword hit');
     expect(feedLabel('anim', 'anim-graph/hero#light-attack', 'Aya')).toBe('Light attack');
-    expect(feedLabel('actor', 'character/swordswoman', 'Aya')).toBe('Aya');
-    expect(feedLabel('actor', 'character/swordswoman', undefined)).toBe('Swordswoman');
+    expect(feedLabel('actor', 'character/swordswoman', 'model')).toBe('Swordswoman');
+    expect(feedLabel('actor', 'character', 'Aya')).toBe('Aya');
     expect(feedLabel('actor', 'character', '')).toBe('Character');
   });
   it('prefers the config title when there is one', () => {

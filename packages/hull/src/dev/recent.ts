@@ -36,8 +36,13 @@ export function createRecentFeed(o: { time(): number; title(kind: TraceKind, id:
   };
   return {
     add(kind, id, node) {
+      // The same thing at the same game time is one chip: a graph with two layers that both enter 'stone-1' on one step, or three
+      // identical enemies spawned together, would otherwise print the same word several times.
+      const last = added > 0 ? ring[(added - 1) % RING]! : null;
+      const now = o.time();
+      if (last && last.at === now && last.kind === kind && last.id === id && last.node === node) return;
       const s = ring[added % RING]!;
-      s.at = o.time(); s.kind = kind; s.id = id; s.node = node;
+      s.at = now; s.kind = kind; s.id = id; s.node = node;
       added++;
     },
     flush() {

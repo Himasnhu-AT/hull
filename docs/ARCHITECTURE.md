@@ -550,14 +550,17 @@ Hull Studio (Electron window)          project server (inside the app)          
 * **The "Just now" feed.** The engine calls `trace(kind, id, node?)` (`core/trace.ts`) where a sound starts
   (`audio/engine.ts` `play`), a vfx burst or trail is spawned (`vfx/system.ts`), an animation graph changes state
   (`anim/graph.ts`, decided by the graph, once per change) and a character's animator first builds its body (`actor`, in
-  `anim/animator.ts` `build`; chosen because it runs once per character, so nothing is added per frame). With no listener
+  `anim/animator.ts` `build`; chosen because it runs once per character, so nothing is added per frame; a state with no clip is not reported, and the same event at the same game time is kept once). With no listener
   the call returns at once and allocates nothing; call sites that build an id with a template check `isTracing()` first. Only
   `dev/runtime.ts` installs a listener: a ring of 64 slots (`dev/recent.ts`, reused, no allocation per event) stamped with
   game time, flushed to the server in one `game.events` message at most ten times a second and not at all when empty. The
   server keeps the last 256 per game and answers `game.recent` (the last N game-seconds, newest first); each batch is also
-  pushed to studios as `game.recent`. `game.moment` pauses the game, reads its state and a screenshot through the control
-  port, and returns them with the recent events. A game that reconnects starts a fresh feed. Labels are the config's
-  `title` or the last part of the id.
+  pushed to studios as `game.recent`. Characters built before a studio connected are announced again on every socket open (one walk of the
+  tree that asks each `Animator` to `announceActor()`; never per frame), and a restart reloads the page, which builds them anew. `game.moment` pauses its own game (not others), reads its state and a screenshot through the control
+  port, and returns them with the recent events; the runtime flushes the ring before answering `state`, `screenshot` and `step`, and
+  reports `paused` at once after any `game.control`, so a later `game.control { paused: false }` resumes it and the studio sees both. A game that reconnects starts a fresh feed. Labels are made by one pure function (`dev/labels.ts`): a config `title` when it has one (no schema has one yet),
+  else the id in words ('vfx/clash-sparks' is 'Clash sparks', 'sound/sword/hit' is 'Sword hit', an anim state 'light-attack' is
+  'Light attack', a character is its id's last part, or its node's name when inline).
 * **Measurements** come from the same tool code the MCP server calls, so the Studio and the AI see the same numbers.
 * **Hosted** (PLAN section 8): the project server runs on Marl's machines and holds the code; the Studio's front
   end is served to the customer's browser; `GameView` switches to a remote source (a video stream, or a

@@ -59,6 +59,15 @@ describe('the recent ring', () => {
     expect(sent[0]![0]!.id).toBe('sound/s10');
     expect(sent[0]!.at(-1)!.id).toBe(`sound/s${RING + 9}`);
   });
+  it('keeps one chip for the same thing at the same game time', () => {
+    const sent: RecentEvent[][] = [];
+    const feed = feedWith(sent, () => 2);
+    feed.add('anim', 'anim-graph/a#x', 'N');
+    feed.add('anim', 'anim-graph/a#x', 'N');
+    feed.add('anim', 'anim-graph/a#y', 'N');
+    feed.add('anim', 'anim-graph/a#x', 'N');
+    expect(feed.snapshot().map((e) => e.id)).toEqual(['anim-graph/a#x', 'anim-graph/a#y', 'anim-graph/a#x']);
+  });
   it('forgets on clear', () => {
     const sent: RecentEvent[][] = [];
     const feed = feedWith(sent);
