@@ -38,7 +38,9 @@ export const inputMapSchema = Type.Object(
   {
     kind: Type.Literal('input-map'),
     note: Type.Optional(Type.String()),
-    actions: Type.Record(Type.String(), actionSchema),
+    actions: Type.Record(Type.String(), actionSchema, {
+      ...ui({ widget: 'bindings', help: 'One row per action: its type, its keys, mouse and gamepad. A key on two actions is flagged.' }),
+    }),
     groups: Type.Optional(Type.Record(Type.String(), Type.Array(Type.String()), { ...ui({ help: 'Sections of the key-binding screen.' }) })),
   },
   { additionalProperties: false, title: 'Hull input map' },
