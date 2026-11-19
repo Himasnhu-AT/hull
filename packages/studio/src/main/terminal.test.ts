@@ -36,5 +36,6 @@ describe('terminal', () => {
     await expect(t.open(80, 24)).rejects.toThrow(/Open a project first/);
     // Hull offers no Claude sign-in (PLAN D15).
     await expect(t.open(80, 24, 'claude-login' as never)).rejects.toThrow(/No terminal program/);
+    await expect(t.open(80, 24, 'codex-login', 'hi')).rejects.toThrow(/Only Claude Code/);
   });
 });

@@ -10,7 +10,7 @@ import { useEffect, useMemo, useState, type JSX } from 'react';
 import type { StageId } from 'hull/dev/protocol';
 import type { OpenedProject } from '../../shared/appApi.ts';
 import type { RpcClient } from '../lib/rpc.ts';
-import { NeedsKey } from './BriefScreen.tsx';
+import { BuilderSetup } from './BuilderSetup.tsx';
 import { canPlay, defaultStage, previousCheckpoint, readyCount, shouldStartBuild, splitPieces, STAGE_LABEL, STAGE_STATUS } from './buildView.ts';
 import { ExplainCard } from './ExplainCard.tsx';
 import { PieceGrid } from './PieceGrid.tsx';
@@ -72,7 +72,7 @@ export function BuildScreen({ rpc, onPlay }: BuildScreenProps): JSX.Element {
       </div>
 
       <div className="cr-b-pane">
-        {b.needs && <NeedsKey text={b.needs} />}
+        {b.needs && <BuilderSetup />}
         {!stage && !b.needs && <div className="skeleton" />}
         {stage && (
           <>

@@ -39,9 +39,11 @@ function Row({ item }: { item: Item }): JSX.Element {
   }
 }
 
-export interface TranscriptViewProps { t: Transcript; showEvents: boolean; label: string; className?: string; empty?: ReactNode }
+export interface TranscriptViewProps { t: Transcript; showEvents: boolean; label: string; className?: string; empty?: ReactNode; /** A run is going: show the three dots until the builder's words start streaming. */ thinking?: boolean }
 
-export function TranscriptView({ t, showEvents, label, className = '', empty }: TranscriptViewProps): JSX.Element {
+export function TranscriptView({ t, showEvents, label, className = '', empty, thinking }: TranscriptViewProps): JSX.Element {
+  const last = t.items[t.items.length - 1];
+  const dots = thinking && !(last && last.k === 'agent' && last.live);
   const ref = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
   // Follow the end while the builder writes, unless the person scrolled up to read.
@@ -56,6 +58,7 @@ export function TranscriptView({ t, showEvents, label, className = '', empty }: 
           <Row item={i} />
         </div>
       ))}
+      {dots && <div className="cr-thinking" aria-label="The builder is working"><i /><i /><i /></div>}
     </div>
   );
 }

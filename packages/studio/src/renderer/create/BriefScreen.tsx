@@ -8,6 +8,8 @@
 import { useEffect, useRef, useState, type JSX } from 'react';
 import type { OpenedProject } from '../../shared/appApi.ts';
 import type { RpcClient } from '../lib/rpc.ts';
+import { BuilderSetup, ViaButton } from './BuilderSetup.tsx';
+import { ClaudeChat } from './ClaudeChat.tsx';
 import { Composer } from './Composer.tsx';
 import { builderPill } from './builderState.ts';
 import { TranscriptView } from './TranscriptView.tsx';
@@ -17,27 +19,21 @@ import { useCreateState } from './useCreate.ts';
 
 export interface BriefScreenProps { rpc: RpcClient; project: OpenedProject; idea: string; onApproved(): void }
 
-export function NeedsKey({ text }: { text: string }): JSX.Element {
-  const { openSettings } = useBuilder();
-  return (
-    <div className="cr-ui cr-needs" role="status">
-      <b>The builder needs a key</b>
-      <p className="cr-sub">{text}</p>
-      <div className="cr-opts"><button className="btn primary" onClick={openSettings}>Add a key</button></div>
-    </div>
-  );
-}
+/** What Claude Code is asked first when it is the builder: the same job Hull's builder does in mode brief. */
+export const claudeBriefPrompt = (idea: string): string =>
+  `I am making a game in Hull. Use the hull MCP tools for every change, so each one is checked and kept in the history. First write the brief: ask me a few short questions, then write GAME.md.${idea.trim() ? ` The idea: ${idea.trim()}` : ''}`;
 
 export function BriefScreen({ rpc, idea, onApproved }: BriefScreenProps): JSX.Element {
   const b = useBuilder();
   const create = useCreateState(rpc);
   const [showEvents, setShowEvents] = useState(false);
+  const [choosing, setChoosing] = useState(false);
   const t = b.lanes.brief;
   const wasApproved = useRef<boolean | null>(null);
   const { startBrief } = b;
 
   // The idea goes to the builder once, as soon as the flow state says this brief is not approved yet.
-  useEffect(() => { if (idea && create && !create.briefApproved) startBrief(idea); }, [idea, create, startBrief]);
+  useEffect(() => { if (idea && create && !create.briefApproved && b.via !== 'claude') startBrief(idea); }, [idea, create, startBrief, b.via]);
 
   // The idea is kept with the project, so the Idea step can show it after the app was closed and the game reopened.
   useEffect(() => {
@@ -53,20 +49,37 @@ export function BriefScreen({ rpc, idea, onApproved }: BriefScreenProps): JSX.El
 
   const state = builderPill({ needs: b.needs !== null, waiting: waiting(t).length, working: t.running || b.starting });
   const send = (): void => { const text = b.draft.trim(); if (!text) return; b.setDraft(''); void b.send(text, { mode: 'brief' }); };
+  const setup = b.needs !== null || choosing;
+  const empty = t.items.length === 0;
+  const composer = (
+    <Composer value={b.draft} onChange={b.setDraft} onSend={send} label="Your message about the brief" placeholder={empty ? 'Describe the game you want' : 'Ask for a change to the brief'}
+      nonce={b.draftNonce} busy={t.running} onStop={b.cancel} autoFocus={empty} />
+  );
 
   return (
-    <div className="cr-chat">
-      <div className="cr-chat-top">
-        <b>Brief</b><span className={`pill ${state.cls}`}>{state.text}</span>
+    <div className="chat">
+      <header className="chat-top">
+        <ViaButton open={setup} onClick={() => setChoosing((c) => !c)} />
+        {!setup && b.via !== 'claude' && <span className={`chat-state ${state.cls}`}><i />{state.text}</span>}
         <span style={{ flex: 1 }} />
-        <label className="cr-sw"><input type="checkbox" checked={showEvents} onChange={(e) => setShowEvents(e.target.checked)} /> Show what the builder sends</label>
-        {create?.briefApproved ? <button className="btn primary" onClick={onApproved}>Go to Build</button> : <button className="btn" onClick={onApproved} title="Skip the brief and go to Build">Skip the brief</button>}
-      </div>
-      <TranscriptView t={t} showEvents={showEvents} label="Conversation about the brief" className="cr-chat-log"
-        empty={b.needs ? null : <p className="cr-sub">{idea ? 'The builder is reading your idea...' : 'Tell the builder what the game is and it will write the brief.'}</p>} />
-      {b.needs && <div className="cr-chat-needs"><NeedsKey text={b.needs} /></div>}
-      <Composer value={b.draft} onChange={b.setDraft} onSend={send} label="Your message about the brief" placeholder={t.items.length === 0 ? 'Describe the game' : 'Ask for a change to the brief'}
-        nonce={b.draftNonce} busy={t.running} onStop={b.cancel} disabled={b.needs !== null} />
+        {b.via !== 'claude' && !setup && <label className="chat-sw"><input type="checkbox" checked={showEvents} onChange={(e) => setShowEvents(e.target.checked)} />Show events</label>}
+        {create?.briefApproved ? <button className="btn primary" onClick={onApproved}>Go to Build</button> : <button className="btn ghost" onClick={onApproved} title="Skip the brief and go to Build">Skip the brief</button>}
+      </header>
+      {setup && <div className="chat-center"><BuilderSetup onDone={() => setChoosing(false)} /></div>}
+      {!setup && b.via === 'claude' && <ClaudeChat prompt={claudeBriefPrompt(idea || create?.idea || '')} />}
+      {!setup && b.via !== 'claude' && empty && (
+        <div className="chat-hero">
+          <h2>{idea ? 'Reading your idea...' : 'What are we making?'}</h2>
+          <p>{idea ? 'The builder will ask a few questions, then write the brief.' : 'Say what the game is. The builder asks a few questions, then writes the brief.'}</p>
+          {composer}
+        </div>
+      )}
+      {!setup && b.via !== 'claude' && !empty && (
+        <>
+          <TranscriptView t={t} showEvents={showEvents} thinking={t.running && waiting(t).length === 0} label="Conversation about the brief" className="chat-log" />
+          <div className="chat-dock">{composer}<p className="chat-hint">Enter to send, Shift+Enter for a new line.</p></div>
+        </>
+      )}
     </div>
   );
 }

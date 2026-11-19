@@ -3,6 +3,7 @@
 import { useEffect, useState, type JSX } from 'react';
 import type { CommunityGame, HullApp, OpenedProject, RecentProject, TemplateInfo } from '../../shared/appApi.ts';
 import { useSettings } from '../settings/open.tsx';
+import { Composer } from '../create/Composer.tsx';
 import { Icon } from '../ui/Icon.tsx';
 
 type Pane = 'idea' | 'recent' | 'new' | 'community';
@@ -103,23 +104,34 @@ export function Launcher({ app, onOpen, startError }: { app: HullApp; onOpen(p: 
         <div className="l-foot">Your games are kept by the app. You never need to pick a folder.</div>
       </div>
 
-      <div className="l-main drag">
+      <div className={`l-main drag${pane === 'idea' ? ' center' : ''}`}>
         <div className="l-in nodrag">
           {error && <div className="note-err" role="alert">{error}</div>}
 
           {pane === 'idea' && (
-            <>
-              <div><h2>What game do you want to make?</h2><p className="sub2">Say it in a sentence or two. The app picks a starting point for you.</p></div>
-              <form className="form cr-ideaform" onSubmit={(e) => { e.preventDefault(); if (idea.trim()) void makeFromIdea(); }}>
-                <textarea className="field-in cr-idea-in" rows={4} value={idea} onChange={(e) => setIdea(e.target.value)} aria-label="Your game idea" autoFocus
-                  placeholder="A third-person samurai game on a windy island. One swordswoman against raiders."
-                  onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && idea.trim()) { e.preventDefault(); void makeFromIdea(); } }} />
-                <div className="cr-examples" role="group" aria-label="Examples">
-                  {EXAMPLES.map((x) => <button type="button" key={x.label} className="chip" onClick={() => setIdea(x.idea)}>{x.label}</button>)}
-                </div>
-                <div><button type="submit" className="btn primary lg" disabled={busy !== null || !idea.trim()}>{busy === 'Creating' ? 'Making your game...' : 'Make my game'}</button></div>
-              </form>
-            </>
+            <div className="l-hero">
+              <h2>What game do you want to make?</h2>
+              <p className="sub2">Say it in a sentence or two. The app picks a starting point for you.</p>
+              <Composer value={idea} onChange={setIdea} onSend={() => { if (idea.trim() && busy === null) void makeFromIdea(); }} label="Your game idea" autoFocus
+                placeholder="A third-person samurai game on a windy island..." sendLabel={busy === 'Creating' ? 'Making your game...' : 'Make my game'} disabled={busy !== null} busy={busy === 'Creating'} />
+              <div className="cr-examples" role="group" aria-label="Examples">
+                {EXAMPLES.map((x) => <button type="button" key={x.label} className="chip" onClick={() => setIdea(x.idea)}>{x.label}</button>)}
+              </div>
+              {busy === 'Creating' && <p className="sub2 l-making">Making your game...</p>}
+              {recents && recents.length > 0 && (
+                <section className="l-recents" aria-label="Recent projects">
+                  <div className="l-rh"><b>Pick up where you left off</b>{recents.length > 6 && <button className="btn ghost" onClick={() => setPane('recent')}>All {recents.length}</button>}</div>
+                  <div className="l-rgrid">
+                    {recents.slice(0, 6).map((r, i) => (
+                      <button key={r.root} className="l-rcard" style={{ animationDelay: `${120 + i * 40}ms` }} disabled={busy !== null} onClick={() => void run('Opening', () => app.openProject(r.root))} title={r.root}>
+                        <span className="l-rmark" aria-hidden="true">{r.title.trim().charAt(0).toUpperCase() || '?'}</span>
+                        <span className="l-rt"><b>{r.title}</b><small>{ago(r.openedAt)}</small></span>
+                      </button>
+                    ))}
+                  </div>
+                </section>
+              )}
+            </div>
           )}
 
           {pane === 'recent' && (

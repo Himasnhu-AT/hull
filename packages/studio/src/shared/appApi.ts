@@ -63,7 +63,7 @@ export interface HullAppAgents {
   /** Connects or disconnects the open project's tools, or signs out. Resolves with a line to show. */
   cliRun(id: CliId, action: CliAction): Promise<string>;
   /** Opens a terminal: `claude` in the open project's folder (the default), or Claude Code's or Codex's own sign-in. Output arrives as 'term-data' events. */
-  termOpen(cols: number, rows: number, program?: TermProgram): Promise<TermInfo>;
+  termOpen(cols: number, rows: number, program?: TermProgram, prompt?: string): Promise<TermInfo>;
   termWrite(tid: string, data: string): Promise<void>;
   termResize(tid: string, cols: number, rows: number): Promise<void>;
   termKill(tid: string): Promise<void>;

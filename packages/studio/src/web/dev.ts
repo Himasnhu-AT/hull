@@ -58,7 +58,7 @@ const api: Record<string, (arg: never) => unknown> = {
   claudeInfo: () => host.terminals.claudeInfo(),
   cliStatus: () => host.accounts.status(),
   cliRun: (o: { a: [CliId, CliAction] }) => host.accounts.run(...o.a),
-  termOpen: (o: { a: [number, number, TermProgram | undefined] }) => host.terminals.open(...o.a),
+  termOpen: (o: { a: [number, number, TermProgram | undefined, string | undefined] }) => host.terminals.open(...o.a),
   termWrite: (o: { a: [string, string] }) => host.terminals.write(...o.a),
   termResize: (o: { a: [string, number, number] }) => host.terminals.resize(...o.a),
   termKill: (o: { a: [string] }) => host.terminals.kill(...o.a),

@@ -15,7 +15,7 @@ interface PtyModule { spawn(file: string, args: string[], o: { name: string; col
 export interface Terminals {
   claudeInfo(): ClaudeCodeInfo;
   /** `program` is one of a fixed few: the person's `claude`, or Codex's own sign-in command. */
-  open(cols: number, rows: number, program?: TermProgram): Promise<TermInfo>;
+  open(cols: number, rows: number, program?: TermProgram, prompt?: string): Promise<TermInfo>;
   write(tid: string, data: string): void;
   resize(tid: string, cols: number, rows: number): void;
   kill(tid: string): void;
@@ -59,7 +59,7 @@ export function createTerminals(o: { project(): AgentProject | null; emit(e: Age
         mcpAdd: p ? `claude mcp add --transport http hull ${p.mcp.url}` : '',
       };
     },
-    async open(cols, rows, program = 'claude') {
+    async open(cols, rows, program = 'claude', prompt) {
       const spec = programs[program];
       if (!spec) throw new Error(`No terminal program called ${String(program)}.`);
       const p = o.project();
@@ -67,7 +67,10 @@ export function createTerminals(o: { project(): AgentProject | null; emit(e: Age
       const exe = which(spec.bin, env);
       if (!exe) throw new Error(`${spec.bin} was not found on this Mac. Install ${spec.label} first.`);
       const tid = `t${next++}`;
-      const t = loadPty().spawn(exe, spec.args, {
+      // An opening message for `claude` is its own documented argument, passed as one argv entry (no shell), never for other programs.
+      if (prompt !== undefined && (program !== 'claude' || typeof prompt !== 'string' || prompt.length > 8000)) throw new Error('Only Claude Code takes an opening message, of at most 8000 characters.');
+      const args = prompt ? [...spec.args, prompt] : spec.args;
+      const t = loadPty().spawn(exe, args, {
         name: 'xterm-256color', cols: Math.max(20, cols), rows: Math.max(5, rows), cwd: p?.root ?? homedir(),
         env: { ...(env as Record<string, string>), PATH: searchPath(env).join(delimiter), TERM: 'xterm-256color', COLORTERM: 'truecolor' },
       });

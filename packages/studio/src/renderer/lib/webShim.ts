@@ -39,7 +39,7 @@ export function webShim(): HullApp {
     claudeInfo: () => call('claudeInfo'),
     cliStatus: () => call('cliStatus'),
     cliRun: (id, action) => call('cliRun', { a: [id, action] }),
-    termOpen: (cols, rows, program) => call('termOpen', { a: [cols, rows, program] }),
+    termOpen: (cols, rows, program, prompt) => call('termOpen', { a: [cols, rows, program, prompt] }),
     termWrite: (tid, data) => call('termWrite', { a: [tid, data] }),
     termResize: (tid, cols, rows) => call('termResize', { a: [tid, cols, rows] }),
     termKill: (tid) => call('termKill', { a: [tid] }),

@@ -39,12 +39,19 @@ export interface Builder {
   /** Starts the builder if it is not running, so a missing key shows before the person types. */
   prepare(): void;
   openSettings(): void;
+  /** Who does the work: Hull's own agent (an API key), Codex over ACP (its own ChatGPT sign-in), or the person's own Claude Code in a terminal. */
+  via: BuilderVia;
+  setVia(v: BuilderVia): void;
   /** The composer's text, which a card's Change link can fill. */
   draft: string;
   setDraft(s: string): void;
   fillDraft(s: string): void;
   draftNonce: number;
 }
+
+export type BuilderVia = 'hull' | 'codex' | 'claude';
+const VIA_KEY = 'hull.builderVia';
+const readVia = (): BuilderVia => { try { const v = localStorage.getItem(VIA_KEY); return v === 'codex' || v === 'claude' ? v : 'hull'; } catch { return 'hull'; } };
 
 const Ctx = createContext<Builder | null>(null);
 export function useBuilder(): Builder {
@@ -67,6 +74,9 @@ export function BuilderProvider({ rpc, project, children }: { rpc: RpcClient; pr
   const pending = useRef<(() => void) | null>(null);
   const [needs, setNeeds] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
+  const [via, setViaState] = useState<BuilderVia>(readVia);
+  const viaRef = useRef(via);
+  viaRef.current = via;
   const settings = useSettings();
   const [draft, setDraft] = useState('');
   const [draftNonce, setDraftNonce] = useState(0);
@@ -91,6 +101,9 @@ export function BuilderProvider({ rpc, project, children }: { rpc: RpcClient; pr
     setStarting(true);
     ensuring.current = (async () => {
       try {
+        // Claude Code runs in its own terminal (PLAN D15): there is no session here to start.
+        if (viaRef.current === 'claude') { setNeeds(null); return null; }
+        if (viaRef.current === 'codex') { const id = await app.agentStart('codex'); setNeeds(null); sid.current = id; return id; }
         const r = await app.agentEnsure();
         if ('needs' in r) { setNeeds(r.needs); return null; }
         setNeeds(null); sid.current = r.sid;
@@ -166,9 +179,17 @@ export function BuilderProvider({ rpc, project, children }: { rpc: RpcClient; pr
     if (p) p(); else void ensure();
   }, [ensure]);
 
+  const setVia = useCallback((v: BuilderVia): void => {
+    try { localStorage.setItem(VIA_KEY, v); } catch { /* not remembered */ }
+    const old = sid.current;
+    sid.current = null; viaRef.current = v; setViaState(v); setNeeds(null);
+    if (old) void window.hullApp?.agentStop(old);
+    if (v !== 'claude') { const p = pending.current; pending.current = null; if (p) p(); else void ensure(); }
+  }, [ensure]);
+
   const value = useMemo<Builder>(() => ({
-    rpc, project, lanes, needs, starting, running, pieces, send, answer, cancel, startBrief, startBuild, retryStage, prepare: () => { void ensure(); }, openSettings: () => settings.open('builder', saved), draft, setDraft, fillDraft, draftNonce,
-  }), [rpc, project, lanes, needs, starting, running, pieces, send, answer, cancel, startBrief, startBuild, retryStage, draft, fillDraft, draftNonce, ensure, settings, saved]);
+    rpc, project, lanes, needs, starting, running, pieces, send, answer, cancel, startBrief, startBuild, retryStage, prepare: () => { void ensure(); }, openSettings: () => settings.open('builder', saved), via, setVia, draft, setDraft, fillDraft, draftNonce,
+  }), [rpc, project, lanes, needs, starting, running, pieces, send, answer, cancel, startBrief, startBuild, retryStage, draft, fillDraft, draftNonce, ensure, settings, saved, via, setVia]);
 
   return (
     <Ctx.Provider value={value}>

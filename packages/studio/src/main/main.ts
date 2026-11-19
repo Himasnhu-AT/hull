@@ -51,7 +51,7 @@ function registerIpc(): void {
   handle('claudeInfo', () => host.terminals.claudeInfo());
   handle('cliStatus', () => host.accounts.status());
   handle('cliRun', (id: CliId, action: CliAction) => host.accounts.run(id, action));
-  handle('termOpen', (cols: number, rows: number, program?: TermProgram) => host.terminals.open(cols, rows, program));
+  handle('termOpen', (cols: number, rows: number, program?: TermProgram, prompt?: string) => host.terminals.open(cols, rows, program, prompt));
   handle('termWrite', (tid: string, data: string) => host.terminals.write(tid, data));
   handle('termResize', (tid: string, cols: number, rows: number) => host.terminals.resize(tid, cols, rows));
   handle('termKill', (tid: string) => host.terminals.kill(tid));
