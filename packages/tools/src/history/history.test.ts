@@ -222,3 +222,37 @@ describe('experiments', () => {
     expect(flags[0]!.pointer).toBe('/spin');
   });
 });
+
+describe('patch and revert one file or field', () => {
+  it('shows a compact line diff against a starting point', async () => {
+    const root = project();
+    const h = await open(root);
+    const start = (await h.list())[0]!.id;
+    await edit(h, root, 'you', 'src/tuning.ts', TS(14));
+    const p = await h.patch({ from: start, to: 'main', file: 'src/tuning.ts' });
+    expect(p.lines.filter((l) => l.op !== 'ctx').map((l) => [l.op, l.text.trim()])).toEqual([['del', 'runSpeed: num(10, { min: 0, max: 99 }),'], ['add', 'runSpeed: num(14, { min: 0, max: 99 }),']]);
+  });
+  it('puts one added row back by taking it out, leaving the rest as edited, and records it', async () => {
+    const root = project();
+    const h = await open(root);
+    const start = (await h.list())[0]!.id;
+    await edit(h, root, 'ai:test', 'config/tuning/t.json', TUNING(5).replace('[1, 2, 3]', '[1, 2, 3, 4]'));
+    const r = await h.revert(start, 'config/tuning/t.json', 'you', '/list/3');
+    expect(r.ok).toBe(true);
+    const back = JSON.parse(readFileSync(join(root, 'config/tuning/t.json'), 'utf8'));
+    expect(back.list).toEqual([1, 2, 3]);
+    expect(back.spin).toBe(5);
+    expect((await h.list())[0]!.kind).toBe('restore');
+  });
+  it('puts a whole file back, including one that was added', async () => {
+    const root = project();
+    const h = await open(root);
+    const start = (await h.list())[0]!.id;
+    await edit(h, root, 'you', 'src/tuning.ts', TS(99));
+    await edit(h, root, 'you', 'src/extra.ts', 'export const x = 1;\n');
+    expect((await h.revert(start, 'src/tuning.ts')).ok).toBe(true);
+    expect((await h.revert(start, 'src/extra.ts')).ok).toBe(true);
+    expect(readFileSync(join(root, 'src/tuning.ts'), 'utf8')).toBe(TS(10));
+    expect((await h.diff({ from: start, to: 'main' })).deltas).toEqual([]);
+  });
+});

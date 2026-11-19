@@ -17,6 +17,7 @@ import { useProject, idFromPath } from './useProject.ts';
 import { useHistory } from '../history/useHistory.ts';
 import { useExpEditing } from '../history/useExpEditing.ts';
 import { HistoryPanel } from '../history/HistoryPanel.tsx';
+import { ChangesPanel } from '../history/ChangesPanel.tsx';
 import { ExpSwitch } from '../history/ExpSwitch.tsx';
 import { Compare } from '../history/Compare.tsx';
 import { AdoptDialog } from '../history/AdoptDialog.tsx';
@@ -138,6 +139,9 @@ function EditorBody({ rpc, project, platform, onClose }: { rpc: RpcClient; proje
   const problemCount = Math.max(allProblems.length, items.reduce((n, i) => n + i.problems, 0));
 
   const select = useCallback((id: string) => setSelected(id), []);
+  // changes-diff: a file clicked in the Library's Changed filter opens its diff in the Changes tab (and is selected too).
+  const [changeFocus, setChangeFocus] = useState<{ id: string; n: number } | null>(null);
+  const openChange = useCallback((id: string) => { setPanels((s) => ({ ...s, dock: true })); setDockTab('changes'); setChangeFocus((f) => ({ id, n: (f?.n ?? 0) + 1 })); }, []);
   const openFromConsole = useCallback((id: string) => { setSelected(id); setPanels((s) => ({ ...s, insp: true })); }, []);
 
   const { lib, insp, dock } = panels;
@@ -174,7 +178,7 @@ function EditorBody({ rpc, project, platform, onClose }: { rpc: RpcClient; proje
       />
       {agentsOpen && <AgentPanel project={project} onClose={() => setAgentsOpen(false)} />}
 
-      {lib && <Library ref={search} items={p.library} error={p.libraryError} selected={selected} changed={changed} onSelect={select} />}
+      {lib && <Library ref={search} items={p.library} error={p.libraryError} selected={selected} changed={changed} onSelect={select} onOpenChanged={openChange} />}
 
       <main className="view">
         <div className="stage">
@@ -204,6 +208,7 @@ function EditorBody({ rpc, project, platform, onClose }: { rpc: RpcClient; proje
 
       {dock && <Dock tab={dockTab} onTab={setDockTab} logs={p.logs} problems={allProblems} journal={p.journal} onClear={p.clearLogs} onOpen={openFromConsole}
         flagged={h.flagged.size}
+        changes={<ChangesPanel rpc={rpc} h={h} tunables={p.tunables} tick={p.journal.length} focus={changeFocus} notify={notify} />}
         history={<HistoryPanel h={h} openExp={openInfo ? openInfo.name : null} onOpenExp={setOpenExp} onCompare={compareExps} onProblems={() => setDockTab('console')} />} />}
 
       {lib && <div className={`splitter v${split.active === 'lib' ? ' drag' : ''}`} style={{ left: w.lib - 3 }} {...split.bind('lib', 1, 200, 420)} role="separator" aria-orientation="vertical" aria-label="Resize Library" />}

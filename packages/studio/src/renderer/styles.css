@@ -459,3 +459,7 @@ textarea.field-in { height: auto; min-height: 76px; padding: 6px 8px; font-famil
 .top .r .chip:has(.vl), .top .r .btn:has(.vl) { padding: 0 8px; }
 .live { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); flex: none; margin: 0 4px; }
 .live.on { background: var(--ok, #3ecf8e); }
+
+/* changes-diff: the reset arrow's swatch for a colour field's previous value. */
+.rs .rs-sw { width: 8px; height: 8px; border-radius: 2px; margin-right: 3px; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.25); flex: none; }
+.rs:has(.rs-sw) { width: auto; padding: 0 4px; }

@@ -107,7 +107,7 @@ export function describe(d: ChangeDelta, lookup: FieldLookup, by?: HistoryAuthor
   return { ...base, path: [d.file], note, revert: whole };
 }
 
-export interface FileGroup { file: string; title: string; kind: 'config' | 'code' | 'asset' | 'other'; rows: ChangeRow[]; by?: HistoryAuthor }
+export interface FileGroup { file: string; title: string; /** Library ids this file shows as: 'look/dawn', 'tunables:hook'. */ ids: string[]; kind: 'config' | 'code' | 'asset' | 'other'; rows: ChangeRow[]; by?: HistoryAuthor }
 
 /** The deltas grouped by file, in file order, each row described. `authors` says who last changed each file. */
 export function groupRows(deltas: readonly ChangeDelta[], lookup: FieldLookup, authors: ReadonlyMap<string, HistoryAuthor> = new Map()): FileGroup[] {
@@ -118,9 +118,10 @@ export function groupRows(deltas: readonly ChangeDelta[], lookup: FieldLookup, a
       const kind = d.file === 'hull.json' || d.file.startsWith('config/') ? 'config' : d.file.startsWith('src/') ? 'code' : d.file.startsWith('assets/') ? 'asset' : 'other';
       const title = d.kind === 'json' ? d.target : d.file;
       const by = authors.get(d.file);
-      g = { file: d.file, title, kind, rows: [], ...(by ? { by } : {}) };
+      g = { file: d.file, title, ids: [], kind, rows: [], ...(by ? { by } : {}) };
       out.set(d.file, g);
     }
+    if (d.kind !== 'lines' && d.kind !== 'asset' && d.kind !== 'file' && !g.ids.includes(d.target)) g.ids.push(d.target);
     g.rows.push(describe(d, lookup, authors.get(d.file)));
   }
   return [...out.values()];
