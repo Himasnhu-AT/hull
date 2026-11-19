@@ -29,11 +29,35 @@ export function defaultStage(stages: readonly StageState[]): StageId {
   return (ready ?? stages[0])?.id ?? 'world';
 }
 
-export interface StagePieces { look: string[]; explained: string[] }
+export interface StagePieces {
+  /** Things to look at and listen to. */
+  look: string[];
+  /** Ids of explain documents. */
+  explained: string[];
+  /** Review keys of pieces that are only numbers: shown as a table under Explained, since a person cannot look at a number. */
+  numbers: string[];
+}
 
-/** A stage's pieces in its two groups. 'explain:<id>' keys are the explained ones; the rest are things to look at and listen to. */
+/** A tunables block or a tuning config: nothing in it can be seen or heard. */
+export const isNumbersKey = (key: string): boolean => key.startsWith('tunables:') || key.startsWith('tuning/');
+
+/** A stage's pieces in its three groups. 'explain:<id>' keys are the explained ones, numbers go to a values table, the rest are looked at. */
 export function splitPieces(keys: readonly string[]): StagePieces {
-  return { look: keys.filter((k) => !k.startsWith('explain:')), explained: keys.filter((k) => k.startsWith('explain:')).map((k) => k.slice('explain:'.length)) };
+  return {
+    look: keys.filter((k) => !k.startsWith('explain:') && !isNumbersKey(k)),
+    explained: keys.filter((k) => k.startsWith('explain:')).map((k) => k.slice('explain:'.length)),
+    numbers: keys.filter(isNumbersKey),
+  };
+}
+
+/** The checkpoint a stage is compared with: the nearest earlier stage that saved one. Undefined for the first stage or when none saved. */
+export function previousCheckpoint(stages: readonly StageState[], id: StageId): string | undefined {
+  const at = STAGE_ORDER.indexOf(id);
+  for (let i = at - 1; i >= 0; i--) {
+    const cp = stages.find((s) => s.id === STAGE_ORDER[i])?.checkpoint;
+    if (cp) return cp;
+  }
+  return undefined;
 }
 
 export const explainKey = (id: string): string => `explain:${id}`;

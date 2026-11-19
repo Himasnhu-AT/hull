@@ -9,7 +9,9 @@ import { useEffect, useRef, useState, type JSX } from 'react';
 import type { OpenedProject } from '../../shared/appApi.ts';
 import type { RpcClient } from '../lib/rpc.ts';
 import { Composer } from './Composer.tsx';
+import { builderPill } from './builderState.ts';
 import { TranscriptView } from './TranscriptView.tsx';
+import { waiting } from './transcript.ts';
 import { useBuilder } from './useBuilder.tsx';
 import { useCreateState } from './useCreate.ts';
 
@@ -44,7 +46,7 @@ export function BriefScreen({ rpc, idea, onApproved }: BriefScreenProps): JSX.El
     if (!wasApproved.current && create.briefApproved) { wasApproved.current = true; onApproved(); }
   }, [create, onApproved]);
 
-  const state = b.needs ? { text: 'needs a key', cls: 'warn' } : t.running || b.starting ? { text: 'working', cls: '' } : { text: 'ready', cls: 'ok' };
+  const state = builderPill({ needs: b.needs !== null, waiting: waiting(t).length, working: t.running || b.starting });
   const send = (): void => { const text = b.draft.trim(); if (!text) return; b.setDraft(''); void b.send(text, { mode: 'brief' }); };
 
   return (

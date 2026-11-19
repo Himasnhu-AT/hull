@@ -3,8 +3,8 @@
 
 import type { JSX, ReactNode } from 'react';
 import type { ContentThumb } from 'hull/dev/protocol';
-import { Thumb } from '../content/Thumb.tsx';
 import { Icon } from '../ui/Icon.tsx';
+import { PieceThumb } from './PieceThumb.tsx';
 import { kindWords, TAG_TEXT, type Card } from './shelves.ts';
 
 export interface PieceCardProps {
@@ -24,7 +24,7 @@ export function PieceCard({ card: c, thumb, playing, onPlay, onApprove, onChange
   return (
     <article className="cr-card">
       <div className="cr-pv">
-        <Thumb kind={c.kind} thumb={thumb} />
+        <PieceThumb id={c.key} kind={c.kind} thumb={thumb} />
         <span className={`cr-tag ${c.tag}`}>{TAG_TEXT[c.tag]}</span>
         {c.kind === 'sound' && (
           <button className="cr-playsnd" onClick={onPlay} disabled={playing} aria-label={`Play ${c.name}`} title="Play"><Icon name="play" size={16} /></button>

@@ -6,7 +6,7 @@
 import { useCallback, useEffect, useMemo, useState, type JSX } from 'react';
 import type { HistoryChange } from 'hull/dev/protocol';
 import type { RpcClient } from '../lib/rpc.ts';
-import { entryOf, mainLine } from './changesList.ts';
+import { entryOf, mainLine, putBackOf } from './changesList.ts';
 import { putBackChange } from './putBack.ts';
 
 export interface ChangesProps { rpc: RpcClient }
@@ -29,6 +29,7 @@ export function Changes({ rpc }: ChangesProps): JSX.Element {
   }, [rpc]);
 
   const list = useMemo(() => mainLine(changes ?? []), [changes]);
+  const backs = useMemo(() => putBackOf(list), [list]);
 
   const putBack = useCallback(async (c: HistoryChange) => {
     setBusy(c.id); setError(null);
@@ -44,12 +45,12 @@ export function Changes({ rpc }: ChangesProps): JSX.Element {
       {list.length === 0 && <p className="cr-sub">Nothing has changed yet.</p>}
       <ol className="cr-clist">
         {list.map((c) => {
-          const e = entryOf(c);
+          const e = entryOf(c, Date.now(), backs.get(c.id));
           return (
             <li key={c.id} className="cr-change">
               <div className="cr-ch-main">
-                <b>{e.title}</b>
-                {e.lines.length > 0 && <ul>{e.lines.map((l, i) => <li key={i}>{l}</li>)}{e.more > 0 && <li className="cr-sub">and {e.more} more</li>}</ul>}
+                <b title={e.titleRaw}>{e.title}</b>
+                {e.lines.length > 0 && <ul>{e.lines.map((l, i) => <li key={i} title={e.linesRaw[i]}>{l}</li>)}{e.more > 0 && <li className="cr-sub">and {e.more} more</li>}</ul>}
                 <span className="cr-sub">{e.who} · {e.when}</span>
               </div>
               <div className="cr-ch-act">

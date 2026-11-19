@@ -1,6 +1,7 @@
 // change: a fix the builder made, as what changed from -> to on which piece. Keep leaves it; Put back reverts that one change.
 
 import { useState, type JSX } from 'react';
+import { fieldName, pieceName } from '../plainNames.ts';
 import { putBackById } from '../putBack.ts';
 import type { Item } from '../transcript.ts';
 import { useBuilder } from '../useBuilder.tsx';
@@ -26,10 +27,10 @@ export function ChangeBlock({ item }: { item: Extract<Item, { k: 'ui' }> }): JSX
   return (
     <div className="cr-ui cr-chg" role="group" aria-label={b.title}>
       <b>{b.title}</b>
-      <span className="cr-piece">{b.piece}</span>
+      <span className="cr-piece" title={b.piece}>{pieceName(b.piece)}</span>
       <ul className="cr-kv">
         {b.lines.map((l) => (
-          <li key={l.label}><span>{l.label}</span> <s>{l.from}</s> <span aria-hidden="true">{'→'}</span><span className="cr-sr"> to </span> <b>{l.to}</b></li>
+          <li key={l.label}><span title={l.label}>{fieldName(l.label, b.piece)}</span> <s>{l.from}</s> <span aria-hidden="true">{'→'}</span><span className="cr-sr"> to </span> <b>{l.to}</b></li>
         ))}
       </ul>
       {error && <div className="note-err" role="alert">{error}</div>}

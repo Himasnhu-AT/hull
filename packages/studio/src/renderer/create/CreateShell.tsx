@@ -15,8 +15,10 @@ import { BuildScreen } from './BuildScreen.tsx';
 import { Changes } from './Changes.tsx';
 import { mainLine } from './changesList.ts';
 import { Everything } from './Everything.tsx';
+import { IdeaScreen } from './IdeaScreen.tsx';
 import { OpenSheet } from './OpenSheet.tsx';
 import { PlayScreen } from './PlayScreen.tsx';
+import { ScreenBoundary } from './ScreenBoundary.tsx';
 import { ShareScreen } from './ShareScreen.tsx';
 import { BuilderProvider } from './useBuilder.tsx';
 import { STEPS, type AttachedPiece, type PlayTab, type Step } from './types.ts';
@@ -48,7 +50,12 @@ export function CreateShell({ project, platform, idea, onClose }: CreateShellPro
       </>
     );
   }
-  return <ShellBody project={project} platform={platform} idea={idea ?? ''} onClose={onClose} step={step} setStep={setStep} tab={tab} setTab={setTab} attached={attached} setAttached={setAttached} onAdvanced={() => flip(true)} />;
+  // Last line of defence: if the title bar or the shell itself breaks, the person can still leave for their games.
+  return (
+    <ScreenBoundary screen="This game" backLabel="Back to your games" onBack={onClose}>
+      <ShellBody project={project} platform={platform} idea={idea ?? ''} onClose={onClose} step={step} setStep={setStep} tab={tab} setTab={setTab} attached={attached} setAttached={setAttached} onAdvanced={() => flip(true)} />
+    </ScreenBoundary>
+  );
 }
 
 interface BodyProps {
@@ -126,25 +133,21 @@ function ShellScreens({ rpc, project, platform, idea, onClose, step, setStep, ta
       </header>
 
       <main className="cr-main">
-        {step === 'idea' && (
-          <div className="cr-pad">
-            <h2>{idea ? 'Your idea' : 'Where this game started'}</h2>
-            {idea ? <blockquote className="cr-idea">{idea}</blockquote> : <p className="cr-sub">This game started from a template or a folder, not from an idea you typed.</p>}
-            <div className="cr-row"><button className="btn lg" onClick={onClose}>Start a different game</button></div>
-          </div>
-        )}
-        {step === 'brief' && <BriefScreen rpc={rpc} project={project} idea={idea} onApproved={() => setStep('build')} />}
-        {step === 'build' && <BuildScreen rpc={rpc} project={project} onPlay={play} />}
-        {step === 'share' && <ShareScreen rpc={rpc} project={project} onBack={play} />}
+        {step === 'idea' && <ScreenBoundary screen="Idea" resetKey={step} onBack={play}><IdeaScreen rpc={rpc} idea={idea} onStartAnother={onClose} /></ScreenBoundary>}
+        {step === 'brief' && <ScreenBoundary screen="Brief" resetKey={step} onBack={() => setStep('idea')}><BriefScreen rpc={rpc} project={project} idea={idea} onApproved={() => setStep('build')} /></ScreenBoundary>}
+        {step === 'build' && <ScreenBoundary screen="Build" resetKey={step} onBack={() => setStep('brief')}><BuildScreen rpc={rpc} project={project} onPlay={play} /></ScreenBoundary>}
+        {step === 'share' && <ScreenBoundary screen="Share" resetKey={step} onBack={play}><ShareScreen rpc={rpc} project={project} onBack={play} /></ScreenBoundary>}
         {step === 'play' && (
           <div className="cr-playgrid">
             <div className="cr-pane">
               {/* The game stays mounted when the tab changes, so it keeps running. */}
-              <div style={{ display: tab === 'play' ? 'contents' : 'none' }}><PlayScreen rpc={rpc} project={project} onAttach={attach} active={tab === 'play'} moment={moment} onFreeze={freeze} /></div>
-              {tab === 'everything' && <Everything rpc={rpc} project={project} library={library} onAttach={attach} onOpen={setSheet} />}
-              {tab === 'changes' && <Changes rpc={rpc} />}
+              <div style={{ display: tab === 'play' ? 'contents' : 'none' }}>
+                <ScreenBoundary screen="Play" resetKey={tab} onBack={() => setStep('build')} backLabel="Go back to Build"><PlayScreen rpc={rpc} project={project} onAttach={attach} active={tab === 'play'} moment={moment} onFreeze={freeze} /></ScreenBoundary>
+              </div>
+              {tab === 'everything' && <ScreenBoundary screen="Everything" resetKey={tab} onBack={() => setTab('play')} backLabel="Go back to Play"><Everything rpc={rpc} project={project} library={library} onAttach={attach} onOpen={setSheet} /></ScreenBoundary>}
+              {tab === 'changes' && <ScreenBoundary screen="Changes" resetKey={tab} onBack={() => setTab('play')} backLabel="Go back to Play"><Changes rpc={rpc} /></ScreenBoundary>}
             </div>
-            {builder}
+            <ScreenBoundary screen="The builder column" resetKey={step} onBack={() => setStep('build')} backLabel="Go back to Build">{builder}</ScreenBoundary>
           </div>
         )}
       </main>
