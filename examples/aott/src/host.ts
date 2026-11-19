@@ -120,7 +120,7 @@ export class AottHost extends Behaviour {
 
     const game = {
       scene, camera, hull, events: new Events(), time: 0, mode: 'menu', hitstop: 0,
-      collision: new CollisionWorld(), settings: { sens: opts.sens || 1, invertY: false },
+      collision: new CollisionWorld(hull.world), settings: { sens: opts.sens || 1, invertY: false },
       fx: null, impactFrame: null, audio: null, hud: null, titans: null, training: null,
       trainingActive: false, allies: [], herd: null, quality: 2,
     } as unknown as Game;

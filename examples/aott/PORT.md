@@ -162,6 +162,18 @@ the Holdout test measures (a new checksum) says so in its commit and updates the
 * **Done when**: a parity test runs 10 000 seeded queries against the old implementation (kept in the test) and agrees
   within epsilon, the Holdout test passes (new expectations only if explained), and a frame-time bench shows no loss.
 
+**P5 status (done).** `src/core/collision.ts` now answers boxes (oriented), spheres and capsules, static and dynamic (titan limbs),
+from `hull/physics`: `raycast` is `Physics.raycast`, `querySphere` is `overlapSphere`, `collideSphere`'s push-out is `overlapSphere` plus
+`distanceTo` (depth is radius minus signed distance, normal is the direction away). Layer bits say static or dynamic and hookable
+or not, so `dynamic: false` and `hookableOnly` are masks. `ignore` sets and "a ray that starts inside a box is not a hit" switch
+the shape off for the cast. Colliders are still the game's objects (`material`, `hookable`, `removed`, `userData`, the world-pose fields
+`player.ts` reads); each holds its physics shape in `_phys`, and `remove`/`_register` keep it in step (town houses). `new CollisionWorld(world)`
+now takes the Hull world (installs physics if the game has none). Left in game code, on purpose: vertical **cylinders** (no cylinder
+shape in `hull/physics`; trunks and posts, in a small grid) and the **ground**, which is an analytic function of x and z (a sampled
+`heightfield` would change what the soldier stands on). Known difference: a ray that starts inside a capsule is reported at distance 0
+(as for a sphere); the old code answered null or the far cap's entry. `collision.parity.test.ts` runs 10 000 seeded queries against the old
+implementation (`collision.legacy.ts`, kept for the test only): 0 mismatches; bench of 60 000 queries: 74 ms now, 117 ms before.
+
 ### P6. Kits: camera, health with hit zones, pickups, spawner
 
 * **Owns**: the camera section of `src/player/player.ts` (`_camera`, `_cineCamera`), `src/game.ts` waves (`WAVES`, `_nextWave`,
