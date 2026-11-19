@@ -8,3 +8,4 @@ minimumReleaseAgeExclude:
   - vitest@5.1.1
   - electron@45.3.4
   - isomorphic-git@1.44.17
+  - '@agentclientprotocol/sdk@2.8.0'

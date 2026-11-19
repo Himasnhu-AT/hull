@@ -24,6 +24,9 @@ const dataDir = await mkdtemp(join(tmpdir(), 'hull-web-'));
 const scratch = join(dataDir, 'projects');
 await mkdir(scratch, { recursive: true });
 const host = createHost({ dataDir, log: (l) => console.log(`[hull] ${l}`) });
+// Agent and terminal events reach the page as a server-sent stream, the web stand-in for Electron's webContents.send.
+const streams = new Set<import('node:http').ServerResponse>();
+host.onAgentEvent((e) => { const line = `data: ${JSON.stringify(e)}\n\n`; for (const r of streams) r.write(line); });
 
 let initial: OpenedProject | null = null;
 const project = flag('project');
@@ -41,6 +44,17 @@ const api: Record<string, (arg: never) => unknown> = {
   recents: () => host.recents(),
   forgetRecent: (root: string) => host.forgetRecent(root),
   reveal: (path: string) => { console.log(`[hull] reveal ${path}`); },
+  agentList: () => host.agents.list(),
+  agentStart: (o: { a: [string] }) => host.agents.start(...o.a),
+  agentPrompt: (o: { a: [string, string] }) => host.agents.prompt(...o.a),
+  agentCancel: (o: { a: [string] }) => host.agents.cancel(...o.a),
+  agentStop: (o: { a: [string] }) => host.agents.stop(...o.a),
+  agentAnswer: (o: { a: [string, string, string | null] }) => host.agents.answer(...o.a),
+  claudeInfo: () => host.terminals.claudeInfo(),
+  termOpen: (o: { a: [number, number] }) => host.terminals.open(...o.a),
+  termWrite: (o: { a: [string, string] }) => host.terminals.write(...o.a),
+  termResize: (o: { a: [string, number, number] }) => host.terminals.resize(...o.a),
+  termKill: (o: { a: [string] }) => host.terminals.kill(...o.a),
   initialProject: () => { const p = initial; initial = null; return p; },
 };
 
@@ -50,6 +64,12 @@ const server = await createServer({
   plugins: [{
     name: 'hull-web-api',
     configureServer(s) {
+      s.middlewares.use('/__hull_events', (req, res) => {
+        res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache', connection: 'keep-alive' });
+        res.write(': open\n\n');
+        streams.add(res);
+        req.on('close', () => streams.delete(res));
+      });
       s.middlewares.use('/__hull', (req, res) => {
         const name = (req.url ?? '').replace(/^\//, '').split('?')[0]!;
         let body = '';

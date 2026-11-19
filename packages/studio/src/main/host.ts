@@ -5,6 +5,9 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createHub, type Hub } from './agents.ts';
+import { createTerminals, type Terminals } from './terminal.ts';
+import type { AgentEvent } from '../shared/agentApi.ts';
 import type { CommunityGame, OpenedProject, RecentProject, TemplateInfo } from '../shared/appApi.ts';
 
 interface ProjectServer { url: string; gameUrl: string; close(): Promise<void> }
@@ -24,6 +27,8 @@ export interface HostOptions {
   /** Where recents live (Electron's userData). */
   dataDir: string;
   log?: (line: string) => void;
+  /** Env the agents and the terminal start with (tests); defaults to the process's. */
+  env?: NodeJS.ProcessEnv;
 }
 
 export interface Host {
@@ -35,6 +40,11 @@ export interface Host {
   closeProject(): Promise<void>;
   recents(): Promise<RecentProject[]>;
   forgetRecent(root: string): Promise<void>;
+  /** Agents (ACP) and the Claude Code terminal, working on the open project. */
+  agents: Hub;
+  terminals: Terminals;
+  /** Subscribes to agent and terminal events; returns the unsubscribe. */
+  onAgentEvent(cb: (e: AgentEvent) => void): () => void;
   /** The server module in use, for tests and the banner. */
   serverKind(): Promise<'real'>;
 }
@@ -53,6 +63,13 @@ export function createHost(opts: HostOptions): Host {
   const recentsFile = join(opts.dataDir, 'recents.json');
   let loaded: { mod: ServerModule; mcp: McpModule; kind: 'real' } | null = null;
   let running: { root: string; server: ProjectServer; mcp: { url: string; close(): Promise<void> }; mcpServer: { close(): Promise<void> } } | null = null;
+
+  const listeners = new Set<(e: AgentEvent) => void>();
+  const emit = (e: AgentEvent): void => { for (const l of listeners) { try { l(e); } catch { /* a dead window must not stop the others */ } } };
+  const current = (): { root: string; mcp: { url: string; launcher: string } } | null =>
+    running ? { root: running.root, mcp: { url: running.mcp.url, launcher: fileURLToPath(new URL('../../../tools/bin/hull-mcp.js', import.meta.url)) } } : null;
+  const hub = createHub({ project: current, emit, log, ...(opts.env ? { env: opts.env } : {}) });
+  const terminals = createTerminals({ project: current, emit, ...(opts.env ? { env: opts.env } : {}) });
 
   async function load(): Promise<{ mod: ServerModule; mcp: McpModule; kind: 'real' }> {
     if (loaded) return loaded;
@@ -82,6 +99,10 @@ export function createHost(opts: HostOptions): Host {
   }
 
   const host: Host = {
+    agents: hub,
+    terminals,
+    onAgentEvent(cb) { listeners.add(cb); return () => { listeners.delete(cb); }; },
+
     async listTemplates() { return (await load()).mod.listTemplates(); },
 
     async listCommunity() { return (await load()).mod.listCommunity({ projectsDir }); },
@@ -119,6 +140,8 @@ export function createHost(opts: HostOptions): Host {
 
     async closeProject() {
       const r = running;
+      // Agents and the terminal work on the project that is closing.
+      await hub.closeAll(); terminals.closeAll();
       running = null;
       if (r) { await r.mcp.close(); await r.mcpServer.close(); await r.server.close(); }
     },
