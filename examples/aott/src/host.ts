@@ -41,6 +41,8 @@ export interface BootOptions {
   /** A mode to start at once instead of the title ('expedition', 'gate', 'scout', 'training', 'free'). */
   play?: string;
   noTitans?: boolean;
+  /** Dev check of the look's post: `?fx=speed` holds the speed cue at full, `?fx=impact` holds the hit pulse. */
+  fx?: string;
   noAllies?: boolean;
   noHorses?: boolean;
   noCivilians?: boolean;
@@ -58,6 +60,7 @@ function queryOptions(): BootOptions {
   const p = new URLSearchParams(location.search);
   return {
     ...(p.has('play') ? { play: p.get('play') ?? '' } : {}),
+    ...(p.has('fx') ? { fx: p.get('fx') ?? '' } : {}),
     noTitans: p.has('notitans'), noAllies: p.has('noallies'), noHorses: p.has('nohorses'), noCivilians: p.has('nocivilians'),
     ...(p.has('allies') ? { allies: +(p.get('allies') ?? 5) } : {}),
     sens: +(p.get('sens') || 1),
@@ -68,7 +71,7 @@ function isPlaying(mode: string): mode is Exclude<GameMode, 'menu'> {
   return mode === 'expedition' || mode === 'gate' || mode === 'scout' || mode === 'free' || mode === 'training';
 }
 
-interface HullViews { render?: { setLook(id: string): void; setQuality(q: 'low' | 'medium' | 'high'): void; setPixelRatioCap(c: number): void; setSpeed(v: number): void; impact(at?: readonly [number, number, number] | null, strength?: number): void; cancelImpact(): void }; audio?: { context: AudioContext | null; bus(n?: string): AudioNode | undefined } }
+interface HullViews { render?: { setLook(id: string): void; setQuality(q: 'low' | 'medium' | 'high'): void; setPixelRatioCap(c: number): void; setSpeed(v: number): void; impact(at?: readonly [number, number, number] | null, strength?: number): void; cancelImpact(): void; holdImpact(k: number | null, at?: readonly [number, number, number] | null): void }; audio?: { context: AudioContext | null; bus(n?: string): AudioNode | undefined } }
 const views = (): HullViews | undefined => (globalThis as { hull?: HullViews }).hull;
 
 const STEP = 1 / CFG.physicsHz;
@@ -416,7 +419,9 @@ export class AottHost extends Behaviour {
     const playing = isPlaying(game.mode);
     game.autoQuality?.(dt, playing);
     // the speed cue the look draws (post.speedBlur): nothing under 32 m/s, full at 82, none when the soldier is down
-    views()?.render?.setSpeed(playing && game.player.alive ? Math.min(1, Math.max(0, (game.player.speed - 32) / 50)) : 0);
+    const fxHold = this.opts.fx;
+    views()?.render?.setSpeed(fxHold === 'speed' ? 1 : playing && game.player.alive ? Math.min(1, Math.max(0, (game.player.speed - 32) / 50)) : 0);
+    if (fxHold === 'impact') views()?.render?.holdImpact(1, null);
     if (!HEADLESS) game.hud?.update?.(this.hudState(playing));
   }
 
