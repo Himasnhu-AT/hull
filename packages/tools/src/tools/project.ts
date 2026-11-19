@@ -51,6 +51,16 @@ const assetRef: Schema = obj({ kind: { enum: ['config', 'code'] }, file: str(), 
 const assetResult: Schema = obj({ ok: { type: 'boolean' }, problems, refs: arr(assetRef), created: arr(str()), gone: arr(str()) }, ['ok', 'problems']);
 const refLines = (o: unknown): string[] => ((o as { refs?: { file: string; pointer?: string; line: number; col: number }[] }).refs ?? []).map((r) => `  ${r.file}${r.pointer ? '#' + r.pointer : ''}:${r.line}:${r.col}`);
 
+
+const codeWrite = obj({ ok: { type: 'boolean', description: 'False for a refusal and also when the write was kept but the type check found problems; see written.' }, written: { type: 'boolean' }, problems, elsewhere: num('Type problems found in other files (run check).'), created: { type: 'boolean' }, line: num(), replaced: num(), importers: arr(obj({ file: str(), line: num(), col: num(), specifier: str() }, ['file', 'line', 'col', 'specifier'])) }, ['ok', 'written', 'problems']);
+const codeFmt = (verb: string) => (o: unknown): string[] => {
+  const r = o as { written: boolean; problems: unknown[]; elsewhere?: number; line?: number };
+  if (!r.written) return ['nothing written'];
+  const here = r.problems.length ? r.problems.length + ' type problem(s) in this file (listed above): fix them.' : 'No type problems in this file.';
+  return [verb + (r.line ? ' at line ' + r.line : '') + '; kept in the history. ' + here + (r.elsewhere ? ' ' + r.elsewhere + ' more in other files: run check.' : '')];
+};
+const typecheck: Schema = { type: 'boolean', description: 'Run the type check on the file after writing (default true). Turn it off for the first of several related edits, then check once.' };
+
 const SPECS: Spec[] = [
   { method: 'project.info', summary: 'The project: root, title, manifest and where its game page is served.', input: empty, output: obj({ root: str(), title: str(), gameUrl: str(), manifest: {} }, ['root', 'title', 'gameUrl']) },
   { method: 'library.list', summary: 'Every config file and tunables block in the project, with its problem count.', input: empty, output: list(obj({ id: str(), kind: str(), path: str(), title: str(), note: str(), problems: num() }, ['id', 'kind', 'path', 'title', 'problems'])),
@@ -72,6 +82,15 @@ const SPECS: Spec[] = [
   { method: 'asset.move', summary: 'Move assets or folders into a folder of the same kind (sound/combat). References are rewritten like a rename.', input: obj({ ids: arr(str()), folder: str(), author }, ['ids', 'folder']), output: assetResult, format: (o) => ['moved', ...refLines(o)] },
   { method: 'asset.delete', summary: 'Delete assets or whole folders. Refused, with every place that still names one, while any reference exists.', input: obj({ ids: arr(str()), author }, ['ids']), output: assetResult, format: (o) => ['deleted'] },
   { method: 'folder.new', summary: 'Create an empty folder inside a config kind, like sound/combat.', input: obj({ path: str(), author }, ['path']), output: writeResult },
+  { method: 'code.list', summary: 'Every file under src/ with its size in bytes.', input: empty, output: list(obj({ path: str(), bytes: num() }, ['path', 'bytes'])),
+    format: (o) => (o as { items: { path: string; bytes: number }[] }).items.map((f) => f.path + '  ' + f.bytes + ' B') },
+  { method: 'code.read', summary: 'Read a file of src/ (path like src/main.ts), whole or the lines from..to (1-based, inclusive).', input: obj({ path: str('Like src/main.ts.'), from: num(), to: num() }, ['path']), output: obj({ ok: { type: 'boolean' }, problems, path: str(), text: str(), from: num(), to: num(), total: num() }, ['ok', 'problems']),
+    format: (o) => [(o as { text?: string }).text ?? ''] },
+  { method: 'code.search', summary: 'Search src/ for a literal string (or a regex with regex:true). Returns file:line:col and the line. Narrow with path (a file or folder under src/).', input: obj({ pattern: str(), regex: { type: 'boolean' }, ignoreCase: { type: 'boolean' }, path: str(), limit: num('At most this many matches (default 100, max 500).') }, ['pattern']), output: obj({ ok: { type: 'boolean' }, problems, matches: arr(obj({ file: str(), line: num(), col: num(), text: str() }, ['file', 'line', 'col', 'text'])), truncated: { type: 'boolean' } }, ['ok', 'problems', 'matches', 'truncated']),
+    format: (o) => { const r = o as { matches: { file: string; line: number; col: number; text: string }[]; truncated: boolean }; return [...r.matches.map((m) => m.file + ':' + m.line + ':' + m.col + ': ' + m.text.trim()), ...(r.truncated ? ['(more matches: narrow the search)'] : [])]; } },
+  { method: 'code.edit', summary: 'Edit code in src/ by exact-string replace: old must match the file exactly once (add surrounding lines if it matches several; or set all). Written atomically, recorded in the history under the caller, the open game reloads. The file is then type-checked: problems come back as file:line:col but the edit stays, so fix them with another edit. For a changed value prefer config_set or tunables_set.', input: obj({ path: str('Like src/player.ts.'), old: str('The exact text to replace.'), new: str('The replacement.'), all: { type: 'boolean', description: 'Replace every copy of old.' }, typecheck, author }, ['path', 'old', 'new']), output: codeWrite, format: codeFmt('edited') },
+  { method: 'code.write', summary: 'Create a file under src/, or overwrite one whole. Same safety, history record and type check as code.edit. Prefer code_edit for a change to an existing file.', input: obj({ path: str('Like src/enemies/slime.ts.'), text: str('The whole file.'), typecheck, author }, ['path', 'text']), output: codeWrite, format: codeFmt('written') },
+  { method: 'code.delete', summary: 'Delete a file of src/. Refused, with each place (file:line:col), while another file imports it or hull.json names it.', input: obj({ path: str(), author }, ['path']), output: codeWrite, format: () => ['deleted'] },
   { method: 'journal.list', summary: 'The recent changes made through the server, newest last.', input: obj({ limit: num() }), output: list({ type: 'object', properties: { at: str(), by: str(), target: str(), path: str(), from: {}, to: {} }, required: ['at', 'by', 'target', 'path'], additionalProperties: true }),
  },
   { method: 'history.list', summary: 'The timeline, newest first, across the main line and every experiment. `by` says who made each change.', input: obj({ limit: num(), line: str("'main' or an experiment name.") }), output: list(historyChange),

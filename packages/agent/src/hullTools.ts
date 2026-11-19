@@ -5,9 +5,9 @@ import { createMcpServer, type McpServer } from '@hull/tools/mcp';
 import type { ToolSpec } from './types.ts';
 
 /** Tools that change the project. Everything else only reads or runs the game. */
-const WRITES = new Set(['config.set', 'tunables.set', 'asset.new', 'asset.duplicate', 'asset.rename', 'asset.move', 'asset.delete', 'folder.new', 'history.restore', 'history.revert', 'exp.adopt']);
+const WRITES = new Set(['config.set', 'tunables.set', 'asset.new', 'asset.duplicate', 'asset.rename', 'asset.move', 'asset.delete', 'folder.new', 'code.edit', 'code.write', 'code.delete', 'history.restore', 'history.revert', 'exp.adopt']);
 /** Writes that are hard to see through or to undo by hand: they ask the person first. */
-const RISKY = new Set(['asset.rename', 'asset.move', 'asset.delete', 'history.restore', 'history.revert', 'exp.adopt']);
+const RISKY = new Set(['code.delete', 'asset.rename', 'asset.move', 'asset.delete', 'history.restore', 'history.revert', 'exp.adopt']);
 /** The tools the model is told about: no new/dev (hidden by the MCP server already) and nothing that only the person should do. */
 const WITHHELD = new Set(['exp.discard', 'community.open']);
 
@@ -54,7 +54,7 @@ export class HullTools {
   isWrite(name: string): boolean { return WRITES.has(name); }
   isRisky(name: string): boolean { return RISKY.has(name); }
   kind(name: string): ToolKind {
-    if (name === 'asset.delete') return 'delete';
+    if (name === 'asset.delete' || name === 'code.delete') return 'delete';
     if (name === 'asset.rename' || name === 'asset.move') return 'move';
     if (WRITES.has(name)) return 'edit';
     if (name === 'check' || name === 'test' || name === 'build' || name === 'play' || name.startsWith('game.')) return 'execute';
