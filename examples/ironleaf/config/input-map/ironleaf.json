@@ -1,6 +1,6 @@
 {
   "kind": "input-map",
-  "note": "WASD moves relative to the camera, the mouse turns it, Shift sprints, Space dodges, F or click swings (placeholder), L changes the look, Esc pauses.",
+  "note": "WASD moves relative to the camera, the mouse turns it, Shift sprints, Space dodges, F or left click cuts, R or right click is the heavy (hold to charge), Q blocks (tap just before a blow to deflect), Tab or C changes stance, T or middle click locks on, E changes target, L changes the look, Esc pauses.",
   "actions": {
     "move": {
       "type": "axis2",
@@ -41,13 +41,6 @@
         ]
       },
       "pad": "stickR"
-    },
-    "jump": {
-      "type": "button",
-      "keys": [
-        "KeyJ"
-      ],
-      "pad": "south"
     },
     "sprint": {
       "type": "button",
@@ -117,19 +110,25 @@
       ],
       "pad": "start",
       "rebind": false
+    },
+    "lockNext": {
+      "type": "button",
+      "keys": [
+        "KeyE"
+      ]
     }
   },
   "groups": {
     "Move": [
       "move",
       "sprint",
-      "dodge",
-      "jump"
+      "dodge"
     ],
     "Look": [
       "look",
       "lookPad",
-      "lockOn"
+      "lockOn",
+      "lockNext"
     ],
     "Fight": [
       "attack",
