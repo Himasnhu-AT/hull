@@ -1,0 +1,31 @@
+{
+  "kind": "vfx",
+  "note": "Billowing steam or smoke. fx.steam sets count, size (x size/3), life (x duration/3) and rise (speed) per call.",
+  "emit": {
+    "count": [12, 14],
+    "over": 1.2,
+    "shape": {
+      "disc": 1.26
+    }
+  },
+  "particle": {
+    "life": [2.55, 4.2],
+    "speed": [0.7, 1.4],
+    "direction": {
+      "cone": [0, 1, 0],
+      "angleDeg": 25
+    },
+    "gravity": 0.2,
+    "drag": 0.9,
+    "ground": "rest",
+    "size": [ [0, 1.4], [0.25, 3.6], [0.5, 4.8], [1, 5.5] ],
+    "sizeScale": [0.8, 1.25],
+    "color": [ [0, "#e9e8e4"], [1, "#b4b6b8"] ],
+    "alpha": [ [0, 0], [0.25, 0.5], [0.6, 0.28], [1, 0] ],
+    "sprite": "smoke"
+  },
+  "budget": {
+    "max": 1600,
+    "fadeNear": 3
+  }
+}

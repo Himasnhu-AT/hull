@@ -76,6 +76,54 @@ describe('curves', () => {
   });
 });
 
+describe('burst options, ground and flutter', () => {
+  it('scales size and speed per call without changing the draws', () => {
+    const c = compile(base);
+    const a = new Pool(20), b = new Pool(20);
+    const ra = new RandomStream(4, 'cosmetic'), rb = new RandomStream(4, 'cosmetic');
+    for (let i = 0; i < 10; i++) { spawnOne(a, c, ra, 0, 0, 0, undefined); spawnOne(b, c, rb, 0, 0, 0, undefined, { size: 2, speed: 3 }); }
+    for (let i = 0; i < 10; i++) {
+      expect(b.scale[i]!).toBeCloseTo(a.scale[i]! * 2, 5);
+      expect(b.vy[i]!).toBeCloseTo(a.vy[i]! * 3, 4);
+    }
+    expect(ra.next()).toBe(rb.next());
+  });
+
+  it('dies, bounces or rests at the ground the game supplies', () => {
+    const fall = (ground: 'die' | 'bounce' | 'rest'): Pool => {
+      const c = compile({ ...base, particle: { life: [5, 5], speed: [0, 0], gravity: -10, ground } });
+      const pool = new Pool(4);
+      spawnOne(pool, c, new RandomStream(1, 'cosmetic'), 0, 1, 0, undefined);
+      for (let i = 0; i < 240; i++) pool.step(c, 1 / 120, () => 0);
+      return pool;
+    };
+    expect(fall('die').count).toBe(0);
+    const rest = fall('rest');
+    expect(rest.count).toBe(1);
+    expect(rest.py[0]!).toBeCloseTo(0.02, 5);
+    const bounce = fall('bounce');
+    expect(bounce.py[0]!).toBeGreaterThanOrEqual(0.02 - 1e-6);
+    expect(bounce.py[0]!).toBeLessThan(0.5);
+  });
+
+  it('flutter moves a particle sideways and none without it', () => {
+    const run = (flutter: number): number => {
+      const c = compile({ ...base, particle: { life: [5, 5], speed: [0, 0], flutter } });
+      const pool = new Pool(2);
+      spawnOne(pool, c, new RandomStream(1, 'cosmetic'), 0, 0, 0, undefined);
+      for (let i = 0; i < 120; i++) pool.step(c, 1 / 120);
+      return Math.hypot(pool.px[0]!, pool.pz[0]!);
+    };
+    expect(run(0)).toBe(0);
+    expect(run(5)).toBeGreaterThan(0.01);
+  });
+
+  it('accepts the new sprites and ground modes in a config', () => {
+    for (const sprite of ['chip', 'leaf'] as const) expect(validateAgainst(vfxSchema, { ...base, particle: { ...base.particle, sprite, ground: 'bounce', flutter: 2 } })).toEqual([]);
+    expect(validateAgainst(vfxSchema, { ...base, particle: { ...base.particle, ground: 'sink' } }).length).toBeGreaterThan(0);
+  });
+});
+
 describe('emitter maths', () => {
   it('draws counts inside the range and the same ones for the same seed', () => {
     const c = compile(base);

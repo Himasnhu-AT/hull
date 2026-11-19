@@ -1,0 +1,27 @@
+{
+  "kind": "vfx",
+  "note": "Stone flakes thrown off a hit; aim it with the surface normal.",
+  "emit": {
+    "count": [8, 8]
+  },
+  "particle": {
+    "life": [0.7, 1.4],
+    "speed": [3.6, 9],
+    "direction": {
+      "cone": [0, 1, 0],
+      "angleDeg": 60
+    },
+    "gravity": -15,
+    "drag": 0.5,
+    "spin": [-12, 12],
+    "size": [ [0, 0.08], [1, 0.08] ],
+    "sizeScale": [0.6, 1.4],
+    "color": [ [0, "#8a8c90"], [1, "#55575c"] ],
+    "alpha": [ [0, 1], [0.8, 1], [1, 0] ],
+    "ground": "bounce",
+    "sprite": "chip"
+  },
+  "budget": {
+    "max": 500
+  }
+}

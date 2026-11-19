@@ -32,7 +32,7 @@ const { attribute, cameraProjectionMatrix, clamp, cos, exp, float, floor, fract,
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type N = any;
 
-const SPRITE_ID: Record<Sprite, number> = { soft: 0, hard: 1, smoke: 2, spark: 3 };
+const SPRITE_ID: Record<Sprite, number> = { soft: 0, hard: 1, smoke: 2, spark: 3, chip: 4, leaf: 5 };
 
 /** What the fragment stage needs to fog a particle the way three's fog does (by distance from the camera). */
 export interface FogState {
@@ -87,6 +87,8 @@ function common(c: Compiled) {
       const n = vnoise(uv.mul(2.2).add(seed.mul(5))).mul(0.65).add(vnoise(uv.mul(5).sub(seed.mul(3))).mul(0.35));
       return clamp(soft.mul(1.6).sub(float(1).sub(n).mul(0.55)), 0, 1);
     }
+    if (kind === 4) return float(1).sub(smoothstep(0.62, 0.72, max(abs(uv.x), abs(uv.y))));
+    if (kind === 5) return float(1).sub(smoothstep(0.8, 1, length(vec2(uv.x.mul(0.85), uv.y.mul(2.6)))));
     if (kind === 3) {
       const a = float(1).sub(smoothstep(0, 1, abs(uv.y))).mul(float(1).sub(smoothstep(0.35, 1, abs(uv.x))));
       return a.mul(a);

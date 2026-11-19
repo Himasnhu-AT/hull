@@ -376,6 +376,40 @@
             "help": "Seconds of travel the sprite is stretched along its velocity. 0 keeps it round."
           }
         },
+        "flutter": {
+          "type": "number",
+          "minimum": 0,
+          "default": 0,
+          "x-ui": {
+            "unit": "m/s",
+            "help": "Sideways wobble of each particle (a falling leaf). 0 flies straight. CPU effects only."
+          }
+        },
+        "ground": {
+          "anyOf": [
+            {
+              "type": "string",
+              "const": "none"
+            },
+            {
+              "type": "string",
+              "const": "die"
+            },
+            {
+              "type": "string",
+              "const": "bounce"
+            },
+            {
+              "type": "string",
+              "const": "rest"
+            }
+          ],
+          "default": "none",
+          "x-ui": {
+            "widget": "select",
+            "help": "What a particle does at the ground the game gave to vfx.setGround: die (gone on touch), bounce (loses speed and rolls), rest (slides along it, never under). CPU effects only."
+          }
+        },
         "sprite": {
           "anyOf": [
             {
@@ -393,11 +427,20 @@
             {
               "type": "string",
               "const": "spark"
+            },
+            {
+              "type": "string",
+              "const": "chip"
+            },
+            {
+              "type": "string",
+              "const": "leaf"
             }
           ],
           "default": "soft",
           "x-ui": {
-            "widget": "select"
+            "widget": "select",
+            "help": "soft/smoke/hard/spark as before; chip is a hard-edged flake that turns with the particle, leaf a pointed oval."
           }
         },
         "blend": {

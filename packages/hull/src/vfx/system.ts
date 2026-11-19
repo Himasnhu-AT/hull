@@ -20,7 +20,7 @@ import { config } from '../config/index.ts';
 import type { Node, Random, World } from '../core/index.ts';
 import { renderRuntime, webgpuVfx, type RenderRuntime } from '../render/runtime.ts';
 import type { Vfx } from '../schema/vfx.ts';
-import { compile, drawCount, look, Pool, spawnOne, type Compiled, type V3 } from './emitter.ts';
+import { compile, drawCount, look, Pool, spawnOne, type Compiled, type GroundFn, type SpawnMods, type V3 } from './emitter.ts';
 import type { FogState, GpuParticles } from './webgpu.ts';
 
 // Effects at or above this budget run their whole simulation on the GPU when the backend can compute (WebGPU).
@@ -83,6 +83,10 @@ void main() {
     float soft = 1.0 - smoothstep(0.0, 1.0, r);
     float n = vnoise(vUv * 2.2 + vSeed * 5.0) * 0.65 + vnoise(vUv * 5.0 - vSeed * 3.0) * 0.35;
     a = clamp(soft * 1.6 - (1.0 - n) * 0.55, 0.0, 1.0);
+  #elif SPRITE == 4
+    a = 1.0 - smoothstep(0.62, 0.72, max(abs(vUv.x), abs(vUv.y)));
+  #elif SPRITE == 5
+    a = 1.0 - smoothstep(0.8, 1.0, length(vec2(vUv.x * 0.85, vUv.y * 2.6)));
   #elif SPRITE == 3
     a = (1.0 - smoothstep(0.0, 1.0, abs(vUv.y))) * (1.0 - smoothstep(0.35, 1.0, abs(vUv.x)));
     a = a * a;
@@ -98,7 +102,21 @@ void main() {
   #include <fog_fragment>
 }`;
 
-const SPRITE_ID = { soft: 0, hard: 1, smoke: 2, spark: 3 } as const;
+const SPRITE_ID = { soft: 0, hard: 1, smoke: 2, spark: 3, chip: 4, leaf: 5 } as const;
+
+/** Per-call changes to a burst: the effect's config stays the baseline. */
+export interface BurstOptions {
+  /** Exact particle count, instead of one drawn from the config's range. */
+  count?: number;
+  /** Multiplies every particle's size. */
+  size?: number;
+  /** Multiplies every particle's start speed. */
+  speed?: number;
+  /** Multiplies every particle's life. */
+  life?: number;
+  /** Multiplies how far from the emit point the emit shape places a particle. */
+  spread?: number;
+}
 
 class Effect {
   readonly id: string;
@@ -278,18 +296,18 @@ class Effect {
   }
 
   /** Starts `n` particles at `(x, y, z)`: in the CPU pool, or as one request to the GPU simulation. */
-  spawn(n: number, x: number, y: number, z: number, dir: V3 | undefined, rng: Random): void {
+  spawn(n: number, x: number, y: number, z: number, dir: V3 | undefined, rng: Random, mods?: SpawnMods): void {
     if (this.gpu !== null) {
       this.gpu.spawn(n, x, y, z, dir, Math.floor(rng.next() * 4294967296));
       return;
     }
-    for (let i = 0; i < n; i++) spawnOne(this.pool, this.c, rng, x, y, z, dir);
+    for (let i = 0; i < n; i++) spawnOne(this.pool, this.c, rng, x, y, z, dir, mods);
   }
 
   /** One fixed step: the CPU pool moves, or the GPU simulation is told a step has passed. */
-  step(dt: number): void {
+  step(dt: number, ground: GroundFn | null): void {
     if (this.gpu !== null) this.gpu.endTick(dt);
-    else this.pool.step(this.c, dt);
+    else this.pool.step(this.c, dt, ground);
   }
 
   /** Draws this frame: the GPU simulation runs its kernels, or the CPU pool is copied into the instance buffers. */
@@ -319,6 +337,7 @@ interface Job {
   aimed: boolean;
   dx: number; dy: number; dz: number;
   left: number;
+  mods: Required<SpawnMods>;
   perSecond: number;
   carry: number;
 }
@@ -361,12 +380,13 @@ export class VfxSystem {
   private readonly trails: Trail[] = [];
   private readonly rng: Random;
   private stepDt = 1 / 60;
+  private ground: GroundFn | null = null;
   private readonly pos: V3 = { x: 0, y: 0, z: 0 };
   private readonly aim: V3 = { x: 0, y: 0, z: 0 };
 
   constructor(private readonly world: World) {
     this.rng = world.random('cosmetic');
-    for (let i = 0; i < JOBS; i++) this.jobs.push({ active: false, fx: null, x: 0, y: 0, z: 0, aimed: false, dx: 0, dy: 0, dz: 0, left: 0, perSecond: 0, carry: 0 });
+    for (let i = 0; i < JOBS; i++) this.jobs.push({ active: false, fx: null, x: 0, y: 0, z: 0, aimed: false, dx: 0, dy: 0, dz: 0, left: 0, mods: { size: 1, speed: 1, life: 1, spread: 1 }, perSecond: 0, carry: 0 });
     world.system('vfx', {
       fixedUpdate: (dt) => this.fixed(dt),
       update: (_dt, alpha) => this.frame(alpha),
@@ -394,10 +414,13 @@ export class VfxSystem {
   }
 
   /** Starts one burst at `at`. `dir` aims the effect's cone. With `emit.over`, the particles start over that time. */
-  burst(id: string, at: V3, dir?: V3): void {
+  burst(id: string, at: V3, dir?: V3, opts?: BurstOptions): void {
     const fx = this.effect(id);
     if (!fx) return;
-    const n = drawCount(fx.c, this.rng);
+    // Always one draw for the count, so a caller's override does not shift the stream.
+    const drawn = drawCount(fx.c, this.rng);
+    const n = opts?.count !== undefined ? Math.max(0, Math.round(opts.count)) : drawn;
+    const mods: SpawnMods | undefined = opts;
     if (fx.c.over > 0 && n > 0) {
       for (let i = 0; i < JOBS; i++) {
         const j = this.jobs[i]!;
@@ -405,12 +428,17 @@ export class VfxSystem {
         j.active = true; j.fx = fx; j.x = at.x; j.y = at.y; j.z = at.z;
         j.aimed = dir !== undefined;
         if (dir) { j.dx = dir.x; j.dy = dir.y; j.dz = dir.z; }
-        j.left = n; j.perSecond = n / fx.c.over; j.carry = 0;
+        j.left = n; j.mods.size = opts?.size ?? 1; j.mods.speed = opts?.speed ?? 1; j.mods.life = opts?.life ?? 1; j.mods.spread = opts?.spread ?? 1; j.perSecond = n / fx.c.over; j.carry = 0;
         return;
       }
       // Every slot is busy: start it all now instead of losing it.
     }
-    fx.spawn(n, at.x, at.y, at.z, dir, this.rng);
+    fx.spawn(n, at.x, at.y, at.z, dir, this.rng, mods);
+  }
+
+  /** The height of the ground for effects that set `particle.ground`; null removes it. */
+  setGround(fn: GroundFn | null): void {
+    this.ground = fn;
   }
 
   /** Emits `emit.rate` particles a second along the path of `node` until stopped or the node is destroyed. */
@@ -451,7 +479,7 @@ export class VfxSystem {
       if (k > j.left) k = j.left;
       const fx = j.fx!;
       if (j.aimed) { this.aim.x = j.dx; this.aim.y = j.dy; this.aim.z = j.dz; }
-      if (k > 0) fx.spawn(k, j.x, j.y, j.z, j.aimed ? this.aim : undefined, rng);
+      if (k > 0) fx.spawn(k, j.x, j.y, j.z, j.aimed ? this.aim : undefined, rng, j.mods);
       j.left -= k;
       if (j.left <= 0) { j.active = false; j.fx = null; }
     }
@@ -473,7 +501,7 @@ export class VfxSystem {
     }
     for (let i = 0; i < this.list.length; i++) {
       const fx = this.list[i]!;
-      fx.step(dt);
+      fx.step(dt, this.ground);
     }
   }
 
