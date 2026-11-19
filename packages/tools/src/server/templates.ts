@@ -31,7 +31,10 @@ const slug = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').
  * through a link or a node_modules copy: nothing is installed into the project, it cannot go stale, and when hull is
  * published the alias is deleted and a normal dependency takes its place.
  */
-export function standaloneTsconfig(): string {
+/** The compiler options a project may set for itself; the rest (outDir, paths, composite...) belong to the workspace. */
+const OWN_OPTIONS = ['lib', 'strict', 'noUncheckedIndexedAccess', 'verbatimModuleSyntax', 'exactOptionalPropertyTypes', 'noImplicitReturns', 'noPropertyAccessFromIndexSignature'];
+
+export function standaloneTsconfig(own: Record<string, unknown> = {}): string {
   const cfg = {
     compilerOptions: {
       target: 'ES2023',
@@ -47,6 +50,7 @@ export function standaloneTsconfig(): string {
       allowImportingTsExtensions: true,
       noEmit: true,
       types: [],
+      ...own,
       paths: { hull: [join(hullSrc, 'index.ts')], 'hull/*': [join(hullSrc, '*', 'index.ts'), join(hullSrc, '*.ts')] },
     },
     include: ['src', '.hull/gen'],
@@ -60,6 +64,16 @@ export async function createProject(opts: { template: string; dir: string; title
   if (!existsSync(join(from, 'hull.json'))) {
     throw new Error(`no template '${opts.template}' (have: ${listTemplates().map((t) => t.name).join(', ')})`);
   }
+  return copyProject({ from, dir: opts.dir, title: opts.title });
+}
+
+/**
+ * Copies a project folder (a template, or a shipped example) into `dir` so it works on its own: no node_modules,
+ * .hull or dist, a standalone tsconfig and package.json. A `title` renames it (and sets its id); without one the
+ * manifest keeps its own title and id.
+ */
+export function copyProject(opts: { from: string; dir: string; title?: string }): { root: string } {
+  const from = opts.from;
   const to = resolve(opts.dir);
   if (existsSync(to) && readdirSync(to).length > 0) throw new Error(`${to} exists and is not empty`);
   mkdirSync(to, { recursive: true });
@@ -70,12 +84,21 @@ export async function createProject(opts: { template: string; dir: string; title
     const r = setJsonPointer(manifest, pointer, value);
     if (r.ok) manifest = r.text;
   };
-  set('/title', opts.title);
-  const id = slug(opts.title);
-  if (/^[a-z0-9][a-z0-9-]*$/.test(id)) set('/id', id);
+  let id = (JSON.parse(manifest) as { id?: string }).id ?? '';
+  if (opts.title !== undefined) {
+    set('/title', opts.title);
+    id = slug(opts.title);
+    if (/^[a-z0-9][a-z0-9-]*$/.test(id)) set('/id', id);
+  }
   writeFileSync(join(to, 'hull.json'), manifest);
 
-  writeFileSync(join(to, 'tsconfig.json'), standaloneTsconfig());
+  // A project's own strictness choices (AOTT turns noUncheckedIndexedAccess off) must survive the copy, or it stops type-checking.
+  let own: Record<string, unknown> = {};
+  try {
+    const c = JSON.parse(readFileSync(join(from, 'tsconfig.json'), 'utf8')) as { compilerOptions?: Record<string, unknown> };
+    own = Object.fromEntries(Object.entries(c.compilerOptions ?? {}).filter(([k]) => OWN_OPTIONS.includes(k)));
+  } catch { /* no tsconfig: the defaults apply */ }
+  writeFileSync(join(to, 'tsconfig.json'), standaloneTsconfig(own));
   writeFileSync(join(to, 'package.json'), `${JSON.stringify({ name: id || 'game', version: '0.0.0', private: true, type: 'module' }, null, 2)}\n`);
   return { root: to };
 }

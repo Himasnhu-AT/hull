@@ -1,4 +1,4 @@
-import type { JSX } from 'react';
+import type { JSX, ReactNode } from 'react';
 import { Icon, type IconName } from '../ui/Icon.tsx';
 
 export interface Panels { lib: boolean; dock: boolean; insp: boolean }
@@ -23,7 +23,24 @@ interface Props {
   onClose(): void;
   agents: boolean;
   onAgents(): void;
+  view: string;
+  onView(v: string): void;
+  compareCount: number;
+  /** Live-status line: shown as a dot with this text as its tooltip. */
+  note: string;
+  /** The branch picker, only when the Game view is showing. */
+  branch?: ReactNode;
+  onReload?(): void;
 }
+
+const VIEWS: { id: string; icon: IconName; label: string }[] = [
+  { id: 'game', icon: 'game', label: 'Game' },
+  { id: 'compare', icon: 'compare', label: 'Compare' },
+  { id: 'sound', icon: 'audio', label: 'Sound' },
+  { id: 'character', icon: 'characters', label: 'Character' },
+  { id: 'vfx', icon: 'world', label: 'VFX' },
+  { id: 'look', icon: 'sliders', label: 'Look' },
+];
 
 const SPEEDS: [number, string][] = [[0.25, '¼×'], [1, '1×'], [2, '2×']];
 
@@ -40,6 +57,14 @@ export function TitleBar(p: Props): JSX.Element {
         <div className="ttl"><b>{p.title}</b><span>Hull</span></div>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div className="seg views" role="tablist" aria-label="Views">
+          {VIEWS.map((v) => (
+            <button key={v.id} role="tab" aria-selected={p.view === v.id} className={p.view === v.id ? 'on' : ''} onClick={() => p.onView(v.id)} title={v.label} aria-label={v.label}>
+              <Icon name={v.icon} /><span className="vl">{v.label}</span>
+              {v.id === 'compare' && p.compareCount > 0 && <span className="vc">{p.compareCount}</span>}
+            </button>
+          ))}
+        </div>
         <div className="seg" role="group" aria-label="Play controls">
           <button className={p.paused ? '' : 'play'} onClick={p.onPlay} disabled={!p.connected} aria-label={p.paused ? 'Play' : 'Pause'} title={`${p.paused ? 'Play' : 'Pause'} the game (Space)`}>
             <Icon name={p.paused ? 'play' : 'pause'} />
@@ -52,10 +77,13 @@ export function TitleBar(p: Props): JSX.Element {
         </div>
       </div>
       <div className="r">
-        <button className={`chip${p.agents ? ' on' : ''}`} data-agents-toggle onClick={p.onAgents} aria-expanded={p.agents} title="Connect Claude Code, Codex or another MCP client to this project"><Icon name="plug" />Agents</button>
+        <span className={`live${p.connected ? ' on' : ''}`} role="status" aria-label={p.note} title={p.note} />
+        {p.branch}
+        {p.onReload && <button className="btn ghost" onClick={p.onReload} title="Reload the game page" aria-label="Reload the game page" style={{ padding: '0 6px' }}><Icon name="reload" /></button>}
+        <button className={`chip${p.agents ? ' on' : ''}`} data-agents-toggle onClick={p.onAgents} aria-expanded={p.agents} title="Connect Claude Code, Codex or another MCP client to this project"><Icon name="plug" /><span className="vl">Agents</span></button>
         {p.problems > 0 && <button className="chip" onClick={p.onProblems} title="Show problems in the Console"><Icon name="warn" />Problems <span className="count">{p.problems}</span></button>}
         <button className="btn" onClick={p.onBuild} disabled={p.build === 'running' || !p.connected} title="Build one JavaScript file for the web and desktop (Cmd B)">
-          <Icon name={p.build === 'running' ? 'reload' : 'build'} className={p.build === 'running' ? 'spin' : undefined} />{p.build === 'running' ? 'Building' : 'Build'}
+          <Icon name={p.build === 'running' ? 'reload' : 'build'} className={p.build === 'running' ? 'spin' : undefined} /><span className="vl">{p.build === 'running' ? 'Building' : 'Build'}</span>
         </button>
         <div className="ptog" role="group" aria-label="Panels">
           {toggles.map((t) => <button key={t.key} className={`pt${p.panels[t.key] ? ' on' : ''}`} aria-pressed={p.panels[t.key]} aria-label={t.label} title={`${p.panels[t.key] ? 'Hide' : 'Show'} ${t.label}`} onClick={() => p.onTogglePanel(t.key)}><Icon name={t.icon} /></button>)}

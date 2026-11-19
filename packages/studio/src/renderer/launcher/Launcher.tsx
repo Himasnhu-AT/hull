@@ -1,10 +1,10 @@
 // The launcher: start a project from a template, open a folder, or pick a recent one.
 
 import { useEffect, useState, type JSX } from 'react';
-import type { HullApp, OpenedProject, RecentProject, TemplateInfo } from '../../shared/appApi.ts';
+import type { CommunityGame, HullApp, OpenedProject, RecentProject, TemplateInfo } from '../../shared/appApi.ts';
 import { Icon } from '../ui/Icon.tsx';
 
-type Pane = 'recent' | 'new';
+type Pane = 'recent' | 'new' | 'community';
 
 const ago = (iso: string): string => {
   const s = (Date.now() - new Date(iso).getTime()) / 1000;
@@ -32,11 +32,27 @@ export function Launcher({ app, onOpen, startError }: { app: HullApp; onOpen(p: 
   const [parent, setParent] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(startError ?? null);
+  const [games, setGames] = useState<CommunityGame[] | null>(null);
+  const [gamesError, setGamesError] = useState<string | null>(null);
+  // The game being opened or reset, and the one asking "replace your copy?".
+  const [working, setWorking] = useState<{ id: string; reset: boolean } | null>(null);
+  const [confirming, setConfirming] = useState<string | null>(null);
 
   useEffect(() => {
     void app.recents().then((r) => { setRecents(r); if (r.length === 0) setPane('new'); }, () => setRecents([]));
     void app.listTemplates().then((t) => { setTemplates(t); setTpl((cur) => cur || t[0]?.name || ''); }, (e) => { setTemplates([]); setError(msg(e)); });
   }, [app]);
+
+  const loadGames = (): void => {
+    setGames(null); setGamesError(null);
+    app.listCommunity().then(setGames, (e) => { setGames([]); setGamesError(msg(e)); });
+  };
+  useEffect(() => { if (pane === 'community' && games === null && !gamesError) loadGames(); }, [pane]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const openGame = (g: CommunityGame, reset: boolean): Promise<void> => {
+    setWorking({ id: g.id, reset }); setConfirming(null);
+    return run('Opening', () => app.openCommunity(g.id, reset)).finally(() => setWorking(null));
+  };
 
   const run = async (label: string, job: () => Promise<OpenedProject | null>): Promise<void> => {
     setBusy(label); setError(null);
@@ -62,6 +78,9 @@ export function Launcher({ app, onOpen, startError }: { app: HullApp; onOpen(p: 
           </button>
           <button className="act" onClick={() => void openFolder()} disabled={busy !== null}>
             <span className="ic"><Icon name="folder" /></span><span><b>Open folder</b><small>A project you already have</small></span>
+          </button>
+          <button className={`act${pane === 'community' ? ' on' : ''}`} onClick={() => setPane('community')}>
+            <span className="ic"><Icon name="game" /></span><span><b>Community</b><small>Games to play and open</small></span>
           </button>
           <button className={`act${pane === 'recent' ? ' on' : ''}`} onClick={() => setPane('recent')}>
             <span className="ic"><Icon name="history" /></span><span><b>Recent projects</b><small>{recents ? `${recents.length} saved` : 'Loading'}</small></span>
@@ -89,6 +108,49 @@ export function Launcher({ app, onOpen, startError }: { app: HullApp; onOpen(p: 
                       <button className="btn ghost" onClick={() => void app.forgetRecent(r.root).then(() => setRecents((l) => (l ?? []).filter((x) => x.root !== r.root)))} aria-label={`Remove ${r.title} from the list`} title="Remove from the list (keeps the files)" style={{ padding: '0 6px' }}><Icon name="close" /></button>
                     </div>
                   ))}
+                </div>
+              )}
+            </>
+          )}
+
+          {pane === 'community' && (
+            <>
+              <div><h2>Community</h2><p className="sub2">Games to play and take apart. Opening one gives you your own copy to edit; the original stays as it is.</p></div>
+              {games === null && <div className="glist"><div className="skeleton gsk" /></div>}
+              {gamesError && (
+                <div className="note-err" role="alert">Could not load the games: {gamesError} <button className="btn" onClick={loadGames} style={{ marginLeft: 8 }}>Try again</button></div>
+              )}
+              {games && games.length === 0 && !gamesError && <p className="sub2">No community games yet.</p>}
+              {games && games.length > 0 && (
+                <div className="glist">
+                  {games.map((g) => {
+                    const mine = working?.id === g.id;
+                    return (
+                      <article key={g.id} className="game">
+                        <div className="cover">{g.cover ? <img src={g.cover} alt="" draggable={false} /> : <Icon name="game" size={28} />}</div>
+                        <div className="g-body">
+                          <div className="g-title"><b>{g.title}</b>{g.copy.exists && <span className="tagchip" title={g.copy.root}>Your copy</span>}</div>
+                          <p className="g-note">{g.note}</p>
+                          {confirming === g.id ? (
+                            <div className="g-confirm" role="alertdialog" aria-label={`Reset ${g.title}`}>
+                              <span>Replace your copy with the original? Your changes to it are lost.</span>
+                              <button className="btn danger" onClick={() => void openGame(g, true)} disabled={busy !== null}>Reset</button>
+                              <button className="btn ghost" onClick={() => setConfirming(null)}>Keep my copy</button>
+                            </div>
+                          ) : (
+                            <div className="g-acts">
+                              <button className="btn primary" onClick={() => void openGame(g, false)} disabled={busy !== null}>
+                                <Icon name="play" size={12} />{mine ? (working?.reset ? 'Resetting...' : g.copy.exists ? 'Opening...' : 'Copying...') : 'Play'}
+                              </button>
+                              {g.copy.exists && (
+                                <button className="btn ghost" onClick={() => setConfirming(g.id)} disabled={busy !== null} aria-label={`Reset ${g.title} to the original`} title="Reset to original"><Icon name="reset" size={14} />Reset to original</button>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </article>
+                    );
+                  })}
                 </div>
               )}
             </>

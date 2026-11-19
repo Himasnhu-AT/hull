@@ -125,12 +125,13 @@ export class RpcClient {
     }
   }
 
-  call<M extends MethodName>(method: M, params: Methods[M]['params']): Promise<Methods[M]['result']> {
+  /** `timeoutMs` overrides the default for one slow call (a build of a big game takes longer than 15 s). */
+  call<M extends MethodName>(method: M, params: Methods[M]['params'], o?: { timeoutMs?: number }): Promise<Methods[M]['result']> {
     if (this.disposed) return Promise.reject(new RpcError(method, 'the client is closed'));
     const id = this.nextId++;
     const text = JSON.stringify({ jsonrpc: '2.0', id, method, params });
     return new Promise((resolve, reject) => {
-      const timeout = this.opts.timeoutMs ?? 15000;
+      const timeout = o?.timeoutMs ?? this.opts.timeoutMs ?? 15000;
       const timer = setTimeout(() => {
         this.pending.delete(id);
         reject(new RpcError(method, `no answer after ${timeout / 1000} s`));

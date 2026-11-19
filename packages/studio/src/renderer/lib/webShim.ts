@@ -17,6 +17,8 @@ export function webShim(): HullApp {
     // A browser cannot show a folder dialog that returns a path, so the dev server answers: a scratch folder to create in,
     // and for "open" a typed path.
     pickFolder: async (purpose) => (purpose === 'location' ? call<string>('scratchDir') : (window.prompt('Path of the project folder') || null)),
+    listCommunity: () => call('listCommunity'),
+    openCommunity: (id, reset) => call('openCommunity', { id, reset }),
     createProject: (o) => call('createProject', o),
     openProject: (root) => call('openProject', root),
     closeProject: () => call('closeProject'),

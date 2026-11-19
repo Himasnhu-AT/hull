@@ -5,7 +5,7 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { OpenedProject, RecentProject, TemplateInfo } from '../shared/appApi.ts';
+import type { CommunityGame, OpenedProject, RecentProject, TemplateInfo } from '../shared/appApi.ts';
 
 interface ProjectServer { url: string; gameUrl: string; close(): Promise<void> }
 interface McpModule {
@@ -16,6 +16,8 @@ interface ServerModule {
   startProjectServer(opts: { root: string; port?: number; log?: (line: string) => void }): Promise<ProjectServer>;
   listTemplates(): TemplateInfo[];
   createProject(opts: { template: string; dir: string; title: string }): Promise<{ root: string }>;
+  listCommunity(opts: { projectsDir: string }): CommunityGame[];
+  openCommunity(opts: { id: string; projectsDir: string; reset?: boolean }): { root: string; created: boolean };
 }
 
 export interface HostOptions {
@@ -26,6 +28,8 @@ export interface HostOptions {
 
 export interface Host {
   listTemplates(): Promise<TemplateInfo[]>;
+  listCommunity(): Promise<CommunityGame[]>;
+  openCommunity(id: string, reset?: boolean): Promise<OpenedProject>;
   createProject(opts: { template: string; title: string; parentDir: string }): Promise<OpenedProject>;
   openProject(root: string): Promise<OpenedProject>;
   closeProject(): Promise<void>;
@@ -44,6 +48,8 @@ export function slug(title: string): string {
 
 export function createHost(opts: HostOptions): Host {
   const log = opts.log ?? (() => {});
+  // Community copies live with the projects the app makes itself, never in the repository.
+  const projectsDir = join(opts.dataDir, 'projects');
   const recentsFile = join(opts.dataDir, 'recents.json');
   let loaded: { mod: ServerModule; mcp: McpModule; kind: 'real' } | null = null;
   let running: { root: string; server: ProjectServer; mcp: { url: string; close(): Promise<void> }; mcpServer: { close(): Promise<void> } } | null = null;
@@ -77,6 +83,16 @@ export function createHost(opts: HostOptions): Host {
 
   const host: Host = {
     async listTemplates() { return (await load()).mod.listTemplates(); },
+
+    async listCommunity() { return (await load()).mod.listCommunity({ projectsDir }); },
+
+    async openCommunity(id, reset) {
+      const { mod } = await load();
+      // A reset replaces the folder under a running server, so the project is closed first.
+      if (reset) await host.closeProject();
+      const { root } = mod.openCommunity({ id, projectsDir, ...(reset ? { reset: true } : {}) });
+      return host.openProject(root);
+    },
 
     async createProject({ template, title, parentDir }) {
       const { mod } = await load();

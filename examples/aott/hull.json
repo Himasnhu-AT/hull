@@ -2,7 +2,7 @@
   "kind": "game",
   "id": "aott",
   "title": "AOTT",
-  "note": "AOTT ported onto Hull: a tether-gear action game against titans. The sim runs on the Hull loop at 120 Hz; the picture is the game's own three.js scene drawn through the render bridge.",
+  "note": "Hold the last wall against the titans. Swing between rooftops on tether gear, cut them down at the nape, and get the townsfolk to safety.",
   "version": "0.1.0",
   "entry": "src/main.ts",
   "generators": "src/audio/generators.ts",
