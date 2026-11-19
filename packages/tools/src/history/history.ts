@@ -7,7 +7,9 @@ import type { Problem } from 'hull';
 import type { ChangeDelta, ExpAdoptResult, ExpInfo, HistoryAuthor, HistoryChange, MergeConflict } from 'hull/dev/protocol';
 import { readJournal } from '../server/journal.ts';
 import { applyDeltas, authorshipProblems, contribution, loadBook, saveBook, type Entries } from './authors.ts';
+import { setJsonPointer, pointerSegments } from '../server/jsonEdit.ts';
 import { diffFiles, isConfigPath, summarize, type FileMap } from './diff.ts';
+import { patchLines, type PatchLine } from './lines.ts';
 import { mergeFiles } from './merge.ts';
 import { replayJournal } from './replay.ts';
 import { readTracked, Store, writeTracked, type CommitInfo } from './store.ts';
@@ -37,6 +39,26 @@ const tagRef = (name: string): string => `refs/tags/cp/${encodeURIComponent(name
 const tagName = (ref: string): string => decodeURIComponent(ref.replace(/^cp\//, ''));
 const NAME = /^[a-z0-9][a-z0-9-]{0,40}$/i;
 const key = (p: Problem): string => `${p.file}|${p.pointer ?? ''}|${p.rule}|${p.message}`;
+
+/** The field at `pointer` as it was in `before` (absent: removed), written into `now` with the formatting kept where it can be. */
+function revertField(now: string, before: string | undefined, pointer: string): { ok: true; text: string } | { ok: false; message: string } {
+  let old: unknown;
+  try { old = before === undefined ? undefined : JSON.parse(before); } catch { return { ok: false, message: 'the old file did not parse' }; }
+  const segs = pointerSegments(pointer);
+  let v: unknown = old;
+  for (const s of segs) v = v !== null && typeof v === 'object' ? (v as Record<string, unknown>)[s] : undefined;
+  if (v !== undefined) return setJsonPointer(now, pointer, v);
+  // The field did not exist then: take it out.
+  let doc: unknown;
+  try { doc = JSON.parse(now); } catch (e) { return { ok: false, message: (e as Error).message }; }
+  let parent: unknown = doc;
+  for (const s of segs.slice(0, -1)) parent = parent !== null && typeof parent === 'object' ? (parent as Record<string, unknown>)[s] : undefined;
+  const last = segs[segs.length - 1];
+  if (parent === null || typeof parent !== 'object' || last === undefined) return { ok: false, message: `there is nothing at ${pointer}` };
+  if (Array.isArray(parent)) parent.splice(Number(last), 1); else delete (parent as Record<string, unknown>)[last];
+  const indent = /^\t/m.test(now) ? '\t' : (/^( +)\S/m.exec(now)?.[1]?.length ?? 2);
+  return { ok: true, text: `${JSON.stringify(doc, null, indent)}${now.endsWith('\n') ? '\n' : ''}` };
+}
 
 export class History {
   readonly store: Store;
@@ -194,6 +216,47 @@ export class History {
     const from = o.from ? await this.rev(o.from) : (await this.store.commitOf(to)).parents[0];
     const deltas = diffFiles(from ? await this.store.filesAt(from) : new Map(), await this.store.filesAt(to));
     return { from: from ?? null, to, deltas };
+  }
+
+  /** The line diff of one file between two states, for the Changes panel (code and other text). */
+  async patch(o: { from?: string; to: string; file: string }): Promise<{ file: string; lines: PatchLine[]; binary: boolean }> {
+    await this.flush();
+    const to = await this.rev(o.to);
+    const from = o.from ? await this.rev(o.from) : (await this.store.commitOf(to)).parents[0];
+    const a = from ? (await this.store.filesAt(from)).get(o.file) : undefined;
+    const b = (await this.store.filesAt(to)).get(o.file);
+    if ((a && a.subarray(0, 4096).includes(0)) || (b && b.subarray(0, 4096).includes(0))) return { file: o.file, lines: [], binary: true };
+    return { file: o.file, lines: patchLines(a?.toString('utf8') ?? '', b?.toString('utf8') ?? ''), binary: false };
+  }
+
+  /**
+   * Puts one file (or, with `pointer`, one field of a config file) back as it was at `spec`. The same checks and the same
+   * record as `restore`: it may not add a problem, and it is a new change with its author, so it can be undone.
+   */
+  async revert(spec: string, file: string, by: HistoryAuthor = 'you', pointer?: string): Promise<{ ok: boolean; problems: Problem[]; change?: HistoryChange }> {
+    await this.flush('main');
+    const target = await this.rev(spec);
+    return this.store.serial(async () => {
+      const then = (await this.store.filesAt(target)).get(file);
+      const current = readTracked(this.root);
+      const now = current.get(file);
+      const next: FileMap = new Map(current);
+      if (pointer === undefined || !isConfigPath(file)) {
+        if (then) next.set(file, then); else next.delete(file);
+      } else {
+        if (!now) return { ok: false, problems: [{ file, rule: 'revert', message: 'the file is gone, so only the whole file can be put back' }] };
+        const edited = revertField(now.toString('utf8'), then?.toString('utf8'), pointer);
+        if (!edited.ok) return { ok: false, problems: [{ file, pointer, rule: 'revert', message: edited.message }] };
+        next.set(file, Buffer.from(edited.text));
+      }
+      const problems = await this.newProblems(next, current);
+      if (problems.length) return { ok: false, problems };
+      const deltas = diffFiles(current, next);
+      if (deltas.length === 0) return { ok: true, problems: [] };
+      writeTracked(this.root, next);
+      const id = await this.store.commit(MAIN, next, { by, kind: 'restore', message: `revert ${pointer === undefined ? file : `${file}${pointer}`}: ${summarize(deltas)}`, details: deltas.map((d) => d.text), force: true });
+      return { ok: true, problems: [], change: await this.recorded(id!, 'main', deltas, () => by) };
+    });
   }
 
   /** AI changes that overwrote a value you set. */

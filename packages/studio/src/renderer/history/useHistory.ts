@@ -19,6 +19,8 @@ export interface HistoryState {
   /** Ids of AI changes that overwrote something you set. */
   flagged: Map<string, Problem[]>;
   /** The deltas of a change, fetched once (history.diff). Undefined until it arrives. */
+  /** The newest main-line change when the Studio first loaded: "what changed since I opened this". */
+  openedId: string | null;
   deltasOf(id: string): ChangeDelta[] | undefined;
   ensureDeltas(id: string): void;
   restore(id: string): Promise<boolean>;
@@ -41,6 +43,18 @@ export function problemMatches(p: Problem, by: string, d: ChangeDelta): boolean 
   return p.message.includes(`${name} from`) || p.message.includes(`${name}/`);
 }
 
+/** The starting point of "since I opened the Studio" survives a page reload of the same tab, as long as that change still exists. */
+function rememberedOpen(changes: HistoryChange[]): string | null {
+  const key = `hull.opened:${typeof location === 'undefined' ? '' : location.origin}`;
+  try {
+    const kept = sessionStorage.getItem(key);
+    if (kept && changes.some((c) => c.id === kept && c.line === 'main')) return kept;
+    const fresh = changes.find((x) => x.line === 'main')?.id ?? null;
+    if (fresh) sessionStorage.setItem(key, fresh);
+    return fresh;
+  } catch { return changes.find((x) => x.line === 'main')?.id ?? null; }
+}
+
 export function useHistory(rpc: RpcClient, problems: Problem[], notify: (text: string, error?: boolean) => void): HistoryState {
   const [changes, setChanges] = useState<HistoryChange[]>([]);
   const [exps, setExps] = useState<ExpInfo[]>([]);
@@ -49,10 +63,11 @@ export function useHistory(rpc: RpcClient, problems: Problem[], notify: (text: s
   const [deltas, setDeltas] = useState<Map<string, ChangeDelta[]>>(() => new Map());
   const [adopting, setAdopting] = useState<Adopting | null>(null);
   const asked = useRef(new Set<string>());
+  const [openedId, setOpenedId] = useState<string | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const load = useCallback(() => {
-    Promise.all([rpc.call('history.list', { limit: 400 }), rpc.call('exp.list', {})]).then(([c, e]) => { setChanges(c); setExps(e); setLoaded(true); setError(null); }, (e: Error) => setError(e.message));
+    Promise.all([rpc.call('history.list', { limit: 400 }), rpc.call('exp.list', {})]).then(([c, e]) => { setChanges(c); setExps(e); setLoaded(true); setOpenedId((o) => o ?? rememberedOpen(c)); setError(null); }, (e: Error) => setError(e.message));
   }, [rpc]);
   // A burst of pushes is one reload.
   const soon = useCallback(() => { if (timer.current) clearTimeout(timer.current); timer.current = setTimeout(load, 120); }, [load]);
@@ -134,5 +149,5 @@ export function useHistory(rpc: RpcClient, problems: Problem[], notify: (text: s
     try { finish(a.name, await rpc.call('exp.adopt', { name: a.name, author: 'you', resolve: choice })); } catch (e) { setAdopting({ ...a, busy: false, error: e instanceof Error ? e.message : String(e) }); }
   }, [adopting, rpc, finish]);
 
-  return { changes, exps, loaded, error, flags, flagged, deltasOf, ensureDeltas, restore, checkpoint, startExp, discard, adopt, adopting, resolveAdopt, cancelAdopt: () => setAdopting(null) };
+  return { changes, exps, loaded, error, flags, flagged, openedId, deltasOf, ensureDeltas, restore, checkpoint, startExp, discard, adopt, adopting, resolveAdopt, cancelAdopt: () => setAdopting(null) };
 }

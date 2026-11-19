@@ -9,6 +9,7 @@ import {
   scrubDelta, snap, toFraction, type CurvePoint,
 } from '../lib/math.ts';
 import { leaveBox } from '../lib/keys.ts';
+import { show, type Shown } from '../history/changesView.ts';
 import { Icon } from './Icon.tsx';
 import { BindingsField } from './Bindings.tsx';
 
@@ -103,9 +104,12 @@ function NumInput({ value, step, label, onCommit, className, blank }: { value: n
 
 /* ---------- shells ---------- */
 
-function ResetButton({ onClick }: { onClick(): void }): JSX.Element {
+function ResetButton({ onClick }: { onClick: (() => void) & { previous?: Shown | undefined } }): JSX.Element {
+  const previous = onClick.previous;
+  const label = previous ? `Back to ${previous.text}` : 'Back to the value the AI wrote';
   return (
-    <button className="rs" onClick={onClick} aria-label="Back to the value the AI wrote" title="Back to the value the AI wrote">
+    <button className="rs" onClick={onClick} aria-label={label} title={label}>
+      {previous?.swatch && <i className="rs-sw" style={{ background: previous.swatch }} />}
       <Icon name="reset" />
     </button>
   );
@@ -199,7 +203,7 @@ export const Dial = memo(function Dial({ field, value, baseline, problems, onCha
       </button>
       <span className="dl" title={field.help || field.label}>{field.label}</span>
       <span className="du">{field.unit}</span>
-      <button className="rs" onClick={() => { if (baseline !== undefined) onChange(field.pointer, baseline, true); }} aria-label="Back to the value the AI wrote" title="Back to the value the AI wrote"><Icon name="reset" /></button>
+      <button className="rs" onClick={() => { if (baseline !== undefined) onChange(field.pointer, baseline, true); }} aria-label={changed ? `Back to ${show(baseline, field).text}` : 'Back to the value the AI wrote'} title={changed ? `Back to ${show(baseline, field).text}` : 'Back to the value the AI wrote'}><Icon name="reset" /></button>
       {problems.length > 0 && <div style={{ gridColumn: '1 / -1' }}><Problems list={problems} /></div>}
     </div>
   );
@@ -313,7 +317,8 @@ const PRESETS = ['#5a9bff', '#3cc482', '#f2a43c', '#ff7a70', '#e9ebee', '#2a2e35
 export const FieldView = memo(function FieldView({ field, value, baseline, problems, refOptions, refs, onChange }: FieldViewProps): JSX.Element {
   const changed = baseline !== undefined && !sameJson(value, baseline);
   const send = useCallback((v: unknown, final = false) => onChange(field.pointer, v, final), [onChange, field.pointer]);
-  const reset = (): void => { if (baseline !== undefined) send(baseline, true); };
+  // Hovering the reset arrow says what it goes back to, so the function carries that along.
+  const reset = Object.assign((): void => { if (baseline !== undefined) send(baseline, true); }, { previous: changed ? show(baseline, field) : undefined });
   const w = field.widget;
   const cls = `fld${changed ? ' mod' : ''}${problems.length ? ' bad' : ''}${field.unset ? (field.def !== undefined ? ' dflt' : ' unset') : ''}`;
   const unit = field.unit ? <small>{field.unit}</small> : null;
