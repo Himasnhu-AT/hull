@@ -601,6 +601,30 @@ where a name is in both lists the method wins.
 * **Budgets**: `hull.json` `budgets` is in the schema, and `render` and `vfx` report draw calls and frame time; the check that
   fails a build or test on them is not built.
 
+### Hull's own agent (`packages/agent`, `@hull/agent`)
+
+An ACP agent (D14, D16) that runs on the user's key: `startHullAgent({ projectRoot, provider })` speaks ACP over a pair of streams, and
+`bin/hull-agent.js [dir] [--fake script.json]` does the same on stdio for the app to start as a child process. It handles
+`initialize`, `session/new`, `session/prompt`, `session/cancel` and `session/close`, and streams `agent_message_chunk`, `plan`, `tool_call` and
+`tool_call_update` (with `diff` content for config and tunable edits), `usage_update` and `compaction_update`, and asks with
+`session/request_permission`.
+
+* **Tools**: called in-process through `createMcpServer` from `@hull/tools`, opened as client "Hull agent", so the history author is
+  `ai:Hull agent`. The agent has no file or shell tools: every write is a validated Hull edit. `session/new`'s `mcpServers` is not used.
+  There is no tool yet that edits `src/` code beyond `tunables.set`.
+* **Models**: Anthropic's Messages API (`ANTHROPIC_API_KEY`, default `claude-opus-5-5`, override with `HULL_AGENT_MODEL`) or any
+  OpenAI-compatible chat endpoint (`HULL_AGENT_BASE_URL` + `HULL_AGENT_API_KEY`, which is how `ai.marlstudio.com` plugs in). Plain fetch,
+  no vendor SDK, no streaming of model tokens yet (text arrives per model call). Keys are never logged or put in an error.
+* **Prompt**: teaches the loop (look, plan, small edit, check, test, step, read state or screenshot, report what could not be judged) and
+  appends the project's `GAME.md` and `AGENTS.md`.
+* **Gates**: destructive tools (rename, move, delete, restore, revert, adopt) ask first (`HULL_AGENT_PERMISSIONS`: `risky` default,
+  `writes`, `none`); after edits the loop runs `check` itself and the run cannot end while it fails, for at most three fix rounds,
+  then stops and says so (`_meta.checkFailed`); an edited run ends with a history checkpoint `hull-agent-run-N`.
+* **Compaction**: past 70% of the model's window old tool results are cut, then everything but the recent tail becomes OpenCode's
+  structured summary (MIT, see `packages/agent/NOTICES`). `HULL_AGENT_CONTEXT` sets the window size.
+* **Tests**: `fakeProvider` plays a script with no network; `agent.e2e.test.ts` runs prompt, tool calls, edit, check, done, a failing-check
+  gate, a permission denial, cancel and compaction over ACP against the arena project.
+
 ## 10. Rules the engine enforces
 
 | Rule | How |
