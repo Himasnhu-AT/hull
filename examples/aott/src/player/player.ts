@@ -10,6 +10,8 @@ import { steerToSlot } from './horse';
 import { FS } from '../world/terrain';
 import type { Game, Cuttable, HitTestHit, KillCam, Cine, WorldHandle } from '../types';
 import { R } from '../sim';
+import { depot as DEP, zones as ZN } from '../tuning';
+import { damp as kitDamp, followDistance, followFov, Reach, newDepotState, stepDepot, fillTo, regenerate } from 'hull/kits';
 
 // Math.hypot is variadic and boxes its arguments in hot loops (it was the top source of garbage); this doesn't.
 const hypot = (a: number, b: number, c = 0): number => Math.sqrt(a * a + b * b + c * c);
@@ -303,7 +305,8 @@ export class Player {
   _swoopAim: THREE.Vector3 | null = null;
   _airLook = 0;
   _skidT = 0;
-  _supplyT = 0;
+  _depot = newDepotState();
+  _reach = new Reach();
   _lowGasTold = false;
   /** Seconds spent at rest (standing, perched, clinging or in the saddle) with the gear quiet. */
   _restT = 0;
@@ -1666,7 +1669,7 @@ export class Player {
     if (this.grip < 1) { this.grip = Math.min(1, this.grip + dt * (this.grounded ? 0.6 : 0.25)); if (this.grip > 0.6) this._gripTold = false; }
     if (this._dashPuff > 0) this._dashPuff -= dt;
     if (this.swapT > 0) { this.swapT -= dt; if (this.swapT <= 0) this.blade = 1; }
-    if (this.game.time - this.lastHurt > 4 && this.hp < 1) this.hp = Math.min(1, this.hp + dt * 0.04);
+    this.hp = regenerate(this.hp, dt, this.game.time - this.lastHurt, ZN.regenDelay, ZN.regenRate);
     this.stats.topSpeed = Math.max(this.stats.topSpeed, this.speed);
 
     this._bounds();
@@ -2237,10 +2240,12 @@ export class Player {
     const cp = Math.cos(pitch), sp = Math.sin(pitch), cy = Math.cos(yaw), sy = Math.sin(yaw);
     const fwd = _a.set(sy * cp, sp, cy * cp);
     const right = _b.set(-cy, 0, sy);
-    const targetDist = CFG.cam.dist + Math.min(speed, 90) * 0.028 + (this.grabbedBy ? 3 : 0) + 1.2 * (c.loom || 0);
-    c.dist += (targetDist - c.dist) * damp(3, dt);
+    // distance, glide off walls, bank and lens are hull/kits' follow-camera maths over the `cam` tunables
+    const CM = CFG.cam;
+    const targetDist = followDistance(CM.dist, speed, CM.distPerSpeed, CM.distSpeedCap, (this.grabbedBy ? 3 : 0) + CM.loomDist * (c.loom || 0));
+    c.dist += (targetDist - c.dist) * kitDamp(CM.distRate, dt);
     // pivot: over the shoulder, a bit higher when standing (lower under a looming titan)
-    const pivot = _c.copy(this.render).addScaledVector(UP, CFG.cam.height - 0.55 * (c.loom || 0)).addScaledVector(right, CFG.cam.side);
+    const pivot = _c.copy(this.render).addScaledVector(UP, CFG.cam.height - CM.loomLower * (c.loom || 0)).addScaledVector(right, CFG.cam.side);
     const want = _d.copy(pivot).addScaledVector(fwd, -c.dist);
     // keep the camera out of walls/trees: cast from the body to the wanted spot. The camera glides in to the
     // clear distance instead of popping there (so a trunk flashing between you and it at speed doesn't pull it
@@ -2251,13 +2256,13 @@ export class Player {
     // (titans too: swooping round a neck, an arm or a shoulder between you and the camera must not fill the view)
     const block = this.collision.raycast(pivot, toCam, len + 0.4);
     const clear = block ? Math.max(0.4, block.distance - (block.collider.dynamic ? 0.7 : 0.4)) : len;
-    if (c.reach === undefined || c.reach > len) c.reach = Math.min(c.reach ?? len, len);
-    if (clear < c.reach) {
-      c.reach += (clear - c.reach) * damp(12, dt);
-      _f.copy(pivot).addScaledVector(toCam, c.reach);
-      if (this.collision.collideSphere(_f, 0.2).some((k) => k.depth > 0.02)) c.reach = clear;
-    } else c.reach += (Math.min(clear, len) - c.reach) * damp(4, dt);
-    want.copy(pivot).addScaledVector(toCam, c.reach);
+    const rc = this._reach;
+    if (rc.update(len, clear, dt, CM.clearIn, CM.clearOut)) {
+      _f.copy(pivot).addScaledVector(toCam, rc.value);
+      if (this.collision.collideSphere(_f, 0.2).some((k) => k.depth > 0.02)) rc.value = clear;
+    }
+    c.reach = rc.value;
+    want.copy(pivot).addScaledVector(toCam, rc.value);
     c.pos.copy(want);
     cam.position.copy(c.pos);
     cam.up.copy(UP);
@@ -2268,15 +2273,15 @@ export class Player {
     if (this.odm.attachedCount() && !this.grounded) {
       const pd = this.odm.pullDir(this.render, _e);
       // a Dutch angle that leans harder the faster and wider the swing (the frame tilts on big arcs)
-      if (pd) rollT = THREE.MathUtils.clamp(pd.dot(right) * Math.min(speed, 70) * 0.0048, -0.26, 0.26);
+      if (pd) rollT = THREE.MathUtils.clamp(pd.dot(right) * Math.min(speed, 70) * CM.rollPerSpeed, -CM.rollMax, CM.rollMax);
     }
     // on a wall the frame leans away from it
-    if (this.wallRun) rollT = THREE.MathUtils.clamp(-this.wallRun.n.dot(right) * 0.24, -0.24, 0.24);
+    if (this.wallRun) rollT = THREE.MathUtils.clamp(-this.wallRun.n.dot(right) * CM.wallRollMax, -CM.wallRollMax, CM.wallRollMax);
     c.roll += (rollT - c.roll) * damp(this.wallRun ? 7 : 3, dt);
     cam.rotateZ(-c.roll + shx * 0.02);
     // FOV opens with speed
     // (a rope biting punches the lens in for a beat: a snap-zoom on a catch)
-    const fovT = CFG.cam.fov + (CFG.cam.fovMax - CFG.cam.fov) * THREE.MathUtils.smoothstep(speed, 12, 85) - 8 * (c.punch || 0) + (this.wallRun ? 6 : 0) + (this.rush > 0 ? 3 : 0);
+    const fovT = followFov(CM.fov, CM.fovMax, speed, CM.fovSpeedLo, CM.fovSpeedHi) - CM.punchFov * (c.punch || 0) + (this.wallRun ? CM.wallRunFov : 0) + (this.rush > 0 ? CM.rushFov : 0);
     c.fov += (fovT - c.fov) * damp((c.punch || 0) > 0.05 ? 16 : 4, dt);
     if (Math.abs(cam.fov - c.fov) > 0.01) { cam.fov = c.fov; cam.updateProjectionMatrix(); }
     this._cineCamera(dt);
@@ -2468,13 +2473,11 @@ export class Player {
     if (!depots || !this.alive) return;
     let inside = false;
     for (const d of depots) if (this.render.distanceTo(d.position) < d.radius) { inside = true; break; }
-    if (!inside) { this._supplyT = 0; return; }
     const needs = this.odm.gas < 0.98 || this.spares < CFG.combat.spares || this.blade < 0.99 || this.hp < 0.99;
-    if (!needs) return;
-    this._supplyT = (this._supplyT || 0) + dt;
-    if (this._supplyT > 0.8) {
-      this.odm.gas = 1; this.spares = CFG.combat.spares; this.blade = 1; this.hp = 1;
-      this._supplyT = -2;
+    // the depot's dwell and cooldown are hull/kits' stepDepot over the `depot` tunables
+    if (stepDepot(this._depot, dt, inside, needs, DEP)) {
+      this.odm.gas = fillTo(this.odm.gas, 1, DEP.gas); this.spares = fillTo(this.spares, CFG.combat.spares, DEP.blades);
+      this.blade = 1; this.hp = fillTo(this.hp, 1, DEP.bandages);
       this.game.audio?.refill?.();
       this.game.hud?.message?.('RESUPPLIED — gas, blades and bandages', 2.2, 'info');
     }

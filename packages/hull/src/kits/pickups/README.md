@@ -10,3 +10,5 @@ Things to collect, and the counters they fill.
 - **Tunables** (`pickup` block): `spinSpeed`, `bobHeight`, `bobSpeed`, `collectRadius`, `height`.
 - **Config**: `material/pickup-<kind>`, `sound/pickup`.
 - **Bench**: `bench.ts`. **Test**: `pickups.test.ts`.
+'- **Depot without a node** (`depot.ts`): `stepDepot(state, dt, inside, needs, {dwell, cooldown})` is true on the step a depot
+  resupplies; `fillTo(current, max, fraction)`. For a player that is not a node with a `Stock`. Test: `depot.test.ts`.'

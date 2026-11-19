@@ -14,6 +14,8 @@ import { R, afterMs } from './sim';
 export type { SpawnRequest };
 import type { Player } from './player/player';
 import { CFG } from './config';
+import { waves as WV, wave1, wave2, wave3, wave4 } from './tuning';
+import { beginWave, stepWaves, waveScale, WAVE_CLEARED, WAVE_NEXT, WAVE_TRICKLE } from 'hull/kits';
 
 type PlayMode = Exclude<GameMode, 'menu'>;
 const SCORED = new Set<GameMode>(['expedition', 'gate', 'scout']);
@@ -22,12 +24,21 @@ const ATMOSPHERE: Partial<Record<GameMode, string>> = { gate: 'varn' };
 
 type SpawnArea = 'field' | 'forest' | 'town';
 interface Wave { msg: string; field: number; forest: number; town: number; abnormal: number; sizes: [number, number]; behemoth?: boolean }
-const WAVES: Wave[] = [
-  { msg: 'WAVE 1 — TITANS IN THE FIELD', field: 4, forest: 0, town: 0, abnormal: 0, sizes: [4, 9] },
-  { msg: `WAVE 2 — THEY'RE COMING OUT OF ${PLACE.forest.toUpperCase()}`, field: 3, forest: 3, town: 0, abnormal: 1, sizes: [5, 13] },
-  { msg: 'WAVE 3', field: 2, forest: 0, town: 3, abnormal: 1, sizes: [4, 12], behemoth: true },
-  { msg: `WAVE 4 — INTO ${PLACE.forest.toUpperCase()}`, field: 1, forest: 6, town: 0, abnormal: 2, sizes: [6, 15] },
-];
+// What each wave holds is the `wave1`..`wave4` tunables (counts and sizes, live in the Inspector); the banner text, the
+// Behemoth on wave 3 and the clock between waves (hull/kits waves.ts over the `waves` block) stay with the flow.
+type WaveBlock = typeof wave1;
+const waveOf = (msg: string, b: WaveBlock, behemoth = false): Wave => ({ msg, field: b.field, forest: b.forest, town: b.town, abnormal: b.abnormal, sizes: [b.sizeMin, b.sizeMax], behemoth });
+const WAVES = {
+  get length(): number { return 4; },
+  at(i: number): Wave {
+    switch (i) {
+      case 0: return waveOf('WAVE 1 — TITANS IN THE FIELD', wave1);
+      case 1: return waveOf(`WAVE 2 — THEY'RE COMING OUT OF ${PLACE.forest.toUpperCase()}`, wave2);
+      case 2: return waveOf('WAVE 3', wave3, true);
+      default: return waveOf(`WAVE 4 — INTO ${PLACE.forest.toUpperCase()}`, wave4);
+    }
+  },
+};
 
 
 /** The tutorial's running counters (what the player has done so far this step). */
@@ -286,7 +297,7 @@ export class Game {
     this._startTutorial();
     if (mode === 'expedition') {
       g.hud?.message?.(TAGLINE.toUpperCase(), 2.6, 'big');
-      this.waveClear = 2.5; // first wave after the title card
+      this.waveClear = WV.firstDelay; // first wave after the title card
       g.audio?.setMusic?.(0.5);
     } else if (mode === 'gate') {
       this.gate.start();
@@ -330,17 +341,16 @@ export class Game {
   _nextWave(): void {
     const g = this.g;
     const idx = this.wave;
-    const w = WAVES[Math.min(idx, WAVES.length - 1)];
-    const scale = 1 + Math.max(0, idx - WAVES.length + 1) * 0.35;
-    this.wave++;
-    this.waveT = 0; this.trickleT = 6;
+    const w = WAVES.at(Math.min(idx, WAVES.length - 1));
+    const scale = waveScale(idx, WAVES.length, WV.growth);
+    beginWave(this, WV);
     trackWave(this.wave);
     // each wave cuts more people off: out in the Reach, in Varn once titans are through the gate, at the forest edge
     g.civilians?.spawn(Math.min(4, 2 + (idx >> 1)), this.breached ? ['town'] : ['field']);
     g.hud?.message?.(idx >= WAVES.length ? `WAVE ${this.wave} — THE HORDE GROWS` : w.msg, 3, 'big');
     // the first wave walks right up to the wall: within rope range of the wall top, so you can zip down onto them
     // (once the gate is down they come up close to it, and some are already in the streets)
-    this._spawnSome('field', Math.round(w.field * scale), w.sizes, Math.round(w.abnormal * scale * 0.5), idx === 0 ? { zMin: 45, zMax: 100, xMax: 85 } : this.breached ? { zMin: 45, zMax: 170, xMax: 130 } : null);
+    this._spawnSome('field', Math.round(w.field * scale), w.sizes, Math.round(w.abnormal * scale * 0.5), idx === 0 ? { zMin: WV.openZMin, zMax: WV.openZMax, xMax: WV.openXMax } : this.breached ? { zMin: WV.breachZMin, zMax: WV.breachZMax, xMax: WV.breachXMax } : null);
     this._spawnSome('forest', Math.round(w.forest * scale * (this.breached ? 0.5 : 1)), w.sizes, Math.round(w.abnormal * scale * 0.5));
     if (this.breached) this._spawnSome('town', Math.round((w.town + (w.forest ? Math.ceil(w.forest * 0.5) : 0)) * scale), w.sizes, 0);
     // the Behemoth comes on wave 3, then again every sixth wave if it isn't already standing at the wall
@@ -626,26 +636,16 @@ export class Game {
       const ts = g.titans?.titans || [];
       const alive = ts.filter((t: Cuttable) => t.alive && t.kind !== 'behemoth').length;
       const behemothUp = ts.some((t: Cuttable) => t.kind === 'behemoth' && t.alive);
-      if (this.waveClear > 0) {
-        this.waveClear -= dt;
-        if (this.waveClear <= 0) this._nextWave();
-      } else if (alive === 0 && !this._spawnQ?.length && !(this.behemothSpawned && behemothUp)) {
-        if (this.wave > 0) g.hud?.message?.(`WAVE ${this.wave} CLEARED`, 2.5, 'info');
-        this.waveClear = 4;
-      } else if (this.wave > 0) {
-        // endless: the next wave marches on a clock even if some of this one are still standing, and stragglers keep
-        // walking in between waves, up to a cap that grows with the wave number
-        this.waveT += dt;
-        const cap = Math.min(22, 6 + this.wave * 2);
-        if (this.waveT > Math.max(45, 90 - this.wave * 4) && alive < cap) this._nextWave();
-        else if ((this.trickleT -= dt) <= 0) {
-          this.trickleT = Math.max(4, 12 - this.wave * 0.8);
-          if (alive + (this._spawnQ?.length || 0) < cap) {
-            const w = WAVES[Math.min(this.wave - 1, WAVES.length - 1)];
-            const area: SpawnArea = R.sim() < 0.6 ? 'field' : R.sim() < 0.75 ? 'forest' : 'town';
-            this._spawnSome(area, 1, w.sizes, R.sim() < 0.2 ? 1 : 0);
-          }
-        }
+      // the wave clock is hull/kits' stepWaves over the `waves` tunables: a cleared field waits clearPause, then the next
+      // wave; endless, the next wave also marches on a clock and stragglers walk in, up to a cap that grows with the wave
+      const queued = this._spawnQ?.length || 0;
+      const code = stepWaves(this, dt, alive, queued, this.behemothSpawned && behemothUp, WV);
+      if (code === WAVE_NEXT) this._nextWave();
+      else if (code === WAVE_CLEARED) g.hud?.message?.(`WAVE ${this.wave} CLEARED`, 2.5, 'info');
+      else if (code === WAVE_TRICKLE) {
+        const w = WAVES.at(Math.min(this.wave - 1, WAVES.length - 1));
+        const area: SpawnArea = R.sim() < 0.6 ? 'field' : R.sim() < 0.75 ? 'forest' : 'town';
+        this._spawnSome(area, 1, w.sizes, R.sim() < 0.2 ? 1 : 0);
       }
     }
     // Holdout never runs out of soldiers either: a comrade who is lost is replaced from the wall after a while

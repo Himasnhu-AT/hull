@@ -15,6 +15,12 @@ export { Stock, Pickup, StockHud, scatterPickups, pickupTuning } from './pickups
 export { Spawner, Chaser, WaveHud, GameOver, spawnGrunt, spawnerTuning, enemyTuning } from './spawner/spawner.ts';
 export { FirstPerson, Crosshair, spawnFirstPerson, fpsTuning } from './fps/fps.ts';
 export { FollowCamera, followTuning } from './follow-camera/follow-camera.ts';
+export { damp, followDistance, followFov, smoothstep, Reach } from './follow-camera/glide.ts';
+export { zoneEffect, coveredDamage, regenerate, ZONE_NONE, ZONE_SHALLOW, ZONE_CUT } from './health/zones.ts';
+export { newDepotState, stepDepot, fillTo } from './pickups/depot.ts';
+export type { DepotRules, DepotState } from './pickups/depot.ts';
+export { newWaveState, resetWaves, beginWave, stepWaves, waveCap, waveClock, waveScale, WAVE_NONE, WAVE_NEXT, WAVE_CLEARED, WAVE_TRICKLE } from './spawner/waves.ts';
+export type { WaveRules, WaveState } from './spawner/waves.ts';
 export { ThirdPerson, AimFollow, spawnThirdPerson, tpTuning } from './third-person/third-person.ts';
 export { PauseMenu } from './pause/pause.ts';
 export { SaveSlots } from './saves/saves.ts';

@@ -14,3 +14,5 @@ An orbiting chase camera that copes with speed and walls.
   `distanceMaxExtra`, `speedSmoothing`, `collisionRadius`, `recover`.
 - **Bench**: `bench.ts`. **Test**: `follow-camera.test.ts` (rest distance, speed effects, wall pull-in and recovery).
 - Spawn it after the target and after the target's controller, so it follows where the target ended up this step.
+'- **Maths for a game'\''s own camera** (`glide.ts`): `followDistance`, `followFov`, `damp`, `smoothstep`, and `Reach` (glides in off a wall,
+  back out when clear). AOTT'\''s soldier camera uses them over its `cam` tunables. Test: `glide.test.ts`.'
