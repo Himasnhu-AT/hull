@@ -1,0 +1,84 @@
+{
+  "title": "Every change is safe",
+  "lang": "en",
+  "steps": [
+    {
+      "title": "Every edit uses Hull's tools",
+      "say": "Whether you change a value in Hull or the builder writes code, the edit goes through Hull's tools.",
+      "ops": [
+        {"op":"write","id":"t","x":800,"y":48,"text":"Every change is safe","size":56,"anchor":"middle"},
+        {"op":"rect","id":"you","x":60,"y":280,"w":360,"h":120,"color":"blue","fill":"blue"},
+        {"op":"write","id":"you-t","x":240,"y":320.9,"text":"You, in the app","size":36,"anchor":"middle"},
+        {"op":"rect","id":"ai","x":60,"y":520,"w":360,"h":120,"color":"green","fill":"green"},
+        {"op":"write","id":"ai-t","x":240,"y":559.9,"text":"The builder","size":38,"anchor":"middle"},
+        {"op":"rect","id":"tools","x":620,"y":380,"w":360,"h":180,"color":"ink","fill":"gray"},
+        {"op":"write","id":"tools-t","x":800,"y":445.6,"text":"Hull's tools","size":46,"anchor":"middle"},
+        {"op":"line","id":"a1","x1":420,"y1":340,"x2":612,"y2":440,"color":"ink","arrow":true},
+        {"op":"line","id":"a2","x1":420,"y1":580,"x2":612,"y2":500,"color":"ink","arrow":true}
+      ]
+    },
+    {
+      "title": "Checked first",
+      "say": "Each edit is validated before it is kept. A bad one is turned away and nothing is written.",
+      "ops": [
+        {"op":"line","id":"a3","x1":980,"y1":470,"x2":1162,"y2":470,"color":"ink","arrow":true},
+        {"op":"rect","id":"proj","x":1170,"y":380,"w":370,"h":180,"color":"green","fill":"green"},
+        {"op":"write","id":"proj-t","x":1355,"y":447.7,"text":"Your project","size":42,"anchor":"middle"},
+        {"op":"write","id":"chk","x":800,"y":323,"text":"checked first","size":34,"color":"gray","anchor":"middle"},
+        {"op":"line","id":"rej","x1":800,"y1":560,"x2":800,"y2":680,"color":"red","arrow":true,"dash":true},
+        {"op":"write","id":"rej-t","x":800,"y":723,"text":"turned away, nothing written","size":32,"color":"red","anchor":"middle"}
+      ]
+    },
+    {
+      "title": "Recorded with who made it",
+      "say": "Every kept edit goes into the history with the name of who made it, you or the builder.",
+      "ops": [
+        {"op":"erase","ids":["you","you-t","ai","ai-t","tools","tools-t","a1","a2","a3","proj","proj-t","chk","rej","rej-t"]},
+        {"op":"write","id":"hist","x":120,"y":250,"text":"History","size":44},
+        {"op":"line","id":"tl","x1":120,"y1":470,"x2":1480,"y2":470,"color":"gray","width":6},
+        {"op":"ellipse","id":"dot0","cx":340,"cy":470,"rx":16,"ry":16,"color":"blue","fill":"blue"},
+        {"op":"write","id":"who0","x":340,"y":380.9,"text":"you","size":36,"color":"blue","anchor":"middle"},
+        {"op":"write","id":"what0","x":340,"y":520,"text":"Jump height\n2.2 to 2.6","size":32,"color":"ink","anchor":"middle"},
+        {"op":"ellipse","id":"dot1","cx":800,"cy":470,"rx":16,"ry":16,"color":"green","fill":"green"},
+        {"op":"write","id":"who1","x":800,"y":380.9,"text":"the builder","size":36,"color":"green","anchor":"middle"},
+        {"op":"write","id":"what1","x":800,"y":520,"text":"New grapple\nhook","size":32,"color":"ink","anchor":"middle"},
+        {"op":"ellipse","id":"dot2","cx":1260,"cy":470,"rx":16,"ry":16,"color":"blue","fill":"blue"},
+        {"op":"write","id":"who2","x":1260,"y":380.9,"text":"you","size":36,"color":"blue","anchor":"middle"},
+        {"op":"write","id":"what2","x":1260,"y":520,"text":"Landing sound\nlouder","size":32,"color":"ink","anchor":"middle"}
+      ]
+    },
+    {
+      "title": "Put any change back",
+      "say": "The Changes list shows them newest first. Put back undoes just that one change.",
+      "ops": [
+        {"op":"ellipse","id":"ring","cx":800,"cy":470,"rx":38,"ry":38,"color":"red"},
+        {"op":"write","id":"pb","x":800,"y":686.7,"text":"Put back","size":44,"color":"red","anchor":"middle"},
+        {"op":"line","id":"pba","x1":800,"y1":675,"x2":800,"y2":610,"color":"red","arrow":true},
+        {"op":"write","id":"cl","x":800,"y":805.9,"text":"The Changes list shows every change, newest first.","size":36,"anchor":"middle"}
+      ]
+    },
+    {
+      "title": "Try an idea on a copy",
+      "say": "An experiment is a copy of your project. Try a change there and your main version stays as it is.",
+      "ops": [
+        {"op":"erase","ids":["hist","tl","dot0","who0","what0","dot1","who1","what1","dot2","who2","what2","ring","pb","pba","cl"]},
+        {"op":"write","id":"main","x":120,"y":250,"text":"main","size":44},
+        {"op":"line","id":"ml","x1":120,"y1":350,"x2":1480,"y2":350,"color":"ink","width":6},
+        {"op":"ellipse","id":"bd","cx":480,"cy":350,"rx":14,"ry":14,"color":"blue","fill":"blue"},
+        {"op":"path","id":"br","d":"M 480 350 C 560 350, 580 570, 680 570 L 1180 570","color":"blue"},
+        {"op":"write","id":"br-t","x":680,"y":595,"text":"experiment: heavier jump","size":34,"color":"blue"},
+        {"op":"write","id":"own","x":800,"y":728.8,"text":"It has its own copy. Main is not touched.","size":40,"anchor":"middle"}
+      ]
+    },
+    {
+      "title": "Adopt it or discard it",
+      "say": "Adopt the one you like and it becomes your main version. Or discard it and nothing changes.",
+      "ops": [
+        {"op":"erase","ids":["own"]},
+        {"op":"path","id":"ad","d":"M 1180 570 C 1340 570, 1340 430, 1340 362","color":"green","arrow":true},
+        {"op":"write","id":"ad-t","x":1385,"y":460,"text":"Adopt","size":40,"color":"green"},
+        {"op":"write","id":"dis","x":800,"y":728.8,"text":"Or discard it, and main stays as it was.","size":40,"color":"red","anchor":"middle"}
+      ]
+    }
+  ]
+}

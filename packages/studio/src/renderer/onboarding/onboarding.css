@@ -1,0 +1,164 @@
+/*
+  First-run tour. Colours come from the app's tokens with a light fallback, so it also works before the tokens exist.
+  The board is paper in both themes: it is a whiteboard, not chrome.
+*/
+
+@font-face {
+  font-family: 'Hull Caveat';
+  src: url('./fonts/Caveat-latin.woff2') format('woff2');
+  font-weight: 400 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@keyframes ob-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes ob-pop { from { opacity: 0; transform: translateY(8px) scale(0.985); } to { opacity: 1; transform: none; } }
+
+.ob-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(24, 22, 18, 0.42);
+  animation: ob-fade 0.18s var(--ease, ease) both;
+}
+
+.ob {
+  display: grid;
+  grid-template-columns: 232px minmax(0, 1fr);
+  width: min(1280px, 100%);
+  height: min(840px, 100%);
+  overflow: hidden;
+  outline: none;
+  color: var(--text, #1a1d21);
+  background: var(--panel, #fff);
+  border: 1px solid var(--line2, rgba(0, 0, 0, 0.17));
+  border-radius: calc(var(--radius, 12px) + 4px);
+  box-shadow: var(--shadow-pop, var(--shadow, 0 24px 60px rgba(20, 30, 50, 0.28)));
+  animation: ob-pop 0.24s var(--ease, ease) both;
+  font-family: var(--sans, system-ui, sans-serif);
+}
+
+.ob-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 0;
+  padding: 20px 14px 16px;
+  background: var(--panel2, #f0f2f5);
+  border-right: 1px solid var(--line, rgba(0, 0, 0, 0.09));
+}
+.ob-rail-head { padding: 0 8px; }
+.ob-rail-title { font-size: 15px; font-weight: 600; }
+.ob-rail-sub { margin-top: 2px; font-size: 12px; color: var(--faint, #66707c); }
+.ob-lessons { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.ob-lesson {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 10px;
+  font: inherit;
+  font-size: 13.5px;
+  text-align: left;
+  color: var(--muted, #4f5762);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s var(--ease, ease), color 0.15s var(--ease, ease);
+}
+.ob-lesson:hover { background: var(--hover, rgba(0, 0, 0, 0.05)); color: var(--text, #1a1d21); }
+.ob-lesson.on { color: var(--text, #1a1d21); font-weight: 600; background: var(--panel, #fff); border-color: var(--line2, rgba(0, 0, 0, 0.17)); }
+.ob-tick {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--faint, #66707c);
+  border: 1.5px solid var(--line2, rgba(0, 0, 0, 0.17));
+  border-radius: 50%;
+}
+.ob-tick.done { color: #fff; background: #2b7a4b; border-color: #2b7a4b; }
+.ob-rail-foot { margin-top: auto; padding: 0 8px; font-size: 11.5px; line-height: 1.45; color: var(--faint, #66707c); }
+
+.ob-main { display: flex; flex-direction: column; gap: 12px; min-width: 0; min-height: 0; padding: 18px 22px 18px; }
+
+.ob-stage { flex: 1 1 0; min-height: 160px; display: flex; align-items: center; justify-content: center; container-type: size; }
+.ob-paper {
+  width: min(100cqw, calc(100cqh * 16 / 9));
+  aspect-ratio: 16 / 9;
+  background: #fffefb;
+  border: 1px solid rgba(28, 27, 24, 0.12);
+  border-radius: var(--radius, 12px);
+  box-shadow: 0 1px 2px rgba(28, 27, 24, 0.06), 0 10px 28px rgba(28, 27, 24, 0.1);
+  overflow: hidden;
+}
+.ob-board { display: block; width: 100%; height: 100%; }
+.ob-board g[aria-hidden='true'] rect, .ob-board g[aria-hidden='true'] circle { fill: #1c1b18; }
+
+.ob-say { min-height: 92px; }
+.ob-say-meta { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 12px; color: var(--faint, #66707c); }
+.ob-chips { display: inline-flex; gap: 6px; }
+.ob-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  font: inherit;
+  font-size: 11.5px;
+  color: var(--muted, #4f5762);
+  background: transparent;
+  border: 1.5px solid var(--line2, rgba(0, 0, 0, 0.17));
+  border-radius: 50%;
+  cursor: pointer;
+  transition: background 0.15s var(--ease, ease), border-color 0.15s var(--ease, ease);
+}
+.ob-chip.done { color: var(--bg, #fff); background: var(--text, #1a1d21); border-color: var(--text, #1a1d21); }
+.ob-chip.cur { color: var(--text, #1a1d21); border-color: var(--signal, #2f5fbf); border-width: 2.5px; }
+.ob-say-title { margin-top: 6px; font-size: 17px; font-weight: 600; }
+.ob-say-text { margin: 3px 0 0; max-width: 78ch; font-size: 14.5px; line-height: 1.5; color: var(--muted, #4f5762); }
+
+.ob-controls { display: flex; align-items: center; gap: 8px; }
+.ob-spacer { flex: 1; }
+.ob-btn {
+  padding: 8px 14px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--text, #1a1d21);
+  background: transparent;
+  border: 1px solid var(--line2, rgba(0, 0, 0, 0.17));
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s var(--ease, ease), transform 0.12s var(--ease, ease);
+}
+.ob-btn:hover:not(:disabled) { background: var(--hover, rgba(0, 0, 0, 0.05)); }
+.ob-btn:active:not(:disabled) { transform: scale(0.97); }
+.ob-btn:disabled { opacity: 0.4; cursor: default; }
+.ob-btn.primary { font-weight: 600; color: var(--on-accent, var(--bg, #fff)); background: var(--text, #1a1d21); border-color: var(--text, #1a1d21); }
+.ob-btn.primary:hover { opacity: 0.88; background: var(--text, #1a1d21); }
+.ob-btn.ghost { color: var(--muted, #4f5762); border-color: transparent; }
+.ob-auto { display: inline-flex; align-items: center; gap: 6px; margin-right: 6px; font-size: 12.5px; color: var(--muted, #4f5762); cursor: pointer; }
+.ob-auto.off { opacity: 0.5; cursor: default; }
+.ob-btn:focus-visible, .ob-lesson:focus-visible, .ob-chip:focus-visible, .ob-auto input:focus-visible { outline: 2px solid var(--signal, #2f5fbf); outline-offset: 2px; }
+
+@media (max-width: 900px) {
+  .ob { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+  .ob-rail { flex-direction: row; align-items: center; gap: 8px; padding: 10px 12px; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--line, rgba(0, 0, 0, 0.09)); }
+  .ob-rail-head, .ob-rail-foot { display: none; }
+  .ob-lessons { flex-direction: row; }
+  .ob-lesson { white-space: nowrap; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ob-scrim, .ob { animation: none; }
+  .ob-btn, .ob-chip, .ob-lesson { transition: none; }
+}

@@ -3,10 +3,16 @@ import type { HullApp, OpenedProject } from '../shared/appApi.ts';
 import { CreateShell } from './create/CreateShell.tsx';
 import { HomeBrief } from './launcher/HomeBrief.tsx';
 import { Launcher } from './launcher/Launcher.tsx';
+import { OnboardingHost } from './onboarding/open.tsx';
 import { SettingsCtx, type SettingsOpener, type SettingsSection } from './settings/open.tsx';
 import { Settings } from './settings/Settings.tsx';
 
+// The first-run tour sits over whatever screen is showing; useOnboarding().open() from onboarding/open.tsx opens it again.
 export function App({ app }: { app: HullApp }): JSX.Element {
+  return <OnboardingHost><AppScreens app={app} /></OnboardingHost>;
+}
+
+function AppScreens({ app }: { app: HullApp }): JSX.Element {
   // `idea` is set only for a project made from the idea box: it starts on the Brief step.
   // A game made from an idea stays on the home page (`phase: 'brief'`) until its brief is done, then opens at Build.
   const [open, setOpen] = useState<{ project: OpenedProject; idea?: string; phase?: 'brief' | 'shell' } | null>(null);

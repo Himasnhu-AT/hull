@@ -1,0 +1,78 @@
+{
+  "title": "Who builds",
+  "lang": "en",
+  "steps": [
+    {
+      "title": "Anyone can build, through Hull",
+      "say": "Your game can be built by Hull's own builder, or by an AI you already use. Both work through Hull's tools.",
+      "ops": [
+        {"op":"write","id":"t","x":800,"y":48,"text":"Who builds","size":56,"anchor":"middle"},
+        {"op":"rect","id":"A","x":80,"y":280,"w":640,"h":120,"color":"green","fill":"green"},
+        {"op":"write","id":"A-t","x":400,"y":319.9,"text":"Hull's builder, in the app","size":38,"anchor":"middle"},
+        {"op":"rect","id":"B","x":80,"y":570,"w":640,"h":120,"color":"blue","fill":"blue"},
+        {"op":"write","id":"B-t","x":400,"y":610.9,"text":"Your own Claude Code or Codex","size":36,"anchor":"middle"},
+        {"op":"rect","id":"P","x":1060,"y":410,"w":440,"h":180,"color":"ink","fill":"gray"},
+        {"op":"write","id":"P-t","x":1280,"y":475.6,"text":"Your game","size":46,"anchor":"middle"},
+        {"op":"line","id":"aa","x1":720,"y1":340,"x2":1052,"y2":470,"color":"ink","arrow":true},
+        {"op":"line","id":"ab","x1":720,"y1":630,"x2":1052,"y2":530,"color":"ink","arrow":true}
+      ]
+    },
+    {
+      "title": "Hull's builder",
+      "say": "Hull's builder runs inside the app. Sign in with your Hull account, which opens your browser, or use your own API key.",
+      "ops": [
+        {"op":"erase","ids":["A","A-t","B","B-t","P","P-t","aa","ab"]},
+        {"op":"rect","id":"o1","x":80,"y":290,"w":640,"h":110,"color":"ink"},
+        {"op":"write","id":"o1-t","x":400,"y":325.9,"text":"Sign in with your Hull account","size":36,"anchor":"middle"},
+        {"op":"rect","id":"o2","x":80,"y":480,"w":640,"h":110,"color":"ink"},
+        {"op":"write","id":"o2-t","x":400,"y":515.9,"text":"Or use your own API key","size":36,"anchor":"middle"},
+        {"op":"rect","id":"hb","x":1000,"y":350,"w":500,"h":170,"color":"green","fill":"green"},
+        {"op":"write","id":"hb-t","x":1250,"y":409.6,"text":"Hull's builder","size":48,"anchor":"middle"},
+        {"op":"line","id":"oa","x1":720,"y1":345,"x2":992,"y2":410,"color":"ink","arrow":true},
+        {"op":"line","id":"ob","x1":720,"y1":535,"x2":992,"y2":460,"color":"ink","arrow":true},
+        {"op":"write","id":"br","x":800,"y":668.8,"text":"Signing in happens in your browser.","size":40,"anchor":"middle"}
+      ]
+    },
+    {
+      "title": "Your own agent, over MCP",
+      "say": "Claude Code or Codex can work from their own window. They connect to Hull over MCP and use the same tools.",
+      "ops": [
+        {"op":"erase","ids":["o1","o1-t","o2","o2-t","hb","hb-t","oa","ob","br"]},
+        {"op":"rect","id":"ag","x":80,"y":290,"w":560,"h":320,"color":"blue","fill":"blue"},
+        {"op":"write","id":"ag-t","x":360,"y":338.8,"text":"Claude Code or Codex","size":40,"anchor":"middle"},
+        {"op":"write","id":"ag-s","x":360,"y":413,"text":"in their own window","size":34,"color":"gray","anchor":"middle"},
+        {"op":"rect","id":"hl","x":960,"y":290,"w":560,"h":320,"color":"ink","fill":"gray"},
+        {"op":"write","id":"hl-t","x":1240,"y":350.3,"text":"Hull","size":56,"anchor":"middle"},
+        {"op":"write","id":"hl-s","x":1240,"y":443,"text":"the app and your project","size":34,"color":"gray","anchor":"middle"},
+        {"op":"line","id":"mc","x1":648,"y1":450,"x2":952,"y2":450,"color":"ink","arrow":"both"},
+        {"op":"write","id":"mc-t","x":800,"y":366.7,"text":"MCP","size":44,"anchor":"middle"}
+      ]
+    },
+    {
+      "title": "Their changes show up here",
+      "say": "When your agent edits the project, the change appears in Hull's history with its name on it.",
+      "ops": [
+        {"op":"line","id":"da","x1":1240,"y1":610,"x2":1240,"y2":690,"color":"ink","arrow":true},
+        {"op":"rect","id":"ch","x":960,"y":690,"w":560,"h":150,"color":"ink"},
+        {"op":"write","id":"ch-t","x":1000,"y":705,"text":"Changes","size":34,"color":"gray"},
+        {"op":"write","id":"ch-e","x":1000,"y":765,"text":"Claude Code made a change","size":38,"color":"green"},
+        {"op":"write","id":"same","x":360,"y":662.8,"text":"Same tools,\nsame checks.","size":40,"anchor":"middle"}
+      ]
+    },
+    {
+      "title": "Same project either way",
+      "say": "Either way you get one project and one history. Pick whichever builder you like.",
+      "ops": [
+        {"op":"erase","ids":["ag","ag-t","ag-s","hl","hl-t","hl-s","mc","mc-t","da","ch","ch-t","ch-e","same"]},
+        {"op":"rect","id":"x1","x":80,"y":310,"w":480,"h":120,"color":"green","fill":"green"},
+        {"op":"write","id":"x1-t","x":320,"y":348.8,"text":"Hull's builder","size":40,"anchor":"middle"},
+        {"op":"rect","id":"x2","x":80,"y":570,"w":480,"h":120,"color":"blue","fill":"blue"},
+        {"op":"write","id":"x2-t","x":320,"y":608.8,"text":"Your own agent","size":40,"anchor":"middle"},
+        {"op":"rect","id":"xp","x":1000,"y":410,"w":520,"h":200,"color":"ink","fill":"gray"},
+        {"op":"write","id":"xp-t","x":1260,"y":455.7,"text":"One project,\none history","size":46,"anchor":"middle"},
+        {"op":"line","id":"xa","x1":560,"y1":370,"x2":992,"y2":470,"color":"ink","arrow":true},
+        {"op":"line","id":"xb","x1":560,"y1":630,"x2":992,"y2":550,"color":"ink","arrow":true}
+      ]
+    }
+  ]
+}
