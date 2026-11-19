@@ -1,0 +1,79 @@
+{
+ "kind": "sound",
+ "note": "A guard shattering.",
+ "bus": "sfx",
+ "level": -2,
+ "pitch": [
+  0.97,
+  1.03
+ ],
+ "limit": {
+  "minGap": 0.05,
+  "voices": 4,
+  "over": "steal-oldest"
+ },
+ "source": {
+  "type": "synth",
+  "length": 0.8,
+  "layers": {
+   "crack": {
+    "from": {
+     "noise": "white"
+    },
+    "then": [
+     {
+      "filter": "highpass",
+      "freq": 1800
+     },
+     {
+      "envelope": {
+       "attack": 0.001,
+       "decay": 0.12
+      }
+     },
+     {
+      "gain": -4
+     }
+    ]
+   },
+   "low": {
+    "from": {
+     "osc": "sine",
+     "freq": 140,
+     "glideTo": 0.4,
+     "glideTime": 0.3
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.002,
+       "decay": 0.4
+      }
+     },
+     {
+      "gain": -4
+     }
+    ]
+   },
+   "ring": {
+    "from": {
+     "modes": [
+      900,
+      1700,
+      2900
+     ],
+     "decay": [
+      0.1,
+      0.2
+     ]
+    },
+    "then": [
+     {
+      "gain": -8
+     }
+    ]
+   }
+  },
+  "reverb": 0.15
+ }
+}
