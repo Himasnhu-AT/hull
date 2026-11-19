@@ -389,7 +389,7 @@ None of these blocks M0 to M7. Each has the assumption the plan is written on.
 
 | Risk | What I would do about it |
 |---|---|
-| "One file" grows large once a game uses models, textures or recordings. | Generated content stays the default and inlines to almost nothing. Binary assets go beside the file by default, with `--single-file` to embed them. The build prints a size report against a budget. |
+| "One file" grows large once a game uses models, textures or recordings. | Generated content stays the default and inlines to almost nothing. Today the build inlines every asset into `game.js` and prints its size; writing binary assets beside the file, and acting on `targets.web.singleFile` and `budgets`, are not built yet. |
 | JSON cannot express every sound or animation. | Recipes cover the common cases; anything else is a code generator with a schema'd block of knobs, so it still gets a bench and sliders. |
 | Rewriting source from the Studio corrupts a file. | Only literals inside a `tunables` block are ever rewritten, by position from the compiler's own parse, and the file is re-parsed and type-checked before the write is kept. |
 | The AI and you edit the same value. | Authorship in the history; `check` flags an overwrite; a merge asks. |
