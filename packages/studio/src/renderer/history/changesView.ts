@@ -12,7 +12,7 @@ import { humanize, type Field } from '../lib/schemaForm.ts';
 export interface Shown { text: string; swatch?: string }
 
 /** What the Inspector knows about the field a delta touches. */
-export type FieldInfo = Pick<Field, 'pointer' | 'label' | 'group' | 'widget' | 'unit' | 'step'>;
+export type FieldInfo = Pick<Field, 'pointer' | 'label' | 'group' | 'widget' | 'unit' | 'step'> & { def?: unknown };
 /** Finds the field for a config id ('look/dawn') or 'tunables:<block>' and a pointer or tunable key; undefined when the Inspector has none. */
 export type FieldLookup = (target: string, pointer: string) => FieldInfo | undefined;
 
@@ -83,11 +83,13 @@ export function describe(d: ChangeDelta, lookup: FieldLookup, by?: HistoryAuthor
     if (d.path === '') return { ...base, path: [d.target], note: d.op === 'add' ? 'new file' : d.op === 'remove' ? 'file removed' : 'replaced', revert: whole };
     const { path, field } = jsonPath(d, lookup);
     const isRow = /^\d+$/.test(lastSeg(d.path)) && d.op !== 'set';
+    // A field the file did not say before had the schema's default: show that as the old value.
+    const dflt = field?.def !== undefined && !isRow;
     const row: ChangeRow = {
       ...base, path,
-      ...(d.op !== 'add' ? { from: show(d.from, field) } : {}),
-      ...(d.op !== 'remove' ? { to: show(d.to, field) } : {}),
-      note: d.op === 'add' ? (isRow ? 'row added' : 'added') : d.op === 'remove' ? (isRow ? 'row removed' : 'removed') : '',
+      ...(d.op !== 'add' ? { from: show(d.from, field) } : dflt ? { from: show(field!.def, field) } : {}),
+      ...(d.op !== 'remove' ? { to: show(d.to, field) } : dflt ? { to: show(field!.def, field) } : {}),
+      note: d.op === 'add' ? (isRow ? 'row added' : dflt ? 'was default' : 'added') : d.op === 'remove' ? (isRow ? 'row removed' : dflt ? 'back to default' : 'removed') : '',
       revert: d.op === 'add' ? { via: 'history.revert', file: d.file, pointer: d.path } : { via: 'config.set', id: d.target, pointer: d.path, value: d.from },
     };
     return row;

@@ -43,6 +43,18 @@ export function problemMatches(p: Problem, by: string, d: ChangeDelta): boolean 
   return p.message.includes(`${name} from`) || p.message.includes(`${name}/`);
 }
 
+/** The starting point of "since I opened the Studio" survives a page reload of the same tab, as long as that change still exists. */
+function rememberedOpen(changes: HistoryChange[]): string | null {
+  const key = `hull.opened:${typeof location === 'undefined' ? '' : location.origin}`;
+  try {
+    const kept = sessionStorage.getItem(key);
+    if (kept && changes.some((c) => c.id === kept && c.line === 'main')) return kept;
+    const fresh = changes.find((x) => x.line === 'main')?.id ?? null;
+    if (fresh) sessionStorage.setItem(key, fresh);
+    return fresh;
+  } catch { return changes.find((x) => x.line === 'main')?.id ?? null; }
+}
+
 export function useHistory(rpc: RpcClient, problems: Problem[], notify: (text: string, error?: boolean) => void): HistoryState {
   const [changes, setChanges] = useState<HistoryChange[]>([]);
   const [exps, setExps] = useState<ExpInfo[]>([]);
@@ -55,7 +67,7 @@ export function useHistory(rpc: RpcClient, problems: Problem[], notify: (text: s
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const load = useCallback(() => {
-    Promise.all([rpc.call('history.list', { limit: 400 }), rpc.call('exp.list', {})]).then(([c, e]) => { setChanges(c); setExps(e); setLoaded(true); setOpenedId((o) => o ?? c.find((x) => x.line === 'main')?.id ?? null); setError(null); }, (e: Error) => setError(e.message));
+    Promise.all([rpc.call('history.list', { limit: 400 }), rpc.call('exp.list', {})]).then(([c, e]) => { setChanges(c); setExps(e); setLoaded(true); setOpenedId((o) => o ?? rememberedOpen(c)); setError(null); }, (e: Error) => setError(e.message));
   }, [rpc]);
   // A burst of pushes is one reload.
   const soon = useCallback(() => { if (timer.current) clearTimeout(timer.current); timer.current = setTimeout(load, 120); }, [load]);

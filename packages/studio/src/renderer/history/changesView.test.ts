@@ -39,6 +39,12 @@ suite('config field diffs', () => {
     expect(rem.note).toBe('row removed');
     expect(rem.revert.via).toBe('config.set');
   });
+  it('shows the default as the old value when the file did not set the field', () => {
+    const r = describe(json({ path: '/sky/color', op: 'add', to: '#5a9bff' }), (t, p) => (p === '/sky/color' ? { pointer: p, label: 'Color', group: 'Sky', widget: 'color', unit: '', step: 1, def: '#14161b' } : undefined));
+    expect(r.from).toEqual({ text: '#14161b', swatch: '#14161b' });
+    expect(r.note).toBe('was default');
+    expect(r.revert).toEqual({ via: 'history.revert', file: 'config/look/dawn.json', pointer: '/sky/color' });
+  });
   it('knows a whole new file', () => {
     const r = describe(json({ path: '', op: 'add' }), lookup);
     expect(r.note).toBe('new file');
