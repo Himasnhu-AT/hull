@@ -450,3 +450,12 @@ textarea.field-in { height: auto; min-height: 76px; padding: 6px 8px; font-famil
 .ag-row { margin-top: 8px; }
 .ag-h { display: flex; align-items: center; justify-content: space-between; font-size: 11.5px; color: var(--muted); }
 .ag-row pre { margin: 4px 0 0; padding: 8px 10px; background: var(--field); border-radius: 6px; white-space: pre-wrap; word-break: break-all; user-select: all; color: var(--text); }
+
+/* ---------- nav in the title bar ---------- */
+.seg.views button { min-width: 28px; padding: 0 8px; }
+.seg.views .vc { color: var(--faint); font-size: 11px; }
+.top .vl { display: none; }
+@media (min-width: 1560px) { .top .vl { display: inline; } }
+.top .r .chip:has(.vl), .top .r .btn:has(.vl) { padding: 0 8px; }
+.live { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); flex: none; margin: 0 4px; }
+.live.on { background: var(--ok, #3ecf8e); }
