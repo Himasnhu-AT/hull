@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -17,7 +17,13 @@ beforeAll(async () => {
   data = join(dir, 'data');
   root = join(dir, 'game');
   await createProject({ template: 'arena', dir: root, title: 'ACP arena' });
-  host = createHost({ dataDir: data, env: { ...process.env, HULL_ACP_AGENTS: JSON.stringify([{ id: 'fake', name: 'Fake agent', command: process.execPath, args: [fixture] }]) } });
+  const fake = join(dir, 'hull-fake.json');
+  writeFileSync(fake, JSON.stringify([
+    { text: 'Checking first.', tools: [{ name: 'check', input: {} }] },
+    { tools: [{ name: 'tunables.set', input: { block: 'player', key: 'runSpeed', value: 8 } }] },
+    { text: 'Raised the run speed to 8.' },
+  ]));
+  host = createHost({ dataDir: data, env: { ...process.env, HULL_AGENT_FAKE: fake, HULL_ACP_AGENTS: JSON.stringify([{ id: 'fake', name: 'Fake agent', command: process.execPath, args: [fixture] }]) } });
   host.onAgentEvent((e) => events.push(e));
   mcpUrl = (await host.openProject(root)).mcp.url;
 }, 120_000);
@@ -67,6 +73,22 @@ describe('agent hub', () => {
     expect(items[0]!.message).toMatch(/runSpeed/i);
     await host.agents.stop(sid);
   }, 120_000);
+
+  it("runs Hull's own agent (packages/agent) with its scripted model, and the history names it", async () => {
+    events.length = 0;
+    const list = await host.agents.list();
+    expect(list.find((a) => a.id === 'hull')).toMatchObject({ installed: true });
+    expect(list.find((a) => a.id === 'hull')!.needs).toBeUndefined();
+    const sid = await host.agents.start('hull');
+    await host.agents.prompt(sid, 'Raise the run speed to 8');
+    await waitFor(() => events.some((e) => e.type === 'done'), 90_000);
+    expect(events.find((e) => e.type === 'done')).toMatchObject({ stopReason: 'end_turn' });
+    const tools = events.filter((e): e is Extract<AgentEvent, { type: 'tool' }> => e.type === 'tool');
+    expect(tools.length).toBeGreaterThan(1);
+    const items = ((await mcpCall('history.list', { limit: 3 })).structuredContent as { items: { by: string }[] }).items;
+    expect(items[0]!.by).toBe('ai:Hull agent');
+    await host.agents.stop(sid);
+  }, 150_000);
 
   it('a denied permission leaves the project alone and ends the run', async () => {
     events.length = 0;
