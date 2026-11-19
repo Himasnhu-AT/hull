@@ -355,6 +355,14 @@ export class Graph {
     this.begin(l, si, 0);
   }
 
+  /** How far through its clip (or cycle) the newest state of a layer is, 0 to 1. For tools. */
+  progress(layer: string): number {
+    const l = this.layers.find((x) => x.name === layer);
+    if (!l) return 0;
+    const e = l.entries[l.count - 1]!;
+    return this.phaseOf(l.states[e.state]!, e);
+  }
+
   /** Weight of each state in a layer right now, by name (for tests and the bench). */
   weights(layer: string): Record<string, number> {
     const out: Record<string, number> = {};

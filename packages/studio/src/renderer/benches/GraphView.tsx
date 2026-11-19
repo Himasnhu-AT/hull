@@ -6,11 +6,28 @@ import type { Animator } from 'hull/anim';
 import type { Engine } from './engine.ts';
 
 interface Trans { from: string; to: string; when?: string | undefined; blend?: number | undefined }
+interface Blend2d { x: string; y: string; points: { x: number; y: number; clip: string }[] }
+interface StateDef { blend2d?: Blend2d; blend?: { by: string; points: Record<string, string> } }
 interface LayerDef { states: Record<string, unknown>; transitions?: Trans[]; mask?: string[]; additive?: boolean; weight?: number; start?: string }
-export interface GraphDef { layers: Record<string, LayerDef> }
+export interface GraphDef { layers: Record<string, LayerDef>; params?: Record<string, { min?: number; max?: number }> }
 
-export interface LiveLayer { state: string; weights: Record<string, number> }
+export interface LiveLayer {
+  state: string; weights: Record<string, number>;
+  /** How far through its clip the state is, 0 to 1. */
+  progress?: number;
+  /** Windows open on this layer now, and the weight of each clip of the state when it blends. */
+  windows?: string[];
+  clips?: Record<string, number>;
+}
 export interface Live { layers: Record<string, LiveLayer>; params: Record<string, number> }
+
+/** One colour for a window name, the same everywhere. */
+const WINDOW_HUES: Record<string, number> = { trace: 8, hit: 8, parry: 205, iframe: 150, cancel: 48, charge: 280, stun: 340 };
+export const windowColor = (name: string): string => {
+  let h = WINDOW_HUES[name];
+  if (h === undefined) { h = 0; for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) % 360; }
+  return `hsl(${h} 70% 58%)`;
+};
 
 const W = 480;
 const NW = 78;
@@ -39,7 +56,46 @@ function layout(names: string[]): { pos: Record<string, P>; h: number } {
   return { pos, h };
 }
 
-function LayerCard({ name, def, live, test }: { name: string; def: LayerDef; live: LiveLayer | undefined; test: (when: string | undefined) => boolean }): JSX.Element {
+/** A 2D blend space: the clips as dots on the plane (bigger as they weigh more), the parameters as a handle you drag. */
+function BlendPad({ state, space, live, params, onParam, weights }: { state: string; space: Blend2d; live: Record<string, number>; params: GraphDef['params']; onParam(name: string, v: number): void; weights: Record<string, number> | undefined }): JSX.Element {
+  const xs = space.points.map((p) => p.x), ys = space.points.map((p) => p.y);
+  const lo = (n: string, v: number[]): number => params?.[n]?.min ?? Math.min(...v, 0);
+  const hi = (n: string, v: number[]): number => params?.[n]?.max ?? Math.max(...v, 0);
+  const x0 = lo(space.x, xs), x1 = Math.max(hi(space.x, xs), x0 + 0.01), y0 = lo(space.y, ys), y1 = Math.max(hi(space.y, ys), y0 + 0.01);
+  const S = 150, M = 14;
+  const px = (v: number): number => M + ((v - x0) / (x1 - x0)) * (S - 2 * M);
+  const py = (v: number): number => S - M - ((v - y0) / (y1 - y0)) * (S - 2 * M);
+  const set = (e: React.PointerEvent<SVGSVGElement>): void => {
+    const r = e.currentTarget.getBoundingClientRect();
+    const fx = ((e.clientX - r.left) / r.width) * S, fy = ((e.clientY - r.top) / r.height) * S;
+    onParam(space.x, x0 + ((fx - M) / (S - 2 * M)) * (x1 - x0));
+    onParam(space.y, y0 + ((S - M - fy) / (S - 2 * M)) * (y1 - y0));
+  };
+  const cx = live[space.x] ?? 0, cy = live[space.y] ?? 0;
+  return (
+    <div className="bpad">
+      <div className="bb-dim" style={{ fontSize: 11.5 }}>{state}: <span className="mono">{space.x}</span> across, <span className="mono">{space.y}</span> up</div>
+      <svg viewBox={`0 0 ${S} ${S}`} width={S} height={S} role="slider" aria-label={`Blend space ${state}`} aria-valuetext={`${space.x} ${cx.toFixed(2)}, ${space.y} ${cy.toFixed(2)}`}
+        onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); set(e); }} onPointerMove={(e) => { if (e.buttons) set(e); }}>
+        <rect x={1} y={1} width={S - 2} height={S - 2} rx={8} className="pbg" />
+        <line x1={px(0)} x2={px(0)} y1={M / 2} y2={S - M / 2} className="pax" />
+        <line y1={py(0)} y2={py(0)} x1={M / 2} x2={S - M / 2} className="pax" />
+        {space.points.map((p, i) => {
+          const w = weights?.[p.clip] ?? 0;
+          return (
+            <g key={i}>
+              <circle cx={px(p.x)} cy={py(p.y)} r={4 + w * 7} className="pdot" style={{ opacity: 0.35 + w * 0.65 }} />
+              <text x={px(p.x)} y={py(p.y) - 10} textAnchor="middle" className="plab">{p.clip}</text>
+            </g>
+          );
+        })}
+        <circle cx={px(Math.min(x1, Math.max(x0, cx)))} cy={py(Math.min(y1, Math.max(y0, cy)))} r={5} className="pcur" />
+      </svg>
+    </div>
+  );
+}
+
+function LayerCard({ name, def, live, test, params, allLive, onParam }: { name: string; def: LayerDef; live: LiveLayer | undefined; test: (when: string | undefined) => boolean; params: GraphDef['params']; allLive: Record<string, number>; onParam(name: string, v: number): void }): JSX.Element {
   const names = Object.keys(def.states);
   const { pos, h } = useMemo(() => layout(names), [names.join('|')]); // eslint-disable-line react-hooks/exhaustive-deps
   const trans = def.transitions ?? [];
@@ -100,11 +156,26 @@ function LayerCard({ name, def, live, test }: { name: string; def: LayerDef; liv
           );
         })}
       </svg>
+      {live && (
+        <div className="lnow">
+          <div className="lbar" title="How far through the clip"><i style={{ width: `${Math.round((live.progress ?? 0) * 100)}%` }} /></div>
+          {live.clips && Object.keys(live.clips).length > 1 && (
+            <div className="lclips">{Object.entries(live.clips).map(([c, w]) => <span key={c} style={{ opacity: 0.35 + w * 0.65 }}>{c} <b className="mono">{Math.round(w * 100)}%</b></span>)}</div>
+          )}
+          {(live.windows?.length ?? 0) > 0 && (
+            <div className="bb-wlist">{live.windows!.map((w) => <span key={w} className="bb-wchip on" style={{ borderColor: windowColor(w) }}><i style={{ background: windowColor(w) }} />{w}</span>)}</div>
+          )}
+        </div>
+      )}
+      {Object.entries(def.states).map(([sn, sd]) => {
+        const b = (sd as StateDef).blend2d;
+        return b ? <BlendPad key={sn} state={sn} space={b} live={allLive} params={params} onParam={onParam} weights={sn === live?.state ? live.clips : undefined} /> : null;
+      })}
     </div>
   );
 }
 
-export function GraphView({ eng, animator, def, live }: { eng: Engine; animator: Animator; def: GraphDef; live: Live | null }): JSX.Element {
+export function GraphView({ eng, animator, def, live, onParam }: { eng: Engine; animator: Animator; def: GraphDef; live: Live | null; onParam(name: string, v: number): void }): JSX.Element {
   // A condition is compiled once per graph; it reads the parameters the animator holds right now.
   const conds = useMemo(() => {
     const m = new Map<string, (v: Float64Array) => number>();
@@ -124,7 +195,7 @@ export function GraphView({ eng, animator, def, live }: { eng: Engine; animator:
   };
   return (
     <div className="gl-wrap">
-      {Object.entries(def.layers).map(([n, l]) => <LayerCard key={n} name={n} def={l} live={live?.layers[n]} test={test} />)}
+      {Object.entries(def.layers).map(([n, l]) => <LayerCard key={n} name={n} def={l} live={live?.layers[n]} test={test} params={def.params} allLive={live?.params ?? {}} onParam={onParam} />)}
     </div>
   );
 }
