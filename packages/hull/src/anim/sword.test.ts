@@ -5,7 +5,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { config, defineGame, startGame, type Game } from '../index.ts';
 import type { AnimGraph } from '../schema/anim-graph.ts';
 import type { Character } from '../schema/character.ts';
-import { Animator, buildBody, compileClip, evalCurve, Graph, Pose, sampleClip } from './index.ts';
+import { Animator, buildBody, compileClip, compileCondition, evalCurve, Graph, Pose, sampleClip } from './index.ts';
 import { exampleSources } from './examples/load.ts';
 
 beforeAll(() => {
@@ -50,6 +50,16 @@ describe('key eases', () => {
     const i = sk().index('armR');
     // 'in' puts a quarter of an eighth of the turn at the midpoint, linear would put half.
     expect(2 * Math.asin(pose.rot[i * 4]!)).toBeCloseTo(0.125, 2);
+  });
+});
+
+describe('conditions', () => {
+  it('read a parameter named with a dash, so a trigger can be named like its clip', () => {
+    const v = Float64Array.from([1, 0]);
+    const names: Record<string, number> = { 'stone-1': 0, 'cut-b': 1 };
+    const c = compileCondition('stone-1 && !cut-b', (n) => names[n] ?? -1);
+    expect(c(v)).toBe(1);
+    expect(compileCondition('stone-1 && cut-b', (n) => names[n] ?? -1)(v)).toBe(0);
   });
 });
 

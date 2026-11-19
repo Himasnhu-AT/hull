@@ -74,6 +74,8 @@ Times in seconds from the start of the clip. `startup` is input to the first fra
 | dodge | any | dodge | dodge | 0.04 | i-frames 0.05-0.30 | 0.50 | 0.36 | 0 | 0 | 0 | attacks after 0.36 |
 | finisher | any | attack on a posture-broken enemy within 2 m | heavy | 0.30 | 0.32-0.46 | 1.1 | none | kills a raider, 35% of a boss bar | 0 | 1.5 | none |
 
+Clip names (phase 2, `config/anim-set/aya.json`): every move plays the clip of its own name (`stone-1`, `water-4`, `wind-charge`, ...; the Clip column above is the phase-1 name), plus `finisher-stone`, `finisher-water`, `finisher-wind`, `riposte` (after a perfect deflect: trace 0.12-0.24, length 0.6), `draw`, `sheathe`, `quickdraw` (standoff release: trace 0.12-0.22, length 0.5), `deflect`, `block`, `roll`, `dodge-l`, `dodge-r`, `dodge-back`, `hit-light`, `hit-heavy`, `guard-broken`, `stagger` (posture broken, 1.0 s) and `broken` (loop), `death`, and per stance `idle-*`, `hold-*`, `guard-*`. Each strike arrives a few hundredths of a second before its trace window ends and stays out, so the blade is where it is drawn for the whole window. The clips carry their travel in the hips (a move's lunge is that distance). The raiders' attack clips (`raider.json`) match the `raider-*` move-sets. Authoring: `examples/ironleaf/tools` (`pnpm tsx examples/ironleaf/tools/build-anims.ts` re-solves every clip from its key poses).
+
 Rules:
 
 - **Deflect window**: a tap of `block` counts as a perfect deflect when it lands 0.00 to 0.12 s before an enemy blade hits (a blockable attack). Later, holding block is a plain block.

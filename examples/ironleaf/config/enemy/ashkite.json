@@ -1,0 +1,93 @@
+{
+ "kind": "enemy",
+ "note": "Ashkite, the archer: keeps 10 to 16 m away, shoots, backs off when you close in.",
+ "moveSet": "move-set/raider-bow",
+ "character": "character/ashkite",
+ "health": 60,
+ "posture": {
+  "max": 40,
+  "recover": 8,
+  "delay": 1.5,
+  "broken": 2.6
+ },
+ "finisherDamage": 1,
+ "speed": {
+  "walk": 1.8,
+  "run": 5,
+  "circle": 1.2,
+  "turn": 6
+ },
+ "spacing": {
+  "min": 10,
+  "max": 16
+ },
+ "think": 0.3,
+ "patterns": [
+  {
+   "name": "shoot",
+   "weight": 5,
+   "steps": [
+    {
+     "move": "bow-shoot",
+     "telegraph": 0.1
+    }
+   ],
+   "recover": 1.3,
+   "when": {
+    "distance": [
+     8,
+     18
+    ],
+    "clear": 4
+   }
+  },
+  {
+   "name": "retreat",
+   "weight": 3,
+   "steps": [
+    {
+     "travel": {
+      "to": 12,
+      "speed": 5
+     },
+     "telegraph": 0
+    }
+   ],
+   "recover": 0.5,
+   "token": false,
+   "when": {
+    "distance": [
+     0,
+     6
+    ]
+   }
+  },
+  {
+   "name": "volley",
+   "weight": 1,
+   "steps": [
+    {
+     "move": "bow-shoot",
+     "telegraph": 0.1,
+     "gap": 0.1
+    },
+    {
+     "move": "bow-shoot",
+     "telegraph": 0.1
+    }
+   ],
+   "recover": 1.6,
+   "when": {
+    "distance": [
+     8,
+     18
+    ],
+    "health": [
+     0,
+     0.5
+    ],
+    "clear": 4
+   }
+  }
+ ]
+}

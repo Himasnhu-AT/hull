@@ -1,5 +1,6 @@
 {
   "kind": "anim-graph",
+  "note": "Cinder Hulk: a trigger per move (named like the clip), full-body in the base layer and the same clip on the upper body so the arms win over the walk swing.",
   "params": {
     "speed": {
       "type": "number",
@@ -7,43 +8,37 @@
       "min": 0,
       "max": 12
     },
-    "grounded": {
-      "type": "boolean",
-      "default": true
-    },
     "dead": {
       "type": "boolean",
       "default": false
     },
-    "attack": {
-      "type": "trigger"
-    },
-    "heavy": {
-      "type": "trigger"
-    },
-    "block": {
+    "guarding": {
       "type": "boolean",
       "default": false
     },
-    "deflect": {
+    "broken": {
+      "type": "boolean",
+      "default": false
+    },
+    "hit": {
+      "type": "trigger"
+    },
+    "stagger": {
       "type": "trigger"
     },
     "dodge": {
       "type": "trigger"
     },
-    "hit": {
+    "cancel": {
       "type": "trigger"
     },
-    "jump": {
+    "backstep": {
       "type": "trigger"
     },
-    "attack2": {
+    "hulk-smash": {
       "type": "trigger"
     },
-    "attack3": {
-      "type": "trigger"
-    },
-    "stagger": {
+    "hulk-grab": {
       "type": "trigger"
     }
   },
@@ -66,6 +61,21 @@
         },
         "dead": {
           "clip": "death"
+        },
+        "back-step": {
+          "clip": "back-step",
+          "exit": "idle",
+          "exitBlend": 0.12
+        },
+        "hulk-smash": {
+          "clip": "hulk-smash",
+          "exit": "idle",
+          "exitBlend": 0.12
+        },
+        "hulk-grab": {
+          "clip": "hulk-grab",
+          "exit": "idle",
+          "exitBlend": 0.12
         }
       },
       "transitions": [
@@ -74,6 +84,36 @@
           "to": "dead",
           "when": "dead",
           "blend": 0.12
+        },
+        {
+          "from": "*",
+          "to": "back-step",
+          "when": "backstep",
+          "blend": 0.06
+        },
+        {
+          "from": "*",
+          "to": "hulk-smash",
+          "when": "hulk-smash",
+          "blend": 0.05
+        },
+        {
+          "from": "*",
+          "to": "hulk-grab",
+          "when": "hulk-grab",
+          "blend": 0.05
+        },
+        {
+          "from": "hulk-smash",
+          "to": "idle",
+          "when": "cancel",
+          "blend": 0.1
+        },
+        {
+          "from": "hulk-grab",
+          "to": "idle",
+          "when": "cancel",
+          "blend": 0.1
         },
         {
           "from": "idle",
@@ -98,7 +138,6 @@
       ],
       "start": "hold",
       "states": {
-        "none": {},
         "hold": {
           "clip": "hold-hulk"
         },
@@ -111,6 +150,11 @@
           "clip": "stagger",
           "exit": "hold",
           "exitBlend": 0.2
+        },
+        "back-step": {
+          "clip": "back-step",
+          "exit": "hold",
+          "exitBlend": 0.12
         },
         "hulk-smash": {
           "clip": "hulk-smash",
@@ -138,15 +182,33 @@
         },
         {
           "from": "*",
+          "to": "back-step",
+          "when": "backstep",
+          "blend": 0.06
+        },
+        {
+          "from": "*",
           "to": "hulk-smash",
-          "when": "attack",
+          "when": "hulk-smash",
           "blend": 0.05
         },
         {
           "from": "*",
           "to": "hulk-grab",
-          "when": "attack2",
+          "when": "hulk-grab",
           "blend": 0.05
+        },
+        {
+          "from": "hulk-smash",
+          "to": "hold",
+          "when": "cancel",
+          "blend": 0.1
+        },
+        {
+          "from": "hulk-grab",
+          "to": "hold",
+          "when": "cancel",
+          "blend": 0.1
         }
       ]
     },
@@ -165,6 +227,17 @@
     "feet": {
       "enabled": true,
       "maxStep": 0.35
+    }
+  },
+  "springs": {
+    "rag": {
+      "chain": [
+        "rag1",
+        "rag2"
+      ],
+      "stiffness": 50,
+      "damping": 5,
+      "drive": 0.04
     }
   }
 }

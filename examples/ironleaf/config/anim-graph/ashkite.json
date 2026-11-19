@@ -1,5 +1,6 @@
 {
   "kind": "anim-graph",
+  "note": "Ashkite: a trigger per move (named like the clip), full-body in the base layer and the same clip on the upper body so the arms win over the walk swing.",
   "params": {
     "speed": {
       "type": "number",
@@ -7,43 +8,34 @@
       "min": 0,
       "max": 12
     },
-    "grounded": {
-      "type": "boolean",
-      "default": true
-    },
     "dead": {
       "type": "boolean",
       "default": false
     },
-    "attack": {
-      "type": "trigger"
-    },
-    "heavy": {
-      "type": "trigger"
-    },
-    "block": {
+    "guarding": {
       "type": "boolean",
       "default": false
     },
-    "deflect": {
+    "broken": {
+      "type": "boolean",
+      "default": false
+    },
+    "hit": {
+      "type": "trigger"
+    },
+    "stagger": {
       "type": "trigger"
     },
     "dodge": {
       "type": "trigger"
     },
-    "hit": {
+    "cancel": {
       "type": "trigger"
     },
-    "jump": {
+    "backstep": {
       "type": "trigger"
     },
-    "attack2": {
-      "type": "trigger"
-    },
-    "attack3": {
-      "type": "trigger"
-    },
-    "stagger": {
+    "bow-shoot": {
       "type": "trigger"
     }
   },
@@ -66,6 +58,16 @@
         },
         "dead": {
           "clip": "death"
+        },
+        "back-step": {
+          "clip": "back-step",
+          "exit": "idle",
+          "exitBlend": 0.12
+        },
+        "bow-shoot": {
+          "clip": "bow-shoot",
+          "exit": "idle",
+          "exitBlend": 0.12
         }
       },
       "transitions": [
@@ -74,6 +76,24 @@
           "to": "dead",
           "when": "dead",
           "blend": 0.12
+        },
+        {
+          "from": "*",
+          "to": "back-step",
+          "when": "backstep",
+          "blend": 0.06
+        },
+        {
+          "from": "*",
+          "to": "bow-shoot",
+          "when": "bow-shoot",
+          "blend": 0.05
+        },
+        {
+          "from": "bow-shoot",
+          "to": "idle",
+          "when": "cancel",
+          "blend": 0.1
         },
         {
           "from": "idle",
@@ -98,7 +118,6 @@
       ],
       "start": "hold",
       "states": {
-        "none": {},
         "hold": {
           "clip": "hold-bow"
         },
@@ -111,6 +130,11 @@
           "clip": "stagger",
           "exit": "hold",
           "exitBlend": 0.2
+        },
+        "back-step": {
+          "clip": "back-step",
+          "exit": "hold",
+          "exitBlend": 0.12
         },
         "bow-shoot": {
           "clip": "bow-shoot",
@@ -133,9 +157,21 @@
         },
         {
           "from": "*",
+          "to": "back-step",
+          "when": "backstep",
+          "blend": 0.06
+        },
+        {
+          "from": "*",
           "to": "bow-shoot",
-          "when": "attack",
+          "when": "bow-shoot",
           "blend": 0.05
+        },
+        {
+          "from": "bow-shoot",
+          "to": "hold",
+          "when": "cancel",
+          "blend": 0.1
         }
       ]
     },
@@ -154,6 +190,27 @@
     "feet": {
       "enabled": true,
       "maxStep": 0.35
+    }
+  },
+  "springs": {
+    "cape": {
+      "chain": [
+        "cape1",
+        "cape2",
+        "cape3"
+      ],
+      "stiffness": 50,
+      "damping": 4,
+      "drive": 0.06
+    },
+    "ragL": {
+      "chain": [
+        "ragL1",
+        "ragL2"
+      ],
+      "stiffness": 60,
+      "damping": 5,
+      "drive": 0.05
     }
   }
 }

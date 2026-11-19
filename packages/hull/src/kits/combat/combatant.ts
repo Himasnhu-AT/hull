@@ -7,6 +7,7 @@ import { flagsOf, fwdX, fwdZ, type KitFlags } from '../common.ts';
 import { Health } from '../health/health.ts';
 import { kitIO } from '../io.ts';
 import { combatHub, HitInfo, type CombatHub, type Outcome } from './hub.ts';
+import { fireShot } from './projectile.ts';
 import { Blade, HurtShapes, segSegDistSq, sweepBlade } from './trace.ts';
 
 export const FIGHTERS = 'fighter';
@@ -645,6 +646,7 @@ export class Combatant extends Behaviour {
       this.told = true;
       this.hub.tell.emit(this, (this.unblockableOverride ?? m.unblockable) ? 'unblockable' : 'glint');
     }
+    if (m.shoot && t0 < m.shoot.at && this.moveT >= m.shoot.at) fireShot(this, this.moveName, m);
     this.traceStep(m);
     if (this.moveT >= m.length) this.endMove(true);
   }

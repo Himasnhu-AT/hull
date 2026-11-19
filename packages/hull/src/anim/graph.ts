@@ -10,10 +10,10 @@ import { accumulate, composite, Pose, type Skeleton } from './skeleton.ts';
 
 type Cond = (v: Float64Array) => number;
 
-/** Compiles `speed > 0.3 && !grounded`. Throws a sentence with the column of the mistake. */
+/** Compiles `speed > 0.3 && !grounded`. Parameter names may contain `-` (there is no arithmetic): `stone-1 && !broken`. Throws a sentence with the column of the mistake. */
 export function compileCondition(src: string, param: (name: string) => number): Cond {
   const toks: { t: string; at: number }[] = [];
-  const re = /\s*(?:(\d+(?:\.\d+)?)|([A-Za-z_][A-Za-z0-9_.]*)|(&&|\|\||==|!=|<=|>=|<|>|!|\(|\)))/y;
+  const re = /\s*(?:(\d+(?:\.\d+)?)|([A-Za-z_][A-Za-z0-9_.-]*)|(&&|\|\||==|!=|<=|>=|<|>|!|\(|\)))/y;
   let pos = 0;
   while (pos < src.length) {
     if (/^\s*$/.test(src.slice(pos))) break;

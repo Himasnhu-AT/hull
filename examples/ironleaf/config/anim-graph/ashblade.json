@@ -1,5 +1,6 @@
 {
   "kind": "anim-graph",
+  "note": "Ashblade: a trigger per move (named like the clip), full-body in the base layer and the same clip on the upper body so the arms win over the walk swing.",
   "params": {
     "speed": {
       "type": "number",
@@ -7,43 +8,40 @@
       "min": 0,
       "max": 12
     },
-    "grounded": {
-      "type": "boolean",
-      "default": true
-    },
     "dead": {
       "type": "boolean",
       "default": false
     },
-    "attack": {
-      "type": "trigger"
-    },
-    "heavy": {
-      "type": "trigger"
-    },
-    "block": {
+    "guarding": {
       "type": "boolean",
       "default": false
     },
-    "deflect": {
+    "broken": {
+      "type": "boolean",
+      "default": false
+    },
+    "hit": {
+      "type": "trigger"
+    },
+    "stagger": {
       "type": "trigger"
     },
     "dodge": {
       "type": "trigger"
     },
-    "hit": {
+    "cancel": {
       "type": "trigger"
     },
-    "jump": {
+    "backstep": {
       "type": "trigger"
     },
-    "attack2": {
+    "sword-cut": {
       "type": "trigger"
     },
-    "attack3": {
+    "sword-cross": {
       "type": "trigger"
     },
-    "stagger": {
+    "sword-feint": {
       "type": "trigger"
     }
   },
@@ -66,6 +64,26 @@
         },
         "dead": {
           "clip": "death"
+        },
+        "back-step": {
+          "clip": "back-step",
+          "exit": "idle",
+          "exitBlend": 0.12
+        },
+        "sword-cut": {
+          "clip": "sword-cut",
+          "exit": "idle",
+          "exitBlend": 0.12
+        },
+        "sword-cross": {
+          "clip": "sword-cross",
+          "exit": "idle",
+          "exitBlend": 0.12
+        },
+        "sword-feint": {
+          "clip": "sword-feint",
+          "exit": "idle",
+          "exitBlend": 0.12
         }
       },
       "transitions": [
@@ -74,6 +92,48 @@
           "to": "dead",
           "when": "dead",
           "blend": 0.12
+        },
+        {
+          "from": "*",
+          "to": "back-step",
+          "when": "backstep",
+          "blend": 0.06
+        },
+        {
+          "from": "*",
+          "to": "sword-cut",
+          "when": "sword-cut",
+          "blend": 0.05
+        },
+        {
+          "from": "*",
+          "to": "sword-cross",
+          "when": "sword-cross",
+          "blend": 0.05
+        },
+        {
+          "from": "*",
+          "to": "sword-feint",
+          "when": "sword-feint",
+          "blend": 0.05
+        },
+        {
+          "from": "sword-cut",
+          "to": "idle",
+          "when": "cancel",
+          "blend": 0.1
+        },
+        {
+          "from": "sword-cross",
+          "to": "idle",
+          "when": "cancel",
+          "blend": 0.1
+        },
+        {
+          "from": "sword-feint",
+          "to": "idle",
+          "when": "cancel",
+          "blend": 0.1
         },
         {
           "from": "idle",
@@ -98,7 +158,6 @@
       ],
       "start": "hold",
       "states": {
-        "none": {},
         "hold": {
           "clip": "hold-sword"
         },
@@ -112,6 +171,11 @@
           "exit": "hold",
           "exitBlend": 0.2
         },
+        "back-step": {
+          "clip": "back-step",
+          "exit": "hold",
+          "exitBlend": 0.12
+        },
         "sword-cut": {
           "clip": "sword-cut",
           "exit": "hold",
@@ -119,6 +183,11 @@
         },
         "sword-cross": {
           "clip": "sword-cross",
+          "exit": "hold",
+          "exitBlend": 0.12
+        },
+        "sword-feint": {
+          "clip": "sword-feint",
           "exit": "hold",
           "exitBlend": 0.12
         }
@@ -138,15 +207,45 @@
         },
         {
           "from": "*",
+          "to": "back-step",
+          "when": "backstep",
+          "blend": 0.06
+        },
+        {
+          "from": "*",
           "to": "sword-cut",
-          "when": "attack",
+          "when": "sword-cut",
           "blend": 0.05
         },
         {
           "from": "*",
           "to": "sword-cross",
-          "when": "attack2",
+          "when": "sword-cross",
           "blend": 0.05
+        },
+        {
+          "from": "*",
+          "to": "sword-feint",
+          "when": "sword-feint",
+          "blend": 0.05
+        },
+        {
+          "from": "sword-cut",
+          "to": "hold",
+          "when": "cancel",
+          "blend": 0.1
+        },
+        {
+          "from": "sword-cross",
+          "to": "hold",
+          "when": "cancel",
+          "blend": 0.1
+        },
+        {
+          "from": "sword-feint",
+          "to": "hold",
+          "when": "cancel",
+          "blend": 0.1
         }
       ]
     },
@@ -165,6 +264,26 @@
     "feet": {
       "enabled": true,
       "maxStep": 0.35
+    }
+  },
+  "springs": {
+    "ragL": {
+      "chain": [
+        "ragL1",
+        "ragL2"
+      ],
+      "stiffness": 60,
+      "damping": 5,
+      "drive": 0.05
+    },
+    "ragR": {
+      "chain": [
+        "ragR1",
+        "ragR2"
+      ],
+      "stiffness": 60,
+      "damping": 5,
+      "drive": 0.05
     }
   }
 }

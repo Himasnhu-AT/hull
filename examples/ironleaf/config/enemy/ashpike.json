@@ -1,0 +1,113 @@
+{
+ "kind": "enemy",
+ "note": "Ashpike, the spearman: long thrusts and a low sweep.",
+ "moveSet": "move-set/raider-spear",
+ "character": "character/ashpike",
+ "health": 90,
+ "posture": {
+  "max": 70,
+  "recover": 8,
+  "delay": 1.5,
+  "broken": 2.6
+ },
+ "weakTo": "water",
+ "finisherDamage": 1,
+ "speed": {
+  "walk": 1.4,
+  "run": 4.2,
+  "circle": 1.2,
+  "turn": 6
+ },
+ "spacing": {
+  "min": 2,
+  "max": 2.8,
+  "wait": [
+   3.2,
+   5
+  ]
+ },
+ "think": 0.3,
+ "patterns": [
+  {
+   "name": "thrust",
+   "weight": 5,
+   "steps": [
+    {
+     "move": "spear-thrust",
+     "telegraph": 0.1
+    }
+   ],
+   "recover": 1,
+   "when": {
+    "distance": [
+     2,
+     3.2
+    ]
+   }
+  },
+  {
+   "name": "double-thrust",
+   "weight": 2,
+   "steps": [
+    {
+     "move": "spear-jab",
+     "telegraph": 0.1,
+     "gap": 0
+    },
+    {
+     "move": "spear-jab",
+     "telegraph": 0
+    }
+   ],
+   "recover": 1.2,
+   "when": {
+    "distance": [
+     2,
+     3.2
+    ],
+    "health": [
+     0,
+     0.6
+    ]
+   }
+  },
+  {
+   "name": "sweep",
+   "weight": 3,
+   "steps": [
+    {
+     "move": "spear-sweep",
+     "telegraph": 0.12
+    }
+   ],
+   "recover": 1.1,
+   "when": {
+    "distance": [
+     1.5,
+     2.6
+    ]
+   }
+  },
+  {
+   "name": "keep-away",
+   "weight": 1,
+   "steps": [
+    {
+     "move": "spear-thrust",
+     "telegraph": 0.4,
+     "travel": {
+      "by": -2,
+      "speed": 6
+     }
+    }
+   ],
+   "recover": 1,
+   "when": {
+    "distance": [
+     0,
+     1.5
+    ]
+   }
+  }
+ ]
+}

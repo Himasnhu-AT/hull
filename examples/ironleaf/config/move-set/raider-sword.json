@@ -1,0 +1,96 @@
+{
+ "kind": "move-set",
+ "note": "Ashblade (swordsman). sword-cut/-b and sword-cross/-h are the same clips with the damage of the pattern that plays them (GAME.md section 6). The brain adds a 0.1 s tell before each; trace start = telegraph - 0.1.",
+ "weapon": {
+  "socket": "handR",
+  "base": [
+   0,
+   -0.14,
+   0
+  ],
+  "tip": [
+   0,
+   -0.96,
+   0
+  ],
+  "radius": 0.05
+ },
+ "moves": {
+  "sword-cut": {
+   "clip": "sword-cut",
+   "length": 0.55,
+   "damage": 14,
+   "posture": 12,
+   "reach": 1.9,
+   "windows": {
+    "trace": [
+     0.25,
+     0.37
+    ]
+   },
+   "lunge": {
+    "distance": 0.4,
+    "from": 0.15,
+    "to": 0.3
+   },
+   "sound": "sound/swing/light"
+  },
+  "sword-cut-b": {
+   "clip": "sword-cut",
+   "length": 0.55,
+   "damage": 12,
+   "posture": 10,
+   "reach": 1.9,
+   "windows": {
+    "trace": [
+     0.25,
+     0.37
+    ]
+   },
+   "lunge": {
+    "distance": 0.4,
+    "from": 0.15,
+    "to": 0.3
+   },
+   "sound": "sound/swing/light"
+  },
+  "sword-cross": {
+   "clip": "sword-cross",
+   "length": 0.6,
+   "damage": 12,
+   "posture": 10,
+   "reach": 1.9,
+   "windows": {
+    "trace": [
+     0.2,
+     0.32
+    ]
+   },
+   "lunge": {
+    "distance": 0.3,
+    "from": 0.12,
+    "to": 0.26
+   },
+   "sound": "sound/swing/light"
+  },
+  "sword-cross-h": {
+   "clip": "sword-cross",
+   "length": 0.6,
+   "damage": 16,
+   "posture": 12,
+   "reach": 1.9,
+   "windows": {
+    "trace": [
+     0.2,
+     0.32
+    ]
+   },
+   "lunge": {
+    "distance": 0.3,
+    "from": 0.12,
+    "to": 0.26
+   },
+   "sound": "sound/swing/light"
+  }
+ }
+}

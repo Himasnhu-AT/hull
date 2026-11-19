@@ -1,0 +1,92 @@
+{
+ "kind": "enemy",
+ "note": "Cinder Hulk, the brute: slow, heavy, grabs and guard-breaking smashes.",
+ "moveSet": "move-set/raider-hulk",
+ "character": "character/hulk",
+ "health": 240,
+ "posture": {
+  "max": 160,
+  "recover": 8,
+  "delay": 1.5,
+  "broken": 2.6
+ },
+ "weakTo": "wind",
+ "finisherDamage": 1,
+ "speed": {
+  "walk": 1.2,
+  "run": 3.4,
+  "circle": 0.9,
+  "turn": 3.5
+ },
+ "spacing": {
+  "min": 1.8,
+  "max": 2.5,
+  "wait": [
+   3,
+   5
+  ]
+ },
+ "think": 0.3,
+ "patterns": [
+  {
+   "name": "smash",
+   "weight": 4,
+   "steps": [
+    {
+     "move": "hulk-smash",
+     "telegraph": 0.1
+    }
+   ],
+   "recover": 1.6,
+   "when": {
+    "distance": [
+     0,
+     2.8
+    ]
+   }
+  },
+  {
+   "name": "grab",
+   "weight": 2,
+   "steps": [
+    {
+     "move": "hulk-grab",
+     "telegraph": 0.25,
+     "unblockable": true
+    }
+   ],
+   "recover": 1.5,
+   "when": {
+    "distance": [
+     0,
+     2
+    ]
+   }
+  },
+  {
+   "name": "stomp-smash",
+   "weight": 1,
+   "steps": [
+    {
+     "move": "hulk-smash-stomp",
+     "telegraph": 0.2,
+     "travel": {
+      "to": 1.9,
+      "speed": 3
+     }
+    }
+   ],
+   "recover": 1.8,
+   "when": {
+    "distance": [
+     0,
+     4
+    ],
+    "health": [
+     0,
+     0.5
+    ]
+   }
+  }
+ ]
+}

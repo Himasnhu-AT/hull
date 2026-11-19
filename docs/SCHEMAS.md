@@ -433,6 +433,13 @@ new phase starts) and `patterns`: each `{ name, weight, steps, recover, token, w
 unblockable }`. `when` limits a pattern by `distance`, `health` (0 to 1) and `phase`. `checkMoveSet` and `checkEnemy`
 (`hull/kits`) check cancels, windows and pattern moves against the move-set, naming the pointer.
 
+Added for Ironleaf (M10): a step may leave out `move` and carry `travel: { by | to, speed }` (the enemy runs that far toward or away from the
+target after the tell: a dash in, a back-step, a retreat; the animator's `speed` is set while it runs). `when` also takes `stance` (the target's
+stances that allow the pattern) and `clear` (metres: no friend of the enemy that close to the target). A pattern's `answers` is a weight
+multiplier by the target's stance. `spacing.wait` is the band to circle at while other enemies hold the attack places; `speed.run` is the
+approach speed when far. A move's `shoot: { at, speed, socket, range, radius }` fires a projectile at `at` seconds instead of a blade
+trace; a deflect or perfect deflect sends it back at the shooter. `EnemyBrain.dormant` keeps an enemy still until `wake()`.
+
 More on the graph (M10): a state may be `"blend2d": { "x": "moveX", "y": "moveY", "points": [{ "x": 0, "y": 1, "clip": "walk" }, ...] }`
 (clips weighted by inverse distance); a transition may have `"sync": true` (the new state starts at the same cycle phase); a layer may have
 `"weightFrom": "param"`. `ik.grips` maps a hand bone to a character socket it grips (`{ "handL": { "socket": "hiltL", "weightFrom": "twoHand" } }`).

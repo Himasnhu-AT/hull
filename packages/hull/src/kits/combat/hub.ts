@@ -1,6 +1,6 @@
 // What a fight tells the rest of the game. One hub per world: the combatants emit into it, and a camera, a sound mixer
 // or a particle system listens to it without knowing who fought.
-import { signal, type Signal, type World } from '../../core/index.ts';
+import { signal, type Node, type Signal, type World } from '../../core/index.ts';
 import type { Combatant } from './combatant.ts';
 
 export type Outcome = 'hit' | 'blocked' | 'deflected' | 'perfect' | 'dodged' | 'finisher' | 'ignored';
@@ -47,6 +47,8 @@ export class CombatHub {
   readonly shake: Signal<[amount: number, seconds: number]> = signal<[number, number]>();
   /** A tell: an attack is about to land. kind is "glint" or "unblockable" (the red flash). */
   readonly tell: Signal<[who: Combatant, kind: string]> = signal<[Combatant, string]>();
+  /** A projectile left a shooter: the game may hang a mesh or a trail on the node. */
+  readonly shot: Signal<[who: Combatant, node: Node]> = signal<[Combatant, Node]>();
   readonly moveStarted: Signal<[who: Combatant, move: string]> = signal<[Combatant, string]>();
 }
 
