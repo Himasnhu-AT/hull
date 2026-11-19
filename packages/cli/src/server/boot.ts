@@ -21,8 +21,21 @@ const hasModule = (name: string): boolean => existsSync(join(hullSrc, name, 'ind
 const idsOf = (sources: ConfigSource[], kind: string): string[] =>
   sources.filter((s) => s.path.startsWith(`config/${kind}/`) && s.path.endsWith('.json')).map((s) => s.path.slice('config/'.length, -'.json'.length)).sort();
 
+/** The renderer the manifest pins (`render.backend`), or undefined for the default ('auto'). */
+function pinnedBackend(sources: ConfigSource[]): string | undefined {
+  const text = sources.find((s) => s.path === 'hull.json')?.text;
+  if (!text) return undefined;
+  try {
+    const b = (JSON.parse(text) as { render?: { backend?: string } }).render?.backend;
+    return b === 'webgl2' || b === 'webgpu' ? b : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function bootSource(o: BootOptions): string {
   const features = o.features ?? [];
+  const backend = pinnedBackend(o.sources);
   const maps = idsOf(o.sources, 'input-map');
   const themes = idsOf(o.sources, 'ui-theme');
   const wantAudio = hasModule('audio') && (features.includes('audio') || idsOf(o.sources, 'sound').length > 0);
@@ -50,7 +63,7 @@ export function bootSource(o: BootOptions): string {
     `const parts = [];`,
     `const views = { game: g };`,
     `globalThis.hull = views;`,
-    `const view = views.render = mountRender(g, el${look ? `, { look: ${JSON.stringify(look)} }` : ''});`,
+    `const view = views.render = mountRender(g, el${look || backend ? `, { ${[look ? `look: ${JSON.stringify(look)}` : '', backend ? `backend: ${JSON.stringify(backend)}` : ''].filter(Boolean).join(', ')} }` : ''});`,
     ...(wantInput ? [skip('input', `mountInput(g, window${maps[0] ? `, ${JSON.stringify(maps[0])}` : ''})`)] : []),
     ...(wantAudio ? [skip('audio', 'mountAudio(g)')] : []),
     ...(wantUi ? [skip('ui', `mountUi(g, el${themes[0] ? `, ${JSON.stringify(themes[0])}` : ''})`)] : []),

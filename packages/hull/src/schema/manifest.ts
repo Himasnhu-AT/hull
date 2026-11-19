@@ -12,6 +12,14 @@ export const manifestSchema = Type.Object(
     entry: Type.String(),
     step: Type.Optional(Type.Enum([30, 60, 120], { default: 60, ...ui({ unit: 'Hz', widget: 'segments', help: 'Fixed simulation rate.' }) })),
     features: Type.Optional(Type.Array(Type.Enum(['audio', 'anim', 'ui', 'vfx', 'physics', 'saves']))),
+    render: Type.Optional(
+      Type.Object(
+        {
+          backend: Type.Optional(Type.Enum(['auto', 'webgl2', 'webgpu'], { default: 'auto', ...ui({ widget: 'select', help: 'Which renderer draws the game. auto tries WebGPU and falls back to WebGL2. A game with GLSL shader code of its own pins webgl2.' }) })),
+        },
+        { additionalProperties: false },
+      ),
+    ),
     start: Type.Optional(
       Type.Object(
         { screen: Type.Optional(Type.String(ref('ui-screen'))), level: Type.Optional(Type.String(ref('level'))) },

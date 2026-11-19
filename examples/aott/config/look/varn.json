@@ -1,0 +1,34 @@
+{
+  "kind": "look",
+  "note": "Varn under attack: a smoke-hazed amber afternoon, the far town lost in haze (Seal the Breach).",
+  "sky": {
+    "color": "#9c8c7c"
+  },
+  "fog": {
+    "color": "#9c8c7c",
+    "near": 150,
+    "far": 1900
+  },
+  "ambient": {
+    "color": "#ffffff",
+    "intensity": 0
+  },
+  "environment": {
+    "intensity": 0.4
+  },
+  "sun": {
+    "color": "#ffffff",
+    "strength": 0,
+    "shadows": false
+  },
+  "exposure": 1,
+  "toneMapping": "aces",
+  "post": {
+    "bloom": 0.62,
+    "bloomThreshold": 0.72,
+    "contrast": 1.07,
+    "saturation": 1.1,
+    "vignette": 0.22,
+    "grain": 0.022
+  }
+}

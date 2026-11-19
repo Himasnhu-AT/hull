@@ -55,4 +55,10 @@ describe('bootModule', () => {
   it('imports the manifest entry', () => {
     expect(bootModule('src/main.ts', [])).toContain('from "/src/main.ts"');
   });
+  it('mounts the renderer the manifest pins, and leaves it on auto otherwise', () => {
+    const manifest = (render?: unknown) => ({ path: 'hull.json', text: JSON.stringify({ kind: 'game', id: 'g', title: 'G', entry: 'src/main.ts', ...(render ? { render } : {}) }) });
+    expect(bootModule('src/main.ts', [manifest({ backend: 'webgl2' })])).toContain('mountRender(g, el, { backend: "webgl2" })');
+    expect(bootModule('src/main.ts', [manifest({ backend: 'auto' })])).toContain('mountRender(g, el);');
+    expect(bootModule('src/main.ts', [manifest()])).toContain('mountRender(g, el);');
+  });
 });

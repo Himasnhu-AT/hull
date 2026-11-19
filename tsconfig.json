@@ -21,6 +21,9 @@
     },
     {
       "path": "templates/third-person"
+    },
+    {
+      "path": "examples/aott"
     }
   ]
 }

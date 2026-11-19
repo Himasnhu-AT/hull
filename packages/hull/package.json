@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./three": "./src/three.ts",
     "./render": "./src/render/index.ts",
     "./vfx": "./src/vfx/index.ts",
     "./physics": "./src/physics/index.ts",

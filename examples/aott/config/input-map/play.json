@@ -1,0 +1,206 @@
+{
+  "kind": "input-map",
+  "note": "AOTT's actions, one per line of the old keys.ts. Keys are rebindable in the HUD's KEYS screen; the mouse is the look action plus the two buttons.",
+  "actions": {
+    "forward": {
+      "type": "button",
+      "keys": [
+        "W",
+        "ArrowUp"
+      ]
+    },
+    "back": {
+      "type": "button",
+      "keys": [
+        "S",
+        "ArrowDown"
+      ]
+    },
+    "strafeL": {
+      "type": "button",
+      "keys": [
+        "A"
+      ]
+    },
+    "strafeR": {
+      "type": "button",
+      "keys": [
+        "D"
+      ]
+    },
+    "left": {
+      "type": "button",
+      "keys": [
+        "ArrowLeft"
+      ]
+    },
+    "right": {
+      "type": "button",
+      "keys": [
+        "ArrowRight"
+      ]
+    },
+    "jump": {
+      "type": "button",
+      "keys": [
+        "Space"
+      ]
+    },
+    "ropeL": {
+      "type": "button",
+      "keys": [
+        "Z",
+        "Q"
+      ]
+    },
+    "ropeR": {
+      "type": "button",
+      "keys": [
+        "X",
+        "E"
+      ]
+    },
+    "land": {
+      "type": "button",
+      "keys": [
+        "V"
+      ]
+    },
+    "skip": {
+      "type": "button",
+      "keys": [
+        "C",
+        "Tab"
+      ]
+    },
+    "hang": {
+      "type": "button",
+      "keys": [
+        "B"
+      ]
+    },
+    "gas": {
+      "type": "button",
+      "keys": [
+        "ShiftLeft",
+        "ShiftRight"
+      ]
+    },
+    "cut": {
+      "type": "button",
+      "keys": [
+        "K",
+        "Enter"
+      ]
+    },
+    "blades": {
+      "type": "button",
+      "keys": [
+        "R"
+      ]
+    },
+    "whistle": {
+      "type": "button",
+      "keys": [
+        "F"
+      ]
+    },
+    "flare": {
+      "type": "button",
+      "keys": [
+        "T"
+      ]
+    },
+    "pause": {
+      "type": "button",
+      "keys": [
+        "P"
+      ]
+    },
+    "mute": {
+      "type": "button",
+      "keys": [
+        "M"
+      ]
+    },
+    "card": {
+      "type": "button",
+      "keys": [
+        "H"
+      ]
+    },
+    "board": {
+      "type": "button",
+      "keys": [
+        "L"
+      ]
+    },
+    "quality": {
+      "type": "button",
+      "keys": [
+        "G"
+      ]
+    },
+    "look": {
+      "type": "axis2",
+      "mouse": "delta",
+      "sensitivity": 1,
+      "rebind": false
+    },
+    "primary": {
+      "type": "button",
+      "keys": [
+        "Mouse0"
+      ],
+      "rebind": false
+    },
+    "secondary": {
+      "type": "button",
+      "keys": [
+        "Mouse2"
+      ],
+      "rebind": false
+    },
+    "confirm": {
+      "type": "button",
+      "keys": [
+        "Enter"
+      ],
+      "rebind": false
+    }
+  },
+  "groups": {
+    "Move": [
+      "forward",
+      "back",
+      "strafeL",
+      "strafeR",
+      "left",
+      "right",
+      "jump"
+    ],
+    "Ropes": [
+      "ropeL",
+      "ropeR",
+      "land",
+      "skip",
+      "hang"
+    ],
+    "Gas": [
+      "gas"
+    ],
+    "Cut": [
+      "cut",
+      "blades"
+    ],
+    "Other": [
+      "whistle",
+      "flare",
+      "pause",
+      "mute",
+      "card",
+      "board",
+      "quality"
+    ]
+  }
+}

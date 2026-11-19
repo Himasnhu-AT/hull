@@ -55,6 +55,24 @@
         ]
       }
     },
+    "render": {
+      "type": "object",
+      "properties": {
+        "backend": {
+          "enum": [
+            "auto",
+            "webgl2",
+            "webgpu"
+          ],
+          "default": "auto",
+          "x-ui": {
+            "widget": "select",
+            "help": "Which renderer draws the game. auto tries WebGPU and falls back to WebGL2. A game with GLSL shader code of its own pins webgl2."
+          }
+        }
+      },
+      "additionalProperties": false
+    },
     "start": {
       "type": "object",
       "properties": {

@@ -242,6 +242,13 @@ generator registered in code and carries its knobs. It still appears in the Libr
 * **Chosen at start**: WebGPU where the device supports it and the manifest allows it, WebGL2 otherwise. If one
   fails to start, the other is tried. In the desktop shell WebGPU runs on Metal, Direct3D 12 or Vulkan, which is
   the native fast path.
+* **Escape hatch for game-built three.js content.** A game that already is procedural three.js (AOTT: ShaderMaterial,
+  `onBeforeCompile`, merged meshes) does not have to be rewritten into `Mesh` and `shape`. It imports three from
+  `hull/three` (the engine's own copy, so `instanceof` holds), builds an `Object3D`, and adds it to a node with the
+  `SceneObject` behaviour; the object follows the node and is drawn by the running backend. The game still never
+  creates a renderer or owns the frame loop. `backendScene(world)` returns the scene the backend draws in, for scene-level
+  state a game owns (a fog colour that follows the player). Such a game's GLSL only runs on WebGL2, so it pins the
+  backend in `hull.json` `render.backend`; `mountRender` is then given that backend instead of choosing.
 * **Custom effects** are written once in a form both backends accept (three.js's node language where it serves
   both; otherwise a pair of shaders registered under one name). `hull check` fails on an effect only one backend
   has.
@@ -274,6 +281,9 @@ sound (recipe or sample) ─► voice ─► bus (sfx / ui / voice / music ...) 
 * **3D**: a listener on the camera; distance roll-off, pan and a low-pass with distance.
 * **Offline**: the same graph renders into an `OfflineAudioContext`, so what is measured is what plays.
 * Every call is safe before the first user gesture and when audio is unavailable.
+* **A game's own Web Audio.** A game that synthesises sound itself (AOTT) takes the engine's `AudioContext` from
+  `mountAudio(...).context` and joins a mixer bus with `.bus('sfx')`, so there is one context, one clock and one
+  resume-on-gesture. Both are null/undefined when Web Audio is unavailable.
 
 ### anim
 
