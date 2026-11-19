@@ -326,3 +326,36 @@ describe('mountAudio hands its context and buses to a game that makes its own so
     g.dispose();
   });
 });
+
+describe('engine: per-play params, live voices, duck and bus low-pass', () => {
+  it('hands params to a generator and drives a live voice with set, tick and stop', async () => {
+    const { registerGenerator, registerLiveGenerator } = await import('./generators.ts');
+    const seen: Record<string, number>[] = [];
+    registerGenerator('test/one', (c) => { seen.push({ ...c.params }); return 0.1; });
+    const log: string[] = [];
+    registerLiveGenerator('test/live', () => ({ set: (p) => log.push('set:' + p['x']), tick: () => log.push('tick'), stop: () => log.push('stop') }));
+    config.load([
+      { path: 'hull.json', text: JSON.stringify({ kind: 'game', id: 'a', title: 'A', entry: 'src/main.ts' }) },
+      { path: 'config/sound/t/one.json', text: JSON.stringify({ kind: 'sound', source: { type: 'code', generator: 'test/one' } }) },
+      { path: 'config/sound/t/live.json', text: JSON.stringify({ kind: 'sound', source: { type: 'code', generator: 'test/live' } }) },
+    ]);
+    let frame: (() => void) | null = null;
+    const g = await startGame(defineGame({ ready() {} }));
+    const real = g.onFrame.bind(g);
+    (g as unknown as { onFrame: unknown }).onFrame = (fn: () => void) => { frame ??= fn; return real(fn); };
+    const view = mountAudio(g, { createContext: () => fakeContext() });
+    view.play('t/one', { params: { strength: 0.7 } });
+    expect(seen).toEqual([{ strength: 0.7 }]);
+    const h = view.play('t/live', { params: { x: 1 } });
+    expect(h?.set).toBeDefined();
+    h!.set!({ x: 2 });
+    h!.stop();
+    h!.stop();
+    expect(log).toEqual(['set:1', 'set:2', 'stop']);
+    view.duck('sfx', 6, 0.2, 0.4);
+    view.setBusLowpass('sfx', 3000);
+    view.setBusLowpass('sfx', null);
+    view.dispose();
+    g.dispose();
+  });
+});

@@ -6,7 +6,7 @@ import { validateAgainst } from '../config/validate.ts';
 import { RandomStream } from '../core/random.ts';
 import { soundSchema, type Sound } from '../schema/sound.ts';
 import { makeImpulse } from './dsp.ts';
-import { buildSound } from './generators.ts';
+import { buildSound, getLiveGenerator } from './generators.ts';
 import { dbToLinear, planSynth } from './plan.ts';
 
 export { measureSound } from './measure.ts';
@@ -52,7 +52,7 @@ async function renderChecked(sound: Sound, seed: number, sampleRate: number, cod
   const frames = Math.max(1, Math.ceil(seconds * sampleRate));
   const ctx = new OfflineAudioContext(2, frames, sampleRate);
   let reverbIn: AudioNode | null = null;
-  if (src.type === 'synth' && (src.reverb ?? 0) > 0) {
+  if (src.type === 'code' || (src.type === 'synth' && (src.reverb ?? 0) > 0)) {
     const [l, r] = makeImpulse(sampleRate, REVERB_SECONDS, 0x7265);
     const conv = ctx.createConvolver();
     const buf = ctx.createBuffer(2, l.length, sampleRate);
@@ -61,6 +61,17 @@ async function renderChecked(sound: Sound, seed: number, sampleRate: number, cod
     conv.buffer = buf;
     conv.connect(ctx.destination);
     reverbIn = conv;
+  }
+  const live = src.type === 'code' ? getLiveGenerator(src.generator) : undefined;
+  if (live && src.type === 'code') {
+    // A live sound is stepped over the whole render the way the engine ticks it every frame, so a scheduler fills the buffer.
+    const out = ctx.createGain();
+    out.gain.value = dbToLinear(sound.level ?? 0);
+    out.connect(ctx.destination);
+    const v = live({ ctx, out, t0: 0, rng: new RandomStream(seed, 'sound'), knobs: src.knobs ?? {}, pitch: 1, params: {}, reverbIn });
+    v.set?.({});
+    for (let t = 0; t < seconds; t += 0.05) v.tick?.(t);
+    return ctx.startRendering();
   }
   buildSound(ctx, sound, seed, 0, ctx.destination, 1, { gain: dbToLinear(sound.level ?? 0), reverbIn });
   return ctx.startRendering();

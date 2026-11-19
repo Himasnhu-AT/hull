@@ -15,16 +15,40 @@ export interface GeneratorCall {
   rng: Random;
   knobs: Readonly<Record<string, unknown>>;
   pitch: number;
+  /** Per-play numbers the caller gave to `play(id, { params })` (a strength, a size). Empty on the bench. */
+  params: Readonly<Record<string, number>>;
+  /** The shared reverb's input, or null (the bench has none): send a copy of the sound here for room. */
+  reverbIn: AudioNode | null;
 }
 /** Build nodes into `out` and return how long the sound lasts, in seconds. */
 export type Generator = (call: GeneratorCall) => number;
 
 const generators = new Map<string, Generator>();
 
+/**
+ * A sound that never ends on its own and follows game state: an engine tone, a wind bed, a score. The engine builds it
+ * once, calls `tick(now)` every frame with the context time, hands `set` the caller's numbers, and calls `stop` at the end.
+ * On the bench, `tick` is stepped over the render length so a scheduler-driven voice fills the buffer.
+ */
+export interface LiveVoice {
+  set?(params: Readonly<Record<string, number>>): void;
+  tick?(now: number): void;
+  stop(): void;
+  /** Anything else the game reads back (the score's current chord). */
+  [k: string]: unknown;
+}
+export type LiveGenerator = (call: GeneratorCall) => LiveVoice;
+const liveGenerators = new Map<string, LiveGenerator>();
+export function registerLiveGenerator(name: string, fn: LiveGenerator): void {
+  liveGenerators.set(name, fn);
+}
+export const hasLiveGenerator = (name: string): boolean => liveGenerators.has(name);
+export const getLiveGenerator = (name: string): LiveGenerator | undefined => liveGenerators.get(name);
+
 export function registerGenerator(name: string, fn: Generator): void {
   generators.set(name, fn);
 }
-export const hasGenerator = (name: string): boolean => generators.has(name);
+export const hasGenerator = (name: string): boolean => generators.has(name) || liveGenerators.has(name);
 
 export interface Built extends BuiltSound {
   /** Seconds the sound lasts. */
@@ -41,12 +65,13 @@ export function buildSound(ctx: BaseAudioContext, sound: Sound, seed: number, t0
   }
   if (src.type === 'code') {
     const gen = generators.get(src.generator);
+    if (!gen && liveGenerators.has(src.generator)) throw new Error(`sound#/source/generator: "${src.generator}" is a live generator; it plays as a continuous voice, not a one-shot`);
     if (!gen) throw new Error(`sound#/source/generator: no generator named "${src.generator}" is registered (registerGenerator)`);
     const gain = ctx.createGain();
     gain.gain.value = opts.gain ?? 1;
     gain.connect(out);
     const rng = new RandomStream(seed, 'sound');
-    const length = gen({ ctx, out: gain, t0, rng, knobs: src.knobs ?? {}, pitch: drawPitch(sound, rng, pitch) });
+    const length = gen({ ctx, out: gain, t0, rng, knobs: src.knobs ?? {}, pitch: drawPitch(sound, rng, pitch), params: opts.params ?? {}, reverbIn: opts.reverbIn ?? null });
     return {
       end: t0 + length,
       length,

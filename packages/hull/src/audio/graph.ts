@@ -37,6 +37,8 @@ export interface BuildOptions {
   gain?: number;
   /** Where the reverb send goes, if the engine has a reverb. */
   reverbIn?: AudioNode | null;
+  /** Per-play numbers handed to a `code` generator. */
+  params?: Readonly<Record<string, number>>;
 }
 
 /** Build every voice of a plan, starting at context time `t0`, into `out`. */
