@@ -22,6 +22,7 @@ export type { DepotRules, DepotState } from './pickups/depot.ts';
 export { newWaveState, resetWaves, beginWave, stepWaves, waveCap, waveClock, waveScale, WAVE_NONE, WAVE_NEXT, WAVE_CLEARED, WAVE_TRICKLE } from './spawner/waves.ts';
 export type { WaveRules, WaveState } from './spawner/waves.ts';
 export { ThirdPerson, AimFollow, spawnThirdPerson, tpTuning } from './third-person/third-person.ts';
+export * from './combat/index.ts';
 export { PauseMenu } from './pause/pause.ts';
 export { SaveSlots } from './saves/saves.ts';
 export type { SaveData } from './saves/saves.ts';

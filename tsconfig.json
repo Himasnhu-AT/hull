@@ -8,6 +8,9 @@
       "path": "packages/tools"
     },
     {
+      "path": "packages/agent"
+    },
+    {
       "path": "templates/cube"
     },
     {
@@ -24,6 +27,9 @@
     },
     {
       "path": "examples/aott"
+    },
+    {
+      "path": "examples/ironleaf"
     }
   ]
 }

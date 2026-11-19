@@ -1,0 +1,145 @@
+{
+ "kind": "input-map",
+ "note": "WASD moves, the mouse turns the camera, click or F cuts, R is the heavy (hold for the charged cut), Q or right click guards, Space dodges, Tab locks on, E picks the next target, 1 2 3 change stance.",
+ "actions": {
+  "move": {
+   "type": "axis2",
+   "keys": {
+    "up": [
+     "W"
+    ],
+    "down": [
+     "S"
+    ],
+    "left": [
+     "A"
+    ],
+    "right": [
+     "D"
+    ]
+   },
+   "pad": "stickL"
+  },
+  "look": {
+   "type": "axis2",
+   "mouse": "delta"
+  },
+  "lookPad": {
+   "type": "axis2",
+   "keys": {
+    "up": [
+     "ArrowUp"
+    ],
+    "down": [
+     "ArrowDown"
+    ],
+    "left": [
+     "ArrowLeft"
+    ],
+    "right": [
+     "ArrowRight"
+    ]
+   },
+   "pad": "stickR"
+  },
+  "attack": {
+   "type": "button",
+   "keys": [
+    "Mouse0",
+    "F"
+   ],
+   "pad": "west"
+  },
+  "heavy": {
+   "type": "button",
+   "keys": [
+    "R"
+   ],
+   "pad": "north"
+  },
+  "guard": {
+   "type": "button",
+   "keys": [
+    "Q",
+    "Mouse2"
+   ],
+   "pad": "triggerL"
+  },
+  "dodge": {
+   "type": "button",
+   "keys": [
+    "Space"
+   ],
+   "pad": "south"
+  },
+  "lock": {
+   "type": "button",
+   "keys": [
+    "Tab"
+   ],
+   "pad": "stickRPress"
+  },
+  "lockNext": {
+   "type": "button",
+   "keys": [
+    "E"
+   ]
+  },
+  "stance1": {
+   "type": "button",
+   "keys": [
+    "1"
+   ]
+  },
+  "stance2": {
+   "type": "button",
+   "keys": [
+    "2"
+   ]
+  },
+  "stance3": {
+   "type": "button",
+   "keys": [
+    "3"
+   ]
+  },
+  "stanceNext": {
+   "type": "button",
+   "keys": [
+    "C"
+   ]
+  },
+  "pause": {
+   "type": "button",
+   "keys": [
+    "Escape",
+    "P"
+   ],
+   "pad": "start"
+  }
+ },
+ "groups": {
+  "Move": [
+   "move"
+  ],
+  "Look": [
+   "look",
+   "lookPad"
+  ],
+  "Combat": [
+   "attack",
+   "heavy",
+   "guard",
+   "dodge",
+   "lock",
+   "lockNext",
+   "stance1",
+   "stance2",
+   "stance3",
+   "stanceNext"
+  ],
+  "Game": [
+   "pause"
+  ]
+ }
+}

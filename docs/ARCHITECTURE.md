@@ -358,6 +358,17 @@ sound (recipe, code or sample) ─► voice ─► bus (sfx / ui / voice / music
   `cut` signal fires with it. `Limb` frees the shared geometry when that node is destroyed.
 * **Hits**: a character's `hits` list gives hit and collider shapes in bone space; `characterHits(def)` resolves each to a bone
   index so the game can follow it with the bone's transform (it feeds `physics` colliders).
+* **Authoring moves (M10)**: a keyframe may name an `ease` (`in`, `out`, `inOut`, `snap`, `linear`, `hold`, `smooth`) for the segment
+  it starts. A clip has named **windows** (`trace`, `parry`, `iframe`, `cancel`...) read with `animator.inWindow(name, layer?)` and
+  fired as the `windows` signal (name, entering, clip, layer) on the fixed step, from the clip time the layer's newest state is
+  at. **Root motion** (`rootMotion` on a keyframe clip) takes the root bone's x/z (or y, and yaw) out of the pose; the
+  graph blends the travel like the pose (`animator.rootMotion`, per fixed step) and `applyRootMotion` moves the node by it. A
+  state may be a **2D blend space** (`blend2d`, inverse distance), a transition may `sync` the cycle phase, a layer may take
+  its weight from a parameter (`weightFrom`). `animator.timeScale` and `hitStop(seconds)` slow or hold one character on game
+  time (a trigger set meanwhile waits). Presentation-only extras on frame time (`secondary.ts`): `springs` (chains of bones that
+  trail the body's acceleration: hair, sash), `hitReact` and `animator.hitReact(dir, strength)` (additive flinch), and
+  `ik.grips` (the off-hand two-bone IK to a socket, last in the IK order). A humanoid body may list extra `bones`.
+  Everything on the fixed step allocates nothing (a test measures the heap).
 * `previewClip`, `previewGraph` and `stopPreview` are for benches. Everything advances on game time.
 
 ### ui
@@ -429,6 +440,7 @@ overrides a kit's tunables (section 4).
 | `health` | `Health`, `HealthHud`, `Weapon` |
 | `pickups` | `Pickup`, `Stock`, `StockHud`, `scatterPickups` |
 | `spawner` | `Spawner`, `Chaser`, `WaveHud`, `GameOver` |
+| `combat` | `Combatant`, `EnemyBrain`, `FighterInput`, `LockOn`, `Standoff`, weapon traces (`Blade`, `HurtShapes`), `combatHub`, `CombatDebug`; config kinds `move-set` and `enemy` |
 | `pause`, `saves` | `PauseMenu`, `SaveSlots` |
 
 **Pure helpers.** For a game that builds its own player or enemies, four kits also export plain functions and small state
@@ -600,6 +612,30 @@ where a name is in both lists the method wins.
   centre. They are library functions for benches; there is no `bench` tool yet.
 * **Budgets**: `hull.json` `budgets` is in the schema, and `render` and `vfx` report draw calls and frame time; the check that
   fails a build or test on them is not built.
+
+### Hull's own agent (`packages/agent`, `@hull/agent`)
+
+An ACP agent (D14, D16) that runs on the user's key: `startHullAgent({ projectRoot, provider })` speaks ACP over a pair of streams, and
+`bin/hull-agent.js [dir] [--fake script.json]` does the same on stdio for the app to start as a child process. It handles
+`initialize`, `session/new`, `session/prompt`, `session/cancel` and `session/close`, and streams `agent_message_chunk`, `plan`, `tool_call` and
+`tool_call_update` (with `diff` content for config and tunable edits), `usage_update` and `compaction_update`, and asks with
+`session/request_permission`.
+
+* **Tools**: called in-process through `createMcpServer` from `@hull/tools`, opened as client "Hull agent", so the history author is
+  `ai:Hull agent`. The agent has no file or shell tools: every write is a validated Hull edit. `session/new`'s `mcpServers` is not used.
+  There is no tool yet that edits `src/` code beyond `tunables.set`.
+* **Models**: Anthropic's Messages API (`ANTHROPIC_API_KEY`, default `claude-opus-5-5`, override with `HULL_AGENT_MODEL`) or any
+  OpenAI-compatible chat endpoint (`HULL_AGENT_BASE_URL` + `HULL_AGENT_API_KEY`, which is how `ai.marlstudio.com` plugs in). Plain fetch,
+  no vendor SDK, no streaming of model tokens yet (text arrives per model call). Keys are never logged or put in an error.
+* **Prompt**: teaches the loop (look, plan, small edit, check, test, step, read state or screenshot, report what could not be judged) and
+  appends the project's `GAME.md` and `AGENTS.md`.
+* **Gates**: destructive tools (rename, move, delete, restore, revert, adopt) ask first (`HULL_AGENT_PERMISSIONS`: `risky` default,
+  `writes`, `none`); after edits the loop runs `check` itself and the run cannot end while it fails, for at most three fix rounds,
+  then stops and says so (`_meta.checkFailed`); an edited run ends with a history checkpoint `hull-agent-run-N`.
+* **Compaction**: past 70% of the model's window old tool results are cut, then everything but the recent tail becomes OpenCode's
+  structured summary (MIT, see `packages/agent/NOTICES`). `HULL_AGENT_CONTEXT` sets the window size.
+* **Tests**: `fakeProvider` plays a script with no network; `agent.e2e.test.ts` runs prompt, tool calls, edit, check, done, a failing-check
+  gate, a permission denial, cancel and compaction over ACP against the arena project.
 
 ## 10. Rules the engine enforces
 

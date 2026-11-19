@@ -2,7 +2,7 @@
 // conditions over named parameters and cross-fade by weight. `step` runs on the fixed step and fires clip events;
 // `evaluate` runs per frame and only reads, blending the poses at a time between the last two steps.
 import type { AnimGraph } from '../schema/anim-graph.ts';
-import type { Clip } from './clip.ts';
+import type { Clip, ClipWindow } from './clip.ts';
 import { clamp } from './math.ts';
 import { accumulate, composite, Pose, type Skeleton } from './skeleton.ts';
 
@@ -97,13 +97,20 @@ interface StateRT {
   /** Blend positions, ascending, one per clip. Empty for a single clip. */
   points: Float64Array;
   by: number;
+  /** A 2D blend space: the two parameters and the position of each clip on their plane (empty for 1D). */
+  by2: number;
+  px: Float64Array;
+  py: Float64Array;
   speedFrom: number;
   rate: number;
   exit: number;
   exitBlend: number;
 }
 
-interface TransRT { from: number; to: number; cond: Cond | null; blend: number; after: number }
+interface TransRT { from: number; to: number; cond: Cond | null; blend: number; after: number; sync: boolean }
+
+/** A window of a clip with the graph's number for its name. */
+interface WinRT { id: number; start: number; end: number }
 
 interface Entry { state: number; t: number; age: number; w: number; prevW: number; dur: number; adv: number; fresh: boolean }
 
@@ -115,7 +122,14 @@ interface LayerRT {
   mask: Uint8Array | null;
   additive: boolean;
   weight: number;
+  /** Parameter that scales the weight, or -1. */
+  weightParam: number;
   entries: Entry[];
+  /** Per window name: 1 while the layer's newest state is inside it (and the same a step ago). */
+  win: Uint8Array;
+  winPrev: Uint8Array;
+  /** The clip that opened each window. */
+  winClip: string[];
   count: number;
   pose: Pose;
 }
@@ -124,6 +138,8 @@ const MAX_ENTRIES = 4;
 const EPS = 1e-9;
 
 export type EventSink = (name: string, clip: string, layer: string) => void;
+/** Called when a window opens (`entering` true) or closes. */
+export type WindowSink = (name: string, entering: boolean, clip: string, layer: string) => void;
 
 export class Graph {
   readonly paramNames: string[] = [];
@@ -136,7 +152,23 @@ export class Graph {
   readonly layers: LayerRT[] = [];
   private readonly tmp: Pose;
   private readonly tmp2: Pose;
-  private readonly w = new Float64Array(16);
+  private readonly w = new Float64Array(32);
+  /** Every window name in the clips the graph can play, in a fixed order. */
+  readonly windowNames: string[] = [];
+  private readonly windowIndex = new Map<string, number>();
+  private readonly clipWindows = new Map<Clip, WinRT[]>();
+  /**
+   * Root motion of the last fixed step: x, y, z (metres) and yaw (radians) in the character's frame, blended over the
+   * layers and states the same way the pose is. Zero when no playing clip has root motion.
+   */
+  readonly rootDelta = new Float64Array(4);
+  private readonly rd = new Float64Array(4);
+  private readonly ra = new Float64Array(4);
+  private readonly rb = new Float64Array(4);
+  private readonly rc = new Float64Array(4);
+  /** True when some clip the graph can play has root motion. */
+  private hasRoot = false;
+  private rootBone = -1;
   /** Foot slide of the layer that plays a speed-matched state, in m/s: |ground speed - what the feet cover|. */
   slide = 0;
   /** What the feet cover and what the game asked for (m/s), for the same layer. */
@@ -176,7 +208,7 @@ export class Graph {
       const states: StateRT[] = names.map((sn) => {
         const sd = l.states[sn]!;
         const sw = `${lw}/states/${sn}`;
-        const st: StateRT = { name: sn, clips: [], points: new Float64Array(0), by: -1, speedFrom: -1, rate: sd.speed ?? 1, exit: -1, exitBlend: sd.exitBlend ?? 0.1 };
+        const st: StateRT = { name: sn, clips: [], points: new Float64Array(0), by: -1, by2: -1, px: new Float64Array(0), py: new Float64Array(0), speedFrom: -1, rate: sd.speed ?? 1, exit: -1, exitBlend: sd.exitBlend ?? 0.1 };
         const clipOf = (cn: string, at: string): Clip | undefined => {
           const c = clips.get(cn);
           if (!c) problem(`${at}: the anim-set has no clip "${cn}"; this state plays nothing.`);
@@ -194,6 +226,20 @@ export class Graph {
           }
           st.clips = cs;
           st.points = Float64Array.from(ps);
+        } else if (sd.blend2d) {
+          const b = sd.blend2d;
+          st.by = paramOf(b.x);
+          st.by2 = paramOf(b.y);
+          if (st.by < 0) problem(`${sw}/blend2d/x: no parameter "${b.x}"; the state plays its first clip.`);
+          if (st.by2 < 0) problem(`${sw}/blend2d/y: no parameter "${b.y}"; the state plays its first clip.`);
+          const cs: Clip[] = [], xs: number[] = [], ys: number[] = [];
+          b.points.forEach((p, pi) => {
+            const c = clipOf(p.clip, `${sw}/blend2d/points/${pi}/clip`);
+            if (c) { cs.push(c); xs.push(p.x); ys.push(p.y); }
+          });
+          st.clips = cs;
+          st.px = Float64Array.from(xs);
+          st.py = Float64Array.from(ys);
         } else if (sd.clip !== undefined) {
           const c = clipOf(sd.clip, `${sw}/clip`);
           if (c) st.clips = [c];
@@ -226,7 +272,7 @@ export class Graph {
             return problem(`${tw}/when: ${e instanceof Error ? e.message : String(e)}; the transition is skipped.`);
           }
         }
-        trans.push({ from, to, cond, blend: t.blend ?? 0.15, after: t.after ?? 0 });
+        trans.push({ from, to, cond, blend: t.blend ?? 0.15, after: t.after ?? 0, sync: t.sync ?? false });
       });
       let mask: Uint8Array | null = null;
       if (l.mask) {
@@ -238,11 +284,38 @@ export class Graph {
       }
       const entries: Entry[] = [];
       for (let e = 0; e < MAX_ENTRIES; e++) entries.push({ state: 0, t: 0, age: 0, w: 0, prevW: 0, dur: 0, adv: 0, fresh: true });
+      let weightParam = -1;
+      if (l.weightFrom !== undefined) {
+        weightParam = paramOf(l.weightFrom);
+        if (weightParam < 0) problem(`${lw}/weightFrom: no parameter "${l.weightFrom}"; the layer keeps its weight.`);
+      }
       this.layers.push({
-        name: lname, states, trans, start: Math.max(start, 0), mask, additive: l.additive ?? false, weight: l.weight ?? 1,
-        entries, count: 1, pose: new Pose(skeleton.n),
+        name: lname, states, trans, start: Math.max(start, 0), mask, additive: l.additive ?? false, weight: l.weight ?? 1, weightParam,
+        entries, count: 1, pose: new Pose(skeleton.n), win: new Uint8Array(0), winPrev: new Uint8Array(0), winClip: [],
       });
     }
+    // Windows: one number per name across every clip a state can play.
+    for (const l of this.layers) {
+      for (const st of l.states) {
+        for (const c of st.clips) {
+          if (this.clipWindows.has(c)) continue;
+          const list: WinRT[] = [];
+          for (const wd of c.windows as readonly ClipWindow[]) {
+            let id = this.windowIndex.get(wd.name);
+            if (id === undefined) { id = this.windowNames.length; this.windowNames.push(wd.name); this.windowIndex.set(wd.name, id); }
+            list.push({ id, start: wd.start, end: wd.end });
+          }
+          this.clipWindows.set(c, list);
+        }
+      }
+    }
+    for (const l of this.layers) {
+      l.win = new Uint8Array(this.windowNames.length); l.winPrev = new Uint8Array(this.windowNames.length);
+      l.winClip = this.windowNames.map(() => '');
+    }
+    const rooted = [...this.clipWindows.keys()].find((c) => c.root !== null);
+    this.hasRoot = rooted !== undefined;
+    this.rootBone = rooted?.root?.bone ?? -1;
     this.reset();
   }
 
@@ -259,6 +332,8 @@ export class Graph {
       e.state = l.start; e.t = 0; e.age = 0; e.w = 1; e.prevW = 1; e.dur = 0; e.adv = 0; e.fresh = true;
     }
     this.slide = 0; this.stride = 0; this.speed = 0;
+    this.rootDelta.fill(0);
+    for (const l of this.layers) { l.win.fill(0); l.winPrev.fill(0); }
   }
 
   setParam(i: number, v: number): void {
@@ -278,6 +353,14 @@ export class Graph {
     const si = l ? l.states.findIndex((s) => s.name === state) : -1;
     if (!l || si < 0) return;
     this.begin(l, si, 0);
+  }
+
+  /** How far through its clip (or cycle) the newest state of a layer is, 0 to 1. For tools. */
+  progress(layer: string): number {
+    const l = this.layers.find((x) => x.name === layer);
+    if (!l) return 0;
+    const e = l.entries[l.count - 1]!;
+    return this.phaseOf(l.states[e.state]!, e);
   }
 
   /** Weight of each state in a layer right now, by name (for tests and the bench). */
@@ -309,16 +392,26 @@ export class Graph {
 
   // ---- fixed step ----
 
-  step(dt: number, emit: EventSink | null): void {
+  step(dt: number, emit: EventSink | null, emitWindow: WindowSink | null = null): void {
     let slide = -1;
+    const root = this.rootDelta;
+    root.fill(0);
     for (let li = 0; li < this.layers.length; li++) {
       const l = this.layers[li]!;
       this.transitions(l);
       const newest = l.count - 1;
+      const lr = this.ra;
+      lr.fill(0);
+      let rootCov = 0;
       for (let i = 0; i < l.count; i++) {
         const e = l.entries[i]!;
         e.prevW = e.w;
         this.advance(l, e, dt, i === newest ? emit : null);
+        // This entry's travel, weighted like its pose; an entry with no clip says nothing about the root.
+        if (this.hasRoot && l.states[e.state]!.clips.length > 0) {
+          for (let k = 0; k < 4; k++) lr[k] = lr[k]! + this.rd[k]! * e.w;
+          rootCov += e.w;
+        }
         if (i === newest) {
           const st = l.states[e.state]!;
           if (st.speedFrom >= 0 && slide < 0) {
@@ -330,6 +423,14 @@ export class Graph {
         }
       }
       this.fade(l, dt);
+      if (this.hasRoot && rootCov > 0 && (l.mask === null || l.mask[this.rootBone] === 1)) {
+        // A state that has a clip but no root motion stands still, with its weight. A layer lays itself over what is
+        // below it, like its pose does; an additive one adds.
+        const cov = Math.min(1, rootCov) * l.weight * (l.weightParam >= 0 ? clamp(this.params[l.weightParam]!, 0, 1) : 1);
+        const norm = 1 / rootCov;
+        for (let k = 0; k < 4; k++) root[k] = l.additive ? root[k]! + lr[k]! * norm * cov : root[k]! * (1 - cov) + lr[k]! * norm * cov;
+      }
+      this.updateWindows(l, emitWindow);
     }
     this.slide = slide < 0 ? 0 : slide;
     for (let i = 0; i < this.isTrigger.length; i++) if (this.isTrigger[i] === 1) this.params[i] = 0;
@@ -344,14 +445,31 @@ export class Graph {
       if (t.from < 0 && t.to === cur.state) continue;
       if (t.after > 0 && cur.age < t.after - EPS) continue;
       if (t.cond !== null && t.cond(this.params) === 0) continue;
-      this.begin(l, t.to, t.blend);
+      this.begin(l, t.to, t.blend, t.sync);
       return;
     }
     const st = l.states[cur.state]!;
     if (st.exit >= 0 && st.clips.length === 1 && !st.clips[0]!.loop && cur.t >= st.clips[0]!.length - EPS) this.begin(l, st.exit, st.exitBlend);
   }
 
-  private begin(l: LayerRT, to: number, blend: number): void {
+  /** Where in its cycle a state is, 0 to 1 (a clip that plays once reports how far through it is). */
+  private phaseOf(st: StateRT, e: Entry): number {
+    const n = st.clips.length;
+    if (n === 0) return 0;
+    if (n === 1 && st.points.length === 0) {
+      const c = st.clips[0]!;
+      return c.loop ? ((e.t / c.length) % 1 + 1) % 1 : Math.min(1, e.t / c.length);
+    }
+    return e.t;
+  }
+
+  private begin(l: LayerRT, to: number, blend: number, sync = false): void {
+    // A synced fade starts the new state where the old one is in its cycle (both should be cycles: walk into run).
+    let phase = -1;
+    if (sync && blend > 0) {
+      const cur = l.entries[l.count - 1]!;
+      phase = this.phaseOf(l.states[cur.state]!, cur);
+    }
     if (blend <= 0) {
       l.count = 1;
       const e = l.entries[0]!;
@@ -367,6 +485,11 @@ export class Graph {
     }
     const e = l.entries[l.count]!;
     e.state = to; e.t = 0; e.age = 0; e.w = 0; e.prevW = 0; e.dur = blend; e.adv = 0; e.fresh = true;
+    const ns = l.states[to]!;
+    if (phase >= 0 && ns.clips.length > 0) {
+      e.t = ns.clips.length === 1 && ns.points.length === 0 ? phase * ns.clips[0]!.length : phase;
+      e.fresh = false;
+    }
     l.count++;
   }
 
@@ -397,6 +520,7 @@ export class Graph {
     const st = l.states[e.state]!;
     e.age += dt;
     const nClips = st.clips.length;
+    this.rd.fill(0);
     if (nClips === 0) { e.t += dt; e.adv = dt; e.fresh = false; return; }
     const info = this.pace(st);
     const t0 = e.fresh ? -1e-7 : e.t;
@@ -405,6 +529,7 @@ export class Graph {
       const adv = dt * info.rate;
       const t1 = e.t + adv;
       if (emit) this.fire(c, t0, t1, c.loop, 1, c.length, emit, l.name);
+      if (this.hasRoot && c.root) this.rootAcc(c, e.t, t1, 1);
       e.adv = adv;
       e.t = c.loop && t1 >= c.length ? t1 % c.length : t1;
     } else {
@@ -415,10 +540,86 @@ export class Graph {
         const dom = this.dominant(st);
         this.fire(dom, t0, t1, true, 1 / dom.length, 1, emit, l.name);
       }
+      if (this.hasRoot) {
+        const w = this.w;
+        this.weightsOf(st, w);
+        for (let i = 0; i < nClips; i++) {
+          const c = st.clips[i]!;
+          if (c.root && w[i]! > 0) this.rootAcc(c, e.t * c.length, t1 * c.length, w[i]!);
+        }
+      }
       e.adv = adv;
       e.t = t1 % 1;
     }
     e.fresh = false;
+  }
+
+  /** Adds the travel of `c` between two clip times (seconds, not wrapped), times `w`, into `rd`. */
+  private rootAcc(c: Clip, tA: number, tB: number, w: number): void {
+    this.cumRoot(c, tA, this.rb);
+    this.cumRoot(c, tB, this.rc);
+    for (let k = 0; k < 4; k++) this.rd[k] = this.rd[k]! + (this.rc[k]! - this.rb[k]!) * w;
+  }
+
+  private cumRoot(c: Clip, t: number, out: Float64Array): void {
+    const r = c.root!;
+    if (c.loop && t >= c.length) {
+      const n = Math.floor(t / c.length);
+      r.at(t - n * c.length, out);
+      for (let k = 0; k < 4; k++) out[k] = out[k]! + r.total[k]! * n;
+    } else r.at(t, out);
+  }
+
+  /** Opens and closes the layer's windows to match the clip time its newest state is at, and tells the sink. */
+  private updateWindows(l: LayerRT, sink: WindowSink | null): void {
+    const n = l.win.length;
+    if (n === 0) return;
+    const prev = l.win;
+    l.win = l.winPrev;
+    l.winPrev = prev;
+    const now = l.win;
+    now.fill(0);
+    const e = l.entries[l.count - 1]!;
+    const st = l.states[e.state]!;
+    let clip: Clip | null = null;
+    let tt = 0;
+    if (st.clips.length === 1 && st.points.length === 0) { clip = st.clips[0]!; tt = e.t; }
+    else if (st.clips.length > 0) { clip = this.dominant(st); tt = e.t * clip.length; }
+    if (clip) {
+      const list = this.clipWindows.get(clip);
+      if (list) {
+        for (let i = 0; i < list.length; i++) {
+          const w = list[i]!;
+          if (tt + EPS >= w.start && tt < w.end - EPS) {
+            if (now[w.id] === 0) l.winClip[w.id] = clip.name;
+            now[w.id] = 1;
+          }
+        }
+      }
+    }
+    if (sink === null) return;
+    for (let i = 0; i < n; i++) {
+      if (now[i] !== prev[i]) sink(this.windowNames[i]!, now[i] === 1, l.winClip[i]!, l.name);
+    }
+  }
+
+  /** True while any layer's newest state is inside the window. */
+  inWindow(name: string, layer?: string): boolean {
+    const id = this.windowIndex.get(name);
+    if (id === undefined) return false;
+    for (let i = 0; i < this.layers.length; i++) {
+      const l = this.layers[i]!;
+      if (layer !== undefined && l.name !== layer) continue;
+      if (l.win[id] === 1) return true;
+    }
+    return false;
+  }
+
+  /** Names of the windows that are open now (for tools; it allocates). */
+  openWindows(layer?: string): string[] {
+    const out: string[] = [];
+    this.windowNames.forEach((nm) => { if (this.inWindow(nm, layer)) out.push(nm); });
+    return out;
   }
 
   /** Events with times in (t0, t1], in the units of t (seconds, or cycles for a blend). No event is missed or doubled. */
@@ -459,6 +660,21 @@ export class Graph {
   /** Weight of each clip of a state: all on the one clip, or linear between the two points the parameter lies between. */
   private weightsOf(st: StateRT, w: Float64Array): void {
     const n = st.clips.length;
+    if (st.px.length > 0 && n > 1) {
+      if (st.by < 0 || st.by2 < 0) { w.fill(0, 0, n); w[0] = 1; return; }
+      // Inverse distance, to the fourth power: a clip dominates near its own point and two neighbours share between them.
+      const vx = this.params[st.by]!, vy = this.params[st.by2]!;
+      let sum = 0;
+      for (let i = 0; i < n; i++) {
+        const dx = vx - st.px[i]!, dy = vy - st.py[i]!;
+        const d2 = dx * dx + dy * dy;
+        if (d2 < 1e-10) { w.fill(0, 0, n); w[i] = 1; return; }
+        w[i] = 1 / (d2 * d2);
+        sum += w[i]!;
+      }
+      for (let i = 0; i < n; i++) w[i] = w[i]! / sum;
+      return;
+    }
     if (n === 1 || st.by < 0) { w.fill(0, 0, n); if (n > 0) w[0] = 1; return; }
     const v = this.params[st.by]!;
     const p = st.points;
@@ -523,7 +739,7 @@ export class Graph {
         this.evalEntry(l, e, alpha, this.tmp);
         accumulate(lp, this.tmp, w);
       }
-      composite(out, lp, l.mask, l.weight, l.additive);
+      composite(out, lp, l.mask, l.weightParam >= 0 ? l.weight * clamp(this.params[l.weightParam]!, 0, 1) : l.weight, l.additive);
     }
   }
 

@@ -1,0 +1,181 @@
+{
+  "kind": "anim-graph",
+  "params": {
+    "speed": {
+      "type": "number",
+      "default": 0,
+      "min": 0,
+      "max": 12
+    },
+    "grounded": {
+      "type": "boolean",
+      "default": true
+    },
+    "dead": {
+      "type": "boolean",
+      "default": false
+    },
+    "attack": {
+      "type": "trigger"
+    },
+    "heavy": {
+      "type": "trigger"
+    },
+    "block": {
+      "type": "boolean",
+      "default": false
+    },
+    "deflect": {
+      "type": "trigger"
+    },
+    "dodge": {
+      "type": "trigger"
+    },
+    "hit": {
+      "type": "trigger"
+    },
+    "jump": {
+      "type": "trigger"
+    },
+    "attack2": {
+      "type": "trigger"
+    },
+    "attack3": {
+      "type": "trigger"
+    },
+    "stagger": {
+      "type": "trigger"
+    }
+  },
+  "layers": {
+    "base": {
+      "start": "idle",
+      "states": {
+        "idle": {
+          "clip": "idle"
+        },
+        "move": {
+          "blend": {
+            "by": "speed",
+            "points": {
+              "1.44": "walk",
+              "4.82": "run"
+            }
+          },
+          "speedFrom": "speed"
+        },
+        "dead": {
+          "clip": "death"
+        }
+      },
+      "transitions": [
+        {
+          "from": "*",
+          "to": "dead",
+          "when": "dead",
+          "blend": 0.12
+        },
+        {
+          "from": "idle",
+          "to": "move",
+          "when": "speed > 0.3",
+          "blend": 0.15
+        },
+        {
+          "from": "move",
+          "to": "idle",
+          "when": "speed < 0.2",
+          "blend": 0.2
+        }
+      ]
+    },
+    "upper": {
+      "mask": [
+        "spine",
+        "armL",
+        "armR",
+        "head"
+      ],
+      "start": "hold",
+      "states": {
+        "none": {},
+        "hold": {
+          "clip": "hold-duel"
+        },
+        "hit": {
+          "clip": "hit",
+          "exit": "hold",
+          "exitBlend": 0.1
+        },
+        "stagger": {
+          "clip": "stagger",
+          "exit": "hold",
+          "exitBlend": 0.2
+        },
+        "duel-cut": {
+          "clip": "duel-cut",
+          "exit": "hold",
+          "exitBlend": 0.12
+        },
+        "duel-thrust": {
+          "clip": "duel-thrust",
+          "exit": "hold",
+          "exitBlend": 0.12
+        },
+        "duel-sweep": {
+          "clip": "duel-sweep",
+          "exit": "hold",
+          "exitBlend": 0.12
+        }
+      },
+      "transitions": [
+        {
+          "from": "*",
+          "to": "stagger",
+          "when": "stagger",
+          "blend": 0.05
+        },
+        {
+          "from": "*",
+          "to": "hit",
+          "when": "hit",
+          "blend": 0.04
+        },
+        {
+          "from": "*",
+          "to": "duel-cut",
+          "when": "attack",
+          "blend": 0.05
+        },
+        {
+          "from": "*",
+          "to": "duel-thrust",
+          "when": "attack2",
+          "blend": 0.05
+        },
+        {
+          "from": "*",
+          "to": "duel-sweep",
+          "when": "attack3",
+          "blend": 0.05
+        }
+      ]
+    },
+    "breath": {
+      "additive": true,
+      "weight": 0.8,
+      "start": "on",
+      "states": {
+        "on": {
+          "clip": "breathe"
+        }
+      }
+    }
+  },
+  "ik": {
+    "feet": {
+      "enabled": true,
+      "maxStep": 0.35
+    }
+  }
+}

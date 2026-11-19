@@ -1,0 +1,68 @@
+{
+  "kind": "vfx",
+  "note": "A puff under a running step.",
+  "emit": {
+    "count": [
+      4,
+      6
+    ],
+    "shape": {
+      "disc": 0.15
+    }
+  },
+  "particle": {
+    "life": [
+      0.3,
+      0.6
+    ],
+    "speed": [
+      0.4,
+      1.2
+    ],
+    "direction": {
+      "cone": [
+        0,
+        1,
+        0
+      ],
+      "angleDeg": 60
+    },
+    "gravity": -0.4,
+    "drag": 2.2,
+    "size": [
+      [
+        0,
+        0.1
+      ],
+      [
+        1,
+        0.3
+      ]
+    ],
+    "color": [
+      [
+        0,
+        "#d3c6a5"
+      ],
+      [
+        1,
+        "#b0a58a"
+      ]
+    ],
+    "alpha": [
+      [
+        0,
+        0.4
+      ],
+      [
+        1,
+        0
+      ]
+    ],
+    "sprite": "smoke",
+    "blend": "alpha"
+  },
+  "budget": {
+    "max": 200
+  }
+}

@@ -1,0 +1,75 @@
+{
+  "kind": "vfx",
+  "note": "Sparks off a clash: short, hot, bright streaks that cool from white to orange.",
+  "emit": {
+    "count": [
+      18,
+      26
+    ]
+  },
+  "particle": {
+    "life": [
+      0.1,
+      0.4
+    ],
+    "speed": [
+      5,
+      17
+    ],
+    "direction": {
+      "cone": [
+        0,
+        1,
+        0
+      ],
+      "angleDeg": 70
+    },
+    "gravity": -9.8,
+    "drag": 1.6,
+    "size": [
+      [
+        0,
+        0.04
+      ],
+      [
+        1,
+        0.02
+      ]
+    ],
+    "sizeScale": [
+      0.9,
+      1.3
+    ],
+    "color": [
+      [
+        0,
+        "#fff3d6"
+      ],
+      [
+        1,
+        "#ff5a14"
+      ]
+    ],
+    "alpha": [
+      [
+        0,
+        0.85
+      ],
+      [
+        0.5,
+        0.8
+      ],
+      [
+        1,
+        0
+      ]
+    ],
+    "glow": 1.8,
+    "stretch": 0.022,
+    "sprite": "spark",
+    "blend": "additive"
+  },
+  "budget": {
+    "max": 700
+  }
+}

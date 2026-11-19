@@ -1,0 +1,17 @@
+{
+  "kind": "game",
+  "id": "ironleaf",
+  "title": "Ironleaf",
+  "note": "A swordswoman on a windswept island. Read your enemy, answer their blade, break their stance. Third person samurai action; phase 1 is the island, the people and the sound.",
+  "version": "0.1.0",
+  "entry": "src/main.ts",
+  "step": 60,
+  "features": [
+    "audio",
+    "ui",
+    "vfx"
+  ],
+  "render": {
+    "backend": "webgl2"
+  }
+}

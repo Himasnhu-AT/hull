@@ -1,0 +1,310 @@
+{
+ "kind": "character",
+ "note": "A swordswoman with a katana in her right hand (socket \"blade\"), hurt shapes on the head, torso and limbs.",
+ "body": {
+  "type": "generated",
+  "recipe": "humanoid",
+  "proportions": {
+   "height": 1.78,
+   "shoulders": 0.44,
+   "legs": 0.52,
+   "head": 0.23
+  },
+  "parts": [
+   {
+    "bone": "handR",
+    "shape": "box",
+    "material": "metal",
+    "center": [
+     0,
+     -0.08,
+     -0.55
+    ],
+    "size": [
+     0.012,
+     0.03,
+     1
+    ]
+   },
+   {
+    "bone": "handR",
+    "shape": "box",
+    "material": "metal",
+    "center": [
+     0,
+     -0.08,
+     -0.05
+    ],
+    "size": [
+     0.075,
+     0.075,
+     0.012
+    ]
+   },
+   {
+    "bone": "handR",
+    "shape": "box",
+    "material": "boots",
+    "center": [
+     0,
+     -0.08,
+     0.08
+    ],
+    "size": [
+     0.03,
+     0.03,
+     0.2
+    ]
+   },
+   {
+    "bone": "hips",
+    "shape": "box",
+    "material": "boots",
+    "center": [
+     -0.2,
+     0.02,
+     -0.05
+    ],
+    "size": [
+     0.035,
+     0.04,
+     0.8
+    ]
+   },
+   {
+    "bone": "chest",
+    "shape": "box",
+    "material": "boots",
+    "center": [
+     0,
+     0.14,
+     0
+    ],
+    "size": [
+     0.5,
+     0.06,
+     0.2
+    ]
+   }
+  ]
+ },
+ "materials": {
+  "skin": "material/skin",
+  "cloth": "material/cloth-indigo",
+  "metal": "material/steel",
+  "boots": "material/leather"
+ },
+ "sockets": {
+  "blade": {
+   "joint": "handR",
+   "offset": [
+    0,
+    -0.08,
+    0
+   ]
+  }
+ },
+ "collider": {
+  "shape": "capsule",
+  "radius": 0.3,
+  "height": 1.7
+ },
+ "hits": [
+  {
+   "bone": "head",
+   "shape": "sphere",
+   "part": "head",
+   "group": "body",
+   "c": [
+    0,
+    0.115,
+    0
+   ],
+   "r": 0.13
+  },
+  {
+   "bone": "chest",
+   "shape": "capsule",
+   "part": "body",
+   "group": "body",
+   "a": [
+    0,
+    0.02,
+    0
+   ],
+   "b": [
+    0,
+    0.3,
+    0
+   ],
+   "r": 0.17
+  },
+  {
+   "bone": "spine",
+   "shape": "capsule",
+   "part": "body",
+   "group": "body",
+   "a": [
+    0,
+    0,
+    0
+   ],
+   "b": [
+    0,
+    0.22,
+    0
+   ],
+   "r": 0.15
+  },
+  {
+   "bone": "hips",
+   "shape": "sphere",
+   "part": "body",
+   "group": "body",
+   "c": [
+    0,
+    0,
+    0
+   ],
+   "r": 0.17
+  },
+  {
+   "bone": "armL",
+   "shape": "capsule",
+   "part": "limb:arm",
+   "group": "limb",
+   "a": [
+    0,
+    0,
+    0
+   ],
+   "b": [
+    0,
+    -0.3,
+    0
+   ],
+   "r": 0.07
+  },
+  {
+   "bone": "forearmL",
+   "shape": "capsule",
+   "part": "limb:arm",
+   "group": "limb",
+   "a": [
+    0,
+    0,
+    0
+   ],
+   "b": [
+    0,
+    -0.26,
+    0
+   ],
+   "r": 0.06
+  },
+  {
+   "bone": "legL",
+   "shape": "capsule",
+   "part": "limb:leg",
+   "group": "limb",
+   "a": [
+    0,
+    0,
+    0
+   ],
+   "b": [
+    0,
+    -0.4,
+    0
+   ],
+   "r": 0.09
+  },
+  {
+   "bone": "shinL",
+   "shape": "capsule",
+   "part": "limb:leg",
+   "group": "limb",
+   "a": [
+    0,
+    0,
+    0
+   ],
+   "b": [
+    0,
+    -0.4,
+    0
+   ],
+   "r": 0.07
+  },
+  {
+   "bone": "armR",
+   "shape": "capsule",
+   "part": "limb:arm",
+   "group": "limb",
+   "a": [
+    0,
+    0,
+    0
+   ],
+   "b": [
+    0,
+    -0.3,
+    0
+   ],
+   "r": 0.07
+  },
+  {
+   "bone": "forearmR",
+   "shape": "capsule",
+   "part": "limb:arm",
+   "group": "limb",
+   "a": [
+    0,
+    0,
+    0
+   ],
+   "b": [
+    0,
+    -0.26,
+    0
+   ],
+   "r": 0.06
+  },
+  {
+   "bone": "legR",
+   "shape": "capsule",
+   "part": "limb:leg",
+   "group": "limb",
+   "a": [
+    0,
+    0,
+    0
+   ],
+   "b": [
+    0,
+    -0.4,
+    0
+   ],
+   "r": 0.09
+  },
+  {
+   "bone": "shinR",
+   "shape": "capsule",
+   "part": "limb:leg",
+   "group": "limb",
+   "a": [
+    0,
+    0,
+    0
+   ],
+   "b": [
+    0,
+    -0.4,
+    0
+   ],
+   "r": 0.07
+  }
+ ],
+ "animSet": "anim-set/combat",
+ "animGraph": "anim-graph/combat"
+}

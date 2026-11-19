@@ -1,0 +1,277 @@
+{
+ "kind": "anim-graph",
+ "note": "Combat. The Combatant sets guarding, broken and dead, and fires a trigger named after the move (or its trigger field) and dodge, stagger, cancel.",
+ "params": {
+  "speed": {
+   "type": "number",
+   "default": 0,
+   "min": 0,
+   "max": 12
+  },
+  "guarding": {
+   "type": "boolean",
+   "default": false
+  },
+  "broken": {
+   "type": "boolean",
+   "default": false
+  },
+  "dead": {
+   "type": "boolean",
+   "default": false
+  },
+  "slash": {
+   "type": "trigger"
+  },
+  "slash2": {
+   "type": "trigger"
+  },
+  "thrust": {
+   "type": "trigger"
+  },
+  "overhead": {
+   "type": "trigger"
+  },
+  "deflect": {
+   "type": "trigger"
+  },
+  "dodge": {
+   "type": "trigger"
+  },
+  "stagger": {
+   "type": "trigger"
+  },
+  "cancel": {
+   "type": "trigger"
+  },
+  "hit": {
+   "type": "trigger"
+  }
+ },
+ "layers": {
+  "base": {
+   "start": "idle",
+   "states": {
+    "idle": {
+     "clip": "idle"
+    },
+    "move": {
+     "blend": {
+      "by": "speed",
+      "points": {
+       "1.44": "walk",
+       "4.82": "run"
+      }
+     },
+     "speedFrom": "speed"
+    },
+    "dodge": {
+     "clip": "dodge",
+     "exit": "idle",
+     "exitBlend": 0.12
+    },
+    "stagger": {
+     "clip": "stagger",
+     "exit": "idle",
+     "exitBlend": 0.12
+    },
+    "broken": {
+     "clip": "broken"
+    },
+    "dead": {
+     "clip": "death"
+    }
+   },
+   "transitions": [
+    {
+     "from": "*",
+     "to": "dead",
+     "when": "dead",
+     "blend": 0.12
+    },
+    {
+     "from": "*",
+     "to": "broken",
+     "when": "broken",
+     "blend": 0.12
+    },
+    {
+     "from": "*",
+     "to": "stagger",
+     "when": "stagger",
+     "blend": 0.05
+    },
+    {
+     "from": "*",
+     "to": "dodge",
+     "when": "dodge",
+     "blend": 0.05
+    },
+    {
+     "from": "broken",
+     "to": "idle",
+     "when": "!broken",
+     "blend": 0.2
+    },
+    {
+     "from": "idle",
+     "to": "move",
+     "when": "speed > 0.3",
+     "blend": 0.15
+    },
+    {
+     "from": "move",
+     "to": "idle",
+     "when": "speed < 0.2",
+     "blend": 0.2
+    }
+   ]
+  },
+  "upper": {
+   "start": "ready",
+   "mask": [
+    "spine",
+    "armL",
+    "armR",
+    "head"
+   ],
+   "states": {
+    "ready": {
+     "clip": "ready"
+    },
+    "guard": {
+     "clip": "guard"
+    },
+    "dodge": {
+     "clip": "dodge",
+     "exit": "ready",
+     "exitBlend": 0.1
+    },
+    "stagger": {
+     "clip": "stagger",
+     "exit": "ready",
+     "exitBlend": 0.1
+    },
+    "broken": {
+     "clip": "broken"
+    },
+    "dead": {
+     "clip": "death"
+    },
+    "slash": {
+     "clip": "slash",
+     "exit": "ready",
+     "exitBlend": 0.12
+    },
+    "slash2": {
+     "clip": "slash2",
+     "exit": "ready",
+     "exitBlend": 0.12
+    },
+    "thrust": {
+     "clip": "thrust",
+     "exit": "ready",
+     "exitBlend": 0.12
+    },
+    "overhead": {
+     "clip": "overhead",
+     "exit": "ready",
+     "exitBlend": 0.12
+    },
+    "deflect": {
+     "clip": "deflect",
+     "exit": "ready",
+     "exitBlend": 0.12
+    }
+   },
+   "transitions": [
+    {
+     "from": "*",
+     "to": "dead",
+     "when": "dead",
+     "blend": 0.1
+    },
+    {
+     "from": "*",
+     "to": "broken",
+     "when": "broken",
+     "blend": 0.12
+    },
+    {
+     "from": "*",
+     "to": "stagger",
+     "when": "stagger",
+     "blend": 0.04
+    },
+    {
+     "from": "*",
+     "to": "dodge",
+     "when": "dodge",
+     "blend": 0.05
+    },
+    {
+     "from": "*",
+     "to": "slash",
+     "when": "slash",
+     "blend": 0.05
+    },
+    {
+     "from": "*",
+     "to": "slash2",
+     "when": "slash2",
+     "blend": 0.05
+    },
+    {
+     "from": "*",
+     "to": "thrust",
+     "when": "thrust",
+     "blend": 0.05
+    },
+    {
+     "from": "*",
+     "to": "overhead",
+     "when": "overhead",
+     "blend": 0.05
+    },
+    {
+     "from": "*",
+     "to": "deflect",
+     "when": "deflect",
+     "blend": 0.05
+    },
+    {
+     "from": "*",
+     "to": "ready",
+     "when": "cancel",
+     "blend": 0.1
+    },
+    {
+     "from": "ready",
+     "to": "guard",
+     "when": "guarding",
+     "blend": 0.08
+    },
+    {
+     "from": "guard",
+     "to": "ready",
+     "when": "!guarding",
+     "blend": 0.1
+    },
+    {
+     "from": "broken",
+     "to": "ready",
+     "when": "!broken",
+     "blend": 0.2
+    }
+   ]
+  }
+ },
+ "ik": {
+  "feet": {
+   "enabled": false
+  },
+  "look": {
+   "enabled": false
+  }
+ }
+}

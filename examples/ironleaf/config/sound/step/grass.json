@@ -1,0 +1,72 @@
+{
+  "kind": "sound",
+  "note": "A step on grass: soft heel, a rustle.",
+  "bus": "sfx",
+  "level": -3,
+  "pitch": [
+    0.88,
+    1.12
+  ],
+  "limit": {
+    "minGap": 0.12,
+    "voices": 4,
+    "over": "skip"
+  },
+  "spatial": {
+    "ref": 3,
+    "max": 28
+  },
+  "source": {
+    "type": "synth",
+    "length": 0.22,
+    "layers": {
+      "heel": {
+        "from": {
+          "noise": "brown"
+        },
+        "then": [
+          {
+            "filter": "lowpass",
+            "freq": [
+              380,
+              520
+            ]
+          },
+          {
+            "envelope": {
+              "attack": 0.003,
+              "decay": 0.1
+            }
+          },
+          {
+            "gain": 1
+          }
+        ]
+      },
+      "rustle": {
+        "from": {
+          "noise": "pink"
+        },
+        "then": [
+          {
+            "filter": "bandpass",
+            "freq": [
+              2400,
+              3400
+            ],
+            "q": 0.8
+          },
+          {
+            "envelope": {
+              "attack": 0.01,
+              "decay": 0.12
+            }
+          },
+          {
+            "gain": -8
+          }
+        ]
+      }
+    }
+  }
+}

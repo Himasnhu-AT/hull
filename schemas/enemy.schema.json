@@ -1,0 +1,351 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:hull:schema:enemy",
+  "type": "object",
+  "required": [
+    "kind",
+    "moveSet",
+    "health",
+    "patterns"
+  ],
+  "properties": {
+    "kind": {
+      "type": "string",
+      "const": "enemy"
+    },
+    "note": {
+      "type": "string"
+    },
+    "moveSet": {
+      "type": "string",
+      "x-ref": "move-set",
+      "x-ui": {
+        "widget": "ref"
+      }
+    },
+    "character": {
+      "type": "string",
+      "x-ref": "character",
+      "x-ui": {
+        "widget": "ref"
+      }
+    },
+    "health": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "default": 100,
+      "x-ui": {
+        "widget": "dial",
+        "step": 5
+      }
+    },
+    "posture": {
+      "type": "object",
+      "required": [
+        "max",
+        "recover",
+        "delay",
+        "broken"
+      ],
+      "properties": {
+        "max": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "default": 80,
+          "x-ui": {
+            "widget": "dial",
+            "step": 5,
+            "help": "Posture that breaks the guard and opens a finisher."
+          }
+        },
+        "recover": {
+          "type": "number",
+          "minimum": 0,
+          "default": 10,
+          "x-ui": {
+            "unit": "/s",
+            "help": "Posture regained each second, once the delay has passed."
+          }
+        },
+        "delay": {
+          "type": "number",
+          "minimum": 0,
+          "default": 1.5,
+          "x-ui": {
+            "unit": "s"
+          }
+        },
+        "broken": {
+          "type": "number",
+          "minimum": 0,
+          "default": 2.4,
+          "x-ui": {
+            "unit": "s",
+            "help": "How long a broken enemy stays open."
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "weakTo": {
+      "type": "string",
+      "x-ui": {
+        "help": "The stance that deals extra posture damage to this enemy."
+      }
+    },
+    "finisherDamage": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "default": 1,
+      "x-ui": {
+        "widget": "slider",
+        "step": 0.05,
+        "help": "Fraction of full health a finisher takes. 1 kills; a boss takes less per finisher."
+      }
+    },
+    "speed": {
+      "type": "object",
+      "required": [
+        "walk"
+      ],
+      "properties": {
+        "walk": {
+          "type": "number",
+          "minimum": 0,
+          "default": 2.4,
+          "x-ui": {
+            "unit": "m/s",
+            "step": 0.1
+          }
+        },
+        "circle": {
+          "type": "number",
+          "minimum": 0,
+          "default": 1.4,
+          "x-ui": {
+            "unit": "m/s",
+            "step": 0.1
+          }
+        },
+        "turn": {
+          "type": "number",
+          "minimum": 0,
+          "default": 6,
+          "x-ui": {
+            "unit": "rad/s",
+            "step": 0.5
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "spacing": {
+      "type": "object",
+      "required": [
+        "min",
+        "max"
+      ],
+      "properties": {
+        "min": {
+          "type": "number",
+          "minimum": 0,
+          "x-ui": {
+            "unit": "m"
+          }
+        },
+        "max": {
+          "type": "number",
+          "minimum": 0,
+          "x-ui": {
+            "unit": "m"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "x-ui": {
+        "help": "The band of distance the enemy likes to keep from its target: closer and it backs off, farther and it approaches, inside it circles."
+      }
+    },
+    "think": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "default": 0.3,
+      "x-ui": {
+        "unit": "s",
+        "step": 0.05,
+        "help": "How often an idle enemy considers attacking."
+      }
+    },
+    "phases": {
+      "type": "array",
+      "items": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 1
+      },
+      "x-ui": {
+        "help": "Health fractions where a new phase starts, highest first: [0.66, 0.33] gives phases 0, 1 and 2."
+      }
+    },
+    "patterns": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "weight",
+          "steps"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "weight": {
+            "type": "number",
+            "minimum": 0,
+            "default": 1,
+            "x-ui": {
+              "widget": "dial",
+              "step": 0.1,
+              "help": "Chance of being picked among the patterns that fit."
+            }
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "move",
+                "telegraph"
+              ],
+              "properties": {
+                "move": {
+                  "type": "string",
+                  "minLength": 1,
+                  "x-ui": {
+                    "help": "A move of the enemy's move-set."
+                  }
+                },
+                "telegraph": {
+                  "type": "number",
+                  "minimum": 0,
+                  "default": 0.5,
+                  "x-ui": {
+                    "widget": "dial",
+                    "unit": "s",
+                    "step": 0.05,
+                    "help": "Seconds the enemy shows the tell before the move starts: the time you get to read it."
+                  }
+                },
+                "gap": {
+                  "type": "number",
+                  "minimum": 0,
+                  "default": 0,
+                  "x-ui": {
+                    "unit": "s",
+                    "step": 0.05,
+                    "help": "Pause after the move, before the next step."
+                  }
+                },
+                "feint": {
+                  "type": "number",
+                  "exclusiveMinimum": 0,
+                  "x-ui": {
+                    "unit": "s",
+                    "step": 0.05,
+                    "help": "Cut the move short this many seconds in: a feint that baits a block or a dodge."
+                  }
+                },
+                "unblockable": {
+                  "type": "boolean",
+                  "x-ui": {
+                    "help": "Overrides the move: a red-flash attack."
+                  }
+                }
+              },
+              "additionalProperties": false
+            },
+            "minItems": 1
+          },
+          "recover": {
+            "type": "number",
+            "minimum": 0,
+            "default": 0.8,
+            "x-ui": {
+              "unit": "s",
+              "step": 0.05,
+              "help": "Time before the enemy thinks again."
+            }
+          },
+          "token": {
+            "type": "boolean",
+            "default": true,
+            "x-ui": {
+              "help": "false: may start without a place in the attack queue (a ranged shot)."
+            }
+          },
+          "when": {
+            "type": "object",
+            "properties": {
+              "distance": {
+                "type": "array",
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "minItems": 2,
+                "maxItems": 2,
+                "items": false
+              },
+              "health": {
+                "type": "array",
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "minItems": 2,
+                "maxItems": 2,
+                "items": false,
+                "x-ui": {
+                  "help": "Fraction of full health, 0 to 1."
+                }
+              },
+              "phase": {
+                "type": "array",
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "minItems": 2,
+                "maxItems": 2,
+                "items": false,
+                "x-ui": {
+                  "help": "Phases are counted by 'phases' below, from 0."
+                }
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "minItems": 1
+    }
+  },
+  "additionalProperties": false,
+  "title": "Hull enemy"
+}

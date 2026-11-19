@@ -1,0 +1,559 @@
+{
+  "kind": "character",
+  "note": "Aya, the heroine. 1.66 m. Ivory kimono, indigo haori and hakama, red sash and scarf, a long ponytail, an ironleaf-steel katana in the right hand and its empty sheath on the left hip.",
+  "body": {
+    "type": "generated",
+    "recipe": "humanoid",
+    "proportions": {
+      "height": 1.66,
+      "shoulders": 0.41002,
+      "legs": 0.52,
+      "head": 0.21414,
+      "build": 0.92
+    },
+    "parts": [
+      {
+        "bone": "hips",
+        "shape": "box",
+        "center": [
+          0,
+          -0.16,
+          0
+        ],
+        "size": [
+          0.36,
+          0.36,
+          0.25
+        ],
+        "color": "#243352"
+      },
+      {
+        "bone": "legL",
+        "shape": "limb",
+        "from": [
+          0,
+          0,
+          0
+        ],
+        "to": [
+          0,
+          -0.39425,
+          0
+        ],
+        "radius": 0.082,
+        "radiusEnd": 0.072,
+        "color": "#243352"
+      },
+      {
+        "bone": "legR",
+        "shape": "limb",
+        "from": [
+          0,
+          0,
+          0
+        ],
+        "to": [
+          0,
+          -0.39425,
+          0
+        ],
+        "radius": 0.082,
+        "radiusEnd": 0.072,
+        "color": "#243352"
+      },
+      {
+        "bone": "shinL",
+        "shape": "limb",
+        "from": [
+          0,
+          0,
+          0
+        ],
+        "to": [
+          0,
+          -0.39425,
+          0
+        ],
+        "radius": 0.07,
+        "radiusEnd": 0.052,
+        "color": "#243352"
+      },
+      {
+        "bone": "shinR",
+        "shape": "limb",
+        "from": [
+          0,
+          0,
+          0
+        ],
+        "to": [
+          0,
+          -0.39425,
+          0
+        ],
+        "radius": 0.07,
+        "radiusEnd": 0.052,
+        "color": "#243352"
+      },
+      {
+        "bone": "spine",
+        "shape": "box",
+        "center": [
+          0,
+          0.10661931,
+          0
+        ],
+        "size": [
+          0.24,
+          0.23323861999999998,
+          0.17
+        ],
+        "color": "#b3322a"
+      },
+      {
+        "bone": "spine",
+        "shape": "box",
+        "center": [
+          0,
+          0.085295448,
+          0.1
+        ],
+        "size": [
+          0.1,
+          0.12,
+          0.05
+        ],
+        "color": "#b3322a"
+      },
+      {
+        "bone": "chest",
+        "shape": "box",
+        "center": [
+          0,
+          0.132512571,
+          0.012
+        ],
+        "size": [
+          0.31,
+          0.27974876099999996,
+          0.19
+        ],
+        "color": "#2c3c61"
+      },
+      {
+        "bone": "armL",
+        "shape": "limb",
+        "from": [
+          0,
+          0,
+          0
+        ],
+        "to": [
+          0,
+          -0.282532,
+          0
+        ],
+        "radius": 0.052,
+        "radiusEnd": 0.046,
+        "color": "#2c3c61"
+      },
+      {
+        "bone": "armR",
+        "shape": "limb",
+        "from": [
+          0,
+          0,
+          0
+        ],
+        "to": [
+          0,
+          -0.282532,
+          0
+        ],
+        "radius": 0.052,
+        "radiusEnd": 0.046,
+        "color": "#2c3c61"
+      },
+      {
+        "bone": "forearmL",
+        "shape": "limb",
+        "from": [
+          0,
+          0,
+          0
+        ],
+        "to": [
+          0,
+          -0.19654400000000002,
+          0
+        ],
+        "radius": 0.046,
+        "radiusEnd": 0.036,
+        "color": "#2c3c61"
+      },
+      {
+        "bone": "forearmR",
+        "shape": "limb",
+        "from": [
+          0,
+          0,
+          0
+        ],
+        "to": [
+          0,
+          -0.19654400000000002,
+          0
+        ],
+        "radius": 0.046,
+        "radiusEnd": 0.036,
+        "color": "#2c3c61"
+      },
+      {
+        "bone": "chest",
+        "shape": "box",
+        "center": [
+          0,
+          0.2709145896,
+          -0.07
+        ],
+        "size": [
+          0.1,
+          0.07,
+          0.03
+        ],
+        "color": "#e9e2d0"
+      },
+      {
+        "bone": "head",
+        "shape": "sphere",
+        "center": [
+          0,
+          0.12420119999999998,
+          0.02
+        ],
+        "size": [
+          0.1798776,
+          0.192726,
+          0.2055744
+        ],
+        "color": "#16110f"
+      },
+      {
+        "bone": "head",
+        "shape": "limb",
+        "from": [
+          0,
+          0.1327668,
+          0.1
+        ],
+        "to": [
+          0,
+          0.053535,
+          0.2
+        ],
+        "radius": 0.036,
+        "radiusEnd": 0.02,
+        "color": "#16110f"
+      },
+      {
+        "bone": "head",
+        "shape": "sphere",
+        "center": [
+          0,
+          0.1413324,
+          0.095
+        ],
+        "size": [
+          0.04,
+          0.04,
+          0.04
+        ],
+        "color": "#b3322a"
+      },
+      {
+        "bone": "head",
+        "shape": "box",
+        "center": [
+          -0.032,
+          0.117777,
+          -0.0942216
+        ],
+        "size": [
+          0.02,
+          0.013,
+          0.012
+        ],
+        "color": "#1a1412"
+      },
+      {
+        "bone": "head",
+        "shape": "box",
+        "center": [
+          0.032,
+          0.117777,
+          -0.0942216
+        ],
+        "size": [
+          0.02,
+          0.013,
+          0.012
+        ],
+        "color": "#1a1412"
+      },
+      {
+        "bone": "neck",
+        "shape": "limb",
+        "from": [
+          0,
+          0,
+          0
+        ],
+        "to": [
+          0,
+          0.08244389999999999,
+          0
+        ],
+        "radius": 0.034,
+        "radiusEnd": 0.034,
+        "color": "#b3322a"
+      },
+      {
+        "bone": "chest",
+        "shape": "limb",
+        "from": [
+          0,
+          0.265025142,
+          0.09
+        ],
+        "to": [
+          0,
+          0.029447238,
+          0.2
+        ],
+        "radius": 0.03,
+        "radiusEnd": 0.018,
+        "color": "#b3322a"
+      },
+      {
+        "bone": "handR",
+        "shape": "box",
+        "center": [
+          0,
+          0.02,
+          0
+        ],
+        "size": [
+          0.03,
+          0.26,
+          0.03
+        ],
+        "color": "#1f1a22"
+      },
+      {
+        "bone": "handR",
+        "shape": "box",
+        "center": [
+          0,
+          -0.13,
+          0
+        ],
+        "size": [
+          0.07,
+          0.012,
+          0.07
+        ],
+        "color": "#b8923a"
+      },
+      {
+        "bone": "handR",
+        "shape": "box",
+        "center": [
+          0,
+          -0.52,
+          0
+        ],
+        "size": [
+          0.012,
+          0.78,
+          0.034
+        ],
+        "color": "#d7dde3"
+      },
+      {
+        "bone": "hips",
+        "shape": "box",
+        "center": [
+          -0.19,
+          -0.02,
+          -0.02
+        ],
+        "size": [
+          0.045,
+          0.045,
+          0.7
+        ],
+        "color": "#1c1517"
+      },
+      {
+        "bone": "hips",
+        "shape": "box",
+        "center": [
+          -0.19,
+          -0.02,
+          -0.4
+        ],
+        "size": [
+          0.05,
+          0.05,
+          0.04
+        ],
+        "color": "#b8923a"
+      }
+    ]
+  },
+  "materials": {
+    "skin": "material/skin",
+    "cloth": "material/cloth-ivory",
+    "metal": "material/steel",
+    "boots": "material/boots"
+  },
+  "sockets": {
+    "handR": {
+      "joint": "handR",
+      "offset": [
+        0,
+        -0.08,
+        0
+      ]
+    },
+    "handL": {
+      "joint": "handL",
+      "offset": [
+        0,
+        -0.05,
+        0
+      ]
+    },
+    "back": {
+      "joint": "chest",
+      "offset": [
+        0,
+        0.2,
+        0.12
+      ]
+    },
+    "hip": {
+      "joint": "hips",
+      "offset": [
+        -0.19,
+        -0.02,
+        -0.02
+      ]
+    },
+    "katanaBase": {
+      "joint": "handR",
+      "offset": [
+        0,
+        -0.14,
+        0
+      ]
+    },
+    "katanaTip": {
+      "joint": "handR",
+      "offset": [
+        0,
+        -0.91,
+        0
+      ]
+    }
+  },
+  "collider": {
+    "shape": "capsule",
+    "radius": 0.32,
+    "height": 1.66
+  },
+  "hits": [
+    {
+      "bone": "head",
+      "shape": "sphere",
+      "part": "head",
+      "group": "body",
+      "c": [
+        0,
+        0.10707,
+        0
+      ],
+      "r": 0.10707
+    },
+    {
+      "bone": "chest",
+      "shape": "capsule",
+      "part": "torso",
+      "group": "body",
+      "a": [
+        0,
+        0.04,
+        0
+      ],
+      "b": [
+        0,
+        0.25447238,
+        0
+      ],
+      "r": 0.1472
+    },
+    {
+      "bone": "spine",
+      "shape": "capsule",
+      "part": "torso",
+      "group": "body",
+      "a": [
+        0,
+        0,
+        0
+      ],
+      "b": [
+        0,
+        0.21323862,
+        0
+      ],
+      "r": 0.138
+    },
+    {
+      "bone": "legL",
+      "shape": "capsule",
+      "part": "leg",
+      "group": "body",
+      "a": [
+        0,
+        0,
+        0
+      ],
+      "b": [
+        0,
+        -0.7885,
+        0
+      ],
+      "r": 0.0736
+    },
+    {
+      "bone": "legR",
+      "shape": "capsule",
+      "part": "leg",
+      "group": "body",
+      "a": [
+        0,
+        0,
+        0
+      ],
+      "b": [
+        0,
+        -0.7885,
+        0
+      ],
+      "r": 0.0736
+    }
+  ],
+  "animSet": "anim-set/aya",
+  "animGraph": "anim-graph/aya"
+}

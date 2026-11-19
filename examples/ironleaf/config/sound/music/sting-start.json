@@ -1,0 +1,151 @@
+{
+  "kind": "sound",
+  "note": "A short plucked phrase on a pentatonic scale, and one deep drum: the fight begins.",
+  "bus": "music",
+  "level": -2,
+  "source": {
+    "type": "synth",
+    "length": 3.2,
+    "layers": {
+      "n0": {
+        "at": 0,
+        "from": {
+          "osc": "triangle",
+          "freq": 293.7
+        },
+        "then": [
+          {
+            "filter": "lowpass",
+            "freq": 1468.5,
+            "q": 1
+          },
+          {
+            "envelope": {
+              "attack": 0.003,
+              "decay": 0.8
+            }
+          },
+          {
+            "gain": -4
+          }
+        ]
+      },
+      "n1": {
+        "at": 0.32,
+        "from": {
+          "osc": "triangle",
+          "freq": 349.2
+        },
+        "then": [
+          {
+            "filter": "lowpass",
+            "freq": 1746,
+            "q": 1
+          },
+          {
+            "envelope": {
+              "attack": 0.003,
+              "decay": 0.8
+            }
+          },
+          {
+            "gain": -4
+          }
+        ]
+      },
+      "n2": {
+        "at": 0.64,
+        "from": {
+          "osc": "triangle",
+          "freq": 392
+        },
+        "then": [
+          {
+            "filter": "lowpass",
+            "freq": 1960,
+            "q": 1
+          },
+          {
+            "envelope": {
+              "attack": 0.003,
+              "decay": 0.8
+            }
+          },
+          {
+            "gain": -4
+          }
+        ]
+      },
+      "n3": {
+        "at": 1.1,
+        "from": {
+          "osc": "triangle",
+          "freq": 440
+        },
+        "then": [
+          {
+            "filter": "lowpass",
+            "freq": 2200,
+            "q": 1
+          },
+          {
+            "envelope": {
+              "attack": 0.003,
+              "decay": 1
+            }
+          },
+          {
+            "gain": -4
+          }
+        ]
+      },
+      "n4": {
+        "at": 1.5,
+        "from": {
+          "osc": "triangle",
+          "freq": 587.3
+        },
+        "then": [
+          {
+            "filter": "lowpass",
+            "freq": 2936.5,
+            "q": 1
+          },
+          {
+            "envelope": {
+              "attack": 0.003,
+              "decay": 1.4
+            }
+          },
+          {
+            "gain": -6
+          }
+        ]
+      },
+      "taiko": {
+        "at": 0.05,
+        "from": {
+          "osc": "sine",
+          "freq": [
+            90,
+            100
+          ],
+          "glideTo": 0.4,
+          "glideTime": 0.4
+        },
+        "then": [
+          {
+            "envelope": {
+              "attack": 0.004,
+              "decay": 0.7
+            }
+          },
+          {
+            "gain": 2
+          }
+        ]
+      }
+    },
+    "reverb": 0.25
+  }
+}

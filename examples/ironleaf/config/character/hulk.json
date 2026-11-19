@@ -1,0 +1,355 @@
+{
+  "kind": "character",
+  "note": "Cinder Hulk, the brute. 2.15 m and broad. Bare scarred torso, iron shoulder plates, a studded club taller than Aya.",
+  "body": {
+    "type": "generated",
+    "recipe": "humanoid",
+    "proportions": {
+      "height": 2.15,
+      "shoulders": 0.78,
+      "legs": 0.52,
+      "head": 0.27735,
+      "build": 1.55
+    },
+    "parts": [
+      {
+        "bone": "chest",
+        "shape": "box",
+        "center": [
+          0,
+          0.19069747500000003,
+          0
+        ],
+        "size": [
+          0.62,
+          0.38139495000000007,
+          0.34
+        ],
+        "color": "#c49a7a"
+      },
+      {
+        "bone": "spine",
+        "shape": "box",
+        "center": [
+          0,
+          0.138091275,
+          0
+        ],
+        "size": [
+          0.5,
+          0.29618255000000004,
+          0.3
+        ],
+        "color": "#c49a7a"
+      },
+      {
+        "bone": "hips",
+        "shape": "box",
+        "center": [
+          0,
+          -0.1,
+          0
+        ],
+        "size": [
+          0.5,
+          0.3,
+          0.34
+        ],
+        "color": "#3a322c"
+      },
+      {
+        "bone": "armL",
+        "shape": "box",
+        "center": [
+          0,
+          0.06,
+          0
+        ],
+        "size": [
+          0.22,
+          0.14,
+          0.26
+        ],
+        "color": "#55595e"
+      },
+      {
+        "bone": "armR",
+        "shape": "box",
+        "center": [
+          0,
+          0.06,
+          0
+        ],
+        "size": [
+          0.22,
+          0.14,
+          0.26
+        ],
+        "color": "#55595e"
+      },
+      {
+        "bone": "chest",
+        "shape": "box",
+        "center": [
+          0,
+          0.26697646500000005,
+          -0.18
+        ],
+        "size": [
+          0.5,
+          0.28,
+          0.04
+        ],
+        "color": "#3a322c"
+      },
+      {
+        "bone": "head",
+        "shape": "sphere",
+        "center": [
+          0,
+          0.1525425,
+          0.01
+        ],
+        "size": [
+          0.249615,
+          0.249615,
+          0.26348249999999995
+        ],
+        "color": "#c49a7a"
+      },
+      {
+        "bone": "head",
+        "shape": "box",
+        "center": [
+          0,
+          0.249615,
+          0
+        ],
+        "size": [
+          0.28,
+          0.05,
+          0.28
+        ],
+        "color": "#55595e"
+      },
+      {
+        "bone": "head",
+        "shape": "box",
+        "center": [
+          0,
+          0.09707249999999999,
+          -0.127581
+        ],
+        "size": [
+          0.2,
+          0.12,
+          0.04
+        ],
+        "color": "#55595e"
+      },
+      {
+        "bone": "head",
+        "shape": "box",
+        "center": [
+          -0.032,
+          0.1525425,
+          -0.12203399999999999
+        ],
+        "size": [
+          0.02,
+          0.013,
+          0.012
+        ],
+        "color": "#c2371f"
+      },
+      {
+        "bone": "head",
+        "shape": "box",
+        "center": [
+          0.032,
+          0.1525425,
+          -0.12203399999999999
+        ],
+        "size": [
+          0.02,
+          0.013,
+          0.012
+        ],
+        "color": "#c2371f"
+      },
+      {
+        "bone": "handR",
+        "shape": "box",
+        "center": [
+          0,
+          -0.5,
+          -0.039999999999999994
+        ],
+        "size": [
+          0.14,
+          1.15,
+          0.14
+        ],
+        "color": "#4b3626"
+      },
+      {
+        "bone": "handR",
+        "shape": "sphere",
+        "center": [
+          0,
+          -1.15,
+          -0.039999999999999994
+        ],
+        "size": [
+          0.3,
+          0.4,
+          0.3
+        ],
+        "color": "#4b3626"
+      },
+      {
+        "bone": "handR",
+        "shape": "box",
+        "center": [
+          0,
+          -1.15,
+          -0.039999999999999994
+        ],
+        "size": [
+          0.34,
+          0.06,
+          0.06
+        ],
+        "color": "#8a8e93"
+      },
+      {
+        "bone": "handR",
+        "shape": "box",
+        "center": [
+          0,
+          -1.15,
+          -0.039999999999999994
+        ],
+        "size": [
+          0.06,
+          0.06,
+          0.34
+        ],
+        "color": "#8a8e93"
+      }
+    ]
+  },
+  "materials": {
+    "skin": "material/skin",
+    "cloth": "material/cloth-ash",
+    "metal": "material/steel",
+    "boots": "material/boots"
+  },
+  "sockets": {
+    "handR": {
+      "joint": "handR",
+      "offset": [
+        0,
+        -0.12,
+        0
+      ]
+    },
+    "clubHead": {
+      "joint": "handR",
+      "offset": [
+        0,
+        -1.15,
+        -0.039999999999999994
+      ]
+    }
+  },
+  "collider": {
+    "shape": "capsule",
+    "radius": 0.5,
+    "height": 2.15
+  },
+  "hits": [
+    {
+      "bone": "head",
+      "shape": "sphere",
+      "part": "head",
+      "group": "body",
+      "c": [
+        0,
+        0.138675,
+        0
+      ],
+      "r": 0.138675
+    },
+    {
+      "bone": "chest",
+      "shape": "capsule",
+      "part": "torso",
+      "group": "body",
+      "a": [
+        0,
+        0.04,
+        0
+      ],
+      "b": [
+        0,
+        0.3413949500000001,
+        0
+      ],
+      "r": 0.24800000000000003
+    },
+    {
+      "bone": "spine",
+      "shape": "capsule",
+      "part": "torso",
+      "group": "body",
+      "a": [
+        0,
+        0,
+        0
+      ],
+      "b": [
+        0,
+        0.27618255,
+        0
+      ],
+      "r": 0.23249999999999998
+    },
+    {
+      "bone": "legL",
+      "shape": "capsule",
+      "part": "leg",
+      "group": "body",
+      "a": [
+        0,
+        0,
+        0
+      ],
+      "b": [
+        0,
+        -1.02125,
+        0
+      ],
+      "r": 0.12400000000000001
+    },
+    {
+      "bone": "legR",
+      "shape": "capsule",
+      "part": "leg",
+      "group": "body",
+      "a": [
+        0,
+        0,
+        0
+      ],
+      "b": [
+        0,
+        -1.02125,
+        0
+      ],
+      "r": 0.12400000000000001
+    }
+  ],
+  "animSet": "anim-set/raider",
+  "animGraph": "anim-graph/hulk"
+}

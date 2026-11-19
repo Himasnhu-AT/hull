@@ -1,0 +1,64 @@
+{
+ "kind": "sound",
+ "note": "The bright ring of a deflect.",
+ "bus": "sfx",
+ "level": -2,
+ "pitch": [
+  0.97,
+  1.03
+ ],
+ "limit": {
+  "minGap": 0.05,
+  "voices": 4,
+  "over": "steal-oldest"
+ },
+ "source": {
+  "type": "synth",
+  "length": 0.7,
+  "layers": {
+   "ring": {
+    "from": {
+     "modes": [
+      1900,
+      3400,
+      5200,
+      7000
+     ],
+     "decay": [
+      0.18,
+      0.3
+     ],
+     "tilt": 0.35
+    },
+    "then": [
+     {
+      "gain": -3
+     }
+    ]
+   },
+   "ping": {
+    "from": {
+     "osc": "sine",
+     "freq": [
+      2600,
+      2800
+     ],
+     "glideTo": 1.1,
+     "glideTime": 0.1
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.001,
+       "decay": 0.25
+      }
+     },
+     {
+      "gain": -9
+     }
+    ]
+   }
+  },
+  "reverb": 0.15
+ }
+}

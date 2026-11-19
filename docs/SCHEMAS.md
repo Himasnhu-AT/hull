@@ -354,6 +354,14 @@ Clip `events` map a name to a time, or a list of times (0 to 1 for loops, second
 signal fires. A clip also has `speed`, `travel` (ground speed in m/s, for stride matching) and `curve` (`smooth` or `linear`
 between keyframes). A `generated` clip's `knobs` are numbers only. Keyframe tracks hold `rotation` (Euler radians) and `offset`.
 
+A key may carry a third item, the **ease** of the curve from it to the next key: `[0.2, [1.2, 0, 0], "in"]`
+(`smooth` the default Catmull-Rom, `linear`, `in`, `out`, `inOut`, `snap`, `hold`). `windows` maps a name to `[start, end]` or a list of
+them (0 to 1 of the loop for looping clips, seconds otherwise): `"windows": { "trace": [0.18, 0.34], "cancel": [0.4, 0.62] }`; the game reads
+`animator.inWindow("trace")` and the `windows` signal. `rootMotion` is `true` or `{ "bone": "hips", "axes": "xz" | "xyz" | "y", "turn": false }`: that bone's
+travel leaves the pose and moves the node when the Animator has `applyRootMotion`. A humanoid `body` may list `bones` (extra bones: a ponytail, a sash)
+that parts and springs can use. `packages/hull/src/anim/examples/config` has a swordswoman with draw, light 1-3, heavy, deflect, dodge and hit
+reaction clips (`character/swordswoman`, `anim-set/sword`, `anim-graph/sword`).
+
 ```json
 {
   "kind": "anim-graph",
@@ -392,6 +400,44 @@ between keyframes). A `generated` clip's `knobs` are numbers only. Keyframe trac
 (seconds in the state). A state has `clip` or `blend`, `speed`, `speedFrom` (a parameter that scales it) and `exit` (the state to go
 to when a non-looping clip ends, with `exitBlend`). A layer has `mask`, `additive` and `weight`. `ik` has `feet` and `look`
 (`enabled`, `weights`, `yawDeg`, `pitchDeg`, `speed`).
+
+## 6b. `move-set` and `enemy` (combat kit)
+
+A `move-set` is what a fighter can do with its weapon; an `enemy` is stats plus patterns that use a move-set. Schemas:
+`schemas/move-set.schema.json`, `schemas/enemy.schema.json`. Defaults and examples:
+`packages/hull/src/kits/combat/config/move-set/duelist.json` and `.../enemy/duelist.json`. Behaviour: the kit's README.
+
+`move-set`: `weapon` is `{ socket, base, tip, radius }`, a line in a character socket's space that the trace sweeps. `stances`
+lists the stances (the first starts). `moves` maps a name to:
+
+| Field | Meaning |
+|---|---|
+| `length` | Seconds the move lasts. Required. |
+| `damage`, `posture` | Hit points and posture a clean hit takes; a block takes the posture only. |
+| `input`, `start`, `stance` | The button it answers, whether it can start from rest (default true), the stance it needs. |
+| `clip`, `trigger` | The animation clip, and the animator trigger that starts it (default the clip, default the move name). |
+| `reach` | Metres the blade can land, for the enemy brain and a finisher's range. |
+| `windows` | Named `[from, to]` ranges in seconds (or a list of them): `trace` (blade live), `telegraph` (the tell), `cancel`, `iframe`. |
+| `windowsFrom` | `move-set` (default) or `clip` (`animator.inWindow`). |
+| `cancelsInto` | Moves reachable in the cancel window; `input` picks which. |
+| `unblockable` | Red flash: only a dodge avoids it. |
+| `guardBreak` | Posture multiplier against a guard (a charged heavy). |
+| `finisher` | Only starts, and only hurts, a broken fighter; takes `finisherDamage` of its full health. |
+| `stagger`, `knockback`, `hitStop` | Feel of a clean hit; defaults come from the `combat` tunables. |
+| `lunge` | `{ distance, from, to }`: steps forward over that part of the move. |
+| `sound` | A `sound` id played when the move starts. |
+
+`enemy`: `moveSet`, `character`, `health`, `posture` (`max`, `recover`, `delay`, `broken`), `weakTo` (the stance that costs it
+extra posture), `finisherDamage`, `speed` (`walk`, `circle`, `turn`), `spacing` (`min`, `max`), `think`, `phases` (health fractions where a
+new phase starts) and `patterns`: each `{ name, weight, steps, recover, token, when }`. A step is `{ move, telegraph, gap, feint,
+unblockable }`. `when` limits a pattern by `distance`, `health` (0 to 1) and `phase`. `checkMoveSet` and `checkEnemy`
+(`hull/kits`) check cancels, windows and pattern moves against the move-set, naming the pointer.
+
+More on the graph (M10): a state may be `"blend2d": { "x": "moveX", "y": "moveY", "points": [{ "x": 0, "y": 1, "clip": "walk" }, ...] }`
+(clips weighted by inverse distance); a transition may have `"sync": true` (the new state starts at the same cycle phase); a layer may have
+`"weightFrom": "param"`. `ik.grips` maps a hand bone to a character socket it grips (`{ "handL": { "socket": "hiltL", "weightFrom": "twoHand" } }`).
+`springs` is `{ "ponytail": { "chain": ["pony1", "pony2", "pony3"], "stiffness": 90, "damping": 6, "drive": 0.06, "falloff": 0.8, "limitDeg": 70 } }`:
+the chain swings from the root bone's acceleration. `hitReact` (`bones`, `angle`, `shift`, `stiffness`, `damping`) shapes `animator.hitReact(dir, strength)`.
 
 ## 7. `ui-theme` and `ui-screen`
 

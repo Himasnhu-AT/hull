@@ -1,0 +1,83 @@
+{
+  "kind": "vfx",
+  "note": "Fireflies drifting low over the grass at night: soft green-gold lights that fade in and out.",
+  "emit": {
+    "rate": 6,
+    "shape": {
+      "box": [
+        22,
+        2.5,
+        22
+      ]
+    }
+  },
+  "particle": {
+    "life": [
+      3,
+      6
+    ],
+    "speed": [
+      0.1,
+      0.5
+    ],
+    "direction": {
+      "cone": [
+        0,
+        1,
+        0
+      ],
+      "angleDeg": 90
+    },
+    "gravity": 0,
+    "drag": 0.6,
+    "flutter": 0.9,
+    "size": [
+      [
+        0,
+        0.06
+      ],
+      [
+        1,
+        0.06
+      ]
+    ],
+    "color": [
+      [
+        0,
+        "#d8ff7a"
+      ],
+      [
+        1,
+        "#fff1a0"
+      ]
+    ],
+    "alpha": [
+      [
+        0,
+        0
+      ],
+      [
+        0.25,
+        1
+      ],
+      [
+        0.6,
+        0.4
+      ],
+      [
+        0.8,
+        1
+      ],
+      [
+        1,
+        0
+      ]
+    ],
+    "glow": 2.5,
+    "sprite": "soft",
+    "blend": "additive"
+  },
+  "budget": {
+    "max": 300
+  }
+}
