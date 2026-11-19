@@ -3,13 +3,13 @@
 
 import { createContext, useCallback, useContext, useMemo, useState, type JSX, type ReactNode } from 'react';
 import { Onboarding } from './Onboarding.tsx';
-import { LESSONS } from './lessons/index.ts';
+import { CHAPTERS as LESSONS } from './story.ts';
 import { markOnboardingSeen, onboardingSeen } from './seen.ts';
 
 export { markOnboardingSeen, onboardingSeen };
 
 export interface OnboardingApi {
-  /** Opens the tour on a lesson (0 to 3; the first by default). */
+  /** Opens the tour at a chapter (0 to 3; the first by default). */
   open(lesson?: number): void;
 }
 

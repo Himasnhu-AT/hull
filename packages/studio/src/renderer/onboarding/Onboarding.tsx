@@ -1,15 +1,24 @@
-// The first-run tour: a sheet over the app with a rail of lessons, a whiteboard, the narration and the controls.
+// The first-run tour: a sheet over the app with a rail of chapters, a small working copy of the app playing one game
+// being made (Replica.tsx), the narration and the controls.
 // Right or Space is next, Left is back, Escape closes. Auto-advance plays the next step by itself a moment after one finishes.
 
 import { useCallback, useEffect, useMemo, useRef, useState, type JSX } from 'react';
-import { LESSONS } from './lessons/index.ts';
+import { Replica } from './Replica.tsx';
+import { CHAPTERS as LESSONS } from './story.ts';
 import { readDoneLessons, writeDoneLessons } from './seen.ts';
-import { usePrefersReducedMotion, Whiteboard } from './Whiteboard.tsx';
+
+/** True while the system asks for reduced motion; follows the setting live. */
+function usePrefersReducedMotion(): boolean {
+  const q = '(prefers-reduced-motion: reduce)';
+  const [on, setOn] = useState(() => typeof matchMedia === 'function' && matchMedia(q).matches);
+  useEffect(() => { const m = matchMedia(q); const f = (): void => setOn(m.matches); m.addEventListener('change', f); return () => m.removeEventListener('change', f); }, []);
+  return on;
+}
 import './onboarding.css';
 
 export interface OnboardingProps { initialLesson?: number; onClose(): void }
 
-const AUTO_DELAY_MS = 1700;
+const AUTO_DELAY_MS = 1100;
 
 function Check(): JSX.Element {
   return <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M3 8.5l3.2 3.2L13 4.6" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg>;
@@ -55,12 +64,12 @@ export function Onboarding({ initialLesson = 0, onClose }: OnboardingProps): JSX
     }
   }, [lessonIx, playKey, last]);
 
-  // Auto-advance, only within a lesson and never with reduced motion: there the person clicks Next.
+  // Auto-advance through the whole story, chapter to chapter, and never with reduced motion: there the person clicks Next.
   useEffect(() => {
-    if (!auto || reduced || settled !== playId || step >= last) return;
-    const t = setTimeout(() => setStep((s) => s + 1), AUTO_DELAY_MS);
+    if (!auto || reduced || settled !== playId || (step >= last && lastLesson)) return;
+    const t = setTimeout(() => { if (step < last) setStep((s) => s + 1); else goTo(lessonIx + 1, 0); }, AUTO_DELAY_MS);
     return () => clearTimeout(t);
-  }, [auto, reduced, settled, playId, step, last]);
+  }, [auto, reduced, settled, playId, step, last, lastLesson, lessonIx, goTo]);
 
   useEffect(() => {
     const prev = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -81,13 +90,13 @@ export function Onboarding({ initialLesson = 0, onClose }: OnboardingProps): JSX
     return () => window.removeEventListener('keydown', onKey);
   }, [next, back, onClose]);
 
-  const nextLabel = step < last ? 'Next' : lastLesson ? 'Start making a game' : 'Next lesson';
+  const nextLabel = step < last ? 'Next' : lastLesson ? 'Start making a game' : 'Next chapter';
   const finished = useMemo(() => done.length, [done]);
 
   return (
     <div className="ob-scrim" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="ob" ref={sheet} role="dialog" aria-modal="true" aria-label="How Hull works" tabIndex={-1}>
-        <nav className="ob-rail" aria-label="Lessons">
+        <nav className="ob-rail" aria-label="Chapters">
           <div className="ob-rail-head">
             <div className="ob-rail-title">How Hull works</div>
             <div className="ob-rail-sub">{finished} of {LESSONS.length} seen</div>
@@ -108,7 +117,7 @@ export function Onboarding({ initialLesson = 0, onClose }: OnboardingProps): JSX
         <section className="ob-main">
           <div className="ob-stage">
             <div className="ob-paper">
-              <Whiteboard lesson={lesson} step={step} playKey={playKey} onStepDone={onStepDone} />
+              <Replica scene={current.scene} playKey={playKey} reduced={reduced} onDone={() => onStepDone(step)} />
             </div>
           </div>
 

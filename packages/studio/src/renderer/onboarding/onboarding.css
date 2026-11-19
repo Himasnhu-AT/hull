@@ -1,15 +1,7 @@
 /*
   First-run tour. Colours come from the app's tokens with a light fallback, so it also works before the tokens exist.
-  The board is paper in both themes: it is a whiteboard, not chrome.
+  The picture is a small copy of the app (Replica.tsx), drawn with the app's own classes.
 */
-
-@font-face {
-  font-family: 'Hull Caveat';
-  src: url('./fonts/Caveat-latin.woff2') format('woff2');
-  font-weight: 400 700;
-  font-style: normal;
-  font-display: swap;
-}
 
 @keyframes ob-fade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes ob-pop { from { opacity: 0; transform: translateY(8px) scale(0.985); } to { opacity: 1; transform: none; } }
@@ -92,11 +84,13 @@
 .ob-main { display: flex; flex-direction: column; gap: 12px; min-width: 0; min-height: 0; padding: 18px 22px 18px; }
 
 .ob-stage { flex: 1 1 0; min-height: 160px; display: flex; align-items: center; justify-content: center; container-type: size; }
+/* The replica scales itself into this box, which has to be its positioning parent. */
 .ob-paper {
-  width: min(100cqw, calc(100cqh * 16 / 9));
-  aspect-ratio: 16 / 9;
-  background: #fffefb;
-  border: 1px solid rgba(28, 27, 24, 0.12);
+  position: relative;
+  width: min(100cqw, calc(100cqh * 980 / 620));
+  aspect-ratio: 980 / 620;
+  background: transparent;
+  border: 0;
   border-radius: var(--radius, 12px);
   box-shadow: 0 1px 2px rgba(28, 27, 24, 0.06), 0 10px 28px rgba(28, 27, 24, 0.1);
   overflow: hidden;
@@ -163,3 +157,60 @@
   .ob-scrim, .ob { animation: none; }
   .ob-btn, .ob-chip, .ob-lesson { transition: none; }
 }
+
+/* Electron lets a window-drag area under this sheet swallow clicks; the sheet and everything in it is not a drag area. */
+.ob-scrim, .ob-scrim * { -webkit-app-region: no-drag; }
+
+/* ---------- the replica: the chat alone, scaled to fit, inert ---------- */
+.rp-box { position: absolute; inset: 0; display: grid; place-items: center; overflow: hidden; }
+.rp { position: absolute; left: 50%; top: 50%; margin: -310px 0 0 -490px; flex: none; transform-origin: center; background: var(--bg); border-radius: 16px; overflow: hidden; pointer-events: none; user-select: none;
+  box-shadow: 0 0 0 0.5px var(--line2), 0 12px 40px -12px rgba(28, 26, 22, 0.25); font-size: 13px; }
+.rp-rise { animation: chat-rise 0.3s var(--ease) both; }
+.rp-press { animation: rp-press 0.4s var(--ease); box-shadow: 0 0 0 4px color-mix(in srgb, var(--signal) 30%, transparent) !important; }
+@keyframes rp-press { 40% { transform: scale(0.94); } }
+.rp-caret { display: inline-block; width: 2px; height: 1.1em; margin-left: 1px; vertical-align: -3px; background: var(--text); animation: cr-blink 1s steps(2) infinite; }
+
+.rp-chat { position: relative; height: 100%; }
+.rp-head { position: absolute; left: 0; right: 0; top: 0; height: 48px; display: flex; align-items: center; gap: 10px; padding: 0 20px; font-size: 14px; transition: opacity 0.3s var(--ease); }
+.rp-hero-t { position: absolute; left: 0; right: 0; top: 150px; text-align: center; transition: opacity 0.25s ease, transform 0.45s var(--ease); }
+.rp-hero-t h2 { margin: 0; font-size: 30px; font-weight: 600; letter-spacing: -0.025em; }
+.rp-hero-t p { margin: 8px 0 0; color: var(--muted); font-size: 14px; }
+.rp-log { position: absolute; left: 0; right: 0; top: 48px; bottom: 120px; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; gap: 14px; padding: 0 120px 14px; transition: opacity 0.3s ease; }
+.rp-log .cr-ui { align-self: stretch; }
+.rp-still > * { animation: none !important; }
+/* The box moves: centred under the heading while you type, at the bottom once the prompt is sent. */
+.rp-dock { position: absolute; left: 120px; right: 120px; bottom: 22px; transition: transform 0.6s var(--ease-move); }
+.rp-chat.hero .rp-dock { transform: translateY(-238px); }
+.rp-chat.hero .rp-head, .rp-chat.hero .rp-log { opacity: 0; }
+.rp-chat:not(.hero) .rp-hero-t { opacity: 0; transform: translateY(-24px); }
+.rp-ta { grid-area: text; min-height: 46px; font-size: 15px; line-height: 1.5; color: var(--text); text-align: left; }
+.rp-ph { color: var(--faint); }
+.rp-cmp .cmp-btn { font-size: 15px; font-weight: 600; }
+.rp-cmp .cmp-btn.idle { background: var(--field); color: var(--faint); }
+
+.rp-picked { background: var(--accent-solid) !important; color: var(--on-accent) !important; }
+.rp-hl { border-radius: 10px; background: color-mix(in srgb, var(--signal) 8%, transparent); box-shadow: 0 0 0 6px color-mix(in srgb, var(--signal) 8%, transparent); }
+.rp-new { color: var(--ok); font-weight: 600; }
+.cr-brief s, .rp-change s { color: var(--faint); }
+.rp-stages { list-style: none; margin: 2px 0 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 18px; }
+.rp-stages li { display: grid; grid-template-columns: 12px minmax(0, 1fr) auto; gap: 8px; align-items: center; font-size: 13px; }
+.rp-stages small { color: var(--faint); font-size: 11.5px; }
+.rp-change { display: flex; gap: 10px; align-items: baseline; font-size: 14px; }
+
+.rp-game { position: relative; height: 150px; border-radius: 12px; overflow: hidden; }
+.rp-sky { position: absolute; inset: 0; background: linear-gradient(180deg, #f2c79a 0%, #e9a873 55%, #b77b52 100%); }
+.rp-ground { position: absolute; left: 0; right: 0; bottom: 0; height: 30%; background: linear-gradient(180deg, #7c5a3c, #5a3f29); }
+.rp-gem { position: absolute; bottom: 34%; width: 14px; height: 14px; background: #5fd1b4; transform: rotate(45deg); box-shadow: 0 0 12px #5fd1b4; }
+.rp-bot { position: absolute; left: 14%; bottom: 30%; width: 26px; height: 34px; border-radius: 7px; background: #2f5fbf; box-shadow: inset 0 -6px 0 #24489a; }
+.rp-bot.jump-floaty { animation: rp-jump-f 1.5s cubic-bezier(0.3, 0, 0.7, 1); }
+.rp-bot.jump-fixed { animation: rp-jump-x 0.6s cubic-bezier(0.3, 0, 0.7, 1) 2; }
+@keyframes rp-jump-f { 50% { transform: translate(80px, -80px); } 100% { transform: translate(160px, 0); } }
+@keyframes rp-jump-x { 50% { transform: translate(50px, -50px); } 100% { transform: translate(100px, 0); } }
+.rp-hud { position: absolute; left: 10px; top: 8px; font: 11px var(--mono); color: #fff; background: rgba(22, 21, 19, 0.55); padding: 3px 9px; border-radius: 999px; }
+
+.rp-file { display: flex; align-items: center; gap: 14px; padding: 12px 16px; border-radius: 12px; background: var(--panel2); }
+.rp-file-ic { width: 40px; height: 48px; border-radius: 8px; display: grid; place-items: center; background: var(--accent-solid); color: var(--on-accent); font: 700 13px var(--mono); }
+.rp-file b { display: block; font-size: 15px; }
+.rp-file small { color: var(--faint); }
+
+@media (prefers-reduced-motion: reduce) { .rp-rise, .rp-press, .rp-caret, .rp-bot { animation: none !important; } .rp-dock, .rp-hero-t { transition: none; } }

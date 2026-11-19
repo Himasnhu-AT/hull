@@ -76,3 +76,5 @@
 @media (prefers-reduced-motion: reduce) { .st, .st-back, .st-login { animation: none; } }
 .st-wait { font-size: 12px; color: var(--muted); animation: chat-breathe 1.4s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) { .st-wait { animation: none; } }
+/* A window-drag area under the sheet would swallow its clicks in Electron. */
+.st-back, .st-back * { -webkit-app-region: no-drag; }
