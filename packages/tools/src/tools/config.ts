@@ -25,7 +25,7 @@ export function writeIds(root: string, source: string): void {
   writeFileSync(file, source);
 }
 
-/** The part of a manifest the CLI needs; SCHEMAS section 2 has the rest. */
+/** The part of a manifest the tools need; SCHEMAS section 2 has the rest. */
 export interface ManifestInfo { entry: string; step?: number; title?: string }
 
 /** Validates hull.json. Returns the manifest when it is usable. */

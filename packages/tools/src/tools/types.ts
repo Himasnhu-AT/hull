@@ -21,7 +21,7 @@ export function parseTsc(output: string, root: string): Problem[] {
   return out;
 }
 
-/** The tsc of the typescript package installed beside the CLI, never the one on PATH. */
+/** The tsc of the typescript package installed beside the tools, never the one on PATH. */
 export function tscPath(): string {
   const pkg = createRequire(import.meta.url).resolve('typescript/package.json');
   return join(dirname(pkg), 'bin', 'tsc');

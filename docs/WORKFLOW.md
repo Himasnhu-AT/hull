@@ -12,8 +12,8 @@ Who does what, in what order, with which command. This is the loop Hull is desig
 | Says what is wrong | In its report: what it checked and what it could not | In the Studio: `needs-change` plus a note |
 | Must not | Undo a value you set without saying why | Open a source file (you never need to) |
 
-"The AI" is whichever agent you use: a local Claude Code or Codex running the `hull` command, any MCP client
-through `hull mcp`, or Marl AI from the Studio's chat panel. All three use the same tools and land in the same
+"The AI" is whichever agent you use: a local Claude Code or Codex running against the app's MCP server, any MCP client,
+or Marl AI from the Studio's chat panel. All three use the same tools and land in the same
 history.
 
 ## 2. Making something new
@@ -21,22 +21,22 @@ history.
 1. You ask for it ("add a grapple hook with a reel sound").
 2. The AI writes the logic and the config, then runs, cheapest first:
 
-   | Step | Command | Catches |
+   | Step | Tool | Catches |
    |---|---|---|
-   | 1 | `hull check` | Type errors, config that does not match its schema, ids that do not exist, banned calls, values of yours it overwrote |
-   | 2 | `hull test` | Wrong behaviour in the simulation: it runs in Node, thousands of frames per second |
-   | 3 | `hull play tests/grapple.steps.json` | What is actually on screen: screenshots the AI reads, golden images that must match |
-   | 4 | `hull bench sound` | Levels and lengths: nothing clips, the new sound sits where it should among the others |
-   | 5 | `hull bench perf` | Frame time, draw calls and allocations against the budgets in the manifest |
+   | 1 | `check` | Type errors, config that does not match its schema, ids that do not exist, banned calls, values of yours it overwrote |
+   | 2 | `test` | Wrong behaviour in the simulation: it runs in Node, thousands of frames per second |
+   | 3 | `play` (file `tests/grapple.steps.json`) | What is actually on screen: screenshots the AI reads, golden images that must match |
+   | 4 | `bench` (sound) | Levels and lengths: nothing clips, the new sound sits where it should among the others |
+   | 5 | `bench` (perf) | Frame time, draw calls and allocations against the budgets in the manifest |
 
 3. The AI reports what it made, what each check showed, and what it could not judge (how a sound *feels*, whether
    an animation *reads*). Those pieces show to you as `unreviewed`.
 
-Each AI turn that passes `hull check` becomes one change in the history, so every step can be undone.
+Each AI turn that passes `check` becomes one change in the history, so every step can be undone.
 
 ## 3. Verifying and tuning
 
-`hull studio` opens Hull Studio on the project.
+The Hull app opens a project in Hull Studio.
 
 1. **Library** shows everything by kind. A filter shows only what is `unreviewed` or changed since you last looked.
 2. Pick a piece: its **bench** shows it alone.
@@ -59,7 +59,7 @@ Each AI turn that passes `hull check` becomes one change in the history, so ever
 
 When you are not sure which way is better, do not choose yet.
 
-1. **New experiment** (or `hull exp start heavier-jump`) branches from where you are. It has its own copy of the
+1. **New experiment** (or the `exp.start` tool) branches from where you are. It has its own copy of the
    project, so the main line is untouched.
 2. Tune it, or ask the AI to work in it ("in heavier-jump, make the landing heavier too").
 3. Start another from the same point, or from the first.
@@ -76,7 +76,7 @@ When you are not sure which way is better, do not choose yet.
 
 ## 5. Closing the loop
 
-The AI starts its next turn with `hull review list` and `hull history --since last-turn`:
+The AI starts its next turn with `review.list` and `history.list`:
 
 ```
 needs-change  anim/soldier#run      "Arms swing too wide; feet slide on the turn."
@@ -91,11 +91,12 @@ you           sound/land/thud       level −8 → −5
 
 ## 6. Building and shipping
 
-```sh
-hull build                        # dist/web/game.js + index.html (+ assets/ if the game has binary files)
-hull build --single-file          # embed everything: exactly one .js
-hull package --mac --win --linux  # Electron apps
-hull package --mac --shell tauri  # experimental: a much smaller app on the system web view
+The Build button (the `build` tool) and the `package` tool:
+
+```
+build                         dist/web/game.js + index.html (+ assets/ if the game has binary files)
+build {singleFile: true}      embed everything: exactly one .js
+package {targets: "mac,win,linux"}   Electron apps
 ```
 
 * **Website**: upload `dist/web/` to any static host.
@@ -107,7 +108,7 @@ hull package --mac --shell tauri  # experimental: a much smaller app on the syst
 
 For the AI, a change is done when all of these hold, and it says so item by item:
 
-1. `hull check`, `hull test` and `hull build` pass.
+1. `check`, `test` and `build` pass.
 2. It ran the thing and looked: a screenshot it read, a state it queried, a measurement it took.
 3. Every new or changed piece opens on its bench without errors.
 4. No value you set was changed without a stated reason.

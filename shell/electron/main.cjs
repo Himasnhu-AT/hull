@@ -87,7 +87,7 @@ function createWindow() {
   win.webContents.on('will-navigate', (e, url) => { if (!url.startsWith('hull://game/')) e.preventDefault(); });
   void win.loadURL('hull://game/index.html');
 
-  // Self-check for `hull package`: save a screenshot after a moment, then quit.
+  // Self-check for `package`: save a screenshot after a moment, then quit.
   const shot = process.env.HULL_SHELL_SCREENSHOT;
   if (shot) {
     win.webContents.once('did-finish-load', () => {

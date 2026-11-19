@@ -171,28 +171,28 @@ three work: the chat panel can call Marl's API, or you keep driving from your ow
 ```
  you: "make X"            AI                                   you
  ───────────────►  writes src/ + config/
-                   hull check   (types, schemas, refs)
-                   hull test    (simulation, in Node)
-                   hull play    (browser, screenshots)
-                   hull bench   (sound levels, frame time)
+                   check   (types, schemas, refs)
+                   test    (simulation, in Node)
+                   play    (browser, screenshots)
+                   bench   (sound levels, frame time)
                           │
                           ▼
                    pieces show as unreviewed  ──────────►  Hull Studio: bench each piece
                                                            approve / note / drag a slider
                           ▲                                        │
-                          │        notes (hull review)  ◄──────────┤
+                          │        notes (review)  ◄──────────┤
                           │        your edits, in the files  ◄─────┘
                           │        every change in the history
                           ▼
-                   hull build ──► dist/web/game.js ──► website
-                   hull package ──► .app / .exe / AppImage
+                   build ──► dist/web/game.js ──► website
+                   package ──► .app / .exe / AppImage
 ```
 
 Three rules keep this loop honest:
 
 1. **The AI does not call a piece done until it has looked at it**: a screenshot it read, a number it measured, a
    test that passed.
-2. **The AI does not undo your edits.** The history knows which values you set. `hull check` reports any change
+2. **The AI does not undo your edits.** The history knows which values you set. `check` reports any change
    that overwrites one, and the AI has to say why.
 3. **You never need to open a source file.** If something can only be changed by reading code, that is a gap: the
    value becomes a tunable or moves into config.
@@ -213,7 +213,7 @@ Version control is part of Hull, not something you set up.
 * **Merging** two experiments is by path: different values changed in the same file combine cleanly; a conflict
   is only the same value changed twice, and the Studio asks which one.
 * **Git still works.** Hull's history lives in `.hull/` and does not touch your own `.git`. Commit, branch and
-  push the project as usual; `.hull/` is ignored. `hull history export` writes experiments as git branches when
+  push the project as usual; `.hull/` is ignored. `history export` writes experiments as git branches when
   you want them there.
 
 `docs/ARCHITECTURE.md` section 7 says how this is stored.
@@ -232,7 +232,7 @@ checking the current release.
 | UI | DOM + CSS, own small kit | Text, focus, accessibility and layout for free. |
 | Schemas | TypeBox (the `typebox` package, 1.x; schemas are JSON Schema, types are inferred), Ajv to validate | One source for types, checks and forms. |
 | History storage | git objects through isomorphic-git, in a private repository under `.hull/` | A proven store and merge base with no dependency on git being installed; Hull adds the diff that understands JSON and tunables. |
-| Source edits | TypeScript 6's compiler API (`typescript@6`) | Rewrites one literal in place without touching the rest of the file. TypeScript 7 is a native compiler whose JavaScript API is still marked unstable, so tools parse with 6 while `hull check` type-checks with 7's `tsc`. |
+| Source edits | TypeScript 6's compiler API (`typescript@6`) | Rewrites one literal in place without touching the rest of the file. TypeScript 7 is a native compiler whose JavaScript API is still marked unstable, so tools parse with 6 while `check` type-checks with 7's `tsc`. |
 | Rigid bodies (optional) | Rapier (WASM, inlined into the bundle) | Fast, deterministic; only loaded by games that ask for it. |
 | Tests | Vitest in Node; Playwright with headless Chromium for the browser | Logic without a browser; screenshots with one pinned Chromium. |
 | Studio | Electron * app; React + Vite inside | Its own window, direct file access, the same Chromium the games ship in. Only the Studio uses React. |
@@ -276,7 +276,7 @@ Electron ships its own Chromium, so a game behaves on all three systems exactly 
 timing, pointer lock, gamepads. The cost is size (about 100 MB per app). Tauri uses each system's built-in web
 view, so an app is a few megabytes, but the game then runs on three different browser engines, and the Linux one
 has been the weak one for WebGL games. Hull packages with Electron by default and offers
-`hull package --shell tauri` as experimental for macOS and Windows, where the system web views are good.
+`package --shell tauri` as experimental for macOS and Windows, where the system web views are good.
 
 ## 7. Milestones
 
@@ -284,11 +284,11 @@ Each milestone ends with something you can run, and a check that proves it.
 
 | | Delivers | Done when |
 |---|---|---|
-| **M0 Skeleton** | Repo, `core`, `config` (load, validate, typed access, tunables), `hull check`, `hull test`, `hull dev`, a spinning-cube template. | A scenario test steps the cube game 10,000 frames in Node in under a second and gets the same end state twice. A wrong config id fails `hull check` with file and field. |
+| **M0 Skeleton** | Repo, `core`, `config` (load, validate, typed access, tunables), `check`, `test`, `dev`, a spinning-cube template. | A scenario test steps the cube game 10,000 frames in Node in under a second and gets the same end state twice. A wrong config id fails `check` with file and field. |
 | **M1 The app, first playable, first bench** | The Hull desktop app: launcher (new project from a template, open, recent), editor with the game running in it (play, pause, step), Library, Inspector writing to JSON and to tunables, sound bench, Build button. The project server inside the app. Engine: `render` basics behind the render bridge (WebGL2 backend), `input`, `audio` with recipes, `ui` basics, the build to one file. | You create an arena project in the app and play it there. You change a sound's pitch and a run speed with the Inspector, hear and see it at once, and the JSON file and the `.ts` literal have changed. Build writes `dist/web/game.js`, and it runs. |
 | **M2 History and experiments** | The history store, the diff, checkpoints, experiments with their own working copies, compare, adopt, merge, authorship. | You start two experiments from one point, tune each differently, run them side by side, adopt one, and the other is still in the timeline. An AI change over a value you set is flagged by the check. All of it from the app's History panel. |
 | **M3 Characters and the agent loop** | `anim` (generated rigs, clips, state graph, IK), character and animation benches, step scripts with screenshots and golden images, control port, MCP, review notes. | You scrub every animation of a character in the app and leave a note; an agent lists the note over MCP. A step script walks the character and its golden screenshot matches. |
-| **M4 Desktop and the look** | `platform`, `hull package` for the three systems (Electron; Tauri experimental), the look (sky, fog, post), `vfx`, the settings and key-binding screens, saves. | The arena game installs and runs on macOS, Windows and Linux with saves, fullscreen and a gamepad. |
+| **M4 Desktop and the look** | `platform`, `package` for the three systems (Electron; Tauri experimental), the look (sky, fog, post), `vfx`, the settings and key-binding screens, saves. | The arena game installs and runs on macOS, Windows and Linux with saves, fullscreen and a gamepad. |
 | **M5 Kits and templates** | The first kits (first-person and third-person controllers, follow camera, health, pickups, spawner, pause menu, save slots), three templates, the kit gallery. | A new project from the app plus one prompt gives a playable prototype built only from kits and config. |
 | **M6 AOTT on Hull** | AOTT rebuilt on the engine, as the proof and the source of fixes. | It plays the same, its sounds and characters are all on benches, and its build is one file. |
 | **M7 WebGPU** | The second render backend behind the bridge; capabilities (`compute`, GPU particles); golden images on both. | AOTT's golden screenshots match on both backends, the game picks the right one by itself on each system, and a bench with 200,000 particles holds 60 frames a second on WebGPU. |
@@ -307,7 +307,7 @@ by the people who built it, only measured.
 | M0 | Done | Cube: 2 × 10,000 steps in 3.2 ms, same checksum; a wrong id fails the check with file and field (code and hull.json). | |
 | M1 | Done | In the app (web mode) on the arena: run speed and a sound's pitch changed live with no reload, both files changed, Build wrote one `game.js` that runs. The Electron window opened once. | The app's main process runs through tsx; a packaged Studio needs it bundled. |
 | M2 | Done | In the app: two experiments tuned apart, compared side by side, one adopted, the other kept; an AI change over yours flagged; a restore is a new change. | Authorship is per value for config and tunables only; the line diff says `+N −M lines`; each commit reads the whole project. |
-| M3 | Done | Character bench (turntable, every clip, the live state graph, foot slide), review notes over MCP, a step script whose golden matches and fails on a changed run speed. MCP and the command line reach every project method. | Bodies are rigid parts, not skinned; glTF clips are skipped; goldens come from a software GPU; the control port has step, press, state and screenshot only. |
+| M3 | Done | Character bench (turntable, every clip, the live state graph, foot slide), review notes over MCP, a step script whose golden matches and fails on a changed run speed. MCP reaches every project method. | Bodies are rigid parts, not skinned; glTF clips are skipped; goldens come from a software GPU; the control port has step, press, state and screenshot only. |
 | M4 | Done on macOS | Dusk look with environment light, snapped shadows, post chain, six effects; saves, settings, fullscreen; physics (1,000 rays on 5,000 boxes in ~1.2 ms, no tunnelling at 100 m/s); the cube packaged as a 244 MB `.app` that launched. | Windows and Linux packages untested; the settings and key screens tested on a fake DOM only; no cascaded shadows or SMAA. |
 | M5 | Done | Kits (controllers, follow camera, health with hit zones, pickups, spawner, pause, save slots); the `fps` and `third-person` templates are ~20 lines each and play, save and load deterministically. A project tunes kit values in the Inspector; they are saved to `config/tuning/<block>.json` and survive a reload. | Experiments do not overlay kit values in the app; tuning files hold numbers only. |
 | M6 | Next | | |
@@ -339,7 +339,7 @@ What that asks of the design, from the first milestone:
   browser. Benches use the same component.
 * **The game and the benches run in headless Chromium on Linux**, which they have to for testing anyway.
 * **Nothing secret is in the Studio's front end.** Source, config and history stay server-side.
-* **Publishing is one step on the server**: `hull build`, then the result goes to Marl's hosting under a share
+* **Publishing is one step on the server**: `build`, then the result goes to Marl's hosting under a share
   link. Publishing again replaces it.
 
 **How a shared game reaches its players** decides the cost of the whole model. The plan assumes the built
@@ -389,9 +389,9 @@ None of these blocks M0 to M7. Each has the assumption the plan is written on.
 | "One file" grows large once a game uses models, textures or recordings. | Generated content stays the default and inlines to almost nothing. Binary assets go beside the file by default, with `--single-file` to embed them. The build prints a size report against a budget. |
 | JSON cannot express every sound or animation. | Recipes cover the common cases; anything else is a code generator with a schema'd block of knobs, so it still gets a bench and sliders. |
 | Rewriting source from the Studio corrupts a file. | Only literals inside a `tunables` block are ever rewritten, by position from the compiler's own parse, and the file is re-parsed and type-checked before the write is kept. |
-| The AI and you edit the same value. | Authorship in the history; `hull check` flags an overwrite; a merge asks. |
+| The AI and you edit the same value. | Authorship in the history; `check` flags an overwrite; a merge asks. |
 | Experiments multiply and confuse. | The Studio shows them as a short list with what differs from the main line in plain words, and offers to archive old ones. |
 | Streaming costs or latency make the hosted Studio poor for action games. | The spike before M8 decides. The other source of the game view, a server-built bundle run in the browser, has neither problem. |
 | A shared game's file is copied and rehosted. | It holds no source, config or history, so it cannot be edited or rebuilt. If that is still too much exposure, shared games are streamed, at a GPU per player. |
-| Two renderers drift apart or double the work. | Games reach both only through the bridge; golden images run on both; an effect one backend lacks fails `hull check`. |
+| Two renderers drift apart or double the work. | Games reach both only through the bridge; golden images run on both; an effect one backend lacks fails `check`. |
 | Determinism is easy to break by accident. | A lint rule bans `Math.random`, `Date.now` and `setTimeout` in game code; a test replays a recorded run and compares state. |

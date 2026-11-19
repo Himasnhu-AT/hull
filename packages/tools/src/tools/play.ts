@@ -61,7 +61,7 @@ export const play = defineTool<PlayInput, PlayReport>({
     const problems: Problem[] = validateScript(file, script);
     if (problems.length) return { ok: false, problems, steps: [], tick: 0, checksum: '' };
 
-    // Inside the app a project server is already running. From the command line or MCP, start one for the run.
+    // Inside the app a project server is already running. From a script or MCP, start one for the run.
     let own: { close(): Promise<void> } | undefined;
     let server = ctx.server;
     if (!server) {

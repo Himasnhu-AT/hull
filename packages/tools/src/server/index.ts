@@ -591,7 +591,7 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
   vite.watcher.add([join(root, 'config'), join(root, 'src'), join(root, 'assets'), join(root, MANIFEST)]);
   mkdirSync(join(root, '.hull'), { recursive: true });
   log(`project server for ${root}: ${urls.http}`);
-  // Anything else that wants this project (hull mcp, the command line, a second app window) attaches to this server
+  // Anything else that wants this project (mcp, the command line, a second app window) attaches to this server
   // rather than starting another: two servers would fight over writes and watchers.
   writeServerFile(root, { url: urls.ws, gameUrl: urls.http, pid: process.pid });
 
