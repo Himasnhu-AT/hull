@@ -159,12 +159,12 @@ reached three ways. The project cannot tell them apart, and the history records 
 
 | Way | Who runs the model | How it reaches Hull |
 |---|---|---|
-| The Hull app | You | The app calls the tools in `@hull/tools` directly |
-| MCP | A local agent you run: Claude Code, Codex, any MCP client | The MCP server the app hosts (streamable HTTP on 127.0.0.1), or the stdio launcher when the app is closed |
-| Marl AI | Marl's backend, with the models Marl offers | Marl's API: the backend runs the agent loop and calls the same tools on the project |
+| Any agent over MCP | Your own agent outside the app: Claude Code, Codex, any MCP client | The MCP server the app hosts (streamable HTTP on 127.0.0.1), or the stdio launcher when the app is closed. No Hull harness is involved. |
+| An external agent inside the app | Your installed Codex, Gemini CLI or other ACP agent, signed in with your own account | The app's agent panel is an ACP (Agent Client Protocol) client; it starts the agent on your machine and hands it Hull's tools over MCP in `session/new`. Claude Code runs as the real, unmodified `claude` in a terminal pane of the app; the Claude ACP adapter is offered only after Anthropic confirms it in writing (D15). |
+| Hull's own agent | Your API key, or credits on Marl's gateway `ai.marlstudio.com` | Hull's own harness (D14), an ACP agent running in the app's main process, calling the tools in `@hull/tools` directly. Later the same agent runs next to hosted projects. |
 
-Marl AI is what a customer of the hosted Studio uses by default, from a chat panel in the Studio. Locally all
-three work: the chat panel can call Marl's API, or you keep driving from your own terminal.
+The agent panel looks the same for every ACP agent: streamed messages, plans, tool calls with diffs, and permission
+requests that you approve or deny. Every change lands in the history with its author.
 
 ## 4. How it works, end to end
 
@@ -293,7 +293,7 @@ Each milestone ends with something you can run, and a check that proves it.
 | **M6 AOTT on Hull** | AOTT rebuilt on the engine, as the proof and the source of fixes. | It plays the same, its sounds and characters are all on benches, and its build is one file. |
 | **M7 WebGPU** | The second render backend behind the bridge; capabilities (`compute`, GPU particles); golden images on both. | AOTT's golden screenshots match on both backends, the game picks the right one by itself on each system, and a bench with 200,000 particles holds 60 frames a second on WebGPU. |
 | **M8 Hosted** | Hull Studio served from Marl's servers; projects held there; publish to a share link (section 8). | A customer with only a browser opens a project, tunes it, publishes it, and a second person plays it from the link without an account. No source reaches either machine. |
-| **M9 Marl AI** | The AI backend: an agent loop over Hull's tools, a model list, metering, the Studio's chat panel (section 3.4). Can be built alongside M8. | A customer with no agent of their own types a request in the Studio and gets a checked change in the history, made by a model they picked. |
+| **M9 Hull's agent** | The agent panel as an ACP client for every agent (Codex, Gemini CLI, Claude Code in a terminal pane, Hull's own); Hull's own harness (D14) with bring-your-own-key and Marl's gateway `ai.marlstudio.com` as providers; plans, approvals and diffs in the panel; usage shown per run. Can be built alongside M8. | You pick an agent in the app, ask for a change, approve its plan and its risky steps in the panel, and get a checked change in the history; the same request works through Codex, through Hull's own agent on your key, and on Marl credits. A Hull task suite (check plus game-state assertions) scores each agent and model. |
 
 Later tracks, after these: AI-generated assets, and other 3D engines.
 
@@ -310,7 +310,7 @@ by the people who built it, only measured.
 | M3 | Done | Character bench (turntable, every clip, the live state graph, foot slide), review notes over MCP, a step script whose golden matches and fails on a changed run speed. MCP reaches every project method. | Bodies are rigid parts, not skinned; glTF clips are skipped; goldens come from a software GPU; the control port has step, press, state and screenshot only. |
 | M4 | Done on macOS | Dusk look with environment light, snapped shadows, post chain, six effects; saves, settings, fullscreen; physics (1,000 rays on 5,000 boxes in ~1.2 ms, no tunnelling at 100 m/s); the cube packaged as a 244 MB `.app` that launched. | Windows and Linux packages untested; the settings and key screens tested on a fake DOM only; no cascaded shadows or SMAA. |
 | M5 | Done | Kits (controllers, follow camera, health with hit zones, pickups, spawner, pause, save slots); the `fps` and `third-person` templates are ~20 lines each and play, save and load deterministically. A project tunes kit values in the Inspector; they are saved to `config/tuning/<block>.json` and survive a reload. | Experiments do not overlay kit values in the app; tuning files hold numbers only. |
-| M6 | Next | | |
+| M6 | Done | AOTT runs as `examples/aott`: a seeded headless Holdout repeats its checksum; in the app the look (exposure) and a tunable (hook range) changed the running game with no reload; Build in the app wrote one 2.6 MB file that boots and plays Holdout from a static server. Sounds are 82 `sound` recipes, effects 21 `vfx` configs, looks 3 `look` configs, titans and soldier rigs `character` configs, collision on `hull/physics` (10,000-query parity), waves, depots and hit zones as kit tunables. | WebGL2 only (GLSL materials); nobody has heard the sounds or played it by hand; meshes, decals, slash arcs and the orbit camera stay in code; the 20 `code` sound recipes and the big titans are not yet shown on the Studio's benches (in progress). PORT.md lists the rest. |
 | M7 | Done | `auto` picks WebGPU and falls back to WebGL2; the same scene matches across backends (PSNR 47.7 dB at medium); 200,000 GPU particles at 59 fps (720p). | Every build carries both backends (arena: 1.68 MB); GPU timestamps read wrong on Apple GPUs. |
 | M8, M9 | Not started | | |
 
@@ -368,7 +368,10 @@ that stream for action games (target under about 80 ms from input to picture), a
 | D10 | Visibility | Private. |
 | D11 | AI-generated assets | A later track. |
 | D12 | Other 3D engines | A later track. |
-| D13 | Who runs the AI | Three ways: the Hull app, a local agent over MCP (Claude Code, Codex, any MCP client), or Marl AI through Marl's API and models. |
+| D13 | Who runs the AI | Three ways: any agent over MCP, an external agent inside the app over ACP, or Hull's own agent on the user's key or Marl's gateway (section 3.4). |
+| D14 | Hull's own agent harness | Written for Hull in TypeScript, in the app's main process, as an ACP agent. OpenCode (MIT) is the reference: its compaction prompt, patch grammar, edit matching and per-model prompts may be copied with attribution in a notices file. Not a fork (it is mid-rewrite, about 300 commits a week) and not a white-labelled sidecar (its name and its own file tools are built in). Chosen 19 Nov 2026 for full control and so writes go through Hull's validated, authored edits. |
+| D15 | Claude subscriptions | Hull never offers claude.ai login and never handles Claude credentials (Anthropic's terms). A user's own Claude Code runs unmodified in a terminal pane; the Agent-SDK-based Claude ACP adapter waits for Anthropic's written confirmation. The name shown is the product's own; "Claude Code" is not used in any Hull feature name. |
+| D16 | Agent protocol | ACP between the app and every agent, including Hull's own. Hull-specific UI (an editable plan, approval cards with diffs) rides as ACP extensions. |
 
 ## 10. Still open
 
@@ -380,7 +383,7 @@ None of these blocks M0 to M7. Each has the assumption the plan is written on.
 | Q2 | How a maker sees the game in the hosted Studio | You said streamed. Since the share link serves the same build anyway, a server-built bundle run in the maker's browser would be far cheaper and have no lag. Both are kept as sources of the game view; the spike before M8 picks the default. |
 | Q3 | Whether a customer can ever take their code out | Held by Marl by default; export is a paid step (your earlier answer). |
 | Q4 | What "support for other 3D engines" means | Not designed yet: either exporting a Hull game to another engine, or Hull's tools and Studio driving one. |
-| Q5 | Which providers and models Marl AI offers | Chosen when the backend is built. |
+| Q5 | Which models Hull's agent offers on Marl credits | `ai.marlstudio.com` is Marl's own gateway (built separately by the owner), priced by Marl; the list is chosen there. Hull treats it as one OpenAI-compatible provider. |
 
 ## 11. Risks
 
