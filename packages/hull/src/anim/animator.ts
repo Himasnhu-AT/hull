@@ -103,7 +103,8 @@ export class Animator extends Behaviour {
   private pelvisDy = 0;
   private liftS = new Float64Array(2);
   private lastDt = 1 / 60;
-  private announced = false;
+  /** The id the "Just now" feed names this character by; empty until the first build found a character. */
+  private actorId = '';
 
   override ready(): void {
     stateFor(this.world).interp.track(this.node);
@@ -167,8 +168,9 @@ export class Animator extends Behaviour {
     if (!def) { this.report(`the animator on "${this.node.name}" has no character, so it draws nothing.`); return; }
     const where = typeof this.character === 'string' ? `character/${bare('character', this.character)}` : 'character';
     // The "Just now" feed's `actor`: a character is active when its animator first builds a body. build() runs once per animator
-    // (and again on a live edit, which must not announce it twice), so this costs nothing per frame.
-    if (!this.announced) { this.announced = true; trace('actor', where, this.node.name); }
+    // (and again on a live edit, which must not announce it twice), so this costs nothing per frame. A studio that connects later
+    // asks again through announceActor().
+    if (this.actorId === '') { this.actorId = where; trace('actor', where, this.node.name); }
     let built;
     try {
       if (def.body.type === 'gltf') throw new Error(`${where}#/body/type: glTF bodies are not supported yet`);
@@ -260,6 +262,11 @@ export class Animator extends Behaviour {
   }
 
   // ---- parameters ----
+
+  /** Says again that this character is in the game, for a studio that connected after it was built. Does nothing before the first build. */
+  announceActor(): void {
+    if (this.actorId !== '') trace('actor', this.actorId, this.node.name);
+  }
 
   /** Sets a graph parameter. A trigger is set by any true value and lasts until the next fixed step has seen it. */
   set(name: string, value: number | boolean): void {

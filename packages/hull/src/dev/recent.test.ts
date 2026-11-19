@@ -24,7 +24,7 @@ describe('trace', () => {
 });
 
 describe('the recent ring', () => {
-  it('labels from the title, else the last part of the id', () => {
+  it('labels from the title, else a readable form of the id', () => {
     expect(lastPart('sound/sword/hit')).toBe('hit');
     expect(lastPart('anim-graph/hero#attack')).toBe('attack');
     const sent: RecentEvent[][] = [];
@@ -32,7 +32,7 @@ describe('the recent ring', () => {
     feed.add('sound', 'sound/sword/hit');
     feed.add('vfx', 'vfx/clash-sparks', 'Blade');
     feed.flush();
-    expect(sent[0]!.map((e) => e.label)).toEqual(['Clash', 'clash-sparks']);
+    expect(sent[0]!.map((e) => e.label)).toEqual(['Clash', 'Clash sparks']);
     expect(sent[0]![1]).toMatchObject({ kind: 'vfx', node: 'Blade' });
     expect('node' in sent[0]![0]!).toBe(false);
   });
@@ -58,6 +58,15 @@ describe('the recent ring', () => {
     expect(sent[0]).toHaveLength(RING);
     expect(sent[0]![0]!.id).toBe('sound/s10');
     expect(sent[0]!.at(-1)!.id).toBe(`sound/s${RING + 9}`);
+  });
+  it('keeps one chip for the same thing at the same game time', () => {
+    const sent: RecentEvent[][] = [];
+    const feed = feedWith(sent, () => 2);
+    feed.add('anim', 'anim-graph/a#x', 'N');
+    feed.add('anim', 'anim-graph/a#x', 'N');
+    feed.add('anim', 'anim-graph/a#y', 'N');
+    feed.add('anim', 'anim-graph/a#x', 'N');
+    expect(feed.snapshot().map((e) => e.id)).toEqual(['anim-graph/a#x', 'anim-graph/a#y', 'anim-graph/a#x']);
   });
   it('forgets on clear', () => {
     const sent: RecentEvent[][] = [];
