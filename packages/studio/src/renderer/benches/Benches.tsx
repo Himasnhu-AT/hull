@@ -362,8 +362,7 @@ function VfxBench({ eng, items, selected, onSelect }: Omit<Props, 'kind' | 'rpc'
   const fire = useCallback((which: string): void => {
     if (!stage) return;
     if (which === idRef.current) rebase();
-    vfx.burst(which.slice('vfx/'.length), stage.scene.at);
-  }, [stage, vfx, rebase]);
+    vfx.burst(which.slice('vfx/'.length), stage.scene.at);  }, [stage, vfx, rebase]);
 
   // Looping goes through previewVfx, the engine's own bench helper.
   useEffect(() => {
