@@ -41,7 +41,7 @@ export function attackTokens(world: World): AttackTokens {
   return t;
 }
 
-type Mode = 'spacing' | 'tell' | 'strike' | 'gap';
+type Mode = 'spacing' | 'tell' | 'travel' | 'strike' | 'gap';
 
 const TAU = Math.PI * 2;
 export function turnToward(from: number, to: number, rate: number, dt: number): number {
@@ -59,7 +59,7 @@ export function turnToward(from: number, to: number, rate: number, dt: number): 
  * stagger or a broken posture drops the pattern and the place. Every number that decides anything is game time.
  */
 export class EnemyBrain extends Behaviour {
-  static override state = ['mode', 'modeT', 'patternIdx', 'stepIdx', 'cooldown', 'thinkT', 'circleDir', 'circleT', 'phase'];
+  static override state = ['mode', 'modeT', 'patternIdx', 'stepIdx', 'cooldown', 'thinkT', 'circleDir', 'circleT', 'phase', 'dormant', 'travelTo'];
   /** Config id of the enemy ("enemy/swordsman" or "swordsman"). */
   enemy = '';
   /** The node to fight, by name. */
@@ -73,8 +73,15 @@ export class EnemyBrain extends Behaviour {
   circleDir = 1;
   circleT = 0;
   phase = 0;
+  /** A dormant enemy stands and does nothing until `wake()` (an encounter that has not started, a standoff). */
+  dormant = false;
+  /** Distance to the target a travel step stops at. */
+  travelTo = 0;
+  /** Seconds a travel step has run, so a blocked enemy gives up. */
+  private travelT = 0;
 
-  /** (new phase). */
+  /** Ends dormancy. */
+  wake(): void { this.dormant = false; this.cooldown = Math.max(this.cooldown, 0.4); }
   readonly phaseChanged: Signal<[phase: number]> = signal<[number]>();
   /** (pattern name) each time a pattern starts. */
   readonly patternStarted: Signal<[name: string]> = signal<[string]>();
@@ -134,6 +141,7 @@ export class EnemyBrain extends Behaviour {
     if (!d || this.flags.paused) return;
     if (c.state === 'dead') { attackTokens(this.world).release(this.node); return; }
     if (c.frozen > 0) return;
+    if (this.dormant) { c.animator?.set('speed', 0); return; }
     if (c.state !== 'free' && c.state !== 'attack') { if (this.mode !== 'spacing' || this.patternIdx >= 0) this.abort(); return; }
     if (!this.target || this.target.destroyed) this.target = this.world.find(this.targetName) ?? null;
     const t = this.target;
@@ -152,6 +160,7 @@ export class EnemyBrain extends Behaviour {
         this.modeT -= dt;
         if (this.modeT <= 0) this.beginMove(d, c);
         break;
+      case 'travel': this.stepTravel(d, c, dx, dz, dist, dt); break;
       case 'strike': {
         const st = this.patternOf(d)?.steps[this.stepIdx];
         if (st?.feint && c.state === 'attack' && c.moveT >= st.feint) { c.cancelMove(); this.finishStep(d); break; }
@@ -178,8 +187,10 @@ export class EnemyBrain extends Behaviour {
 
   private stepSpacing(d: Enemy, c: Combatant, dx: number, dz: number, dist: number, dt: number): void {
     if (c.state !== 'free') return;
-    const walk = d.speed?.walk ?? 2.4, circle = d.speed?.circle ?? 1.4;
-    const lo = d.spacing?.min ?? 1.6, hi = d.spacing?.max ?? 3;
+    const tk = attackTokens(this.world);
+    const waiting = !(tk.has(this.node) || tk.free()) && d.spacing?.wait !== undefined;
+    const lo = waiting ? d.spacing!.wait![0] : (d.spacing?.min ?? 1.6), hi = waiting ? d.spacing!.wait![1] : (d.spacing?.max ?? 3);
+    const walk = dist > hi + 1.5 && d.speed?.run ? d.speed.run : (d.speed?.walk ?? 2.4), circle = d.speed?.circle ?? 1.4;
     const nx = dist > 1e-6 ? dx / dist : 0, nz = dist > 1e-6 ? dz / dist : -1;
     let mx = 0, mz = 0;
     if (dist > hi) { mx = nx * walk; mz = nz * walk; }
@@ -206,6 +217,7 @@ export class EnemyBrain extends Behaviour {
       }
     }
     c.drive(mx * dt, mz * dt);
+    c.animator?.set('speed', Math.hypot(mx, mz));
 
     this.cooldown -= dt;
     this.thinkT -= dt;
@@ -227,19 +239,21 @@ export class EnemyBrain extends Behaviour {
       if (p.weight <= 0) continue;
       if (p.token !== false && !hold) continue;
       const w = p.when;
-      const first = c.moveDef(p.steps[0]!.move);
+      const first = c.moveDef(p.steps.find((s) => s.move)?.move ?? '');
       const dr = w?.distance ?? [0, (first?.reach ?? 2) + 0.8];
+      if (w?.stance && !w.stance.includes(this.targetStance())) continue;
+      if (w?.clear !== undefined && this.friendNearTarget(w.clear)) continue;
       if (dist < dr[0] || dist > dr[1]) continue;
       if (w?.health && (frac < w.health[0] || frac > w.health[1])) continue;
       if (w?.phase && (this.phase < w.phase[0] || this.phase > w.phase[1])) continue;
       el.push(i);
-      total += p.weight;
+      total += this.weightOf(p);
     }
     if (el.length === 0) return;
     let r = this.world.random('brain').next() * total;
     let pick = el[el.length - 1]!;
     for (let k = 0; k < el.length; k++) {
-      r -= d.patterns[el[k]!]!.weight;
+      r -= this.weightOf(d.patterns[el[k]!]!);
       if (r < 0) { pick = el[k]!; break; }
     }
     const pat = d.patterns[pick]!;
@@ -255,16 +269,65 @@ export class EnemyBrain extends Behaviour {
     const st = pat.steps[this.stepIdx]!;
     this.mode = 'tell';
     this.modeT = st.telegraph;
-    const m = this.combatant.moveDef(st.move);
-    this.hub.tell.emit(this.combatant, (st.unblockable ?? m?.unblockable) ? 'unblockable' : 'glint');
+    const m = st.move ? this.combatant.moveDef(st.move) : undefined;
+    if (st.move) this.hub.tell.emit(this.combatant, (st.unblockable ?? m?.unblockable) ? 'unblockable' : 'glint');
     if (st.telegraph <= 0) this.beginMove(d, this.combatant);
   }
 
+  /** Ends the tell: runs the step's travel first when it has one, then the move. */
   private beginMove(d: Enemy, c: Combatant): void {
     const st = this.patternOf(d)!.steps[this.stepIdx]!;
+    const tr = st.travel;
+    if (tr && this.target) {
+      const dist = Math.hypot(this.target.position.x - this.node.position.x, this.target.position.z - this.node.position.z);
+      this.travelTo = tr.to ?? Math.max(0.5, dist - (tr.by ?? 0));
+      this.travelT = 0;
+      this.mode = 'travel';
+      return;
+    }
+    this.startStepMove(d, c);
+  }
+
+  private startStepMove(d: Enemy, c: Combatant): void {
+    const st = this.patternOf(d)!.steps[this.stepIdx]!;
+    if (!st.move) { this.finishStep(d); return; }
     c.unblockableOverride = st.unblockable ?? null;
     if (!c.attack(st.move)) { this.abort(); return; }
     this.mode = 'strike';
+  }
+
+  private stepTravel(d: Enemy, c: Combatant, dx: number, dz: number, dist: number, dt: number): void {
+    const tr = this.patternOf(d)!.steps[this.stepIdx]!.travel!;
+    const speed = tr.speed ?? 5;
+    this.travelT += dt;
+    const need = dist - this.travelTo;
+    if (Math.abs(need) < 0.08 || this.travelT > 2.5) { c.animator?.set('speed', 0); this.startStepMove(d, c); return; }
+    const k = Math.min(Math.abs(need), speed * dt) * Math.sign(need);
+    const l = dist > 1e-6 ? dist : 1;
+    c.drive((dx / l) * k, (dz / l) * k);
+    c.animator?.set('speed', speed);
+  }
+
+  private weightOf(p: EnemyPattern): number {
+    const k = p.answers?.[this.targetStance()];
+    return k === undefined ? p.weight : p.weight * k;
+  }
+
+  /** The stance the target fights in now ('' when it has none). */
+  private targetStance(): string { return this.target?.get(Combatant)?.stance ?? ''; }
+
+  private friendNearTarget(r: number): boolean {
+    const t = this.target;
+    if (!t) return false;
+    const g = this.world.group(FIGHTERS);
+    for (let i = 0; i < g.length; i++) {
+      const o = g[i]!;
+      if (o === this.node || o === t || o.destroyed) continue;
+      const oc = o.get(Combatant);
+      if (!oc || oc.state === 'dead' || oc.team !== this.combatant.team) continue;
+      if (Math.hypot(o.position.x - t.position.x, o.position.z - t.position.z) < r) return true;
+    }
+    return false;
   }
 
   private finishStep(d: Enemy): void {
@@ -272,6 +335,7 @@ export class EnemyBrain extends Behaviour {
     const st = pat.steps[this.stepIdx]!;
     this.stepIdx++;
     this.combatant.unblockableOverride = null;
+    this.combatant.animator?.set('speed', 0);
     if (this.stepIdx >= pat.steps.length) {
       attackTokens(this.world).release(this.node);
       this.mode = 'spacing';

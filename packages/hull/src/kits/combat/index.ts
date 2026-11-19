@@ -7,6 +7,7 @@ export type { Outcome } from './hub.ts';
 export { EnemyBrain, AttackTokens, attackTokens, brainTuning, turnToward } from './brain.ts';
 export { FighterInput, fighterTuning } from './input.ts';
 export { LockOn, lockTuning, pickLockTarget } from './lockon.ts';
+export { Projectile, fireShot } from './projectile.ts';
 export { Standoff } from './standoff.ts';
 export type { StandoffResult } from './standoff.ts';
 export { Blade, HurtShapes, poseNow, segSegDistSq, segmentHitsBox, sweepBlade } from './trace.ts';

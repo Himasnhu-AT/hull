@@ -1,0 +1,144 @@
+{
+ "kind": "move-set",
+ "note": "Kagari (duelist): the same three clips as the Ashblade with longer reach; the brain tell is 0.1 s (0.3 s for the red-flash thrust).",
+ "weapon": {
+  "socket": "handR",
+  "base": [
+   0,
+   -0.14,
+   0
+  ],
+  "tip": [
+   0,
+   -1.3,
+   0
+  ],
+  "radius": 0.05
+ },
+ "moves": {
+  "duel-cut": {
+   "clip": "duel-cut",
+   "length": 0.6,
+   "damage": 16,
+   "posture": 14,
+   "reach": 2.3,
+   "windows": {
+    "trace": [
+     0.2,
+     0.32
+    ]
+   },
+   "lunge": {
+    "distance": 0.5,
+    "from": 0.1,
+    "to": 0.26
+   },
+   "sound": "sound/swing/light"
+  },
+  "duel-cut-b": {
+   "clip": "duel-cut",
+   "length": 0.6,
+   "damage": 14,
+   "posture": 12,
+   "reach": 2.3,
+   "windows": {
+    "trace": [
+     0.2,
+     0.32
+    ]
+   },
+   "lunge": {
+    "distance": 0.5,
+    "from": 0.1,
+    "to": 0.26
+   },
+   "sound": "sound/swing/light"
+  },
+  "duel-thrust": {
+   "clip": "duel-thrust",
+   "length": 0.65,
+   "damage": 20,
+   "posture": 16,
+   "reach": 2.7,
+   "windows": {
+    "trace": [
+     0.25,
+     0.37
+    ]
+   },
+   "lunge": {
+    "distance": 0.8,
+    "from": 0.15,
+    "to": 0.33
+   },
+   "sound": "sound/swing/heavy"
+  },
+  "duel-thrust-b": {
+   "clip": "duel-thrust",
+   "length": 0.65,
+   "damage": 14,
+   "posture": 12,
+   "reach": 2.7,
+   "windows": {
+    "trace": [
+     0.25,
+     0.37
+    ]
+   },
+   "lunge": {
+    "distance": 0.8,
+    "from": 0.15,
+    "to": 0.33
+   },
+   "sound": "sound/swing/heavy"
+  },
+  "duel-thrust-r": {
+   "clip": "duel-thrust",
+   "length": 0.65,
+   "damage": 22,
+   "posture": 20,
+   "reach": 2.7,
+   "unblockable": true,
+   "windows": {
+    "trace": [
+     0.25,
+     0.37
+    ]
+   },
+   "lunge": {
+    "distance": 0.8,
+    "from": 0.15,
+    "to": 0.33
+   },
+   "sound": "sound/swing/heavy"
+  },
+  "duel-sweep": {
+   "clip": "duel-sweep",
+   "length": 0.8,
+   "damage": 18,
+   "posture": 20,
+   "reach": 2.5,
+   "windows": {
+    "trace": [
+     0.32,
+     0.46
+    ]
+   },
+   "sound": "sound/swing/heavy"
+  },
+  "duel-sweep-t": {
+   "clip": "duel-sweep",
+   "length": 0.8,
+   "damage": 16,
+   "posture": 18,
+   "reach": 2.5,
+   "windows": {
+    "trace": [
+     0.32,
+     0.46
+    ]
+   },
+   "sound": "sound/swing/heavy"
+  }
+ }
+}
