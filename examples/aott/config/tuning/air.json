@@ -1,0 +1,8 @@
+{
+  "kind": "tuning",
+  "note": "The soldier's air numbers.",
+  "control": 8.5,
+  "pump": 12,
+  "carve": 10,
+  "carveGas": 32
+}

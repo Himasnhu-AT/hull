@@ -1,0 +1,34 @@
+{
+  "kind": "look",
+  "note": "The expedition rides out in the early morning: low golden light, a pale sky, a long soft haze (The Twelfth Sortie).",
+  "sky": {
+    "color": "#d6c1ac"
+  },
+  "fog": {
+    "color": "#d6c1ac",
+    "near": 90,
+    "far": 1200
+  },
+  "ambient": {
+    "color": "#ffffff",
+    "intensity": 0
+  },
+  "environment": {
+    "intensity": 0.4
+  },
+  "sun": {
+    "color": "#ffffff",
+    "strength": 0,
+    "shadows": false
+  },
+  "exposure": 1,
+  "toneMapping": "aces",
+  "post": {
+    "bloom": 0.62,
+    "bloomThreshold": 0.72,
+    "contrast": 1.07,
+    "saturation": 1.1,
+    "vignette": 0.22,
+    "grain": 0.022
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "kind": "tuning",
+  "note": "The soldier's keys numbers.",
+  "turnGround": 2.7,
+  "turnAir": 1.9,
+  "turnRope": 1.6,
+  "followRate": 1.1,
+  "payout": 7,
+  "releaseLift": 2.2
+}

@@ -1,0 +1,7 @@
+{
+  "kind": "tuning",
+  "note": "The soldier's aim numbers.",
+  "cone": 0.55,
+  "facingWeight": 3.2,
+  "banTime": 4
+}

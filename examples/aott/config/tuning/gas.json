@@ -1,0 +1,13 @@
+{
+  "kind": "tuning",
+  "note": "The soldier's gas numbers.",
+  "capacity": 1,
+  "boostAccel": 30,
+  "hookedBoostAccel": 13,
+  "dashDv": 16,
+  "dashCost": 0.035,
+  "dashCooldown": 0.45,
+  "boostRate": 0.05,
+  "reelRate": 0.004,
+  "fireCost": 0.003
+}
