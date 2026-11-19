@@ -1,0 +1,17 @@
+{
+  "name": "@hull/agent",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "hull-agent": "./bin/hull-agent.js"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@agentclientprotocol/sdk": "2.8.0",
+    "@hull/tools": "workspace:*",
+    "hull": "workspace:*"
+  }
+}
