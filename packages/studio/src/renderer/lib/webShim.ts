@@ -2,6 +2,7 @@
 // Each call goes to the dev server, which runs the same host code Electron's main process runs.
 
 import type { HullApp } from '../../shared/appApi.ts';
+import type { AgentEvent } from '../../shared/agentApi.ts';
 
 async function call<T>(name: string, arg?: unknown): Promise<T> {
   const r = await fetch(`/__hull/${name}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(arg ?? null) });
@@ -25,6 +26,22 @@ export function webShim(): HullApp {
     recents: () => call('recents'),
     forgetRecent: (root) => call('forgetRecent', root),
     reveal: (path) => call('reveal', path),
+    agentList: () => call('agentList'),
+    agentStart: (id) => call('agentStart', { a: [id] }),
+    agentPrompt: (sid, text) => call('agentPrompt', { a: [sid, text] }),
+    agentCancel: (sid) => call('agentCancel', { a: [sid] }),
+    agentStop: (sid) => call('agentStop', { a: [sid] }),
+    agentAnswer: (sid, reqId, optionId) => call('agentAnswer', { a: [sid, reqId, optionId] }),
+    claudeInfo: () => call('claudeInfo'),
+    termOpen: (cols, rows) => call('termOpen', { a: [cols, rows] }),
+    termWrite: (tid, data) => call('termWrite', { a: [tid, data] }),
+    termResize: (tid, cols, rows) => call('termResize', { a: [tid, cols, rows] }),
+    termKill: (tid) => call('termKill', { a: [tid] }),
+    onAgentEvent: (cb) => {
+      const es = new EventSource('/__hull_events');
+      es.onmessage = (m) => cb(JSON.parse(m.data as string) as AgentEvent);
+      return () => es.close();
+    },
     initialProject: () => call('initialProject'),
   };
 }
