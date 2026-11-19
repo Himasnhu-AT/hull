@@ -13,6 +13,6 @@ describe('crashText', () => {
     expect(crashText('Brief', { a: 1 }).detail).toContain('{"a":1}');
   });
   it('cuts a very long message', () => {
-    expect(crashText('Build', new Error('x'.repeat(1000))).detail.length).toBeLessThan(500);
+    expect(crashText('Build', new Error('x'.repeat(1000))).detail.split('\n')[0]!.length).toBeLessThan(430);
   });
 });

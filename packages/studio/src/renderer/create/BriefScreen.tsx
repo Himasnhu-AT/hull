@@ -39,6 +39,11 @@ export function BriefScreen({ rpc, idea, onApproved }: BriefScreenProps): JSX.El
   // The idea goes to the builder once, as soon as the flow state says this brief is not approved yet.
   useEffect(() => { if (idea && create && !create.briefApproved) startBrief(idea); }, [idea, create, startBrief]);
 
+  // The idea is kept with the project, so the Idea step can show it after the app was closed and the game reopened.
+  useEffect(() => {
+    if (idea && create && create.idea.trim() === '') rpc.call('create.set', { patch: { idea, step: 'brief' }, author: 'you' }).catch(() => { /* the idea is only a bookmark */ });
+  }, [idea, create, rpc]);
+
   // Approval seen after this screen opened moves the shell on; one that was already there waits for the person.
   useEffect(() => {
     if (!create) return;
