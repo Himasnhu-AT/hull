@@ -16,27 +16,32 @@ hull/
         core/            loop, world, timers, random, events                               (no browser APIs)
         config/          registry, loader, live updates, tunables                          (no browser APIs)
         schema/          every config kind as a TypeBox schema; emits schemas/*.schema.json
-        render/          the render bridge; backend/webgl2 and backend/webgpu behind it
-        audio/           Web Audio engine
-        anim/            skeletons, clips, graphs, IK
+        render/          the render bridge; webgl2 and webgpu backends behind it; golden/ compares images
+        vfx/             particle effects (CPU pool, GPU simulation on WebGPU)
+        audio/           Web Audio engine, sound bench pieces, pure DSP helpers
+        anim/            skeletons, clips, graphs, IK, the Animator
         ui/              DOM UI kit
         input/           devices to actions
-        physics/         swept collision; optional rigid bodies
-        platform/        browser and desktop shell differences
-        kits/            reusable gameplay pieces
-        dev/             control API, benches, scenario runner, golden images, budgets (not in ship builds)
+        physics/         swept collision, queries, rope, rigid bodies
+        platform/        saves, settings, fullscreen; browser and desktop shell differences
+        kits/            reusable gameplay pieces, each with config, bench, test and README
+        dev/             the game side of the project protocol (connectDev; not in ship builds)
+        three.ts         `hull/three`: the engine's own copy of three.js, for games that build three.js objects
     tools/               @hull/tools: every tool, defined once; the app, MCP and Marl AI call them (no command line)
-      src/tools/         the tool list (typed function + JSON Schema each)
+      src/tools/         the tool list (typed function + JSON Schema each) and the project methods
       src/mcp/           the MCP server library: stdio and streamable HTTP
-      src/server/        the project server the Studio talks to
-      src/history/       the history store, the diff, experiments, merge
-      src/edit/          writes to JSON and to TypeScript literals
+      src/server/        the project server the Studio talks to; build, templates, tunable rewriting
+      src/history/       the history store, the diff, experiments, merge, authorship
+      src/review/        review notes (`.hull/review.json`)
+      src/play/          step scripts: run in a headless browser, golden image compare, PNG codec
+      src/control/       a client for the project server's protocol
       bin/hull-mcp.js    stdio launcher, MCP only
-    studio/              Hull Studio (Electron app, React inside)
+    studio/              Hull Studio (Electron app, React inside); benches live in src/renderer/benches
   schemas/               generated JSON Schema files
-  templates/             starting points for the `new` tool
-  shell/                 desktop shells for games: electron/ (default), tauri/ (experimental)
-  examples/              small games used as tests of the engine itself
+  templates/             starting points for the `new` tool: cube, arena, fps, third-person
+  shell/                 desktop shells for games: electron/ (used by `package`), tauri/ (a placeholder)
+  examples/              games used as tests of the engine itself (aott)
+  scripts/               maintainer scripts (`pnpm project:*`); never ship
   docs/
 ```
 
@@ -54,9 +59,10 @@ mygame/
 
 Rules between the engine's folders:
 
-* `core` and `config` must run in Node: no `window`, `document`, `AudioContext` or WebGL. A lint rule and a test
-  that imports them in Node enforce it.
-* Nothing imports `dev/` except through one guarded entry, so a ship build contains none of it.
+* `core` and `config` must run in Node: no `window`, `document`, `AudioContext` or WebGL. A test that imports them in
+  Node enforces it. `physics` and the pure parts of `audio`, `vfx`, `anim` and `kits` run in Node too.
+* Nothing imports `dev/` except the dev page, so a ship build contains none of it (the build fails if `dev/runtime` or
+  `connectDev` reach `game.js`).
 * `studio/` talks to a project only through the project server's protocol (section 8). It never reads the disk
   itself. That is what lets the same Studio run against a remote project later.
 
@@ -150,7 +156,7 @@ becomes a first-version goal.
   scene graph is the render graph. In Node tests the same objects exist; only the renderer is missing.
 * **Behaviour**: a class attached to a node. Lifecycle: `ready()`, `fixedUpdate(dt)`, `update(dt, alpha)`,
   `dispose()`. A behaviour with no `fixedUpdate` costs nothing per step. Fields that are gameplay state are
-  declared with `state()` so the checksum and saves find them.
+  listed in a static `state` array so the checksum and saves find them.
 * **Signal**: a typed event a behaviour exposes (`died = signal<[by: Node]>()`), connected with
   `other.died.connect(fn)`. Connections end with the node.
 * **Group**: a named set (`node.addTo('enemies')`, `world.group('enemies')`), kept as an array for fast loops.
@@ -179,11 +185,11 @@ config/**/*.json  ──►  validate (schema)  ──►  resolve references  �
 
 * The id of a file is its path under `config/` without the extension: `config/sound/sword/hit.json` is
   `sound/sword/hit`. The first folder is the kind, repeated in the file's `kind` field.
-* Files carry no `$schema` line. `check` and the Studio know the schema from the kind, and Hull writes the
-  editor mapping (`.vscode/settings.json`) so autocomplete works.
+* Files carry no `$schema` line. `check` and the Studio know the schema from the kind; the emitted files are in
+  `schemas/` for an editor that wants them.
 * A reference is a string id in a field the schema marks as a reference (`x-ref: "sound"`). `check` resolves
   every one, in config and in code.
-* **Typed access**: `check` and `dev` write `.hull/gen/ids.ts`, a list of every id per kind. So
+* **Typed access**: `check` writes `.hull/gen/ids.ts`, a list of every id per kind. So
   `config.sound('sword/hit')` autocompletes and a missing id is a compile error.
 * **In dev**, files are loaded and validated at start, and the project server pushes changes: the registry
   replaces the value and calls the subscribers, so a slider in the Studio is heard or seen on the next frame.
@@ -252,116 +258,216 @@ generator registered in code and carries its knobs. It still appears in the Libr
   creates a renderer or owns the frame loop. `backendScene(world)` returns the scene the backend draws in, for scene-level
   state a game owns (a fog colour that follows the player). Such a game's GLSL only runs on WebGL2, so it pins the
   backend in `hull.json` `render.backend`; `mountRender` is then given that backend instead of choosing.
+* **The interface** (`render/backend.ts`): `init`, `can(cap)`, `sync(world, alpha)`, `draw(cameraNode)`, `setLook`,
+  `setFx`, `setQuality`, `resize`, `stats`, `shot`, `dispose`. Capabilities are `shadows`, `instancing`, `post`,
+  `compute`, `msaa`. `render/pick.ts` chooses the order (`backendOrder`) and refuses a WebGPU adapter that is software or
+  short of storage buffers (`webgpuRefusal`).
+* **`mountRender(game, el, opts)`** picks the backend, owns the canvas and the animation-frame loop, and keeps the look in
+  step with its config file. `opts.backend` is `auto` (default), `webgl2` or `webgpu`; a page can force one for a test with
+  `?hullBackend=`. The view it returns has `backend`, `ready`, `stats()`, `shot()`, `setLook`, `setQuality`,
+  `setPixelRatioCap`, `can(cap)`, and the post cues below. A backend that fails to start is reported once and skipped; with
+  none the game runs without a picture.
+* **Behaviours**: `Mesh`, `Camera`, `Light`, `SceneObject`, and `instances(parent, opts)` for crowds. `activeCamera(root)`
+  finds the camera node. `debug.line(a, b, color)` draws for one frame in dev.
+* **Post cues** (both on `RenderView`, drawn by the post chain, so the `low` tier shows neither): `setSpeed(0..1)` drives the
+  look's `post.speedBlur` and eases in and out by itself. `impact(at, strength)` starts a hit pulse (colour drain, chromatic
+  punch, vignette) that lasts `IMPACT_SECONDS` (0.22) of real time, so a hit-stop does not freeze it. `cancelImpact()` ends it;
+  `holdImpact(k)` freezes it for screenshots. State and envelope are in `render/postfx.ts`; they never touch the simulation.
 * **Custom effects** are written once in a form both backends accept (three.js's node language where it serves
-  both; otherwise a pair of shaders registered under one name). `check` fails on an effect only one backend
+  both; otherwise a pair of shaders registered under one name). `check` does not yet fail on an effect only one backend
   has.
-* **Golden images run on both backends** with a small tolerance, so they cannot drift apart unnoticed.
-* To settle at kickoff, by a spike: whether three.js's WebGPU renderer with its own WebGL2 fallback is solid
-  enough to be the single path, which would make the two backends one.
-* Owns resizing, quality levels (render scale, shadows, post on or off) and a governor that
-  steps quality down when frames run long.
-* **Look** (`look` config): sun, sky, fog, exposure, tone mapping, post chain (bloom, grade, vignette, speed blur).
-* **Materials** (`material` config): PBR values, generated textures by recipe, or image files. Games do not write
-  raw shaders; they ask for a material or a post effect, so the renderer underneath can change (WebGPU later).
-* **Mesh builder**: geometry made in code (boxes, tubes, lathes, extrusions, merged by material).
-* **Cameras**: follow, orbit, first-person and a cutscene director (set shots, letterbox), driven by config.
-* **VFX** (`vfx` config): pooled particle emitters and decals with budgets.
-* **Debug draw**: lines, shapes and labels for dev builds and benches.
+* **Golden images run on both backends** with a small tolerance (`render/golden/`: 5% of pixels over 24/255, mean under
+  4/255), so they cannot drift apart unnoticed.
+* Owns resizing, quality levels (`low` drops post and shadows; `high` adds grain and FXAA) and the device pixel ratio cap
+  that the platform's quality preset sets. There is no automatic governor yet.
+* **Look** (`look` config): sun and its shadows, sky, fog, ambient, environment light, exposure, tone mapping, post chain
+  (bloom, grade, vignette, grain, FXAA, speed blur). `render/look.ts` resolves the file to plain values (`resolveLook`).
+* **Materials** (`material` config): colour, roughness, metalness and a named texture recipe. Meshes with the same
+  spec share one material, released when the last user goes. Games do not write raw shaders for them; they ask for a
+  material, so the renderer underneath can change.
+* **Mesh**: a unit `box`, `sphere`, `plane`, `capsule` or `cylinder`, scaled by its node and shared by shape. Anything
+  else a game builds in code goes through `SceneObject`. (A general mesh builder is not built.)
+* **Cameras**: the `Camera` behaviour (perspective: `fov`, `near`, `far`, `active`). The follow camera is a kit. An orbit
+  camera and a cutscene director are not built.
+* **Debug draw**: lines for dev builds and benches (`debug`).
 * Rendering never changes gameplay state. It reads node transforms, interpolated by `alpha`.
+
+### vfx
+
+* A game calls `mountVfx(game)` once (the dev page does it), then `vfx.burst(id, at, dir?, opts?)` for a one-shot and
+  `vfx.trail(id, node)` for a stream that follows a node until its handle's `stop()` or the node is destroyed. Before
+  `mountVfx` every call does nothing and says so once. `vfx.stats()` and `vfx.clear()` read and reset the pools;
+  `previewVfx` loops one effect for a bench.
+* Particles are simulated in the fixed step, so the same seed gives the same effect, and drawn by `mountRender`. An effect is a
+  `vfx` config file (SCHEMAS section 10); `compile` turns it into flat arrays and a pool, so a burst allocates nothing.
+* **Burst options** (`BurstOptions`): `count` (exact), and multipliers `size`, `speed`, `life` and `spread` (reach of the
+  emit shape). The config stays the baseline, so one effect serves a small and a large hit.
+* **Ground**: `vfx.setGround((x, z) => height)` gives effects with `particle.ground` a floor: `die`, `bounce` or `rest`.
+  `null` removes it.
+* **Flutter** is a sideways wobble per particle (a falling leaf). **Sprites**: `soft`, `smoke`, `hard`, `spark`, `chip`, `leaf`.
+  Ground and flutter run on the CPU pool only.
+* **Two paths**: an effect with a budget under 2048 runs on the CPU pool on both backends; at 2048 or more it runs wholly on
+  the GPU when the backend can compute (WebGPU). The WebGPU particle code is loaded only by the WebGPU backend, so a WebGL2
+  game does not ship it. Where an effect is near the camera it fades out (`budget.fadeNear`).
 
 ### audio
 
 ```
-sound (recipe or sample) ─► voice ─► bus (sfx / ui / voice / music ...) ─► master: compressor ─► limiter ─► out
-                                        └─ send ─► reverb
+sound (recipe, code or sample) ─► voice ─► bus (sfx / ui / voice / music ...) ─► master: compressor ─► limiter ─► out
+                                              └─ send ─► reverb
 ```
 
-* A **recipe** is a small graph: sources (oscillator, noise, sample), shapers (filter, envelope, gain, drive,
-  delay), and random ranges per play.
+* A **recipe** is a small graph: sources (oscillator, noise, modes), shapers (filter, envelope, gain, drive, delay, pan),
+  and random ranges per play. `planSynth` turns it into a plan that both the live engine and the offline bench build from.
+  `sample` sources are in the schema but report as not supported yet.
 * **Limits per sound**: minimum gap, maximum voices, what to do when over.
-* **Buses and snapshots** (`mixer` config): levels, ducking rules, named snapshots the game switches between.
-* **Music** (`music` config): layers on a shared clock with an intensity value the game sets.
-* **3D**: a listener on the camera; distance roll-off, pan and a low-pass with distance.
-* **Offline**: the same graph renders into an `OfflineAudioContext`, so what is measured is what plays.
-* Every call is safe before the first user gesture and when audio is unavailable.
+* **Buses** (`mixer` config): levels and a master compressor and limiter (`planMixer`, `defaultMixer`). Ducking rules and
+  snapshots in the config are not built; a game ducks at run time (below).
+* **`mountAudio(game, opts)`** returns an `AudioView`: `play(id, opts)`, `setBus(bus, db)`, `duck(bus, db, hold, release)`,
+  `setBusLowpass(bus, hz | null, seconds?)`, `setListener(pos, forward?)`, `state`, `context`, `bus(name?)`, `dispose()`.
+* **Play options**: `volume`, `pitch`, `at` (a world position: distance roll-off, pan and a low-pass with distance, against
+  the listener), `params` (numbers for a code sound) and `spatial: { ref, max }` (this play's distance range).
+* **Code sounds.** `registerGenerator(name, fn)` builds nodes once into `call.out` and returns the length. The call carries
+  `ctx`, `t0`, a seeded `rng` (never `Math.random`), `knobs`, `pitch`, `params` and `reverbIn`. **Live generators**
+  (`registerLiveGenerator`) return a `LiveVoice` with `set(params)`, a per-frame `tick(now)`, `stop()` and anything the game
+  reads back; `play` hands back a handle whose `set` reaches it. That is how a winch whine or a score follows game state.
+* **Offline**: the same plan renders into an `OfflineAudioContext` (`renderSound`, `measureSound`, `checkSound`), so what is
+  measured is what plays. `measureChannels` and `fft` give peak, loudness and spectral centre.
+* Every call is safe before the first user gesture and when audio is unavailable (`mountAudio` then returns a no-op view).
 * **A game's own Web Audio.** A game that synthesises sound itself (AOTT) takes the engine's `AudioContext` from
-  `mountAudio(...).context` and joins a mixer bus with `.bus('sfx')`, so there is one context, one clock and one
+  `view.context` and joins a mixer bus with `view.bus('sfx')`, so there is one context, one clock and one
   resume-on-gesture. Both are null/undefined when Web Audio is unavailable.
+* Not built: the `music` layers on an intensity clock.
 
 ### anim
 
-* A **skeleton** is a tree of named joints. A body is generated (a recipe of segments and proportions) or loaded
-  from glTF.
-* A **clip** is keyframes (JSON tracks), a glTF clip, or generated (a function of time with a schema'd block of
-  knobs: stride length, arm swing, lean).
-* An **anim graph** has parameters, states that play a clip or a blend, transitions with conditions and blend
-  times, layers, and IK targets.
-* **Events** on a clip's timeline (`footstep`, `hit-frame`) are signals.
-* Everything advances on game time.
+* A **skeleton** (`Skeleton`, `Pose`) is a tree of named joints. A body is generated by `buildBody` (a humanoid recipe from
+  `proportions`, or a custom `bones` and `parts` list) and drawn as rigid shaped parts, one per bone, not skinned. glTF
+  bodies are in the schema but not loaded yet.
+* A **clip** is keyframes (JSON tracks of rotation and offset), or generated: `registerGenerator(name, factory)` takes the
+  skeleton and a block of numeric knobs and returns a function of phase. The engine ships `humanoid/idle`, `walk`, `run`
+  and two additive helpers. Lengths and strides scale with the skeleton's height, so a giant takes slow, long steps.
+* An **anim graph** (`Graph`) has parameters (number, boolean, trigger), layers with masks, states that play a clip or a
+  blend over a parameter, transitions with a `when` expression (`compileCondition`) and blend times, and IK settings.
+* **Animator** is the behaviour that runs it on game time. `character` names a `character/*` file; `set(name, value)`,
+  `trigger(name)`, `get`, `stateOf(layer)`, `weights(layer)`; `look(target)` and `reach(endBone, target, weight)` for IK
+  (`twoBone`, `lookAt` in `anim/ik.ts`); `ground` gives foot placement a height function. `socket(name)` and `bone(name)`
+  return the Object3D for a blade or an effect.
+* **Events** on a clip's timeline fire the `events` signal on the fixed step with the event, clip and layer.
+* **Cutting**: `detach(bone)` takes a bone and everything under it off the body and returns a node the game can throw; the
+  `cut` signal fires with it. `Limb` frees the shared geometry when that node is destroyed.
+* **Hits**: a character's `hits` list gives hit and collider shapes in bone space; `characterHits(def)` resolves each to a bone
+  index so the game can follow it with the bone's transform (it feeds `physics` colliders).
+* `previewClip`, `previewGraph` and `stopPreview` are for benches. Everything advances on game time.
 
 ### ui
 
-* DOM over the canvas. **Tokens** (`ui-theme`) are CSS variables.
-* **Components** are small functions that make DOM (button, bar, list, keycap, panel, toast, dialog).
-* A **screen** (`ui-screen`) is a tree of components with bindings to a view-model the game exposes, and named
-  actions. The UI reads the view-model once per frame and writes only what changed.
-* Focus moves by keyboard and gamepad on every screen.
-* The settings and key-binding screens are generated from the settings schema and the input map.
+* DOM over the canvas. **Tokens** (`ui-theme`) are CSS variables set by `mountUi(game, el, theme?)`.
+* **Widgets** are small classes (`UiPanel`, `UiText`, `UiBar`, `UiButton`, `UiImage`) styled by those variables; values
+  update each frame and touch the DOM only when they changed. `ui.root` is the full-size layer to add them to.
+* A **screen** (`ui-screen`) is a tree of widgets with bindings (`bind`, `max`, `format`, `visible`) to a view-model the game
+  passes to `ui.screen(id, vm, { state })`, and named `on` actions registered with `ui.action(name, fn)` (`ui.open:<id>` and
+  `ui.close` are built in). A rebuild after a file edit keeps the focused button.
+* `focusMove(delta)` moves focus through the top screen's buttons for keyboard and gamepad. `setStrings(fn)` resolves `@key` text.
+* The settings and key-binding screens are in `platform/screens`, built from the settings and the input map.
 
 ### input
 
-* Devices map to **actions** (`input-map`). Code reads actions, never keys.
-* Input is sampled once per frame; edges last exactly one fixed step.
-* In tests, over the control port and in hosted play, actions are set directly.
+* Devices map to **actions** (`input-map`, compiled by `compileMap`). Code reads actions, never keys.
+* `mountInput` wires the DOM; `InputCore` is the same logic with no DOM, for tests and the control port. Input is sampled once
+  per frame; edges last exactly one fixed step.
+* Players can rebind (`Overrides`, saved by the platform's settings); an action may set `rebind: false`.
+* In tests, over the control port and in hosted play, actions are set directly (`press` goes through real key events).
 
 ### physics
 
-* Built in: a swept sphere or capsule against boxes, cylinders, capsules, spheres and a height field in a uniform
-  grid. Nothing tunnels at speed.
-* Optional: rigid bodies through an adapter, loaded only by games that ask for it.
+* `usePhysics(world, opts)` makes a `Physics` world (a broadphase grid; `cell`, `gravity`, `iterations`); `physicsOf(world)`
+  finds it. Shapes: sphere, capsule, box, static triangle mesh (with a bounding-volume tree), infinite plane and height field.
+  Layers are bits with a mask; a shape can carry a `tag` (queries match it exactly or by prefix) and can be a trigger.
+* **Queries**: `raycast`, `spherecast`, `capsulecast`, `overlapSphere`, `overlapCapsule`, `distanceTo`. They fill a `Hit` the
+  world owns and reuses, so they allocate nothing.
+* **Movement**: `slideMove` (a swept sphere or capsule that slides along surfaces and fills a `MoveResult`: contacts with a walkable flag, grounded, stepped up)
+  is the character mover; nothing tunnels at speed. `Rope` is a distance constraint for grapple wires (`Rope.fromRay`).
+* **Behaviours**: `Collider` puts a shape on a node (static, or following the node or a bone); `Body` is a rigid body that
+  falls, tumbles and settles. Rigid bodies are small on purpose (spheres and boxes for debris and severed limbs; no joints, no
+  tall stacks) and deterministic: same inputs, same states.
+* `debugShapes` draws shapes through `debug`.
 
 ### platform
 
-One interface, chosen at build time.
+`createPlatform({ id, ... })` gives one object whether the game runs in a browser or in the desktop shell (`detectKind` looks
+for `window.hullShell`, which the Electron preload exposes).
 
 | | Browser | Desktop shell |
 |---|---|---|
-| Saves | IndexedDB | Files in the user's app-data folder |
+| Saves | localStorage (`hull:<id>:saves:<slot>`); in memory if the browser refuses it | Files in the user's app-data folder |
 | Settings | localStorage | A JSON file |
-| Window | Fullscreen API | Window size, fullscreen, display choice |
+| Window | Fullscreen API | Window fullscreen |
 | Quit | (none) | Closes the app |
 
-Saves are versioned JSON with migrations.
+* **Saves** (`createSaves`): versioned JSON `{ hull: 'save', version, savedAt, data }` with `migrations[n]` from version n to n + 1.
+  A corrupt or newer file is reported once and skipped. `write`, `read`, `list`, `delete`.
+* **Settings** (`createSettings`): per-bus volume, quality (`low`, `medium`, `high`, with a pixel-ratio cap), fullscreen,
+  `invertY`, `sensitivity` and key bindings. `set` clamps, `apply(targets)` pushes them to audio, render and input, `look()`
+  turns a mouse or stick delta into a rotation without allocating.
+* **Pointer lock** by policy: `click`, `manual` or `never`; released while a menu is open (`setMenuOpen`) or the page is hidden.
+* **Screens**: `openSettingsScreen`, `openBindingsScreen` and `attachPadNav` (gamepad focus navigation).
 
 ### kits
 
-A kit is a folder: behaviours, their tunables, default config, a bench scene, a test and a short README. The game
-composes kits and talks to them only through their signals, public methods and tuning.
+A kit is a folder under `packages/hull/src/kits/`: behaviours, their tunables, default config, a bench scene, a test and a
+short README. The game composes kits and talks to them only through their signals, public methods and tuning. Sound, input,
+saves and the UI layer go through `kitIO`, so a test swaps them (`hull/kits/testing`). A tuning file in `config/tuning/`
+overrides a kit's tunables (section 4).
+
+| Kit | Behaviours and helpers |
+|---|---|
+| `level` | `ArenaLevel`: floor, walls, crates |
+| `fps`, `third-person` | `FirstPerson`, `ThirdPerson`, `AimFollow`, spawn helpers; the shared walker (`walk`, `footsteps`) |
+| `follow-camera` | `FollowCamera` |
+| `health` | `Health`, `HealthHud`, `Weapon` |
+| `pickups` | `Pickup`, `Stock`, `StockHud`, `scatterPickups` |
+| `spawner` | `Spawner`, `Chaser`, `WaveHud`, `GameOver` |
+| `pause`, `saves` | `PauseMenu`, `SaveSlots` |
+
+**Pure helpers.** For a game that builds its own player or enemies, four kits also export plain functions and small state
+objects with no nodes in them. They allocate nothing per step and are tested in Node:
+
+* `spawner/waves`: `newWaveState`, `stepWaves(state, dt, alive, queued, hold, rules)`, `beginWave`, `resetWaves`, `waveCap`,
+  `waveClock`, `waveScale`. The clock of an endless wave run (when the next wave starts, when a cleared wave is announced,
+  when a straggler walks in); what a wave contains stays the game's. The result is one of `WAVE_NONE`, `WAVE_NEXT`,
+  `WAVE_CLEARED`, `WAVE_TRICKLE`.
+* `pickups/depot`: `newDepotState`, `stepDepot(state, dt, inside, needs, { dwell, cooldown })`, `fillTo`. A supply zone you stand
+  in until it resupplies you, for a player that is not a node.
+* `health/zones`: `zoneEffect(damage, cutAt, shallowAt)` returns `ZONE_NONE`, `ZONE_SHALLOW` or `ZONE_CUT`;
+  `coveredDamage`, `regenerate`. What a hit on a body part does, as numbers.
+* `follow-camera/glide`: `damp`, `followDistance`, `followFov`, `smoothstep` and `Reach` (a wall-avoidance distance that glides in
+  and out). The chase camera's maths without the behaviour.
 
 ## 6. Build and output
 
 ```
 src/ + config/ + hull  ──►  build
-   1. check (types, schemas, references, rules)
-   2. inline config (defaults stripped) and tunables (as constants)
-   3. bundle the game and the engine modules it uses; drop dev/; minify
-   4. write dist/web/game.js, index.html, assets/ (if any), build.json (sizes, hashes)
+   1. check (types, schemas, references, rules); the `build` tool's `skipCheck` skips it
+   2. strip `note` fields and inline config; tunables of the project become constants (kit blocks stay live cells)
+   3. bundle the game and the engine modules it uses with Vite; drop dev/; minify
+   4. write dist/web/game.js, index.html and build.json (sizes, gzip size, whether dev code reached the bundle)
 ```
 
-* `game.js` is one ES module with no imports. It exports `start(element, options)` and starts itself when loaded
-  by the generated `index.html`.
-* Binary assets are copied to `assets/` with hashed names; `--single-file` embeds them instead.
-* `build.json` lists what took the space, so the AI can act on a size budget.
+* `game.js` is one ES module with no imports, config inside. It exports `start(element)` and starts itself when the
+  generated `index.html` has an `#app` element.
+* Binary assets are inlined into `game.js` (nothing is written to `assets/` yet); the one-file output is always on.
+  `hull.json` `targets.web.singleFile` and a size-budget failure are in the manifest schema but not acted on yet.
+* `build.json` lists the files with their sizes, and the build fails if `dev/` code reached `game.js`.
 
-**Desktop**: `package` copies `dist/web` into a shell.
+**Desktop**: the `package` tool builds `dist/web`, copies it and `shell/electron` into an Electron runtime and writes
+`dist/desktop/<Title>.app` on macOS. Only the system it runs on can be built; the others come back as skipped. `smoke: true`
+launches the packaged app once and saves a screenshot.
 
-* `shell/electron` (default): one window, the game served from a private scheme, a preload exposing only the
-  `platform` interface. Targets: macOS (`dmg`, `zip`; arm64 and x64), Windows (`nsis`, portable), Linux
-  (`AppImage`, `deb`).
-* `shell/tauri` (experimental, `--shell tauri`): the same `platform` interface over Tauri commands. Offered for
-  macOS and Windows. A check in `package` runs the game's own step script inside the built app, because the
-  web view is not the Chromium the game was tested in.
-* Signing and notarisation are configured in the manifest and done in CI on each system.
+* `shell/electron`: one window, the game served from a private scheme, a preload (`window.hullShell`) exposing only the
+  `platform` interface (read, write, list, remove, fullscreen, quit).
+* `shell/tauri` is a placeholder README: there is no Tauri shell yet.
+* Installers (`dmg`, `nsis`, `AppImage`), signing and notarisation are not built; they belong in CI per system.
 
 ## 7. History and experiments
 
@@ -418,9 +524,9 @@ Hull Studio (Electron window)          project server (inside the app)          
             ◄──── hosted: a video stream + input channel
 ```
 
-* **Benches** are part of the runtime (`hull/dev/benches`): a function that, given one id, builds the smallest
-  scene that shows it and returns the controls it offers. The Studio hosts benches; it does not know how to draw
-  a character itself. A game can register benches for its own kinds.
+* **Benches**: the smallest scene that shows one id, with the controls it offers. Per-kind benches (sound, character and
+  animation, vfx, look) are in `packages/studio/src/renderer/benches`; each kit has a `bench.ts` scene. They draw with
+  the runtime's own modules, so a bench shows what the game would.
 * The **Inspector** renders a form from the JSON Schema and its `x-ui` hints, or from a `tunables` block. Editing a
   field sends one `set` to the project server, which writes the file and pushes the new value to the running game.
 * **Review** state per id (`unreviewed`, `approved`, `needs-change`, a note, the content hash) lives in
@@ -434,53 +540,75 @@ Hull Studio (Electron window)          project server (inside the app)          
 ## 9. Tools for the agent
 
 Every tool is defined once, in `packages/tools/src/tools/` (`@hull/tools`), as a typed function with a JSON Schema for
-its input. There is no command line: the app is the product, so one front less to keep. Three fronts expose the list:
+its input and output (`defineTool`, `ToolDef`). There is no command line: the app is the product, so one front less to keep.
+Three fronts expose the list:
 
 | Front | For | Notes |
 |---|---|---|
 | The Hull desktop app | The person | Calls the tool functions directly. |
-| MCP | A local agent (Claude Code, Codex, any MCP client) | `createMcpServer(projectRoot)` in `@hull/tools`. The app hosts it over streamable HTTP on 127.0.0.1 for the open project and shows how to connect; `bin/hull-mcp.js` serves it over stdio when the app is closed. |
-| Marl AI | Customers of the hosted Studio, and the Studio's chat panel | A separate backend service. It runs the agent loop with a model from Marl's list, calls the tools on the project server, streams text and changes back, and meters usage. One turn ends as one change in the history. |
+| MCP | A local agent (Claude Code, Codex, any MCP client) | `createMcpServer(projectRoot)` in `@hull/tools`. The app hosts it over streamable HTTP on 127.0.0.1 for the open project and shows how to connect; `bin/hull-mcp.js [dir]` serves it over stdio when the app is closed. |
+| Marl AI | Customers of the hosted Studio, and the Studio's chat panel | A separate backend service. It runs the agent loop with a model from Marl's list, calls the tools on the project server, streams text and changes back, and meters usage. One turn ends as one change in the history. Not built here. |
 
-The author of a change records the front and the model (`you`, `ai:local`, `ai:mcp`, `ai:marl/<model>`), so the
-timeline shows who and what made it. Marl AI holds the provider keys: none is ever in a project or in the Studio's
-front end. Its providers and models are chosen when it is built, from their documentation at that time.
+The author of a change records the front and the model (`you`, `ai:<agent>`, `marl:<model>`), so the timeline shows who
+and what made it. Marl AI holds the provider keys: none is ever in a project or in the Studio's front end.
 
-What the tools give an agent:
+### The tools
 
-* **Errors are located.** `path:line:col: message` for code, `path#/json/pointer: message` for config, and
-  every tool returns the same problems as data.
-* **Scenario tests** (Node): `const game = await testGame(); game.press('jump'); game.step(30);
-  expect(game.find('player').position.y).toBeGreaterThan(1)`.
-* **Step scripts** (browser): a JSON list of `press`, `step`, `waitUntil`, `expect`, `shot`. A `shot` with a golden
-  image fails on a perceptual difference and writes the diff.
-* **Control port**: in a dev build the game listens on a local WebSocket: `step`, `press`, `release`, `state`,
-  `set`, `spawn`, `teleport`, `shot`, `errors`, `perf`. The MCP server exposes the same list as MCP tools.
-* **As built (M3).** The control port is the project server's `game.run` method: the server sends `game.rpc` to a
-  connected game and the game answers `game.result` (`dev/protocol.ts`, `dev/runtime.ts`). Ops so far: `step`, `press`,
-  `release`, `state`, `screenshot`. A page opened with `?hull-paused&hull-client=<id>` starts frozen at tick 0 and
-  can be aimed at by id, so a script starts from the same state every time. The `play` tool takes a JSON script of
-  `step`, `press`, `release`, `hold`, `read`, `check` and `screenshot` steps, runs it in a headless browser
-  (agent-browser) and compares each screenshot with `tests/golden/<name>.png` per channel and per pixel (default: 8
-  of 255 per channel, 0 pixels allowed). A missing golden is written; the `update` input rewrites them; a mismatch stops the
-  script and leaves `.hull/play/<name>.actual.png` and `.diff.png`. The MCP server speaks JSON-RPC (initialize, tools/list, tools/call) over stdio (newline-delimited) and over
-  streamable HTTP, and serves the registry without `dev` and `new`. Not yet: `set`, `spawn`, `teleport`, `errors`,
-  `perf`, `waitUntil` and perceptual (not per-pixel) compare. The project methods (`config.set`, `history.*`, `game.run`)
-  are MCP tools too.
-* **Budgets**: a test can assert frame time at the 95th percentile, draw calls, node count and allocations per
-  frame.
-* **Sound bench**: peak, loudness, length, spectral centre per sound; a rule file states the expected order and
-  fails when it is broken.
+The registry (`tools`) holds files-and-processes tools. Each takes a project root and returns problems as data.
+
+| Tool | Does |
+|---|---|
+| `check` | Types, config against schemas, references, house rules (no `Math.random`, `Date.now`, `performance.now` in game code); writes `.hull/gen/ids.ts` |
+| `test` | Runs the project's `src/**/*.test.ts` in Node (Vitest) and reports each failure at its file and line |
+| `build` | `dist/web/game.js`, `index.html`, `build.json` (section 6) |
+| `package` | Builds, then an Electron app in `dist/desktop/` (`targets`, `smoke`) |
+| `dev` | Serves the game in a browser, reloading on change. Hidden from MCP: it never returns |
+| `new` | Makes a game from a template. Hidden from MCP |
+| `play` | Runs a step script in a headless browser (below) |
+| `review.list`, `review.set`, `review.note` | Review notes |
+
+The **project methods** (`projectTools`) go through the project's server, so an open app hears them: `project.info`,
+`library.list`, `config.read`, `config.set`, `tunables.list`, `tunables.set`, `journal.list`, `history.list`, `history.diff`,
+`history.restore`, `history.checkpoint`, `exp.start`, `exp.list`, `exp.compare`, `exp.adopt`, `exp.discard`, `game.control`,
+`game.run`, `problems.list`, and the review methods. `openProject` attaches to the server the app started (it writes
+`.hull/server.json`) or starts one in process, so two servers never fight over one project. `allTools` is the union;
+where a name is in both lists the method wins.
+
+**MCP** (`mcp/`) is JSON-RPC 2.0 written by hand: `initialize`, `tools/list`, `tools/call`, `ping`, over newline-delimited stdio
+(`serveMcpStdio`) or streamable HTTP bound to loopback only (`startMcpHttp`). The package has no MCP SDK dependency.
+
+**Maintainer scripts** (`scripts/project.ts`, never shipped) call a tool as a function: `pnpm project:check|build|dev <dir>`, and
+`pnpm project:run <tool> <dir> [json]`. `pnpm mcp [dir]` starts the stdio server.
+
+### What the tools give an agent
+
+* **Errors are located.** `path:line:col: message` for code, `path#/json/pointer: message` for config, and every tool
+  returns the same problems as data (`formatProblem`).
+* **Scenario tests** (Node): `hull/kits/testing` starts a game with a headless input and counted sounds
+  (`startRig` gives a `Rig` with `g`, `core`, `sounds` and `step(n)`; `runScenario` records and replays a run). This is the harness the kits' own tests use.
+* **Control port.** In a dev build the game connects to the project server (`connectDev`, `dev/protocol.ts`). The server sends
+  `game.rpc` and the game answers `game.result`; the `game.run` method is the way in. Ops: `step`, `press`, `release`,
+  `state`, `screenshot`. A page opened with `?hull-paused&hull-client=<id>` starts frozen at tick 0 and can be aimed at by
+  id, so a script starts from the same state every time. Time moves only by `step`. Not built: `set`, `spawn`, `teleport`,
+  `errors`, `perf`, `waitUntil`.
+* **Step scripts** (`play`): a JSON list of `step`, `press`, `release`, `hold`, `read`, `check` and `screenshot` steps, run in a
+  headless browser (agent-browser). Each screenshot is compared with `tests/golden/<name>.png` per channel and per pixel
+  (default: 8 of 255 per channel, 0 pixels allowed). A missing golden is written; `update` rewrites them; a mismatch stops the
+  script and leaves `.hull/play/<name>.actual.png` and `.diff.png`. Not built: a perceptual compare.
+* **Sound measurement**: `renderSound`, `measureSound` and `checkSound` in `hull/audio` give peak, loudness, length and spectral
+  centre. They are library functions for benches; there is no `bench` tool yet.
+* **Budgets**: `hull.json` `budgets` is in the schema, and `render` and `vfx` report draw calls and frame time; the check that
+  fails a build or test on them is not built.
 
 ## 10. Rules the engine enforces
 
 | Rule | How |
 |---|---|
-| No wall clock or unseeded random in game code | Lint rule; the engine's versions are the only ones exported |
-| `core` and `config` run without a browser | Import test in Node |
+| No wall clock or unseeded random in game code | `check` house rules (a source scan); the engine's versions are the ones to use |
+| `core` and `config` run without a browser | A test imports them in Node |
 | Config matches its schema; references resolve | `check` |
 | A write from the Studio leaves the file valid | Re-validate (JSON) or re-parse and type-check (TypeScript) before keeping it |
 | An AI change over a value the person set is visible | `check` lists it |
-| A subsystem that throws at start does not stop the game | Each module is started in a guard; the error is reported once |
-| No allocations per frame in engine code | Budget test in the examples |
-| Dev tools are not in ship builds | Build test greps the bundle |
+| A subsystem that throws at start does not stop the game | `mountRender` and `mountAudio` report once and carry on without a picture or sound |
+| No allocations per frame in engine code | Convention for now; the physics tests check queries and the mover allocate nothing |
+| Dev tools are not in ship builds | `build` scans the bundle and fails if dev code reached it |

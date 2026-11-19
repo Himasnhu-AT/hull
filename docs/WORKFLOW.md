@@ -26,8 +26,8 @@ history.
    | 1 | `check` | Type errors, config that does not match its schema, ids that do not exist, banned calls, values of yours it overwrote |
    | 2 | `test` | Wrong behaviour in the simulation: it runs in Node, thousands of frames per second |
    | 3 | `play` (file `tests/grapple.steps.json`) | What is actually on screen: screenshots the AI reads, golden images that must match |
-   | 4 | `bench` (sound) | Levels and lengths: nothing clips, the new sound sits where it should among the others |
-   | 5 | `bench` (perf) | Frame time, draw calls and allocations against the budgets in the manifest |
+   | 4 | Sound measurement (`measureSound`, `checkSound` in `hull/audio`; no tool yet) | Levels and lengths: nothing clips, the new sound sits where it should among the others |
+   | 5 | Frame time and draw calls (`render` stats; no tool or budget check yet) | Cost against the budgets in the manifest |
 
 3. The AI reports what it made, what each check showed, and what it could not judge (how a sound *feels*, whether
    an animation *reads*). Those pieces show to you as `unreviewed`.
@@ -94,15 +94,14 @@ you           sound/land/thud       level −8 → −5
 The Build button (the `build` tool) and the `package` tool:
 
 ```
-build                         dist/web/game.js + index.html (+ assets/ if the game has binary files)
-build {singleFile: true}      embed everything: exactly one .js
-package {targets: "mac,win,linux"}   Electron apps
+build                         dist/web/game.js + index.html + build.json (assets are inlined: one .js)
+package {targets: ["mac"]}    an Electron app for the system it runs on; the others are reported as skipped
 ```
 
 * **Website**: upload `dist/web/` to any static host.
-* **Desktop**: installers land in `dist/desktop/`. Unsigned builds are for testing on your machine; signed builds
-  for each system are made by the CI job the template includes.
-* The build prints a size report and fails if it is over the budget in the manifest.
+* **Desktop**: the app lands in `dist/desktop/` (`<Title>.app` on macOS). It is unsigned, for testing on your machine; installers
+  and signing are not built.
+* The build prints the size of `game.js` and fails if dev code reached it. A size budget from the manifest is not enforced yet.
 
 ## 7. What "done" means
 

@@ -1,11 +1,12 @@
 # Config schemas
 
-Every config file in a Hull game, what it may contain, and an example. These are drafts for review: field names
-and ranges will move during the first milestones, but the shape (a kind, an id from the path, references by id, UI
-hints, direct edits recorded in the history) is the design.
+Every config file in a Hull game, what it may contain, and an example. Field names and ranges can still
+move, but the shape (a kind, an id from the path, references by id, UI hints, direct edits recorded in the history) is
+the design. Kinds that are described here but have no schema yet are marked "not built".
 
 The schemas are written once in TypeScript (TypeBox) under `packages/hull/src/schema/` and emitted as JSON Schema
-(draft 2020-12) files into `schemas/`. The JSON below is what gets emitted.
+(draft 2020-12) files into `schemas/`. The JSON below is the shape of what gets emitted (abridged: the files in `schemas/` are the whole truth, one per kind:
+`game`, `tuning`, `sound`, `mixer`, `character`, `anim-set`, `anim-graph`, `ui-theme`, `ui-screen`, `input-map`, `look`, `vfx`, `material`).
 
 ## 1. Conventions
 
@@ -24,8 +25,8 @@ The schemas are written once in TypeScript (TypeBox) under `packages/hull/src/sc
 | id | Not written in the file. It is the path under `config/` without `.json`: `config/sound/sword/hit.json` is `sound/sword/hit`. |
 | `note` | Optional. One line for the person reviewing it. Shown in the Studio. |
 
-Files carry no `$schema` line. Hull knows the schema from the kind, and writes the editor mapping so
-autocomplete works.
+Files carry no `$schema` line. Hull knows the schema from the kind; the emitted files in `schemas/` can be mapped
+in an editor by hand.
 
 ### Units and types
 
@@ -86,8 +87,8 @@ export const player = tunables('player', {
 
 ### Versions
 
-A schema has a `version`. When a kind changes shape, Hull ships a migration, and `hull migrate` rewrites the
-files (as one recorded change).
+Schemas have no version field yet and there is no migration tool. When a kind changes shape, the files in the
+repository's templates and kits are rewritten with it.
 
 ## 2. The game manifest (`hull.json`)
 
@@ -101,7 +102,7 @@ files (as one recorded change).
   "step": 60,
   "features": ["audio", "anim", "ui", "vfx"],
   "render": { "backend": "auto" },
-  "start": { "screen": "ui/title", "level": "level/yard" },
+  "start": { "screen": "ui-screen/title", "level": "level/yard" },
   "systems": ["waves", "score"],
   "targets": {
     "web": { "singleFile": false },
@@ -137,7 +138,7 @@ Schema (abridged):
 
 ## 3. `tuning`: a block of numbers owned by code
 
-A block of numbers kept as a file, for values that are shared (several pieces of code, a level, a tool) or that vary by file (one per enemy type, one per difficulty). The game declares the block's shape once in code with `tuningKind('jump', { height: num(2.2, ...) })`; each file holds values. Numbers used by one piece of code alone go in a `tunables` block instead.
+A block of numbers kept as a file, for values that are shared (several pieces of code, a level, a tool) or that vary by file (one per enemy type, one per difficulty). The file schema says only "`kind`, an optional `note`, and numbers": the names and ranges come from a `tunables` block of the same name in code. A kit's block is overridden by `config/tuning/<block>.json` (block name in kebab case; `thirdPerson` is `third-person.json`): keys the file lacks keep the code value. A key the block does not know, or a value its options refuse, is a problem at `file#/key`. Numbers used by one piece of code alone and not shared go in a `tunables` block with no file.
 
 ```json
 {
@@ -147,7 +148,7 @@ A block of numbers kept as a file, for values that are shared (several pieces of
 }
 ```
 
-Emitted schema for that block:
+The emitted file schema is just `{ "kind": "tuning", "note"?: string, <any key>: number }`. A block's own widgets (below) come from the code:
 
 ```json
 {
@@ -253,25 +254,24 @@ What AOTT's sounds needed and the first draft above could not say:
 |---|---|
 | layer `at` | Start the layer this many seconds after the sound starts. |
 | layer `repeat: { count, every, falloff }` | Play the layer again `count` times, `every` seconds apart, each quieter by `falloff` (ratchets, debris). |
-| source `modes` | A bank of decaying sine partials (`freq`, `gain`, `decay` each): struck metal, bells, blades. |
+| layer `from: { modes, decay, tilt }` | A bank of decaying sine partials, up to 16 frequencies (each a number or range) with one `decay` and a `tilt` toward the low ones: struck metal, bells, blades. |
 | noise `color` | `white`, `pink` or `brown`. |
 | oscillator `detune` | In cents. |
 | filter `glideTo`, `glideTime` | Sweep the cutoff to this multiple of its start over `glideTime` seconds. |
 | filter `gain` | For `peaking` filters, in dB. |
 | envelope `hold` | Seconds held at full level between attack and decay. |
-| `pick.mode` | How a variation is chosen: `random` or `cycle`. |
+| `pick.mode` | How a variation is chosen: `random`, `shuffle` or `sequence`. |
 | `bus` | A bus name inside the mixer file, so it is not an `x-ref`. |
 
 For a game that drives sound from state (AOTT): `play(id, { params, spatial })` hands numbers to a `code` generator (`call.params`) and
 overrides the recipe's distance range for one play; `registerLiveGenerator` makes a sound that is built once and fed by `handle.set({...})`
 and a per-frame `tick` (a winch, a score); `view.duck(bus, db, hold, release)` and `view.setBusLowpass(bus, hz)` are the mixer moves
-a game makes at runtime.
+a game makes at runtime (ARCHITECTURE, audio).
 
 `sample` sources are accepted by the schema and reported as not supported yet. `code` sources call a generator the
-game registers with `registerGenerator`. The mixer has buses and a master compressor and limiter; ducking and
-snapshots come later.
+game registers with `registerGenerator`. The mixer has buses and a master compressor and limiter.
 
-## 5. `mixer` and `music`
+## 5. `mixer`
 
 ```json
 {
@@ -283,32 +283,15 @@ snapshots come later.
     "voice": { "to": "master", "level": 0 },
     "music": { "to": "master", "level": -10 }
   },
-  "ducks": { "voice-over-music": { "when": "voice", "lower": "music", "by": 8, "attack": 0.15, "release": 0.8 } },
-  "snapshots": {
-    "paused": { "sfx": -18, "music": -6, "lowpass": 900 },
-    "low-health": { "sfx": -3, "lowpass": 3000 }
-  },
   "master": { "compressor": { "threshold": -14, "ratio": 3 }, "limiter": -1 }
 }
 ```
 
-```json
-{
-  "kind": "music",
-  "tempo": 96,
-  "key": "D minor",
-  "bars": 8,
-  "layers": {
-    "pad":   { "sound": "music/parts/pad",   "from": 0.0 },
-    "pulse": { "sound": "music/parts/pulse", "from": 0.3 },
-    "drums": { "sound": "music/parts/drums", "from": 0.55 },
-    "brass": { "sound": "music/parts/brass", "from": 0.8 }
-  },
-  "intensity": { "rise": 0.7, "fall": 2.2 }
-}
-```
+A bus has a `level` in dB (-60 to 12) and `to`, the bus it feeds. `master.compressor` is `threshold` (dB) and `ratio`;
+`master.limiter` is a ceiling in dB. Without a mixer file, `defaultMixer` applies.
 
-`from` is the intensity (0 to 1) at which a layer comes in. The game sets one number; the music follows.
+Not built: ducking rules and snapshots in the file (a game calls `duck` and `setBusLowpass` at run time) and the `music` kind
+(layers that come in on an intensity value).
 
 ## 6. `character`, `anim-set`, `anim-graph`
 
@@ -326,13 +309,16 @@ A character is a body, what it is made of, where things attach, and which animat
   "materials": { "skin": "material/skin/fair", "cloth": "material/cloth/green", "metal": "material/steel" },
   "sockets": { "handR": { "joint": "handR", "offset": [0, -0.05, 0.02] }, "back": { "joint": "spine", "offset": [0, 0.2, -0.15] } },
   "collider": { "shape": "capsule", "radius": 0.35, "height": 1.7 },
-  "animSet": "anim/soldier",
-  "animGraph": "anim/soldier.graph"
+  "animSet": "anim-set/soldier",
+  "animGraph": "anim-graph/soldier"
 }
 ```
 
-`body.type` is `generated` (a recipe registered in code plus proportions) or `gltf` (`file`, and a `joints` map
-from the engine's joint names to the model's).
+`animSet` and `animGraph` are ids of `anim-set` and `anim-graph` files (`config/anim-set/soldier.json`,
+`config/anim-graph/soldier.json`). `body.type` is `generated` or `gltf` (`file`, and a `joints` map from the engine's joint
+names to the model's); glTF bodies are in the schema but the Animator reports them as not supported yet. A generated body
+has a `recipe` (`humanoid`, with `proportions`: `height`, `shoulders`, `legs`, `head`, `arms`, `build`; or `custom`, with a `bones`
+list of `{ name, parent, offset }` and a `parts` list of `limb`, `box` and `sphere` shapes on bones) and a `scale`.
 
 `hits` (optional) lists hit and collider shapes that follow bones, in the bone's own space and the body's unscaled
 units: `{ "bone": "head", "shape": "sphere", "part": "head", "group": "body", "c": [0, 1.2, 0.1], "r": 0.9 }`. A `capsule`
@@ -360,7 +346,9 @@ checks them against the body and returns each with its bone index.
 }
 ```
 
-Clip `events` are times (0 to 1 for loops, seconds otherwise) at which a named signal fires.
+Clip `events` map a name to a time, or a list of times (0 to 1 for loops, seconds otherwise), at which the Animator's `events`
+signal fires. A clip also has `speed`, `travel` (ground speed in m/s, for stride matching) and `curve` (`smooth` or `linear`
+between keyframes). A `generated` clip's `knobs` are numbers only. Keyframe tracks hold `rotation` (Euler radians) and `offset`.
 
 ```json
 {
@@ -396,14 +384,17 @@ Clip `events` are times (0 to 1 for loops, seconds otherwise) at which a named s
 }
 ```
 
-`when` is a small expression over the parameters: comparisons, `!`, `&&`, `||`. Nothing else.
+`when` is a small expression over the parameters: comparisons, `!`, `&&`, `||`. Nothing else. A transition may also have `after`
+(seconds in the state). A state has `clip` or `blend`, `speed`, `speedFrom` (a parameter that scales it) and `exit` (the state to go
+to when a non-looping clip ends, with `exitBlend`). A layer has `mask`, `additive` and `weight`. `ik` has `feet` and `look`
+(`enabled`, `weights`, `yawDeg`, `pitchDeg`, `speed`).
 
 ## 7. `ui-theme` and `ui-screen`
 
 ```json
 {
   "kind": "ui-theme",
-  "color": { "panel": "#0e1012", "text": "#e6e1d6", "muted": "#9a968c", "accent": "#f0a43a", "danger": "#c4372b" },
+  "color": { "panel": "#0e1012", "text": "#e6e1d6", "muted": "#9a968c", "accent": "#f0a43a", "danger": "#c4372b", "good": "#6bbf59", "line": "#2a2d31" },
   "type": { "family": "system-ui", "size": 14, "labelTracking": 0.2 },
   "space": { "gutter": 20, "radius": 2 }
 }
@@ -418,7 +409,7 @@ Clip `events` are times (0 to 1 for loops, seconds otherwise) at which a named s
     "children": [
       { "title": { "text": "@pause.title" } },
       { "button": { "text": "@pause.resume", "primary": true }, "on": { "press": "game.resume" } },
-      { "button": { "text": "@menu.settings" }, "on": { "press": "ui.open:ui/settings" } },
+      { "button": { "text": "@menu.settings" }, "on": { "press": "ui.open:ui-screen/settings" } },
       { "button": { "text": "@pause.quit" }, "on": { "press": "game.toTitle" } }
     ]
   },
@@ -426,12 +417,19 @@ Clip `events` are times (0 to 1 for loops, seconds otherwise) at which a named s
 }
 ```
 
-* Text beginning with `@` is a key in the `strings` file.
+* A node is one widget (`panel`, `stack`, `row`, `title`, `text`, `bar`, `button` or `image`) with its options, plus `on` and
+  `children` (only `panel`, `stack` and `row` take children). Options: `text`, `bind`, `max`, `format`, `primary`, `align`, `width`,
+  `gap`, `src`, `alt`, `label`, `menu`, `visible`.
+* Text beginning with `@` is a key the game resolves with `ui.setStrings(fn)`; without it the key itself is shown.
 * `bind` reads a value from the game's view-model: `{ "bar": { "bind": "player.hp", "max": "player.maxHp" } }`.
 * `on` names an action the game or the UI kit registered.
 * `states` are the versions the Studio's bench shows (with mock data), so every state can be reviewed.
 
 ## 8. `input-map`
+
+An action is a `button`, an `axis` or an `axis2`. `keys` is a list (button, axis) or an object of `up`/`down`/`left`/`right` lists (axis2).
+`mouse` is `delta`, `deltaX`, `deltaY` or `wheel`; `pad` names a button or stick (a list for several). Also `deadzone`
+(default 0.15), `sensitivity`, `invertY` and `rebind` (default true). `groups` only orders the key-binding screen.
 
 ```json
 {
@@ -455,10 +453,18 @@ Clip `events` are times (0 to 1 for loops, seconds otherwise) at which a named s
   "sun": { "color": "#ffeddb", "strength": 3.2, "elevationDeg": 48, "azimuthDeg": 210, "shadows": true, "shadowRange": 75, "shadowLead": 0.45, "shadowSoftness": 3, "shadowNormalBias": 0.06 },
   "sky": { "horizon": "#a9c6dc", "mid": "#8fb2d6", "zenith": "#3d6aa8" },
   "fog": { "color": "#a9c6dc", "near": 140, "far": 1500 },
+  "ambient": { "color": "#ffffff", "intensity": 0.6, "ground": "#3a3631" },
+  "environment": { "intensity": 0.4 },
   "exposure": 1.0,
+  "toneMapping": "aces",
   "post": { "bloom": 0.6, "contrast": 1.07, "saturation": 1.1, "vignette": 0.22, "grain": 0.02, "speedBlur": 1 }
 }
 ```
+
+Other fields: `sky.color` is a flat sky instead of the gradient; `fog` is linear (`near`, `far`) or by `density`, with `skyBlend`;
+`ambient.ground` makes the ambient light a hemisphere; `environment.intensity` bakes the sky into reflections;
+`toneMapping` is `none`, `linear`, `reinhard`, `cineon`, `aces`, `agx` or `neutral`; `post` also has `bloomThreshold`, `lift`, `gamma`,
+`gain` (a colour triple each) and `aa` (`none` or `fxaa`).
 
 `speedBlur` is the most the speed cue draws: a radial blur, a closing vignette and faint streaks near the border. The
 game reports how fast the player moves with `render.setSpeed(0..1)` and the cue eases in and out by itself. A hit pulse
@@ -487,15 +493,20 @@ view (a fraction of `shadowRange`), `shadowSoftness` blurs the edge and `shadowN
 }
 ```
 
-Fields beyond the sample: `particle.sprite` is `soft`, `smoke`, `hard`, `spark`, `chip` (a hard-edged flake that turns with the particle) or `leaf` (a pointed oval). `particle.ground` (`none`, `die`, `bounce`, `rest`) says what a particle does at the ground height the game gives `vfx.setGround(fn)`: die on touch, bounce and roll, or slide along it. `particle.flutter` (m/s) is a sideways wobble per particle, for a falling leaf. `ground` and `flutter` run on the CPU pool only (effects with a budget of 2048 or more on WebGPU ignore them).
+Fields beyond the sample: `emit.rate` (particles a second, for a trail); `emit.shape` is `point`, `{ sphere }`, `{ disc }` or `{ box }`;
+`particle.direction` is a `cone` or `{ "outward": true }`; `sizeScale` (a range applied to the size curve), `glow`, and `blend`
+(`alpha` or `additive`); `particle.sprite` is `soft`, `smoke`, `hard`, `spark`, `chip` (a hard-edged flake that turns with the particle) or `leaf` (a pointed oval). `particle.ground` (`none`, `die`, `bounce`, `rest`) says what a particle does at the ground height the game gives `vfx.setGround(fn)`: die on touch, bounce and roll, or slide along it. `particle.flutter` (m/s) is a sideways wobble per particle, for a falling leaf. `ground` and `flutter` run on the CPU pool only (effects with a budget of 2048 or more on WebGPU ignore them).
 
 A call can change one burst without a second config: `vfx.burst(id, at, dir, { count, size, speed, life, spread })` sets the exact count and multiplies size, start speed, life and the emit shape's reach. The count draw still happens, so the random stream stays in step.
 
-## 11. `material`, `prefab`, `level`
+## 11. `material` (and `prefab`, `level`: not built)
 
 ```json
 { "kind": "material", "color": "#9aa0a8", "roughness": 0.35, "metalness": 1, "texture": { "recipe": "brushed", "scale": 2 } }
 ```
+
+`prefab` and `level` have no schema yet. The two sketches below are the plan, not something `check` accepts: a game builds its
+nodes and level in code (the `level` kit's `ArenaLevel`) and loads `look` itself.
 
 ```json
 {
@@ -526,7 +537,9 @@ A call can change one burst without a second config: `vfx.burst(id, at, dir, { c
 
 A level is mostly made by a generator in code (with a seed and knobs); `place` adds or overrides single things.
 
-## 12. `strings`
+## 12. `strings` (not built)
+
+No `strings` kind exists. A game gives `ui.setStrings(fn)` a lookup of its own; this is the planned file.
 
 ```json
 { "kind": "strings", "lang": "en", "text": { "pause.title": "Paused", "pause.resume": "Resume", "pause.quit": "Quit to title", "menu.settings": "Settings" } }
@@ -540,8 +553,8 @@ Not config: the record of what you have checked. It lives with Hull's own data, 
 {
   "items": {
     "sound/sword/hit": { "state": "approved", "at": "2026-11-20T10:12:00Z", "by": "you", "hash": "9c1f0a" },
-    "anim/soldier#run": { "state": "needs-change", "note": "Arms swing too wide; feet slide on the turn.", "at": "2026-11-20T10:15:00Z", "hash": "44b7e2" },
-    "ui/pause": { "state": "unreviewed", "hash": "a03d51" }
+    "anim-set/soldier#run": { "state": "needs-change", "note": "Arms swing too wide; feet slide on the turn.", "at": "2026-11-20T10:15:00Z", "hash": "44b7e2" },
+    "ui-screen/pause": { "state": "unreviewed", "hash": "a03d51" }
   }
 }
 ```
@@ -551,5 +564,5 @@ Not config: the record of what you have checked. It lives with Hull's own data, 
 * `hash` is the content hash at review time. When the piece changes, the state falls back to `unreviewed` and the
   old note is kept beside it until you clear it.
 * `by` is who wrote the entry (`you`, `ai:<agent>`). A key must name a piece that exists; the write is refused otherwise.
-* * The `review.list`, `review.set` and `review.note` tools (and project methods of the same names) read and write the notes; `review.list` with `open: true` gives the open ones to the AI.
+* The `review.list`, `review.set` and `review.note` tools (and project methods of the same names) read and write the notes; `review.list` with `open: true` gives the open ones to the AI.
 * `hash` is six hex digits of a SHA-1 of the file text (config) or of the block's keys and values (tunables). A `#part` key hashes the whole piece.
