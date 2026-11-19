@@ -1,0 +1,28 @@
+{
+  "kind": "vfx",
+  "note": "Pale stone dust off a hit; size is the call's big/2.",
+  "emit": {
+    "count": [4, 4],
+    "shape": "point"
+  },
+  "particle": {
+    "life": [1.4, 2.4],
+    "speed": [0.6, 3.2],
+    "direction": {
+      "cone": [0, 1, 0],
+      "angleDeg": 75
+    },
+    "gravity": -0.45,
+    "drag": 3.1,
+    "ground": "rest",
+    "size": [ [0, 0.65], [1, 2.9] ],
+    "sizeScale": [0.8, 1.25],
+    "color": [ [0, "#a8a49b"], [1, "#b3a894"] ],
+    "alpha": [ [0, 0], [0.06, 0.52], [0.45, 0.3], [1, 0] ],
+    "sprite": "smoke"
+  },
+  "budget": {
+    "max": 700,
+    "fadeNear": 2
+  }
+}

@@ -58,7 +58,14 @@ export const vfxSchema = Type.Object(
         glow: Type.Optional(Type.Number({ minimum: 0, default: 1, ...ui({ step: 0.1, help: 'Multiplies the colour. Above 1 makes it brighter than white so bloom picks it up.' }) })),
         spin: Type.Optional(range([0, 0], 'Turn speed of the sprite.', 'rad/s')),
         stretch: Type.Optional(Type.Number({ minimum: 0, default: 0, ...ui({ step: 0.01, help: 'Seconds of travel the sprite is stretched along its velocity. 0 keeps it round.' }) })),
-        sprite: Type.Optional(Type.Union([Type.Literal('soft'), Type.Literal('smoke'), Type.Literal('hard'), Type.Literal('spark')], { default: 'soft', ...ui({ widget: 'select' }) })),
+        flutter: Type.Optional(Type.Number({ minimum: 0, default: 0, ...ui({ unit: 'm/s', help: 'Sideways wobble of each particle (a falling leaf). 0 flies straight. CPU effects only.' }) })),
+        ground: Type.Optional(
+          Type.Union([Type.Literal('none'), Type.Literal('die'), Type.Literal('bounce'), Type.Literal('rest')], {
+            default: 'none',
+            ...ui({ widget: 'select', help: 'What a particle does at the ground the game gave to vfx.setGround: die (gone on touch), bounce (loses speed and rolls), rest (slides along it, never under). CPU effects only.' }),
+          }),
+        ),
+        sprite: Type.Optional(Type.Union([Type.Literal('soft'), Type.Literal('smoke'), Type.Literal('hard'), Type.Literal('spark'), Type.Literal('chip'), Type.Literal('leaf')], { default: 'soft', ...ui({ widget: 'select', help: 'soft/smoke/hard/spark as before; chip is a hard-edged flake that turns with the particle, leaf a pointed oval.' }) })),
         blend: Type.Optional(Type.Union([Type.Literal('alpha'), Type.Literal('additive')], { default: 'alpha', ...ui({ widget: 'select' }) })),
       },
       { additionalProperties: false },

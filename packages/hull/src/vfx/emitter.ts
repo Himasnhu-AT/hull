@@ -4,9 +4,14 @@ import type { Random } from '../core/types.ts';
 import type { Vfx } from '../schema/vfx.ts';
 import { buildLut, lutAt } from './curves.ts';
 
-export type Sprite = 'soft' | 'smoke' | 'hard' | 'spark';
+export type Sprite = 'soft' | 'smoke' | 'hard' | 'spark' | 'chip' | 'leaf';
+/** Height of the ground at (x, z), supplied by the game through `vfx.setGround`. */
+export type GroundFn = (x: number, z: number) => number;
+export const GROUND = { none: 0, die: 1, bounce: 2, rest: 3 } as const;
 export type Blend = 'alpha' | 'additive';
 export interface V3 { x: number; y: number; z: number }
+/** Per-call multipliers on a spawn (the config is the baseline). */
+export interface SpawnMods { size?: number; speed?: number; life?: number; spread?: number }
 
 export interface Compiled {
   countMin: number;
@@ -28,6 +33,8 @@ export interface Compiled {
   spinMin: number;
   spinMax: number;
   stretch: number;
+  flutter: number;
+  ground: number;
   sprite: Sprite;
   blend: Blend;
   max: number;
@@ -83,6 +90,8 @@ export function compile(v: Vfx): Compiled {
     spinMin: Math.min(spin[0], spin[1]),
     spinMax: Math.max(spin[0], spin[1]),
     stretch: p.stretch ?? 0,
+    flutter: p.flutter ?? 0,
+    ground: GROUND[p.ground ?? 'none'],
     sprite: p.sprite ?? 'soft',
     blend: p.blend ?? 'alpha',
     max: v.budget?.max ?? 400,
@@ -140,7 +149,7 @@ export class Pool {
   }
 
   /** Moves every particle forward `dt` seconds: drag, gravity, position, age. Particles past their life leave. */
-  step(c: Compiled, dt: number): void {
+  step(c: Compiled, dt: number, ground?: GroundFn | null): void {
     // Drag as an exponential, so the result does not depend on the step length.
     const keep = Math.exp(-c.drag * dt);
     const g = c.gravity * dt;
@@ -152,9 +161,29 @@ export class Pool {
       const vy = this.vy[i]! * keep + g;
       const vz = this.vz[i]! * keep;
       this.vx[i] = vx; this.vy[i] = vy; this.vz[i] = vz;
-      this.px[i] = this.px[i]! + vx * dt;
-      this.py[i] = this.py[i]! + vy * dt;
-      this.pz[i] = this.pz[i]! + vz * dt;
+      let x = this.px[i]! + vx * dt;
+      let y = this.py[i]! + vy * dt;
+      let z = this.pz[i]! + vz * dt;
+      if (c.flutter > 0) {
+        // A different phase per particle (its slot and its birth rotation), so a handful do not wobble together.
+        const ph = a * 8 + this.rot[i]! * 3;
+        x += Math.sin(ph) * c.flutter * dt;
+        z += Math.cos(ph * 0.83) * c.flutter * dt;
+        y += Math.sin(ph * 1.3) * c.flutter * 0.5 * dt;
+      }
+      if (c.ground !== 0 && ground) {
+        const gh = ground(x, z) + 0.02;
+        if (y < gh) {
+          if (c.ground === 1) { this.remove(i); continue; }
+          y = gh;
+          if (c.ground === 2) {
+            this.vy[i] = -this.vy[i]! * 0.32; this.vx[i] = this.vx[i]! * 0.6; this.vz[i] = this.vz[i]! * 0.6;
+            this.spin[i] = this.spin[i]! * 0.4;
+            if (Math.abs(this.vy[i]!) < 0.8) { this.vy[i] = 0; this.vx[i] = this.vx[i]! * 0.85; this.vz[i] = this.vz[i]! * 0.85; }
+          } else if (this.vy[i]! < 0) this.vy[i] = 0;
+        }
+      }
+      this.px[i] = x; this.py[i] = y; this.pz[i] = z;
       this.rot[i] = this.rot[i]! + this.spin[i]! * dt;
       i++;
     }
@@ -171,7 +200,8 @@ export function drawCount(c: Compiled, rng: Random): number {
  * config's axis. Returns false, and counts it as dropped, when the pool is full. Always draws the same number of
  * random values, full or not, so a full pool does not shift the stream.
  */
-export function spawnOne(pool: Pool, c: Compiled, rng: Random, ox: number, oy: number, oz: number, dir: V3 | undefined): boolean {
+export function spawnOne(pool: Pool, c: Compiled, rng: Random, ox: number, oy: number, oz: number, dir: V3 | undefined, mods?: SpawnMods): boolean {
+  const sizeMul = mods?.size ?? 1, speedMul = mods?.speed ?? 1, lifeMul = mods?.life ?? 1, spread = mods?.spread ?? 1;
   // Shape offset.
   let dx = 0, dy = 0, dz = 0;
   const sh = c.shape;
@@ -221,15 +251,15 @@ export function spawnOne(pool: Pool, c: Compiled, rng: Random, ox: number, oy: n
     ny = ay * cosT + by * cp + cy * sp;
     nz = az * cosT + bz * cp + cz * sp;
   }
-  const speed = rng.range(c.speedMin, c.speedMax);
-  const life = rng.range(c.lifeMin, c.lifeMax);
-  const scale = rng.range(c.sizeMin, c.sizeMax);
+  const speed = rng.range(c.speedMin, c.speedMax) * speedMul;
+  const life = rng.range(c.lifeMin, c.lifeMax) * lifeMul;
+  const scale = rng.range(c.sizeMin, c.sizeMax) * sizeMul;
   const rot = rng.next() * Math.PI * 2;
   const spin = rng.range(c.spinMin, c.spinMax);
 
   if (pool.count >= pool.capacity) { pool.dropped++; return false; }
   const i = pool.count++;
-  pool.px[i] = ox + dx; pool.py[i] = oy + dy; pool.pz[i] = oz + dz;
+  pool.px[i] = ox + dx * spread; pool.py[i] = oy + dy * spread; pool.pz[i] = oz + dz * spread;
   pool.vx[i] = nx * speed; pool.vy[i] = ny * speed; pool.vz[i] = nz * speed;
   pool.age[i] = 0; pool.life[i] = life; pool.scale[i] = scale; pool.rot[i] = rot; pool.spin[i] = spin;
   pool.spawned++;

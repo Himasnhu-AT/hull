@@ -1,10 +1,10 @@
 // Particle effects driven by `vfx` config. A game calls `mountVfx(game)` once (the dev page does it for you), then
 // `vfx.burst('dust', at, dir)` for a one-shot and `vfx.trail('gas', node)` for a stream that follows a node.
 import type { Game, Node } from '../core/index.ts';
-import { VfxSystem, type TrailHandle, type VfxStats } from './system.ts';
-import type { V3 } from './emitter.ts';
+import { VfxSystem, type BurstOptions, type TrailHandle, type VfxStats } from './system.ts';
+import type { GroundFn, V3 } from './emitter.ts';
 
-export type { TrailHandle, VfxStats, V3 };
+export type { BurstOptions, GroundFn, TrailHandle, VfxStats, V3 };
 export { compile, drawCount, nearFade, Pool, spawnOne } from './emitter.ts';
 export type { Compiled } from './emitter.ts';
 export { buildLut, lutAt, parseColor, sampleColorCurve, sampleCurve } from './curves.ts';
@@ -25,9 +25,16 @@ const none: TrailHandle = { stop() {}, active: false };
 
 /** What a game calls. Safe before `mountVfx`: it does nothing (and says so once). */
 export const vfx = {
-  /** One burst at `at`; `dir` aims the effect's cone (the up axis in the config otherwise). */
-  burst(id: string, at: V3, dir?: V3): void {
-    active('burst')?.burst(id, at, dir);
+  /**
+   * One burst at `at`; `dir` aims the effect's cone (the up axis in the config otherwise). `opts` changes this call's
+   * count, size and speed without a second config.
+   */
+  burst(id: string, at: V3, dir?: V3, opts?: BurstOptions): void {
+    active('burst')?.burst(id, at, dir, opts);
+  },
+  /** Gives effects with `particle.ground` the ground's height at (x, z); null takes it away. */
+  setGround(fn: GroundFn | null): void {
+    active('setGround')?.setGround(fn);
   },
   /** Particles along the path of `node`, `emit.rate` a second, until the handle's `stop()` or the node is destroyed. */
   trail(id: string, node: Node): TrailHandle {
