@@ -74,3 +74,5 @@
 .st-term { height: 240px; padding: 8px 4px 4px 10px; }
 
 @media (prefers-reduced-motion: reduce) { .st, .st-back, .st-login { animation: none; } }
+.st-wait { font-size: 12px; color: var(--muted); animation: chat-breathe 1.4s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .st-wait { animation: none; } }

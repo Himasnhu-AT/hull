@@ -42,7 +42,7 @@ describe('settings', () => {
       expect(await store.get()).toMatchObject({ provider: 'anthropic', hasKey: false, source: 'app' });
       expect(await store.needs({})).toBe(NEEDS_KEY);
       const saved = await store.set({ provider: 'openai', apiKey: 'sk-secret-123', baseUrl: 'https://ai.example.com/v1', model: 'm1' });
-      expect(saved).toEqual({ provider: 'openai', hasKey: true, keys: { anthropic: false, openai: true }, baseUrl: 'https://ai.example.com/v1', model: 'm1', source: 'app' });
+      expect(saved).toEqual({ provider: 'openai', hasKey: true, keys: { anthropic: false, openai: true }, baseUrl: 'https://ai.example.com/v1', model: 'm1', source: 'app', account: { url: 'http://127.0.0.1:8787', email: null } });
       expect(JSON.stringify(await store.get())).not.toContain('sk-secret');
       // On disk the key is encrypted.
       expect(readFileSync(join(dir, 'agent-settings.json'), 'utf8')).not.toContain('sk-secret');

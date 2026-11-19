@@ -16,7 +16,7 @@ if (process.env['HULL_USER_DATA']) app.setPath('userData', process.env['HULL_USE
 const here = dirname(fileURLToPath(import.meta.url));
 // The builder's API key is kept encrypted with the OS keychain (safeStorage), as base64 text in userData.
 const host = createHost({
-  dataDir: app.getPath('userData'), log: (l) => console.log(`[hull] ${l}`), trash: (p) => shell.trashItem(p),
+  dataDir: app.getPath('userData'), log: (l) => console.log(`[hull] ${l}`), trash: (p) => shell.trashItem(p), openUrl: (u) => shell.openExternal(u),
   crypto: {
     available: () => safeStorage.isAsyncEncryptionAvailable(),
     encrypt: async (s) => (await safeStorage.encryptStringAsync(s)).toString('base64'),
@@ -53,6 +53,9 @@ function registerIpc(): void {
   handle('agentEnsure', () => host.agents.ensure());
   handle('agentSettings', () => host.agentSettings());
   handle('setAgentSettings', (s: AgentSettingsInput) => host.setAgentSettings(s));
+  handle('accountSignIn', () => host.accountSignIn());
+  handle('accountCancel', () => host.accountCancel());
+  handle('accountSignOut', () => host.accountSignOut());
   handle('agentCancel', (sid: string) => host.agents.cancel(sid));
   handle('agentStop', (sid: string) => host.agents.stop(sid));
   handle('agentAnswer', (sid: string, reqId: string, optionId: string | null) => host.agents.answer(sid, reqId, optionId));

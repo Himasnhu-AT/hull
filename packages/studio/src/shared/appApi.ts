@@ -62,6 +62,10 @@ export interface HullAppAgents {
   agentSettings(): Promise<AgentSettings>;
   /** Saves the model choice and, when given, the key (kept with safeStorage in Electron). A running builder is restarted with it on the next agentEnsure. */
   setAgentSettings(s: AgentSettingsInput): Promise<AgentSettings>;
+  /** Signs in to the Hull account in the browser (OAuth code + PKCE, loopback). Resolves when the browser comes back. */
+  accountSignIn(): Promise<AgentSettings>;
+  accountCancel(): Promise<void>;
+  accountSignOut(): Promise<AgentSettings>;
   agentCancel(sid: string): Promise<void>;
   agentStop(sid: string): Promise<void>;
   /** Answers a permission card. `null` denies by cancelling. */

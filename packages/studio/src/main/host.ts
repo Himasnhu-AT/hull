@@ -10,6 +10,7 @@ import { createHub, type Hub } from './agents.ts';
 import { createSettingsStore, type KeyCrypto } from './agentSettings.ts';
 import { createTerminals, type Terminals } from './terminal.ts';
 import { createAccounts, type Accounts, type Runner } from './accounts.ts';
+import { startSignIn, type SignIn } from './account.ts';
 import { pickTemplate, titleFromIdea } from './idea.ts';
 import type { AgentEvent, AgentSettings, AgentSettingsInput } from '../shared/agentApi.ts';
 import type { CommunityGame, OpenedProject, RecentProject, TemplateInfo } from '../shared/appApi.ts';
@@ -35,6 +36,8 @@ export interface HostOptions {
   env?: NodeJS.ProcessEnv;
   /** Where the builder's key can be kept safely (Electron's safeStorage). Without it the environment decides. */
   crypto?: KeyCrypto;
+  /** Opens a URL in the person's browser (Electron's shell.openExternal); `open` on macOS otherwise. */
+  openUrl?: (url: string) => Promise<void>;
   /** Moves a folder to the system Trash (Electron's shell.trashItem). Without it, moving to the Trash is refused. */
   trash?: (path: string) => Promise<void>;
   /** Runs a protocol method on a project (config.set for a rename); defaults to @hull/tools' runTool. Tests pass a fake. */
@@ -66,6 +69,12 @@ export interface Host {
   /** The builder's model and key (the key itself never leaves the main process). */
   agentSettings(): Promise<AgentSettings>;
   setAgentSettings(s: AgentSettingsInput): Promise<AgentSettings>;
+  /** Signs in to the Hull account through the browser; resolves when the browser comes back. */
+  accountSignIn(): Promise<AgentSettings>;
+  /** Stops a sign-in that is waiting for the browser. */
+  accountCancel(): Promise<void>;
+  /** Forgets the account token here and revokes it on the server. */
+  accountSignOut(): Promise<AgentSettings>;
   /** Subscribes to agent and terminal events; returns the unsubscribe. */
   onAgentEvent(cb: (e: AgentEvent) => void): () => void;
   /** The server module in use, for tests and the banner. */
@@ -106,6 +115,7 @@ export function createHost(opts: HostOptions): Host {
   const emit = (e: AgentEvent): void => { for (const l of listeners) { try { l(e); } catch { /* a dead window must not stop the others */ } } };
   const current = (): { root: string; mcp: { url: string; launcher: string } } | null =>
     running ? { root: running.root, mcp: { url: running.mcp.url, launcher: fileURLToPath(new URL('../../../tools/bin/hull-mcp.js', import.meta.url)) } } : null;
+  let signIn: SignIn | null = null;
   const settings = createSettingsStore({ dataDir: opts.dataDir, crypto: opts.crypto, env: opts.env });
   const hub = createHub({ project: current, emit, log, settings, ...(opts.env ? { env: opts.env } : {}) });
   const terminals = createTerminals({ project: current, emit, ...(opts.env ? { env: opts.env } : {}) });
@@ -144,6 +154,32 @@ export function createHost(opts: HostOptions): Host {
     accounts,
     agentSettings: () => settings.get(),
     async setAgentSettings(s) { const r = await settings.set(s); await hub.stopEnsured(); return r; },
+    async accountSignIn() {
+      signIn?.cancel();
+      const open = opts.openUrl ?? (async (url: string) => {
+        if (process.platform !== 'darwin') throw new Error(`open this address in your browser: ${url}`);
+        const { spawn } = await import('node:child_process');
+        await new Promise<void>((ok, fail) => { const c = spawn('open', [url]); c.on('error', fail); c.on('exit', (code) => (code === 0 ? ok() : fail(new Error(`open exited ${code}`)))); });
+      });
+      const server = await settings.accountUrl();
+      const s = await startSignIn({ server, open });
+      signIn = s;
+      try {
+        const { token, email } = await s.done;
+        const r = await settings.setAccount({ url: server, email, token });
+        await hub.stopEnsured();
+        log(`signed in to the Hull account at ${server}`);
+        return r;
+      } finally { if (signIn === s) signIn = null; }
+    },
+    async accountCancel() { signIn?.cancel(); signIn = null; },
+    async accountSignOut() {
+      const old = await settings.clearAccount();
+      await hub.stopEnsured();
+      // Telling the server is a courtesy: the token is already gone here, so a server that cannot be reached changes nothing.
+      if (old) await fetch(`${old.url}/api/logout`, { method: 'POST', headers: { authorization: `Bearer ${old.token}` } }).catch(() => {});
+      return settings.get();
+    },
     onAgentEvent(cb) { listeners.add(cb); return () => { listeners.delete(cb); }; },
 
     async listTemplates() { return (await load()).mod.listTemplates(); },

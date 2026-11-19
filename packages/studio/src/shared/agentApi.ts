@@ -84,11 +84,15 @@ export interface PromptOptions {
 }
 
 export type KeyProvider = 'anthropic' | 'openai';
+/** Who serves the builder's model: a key of the person's own, or their Hull account (backend/, which holds the key). */
+export type BuilderProvider = KeyProvider | 'account';
 
 /** Which model the builder uses. The keys are kept by the app and never handed back to the page. */
 export interface AgentSettings {
-  provider: KeyProvider;
-  /** A key for the provider in use (saved, or from the environment). */
+  provider: BuilderProvider;
+  /** The Hull account: the server's address, and who is signed in (null when no one is). The token never reaches the page. */
+  account?: { url: string; email: string | null };
+  /** A key for the provider in use (saved, or from the environment), or a signed-in account. */
   hasKey: boolean;
   /** Which providers have a saved key. One key per provider, so switching back and forth keeps both. Absent when the environment decides. */
   keys?: Record<KeyProvider, boolean>;
@@ -98,7 +102,7 @@ export interface AgentSettings {
   source?: 'app' | 'environment';
 }
 /** `apiKey` is saved for `provider`; an empty one keeps the key already saved. `clearKey` forgets that provider's key. */
-export interface AgentSettingsInput { provider: KeyProvider; apiKey?: string; /** Whose key `apiKey` is, when not the provider in use. */ keyFor?: KeyProvider; baseUrl?: string; model?: string; clearKey?: KeyProvider }
+export interface AgentSettingsInput { provider: BuilderProvider; /** The Hull account server's address. */ accountUrl?: string; apiKey?: string; /** Whose key `apiKey` is, when not the provider in use. */ keyFor?: KeyProvider; baseUrl?: string; model?: string; clearKey?: KeyProvider }
 
 /** The coding agents a person may already have on this Mac and sign in to themselves. */
 export type CliId = 'claude' | 'codex';

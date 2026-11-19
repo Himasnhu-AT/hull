@@ -57,7 +57,7 @@ export function ModelPicker(): JSX.Element {
   const pickHull = async (m?: string): Promise<void> => {
     setOpen(false);
     if (!cfg?.hasKey) { settings.open('builder', load); return; }
-    if (m && cfg.provider === 'anthropic' && m !== (cfg.model || DEFAULT_MODEL)) setCfg(await window.hullApp!.setAgentSettings({ provider: 'anthropic', model: m, ...(cfg.baseUrl ? { baseUrl: cfg.baseUrl } : {}) }));
+    if (m && cfg.provider !== 'openai' && m !== (cfg.model || DEFAULT_MODEL)) setCfg(await window.hullApp!.setAgentSettings({ provider: cfg.provider, model: m, ...(cfg.baseUrl ? { baseUrl: cfg.baseUrl } : {}) }));
     writeVia('hull');
   };
 
@@ -68,7 +68,7 @@ export function ModelPicker(): JSX.Element {
       </button>
       {open && (
         <div className="mp-menu" role="menu">
-          <div className="mp-h">Hull's builder{cfg && !cfg.hasKey && <span className="mp-need">needs a key</span>}</div>
+          <div className="mp-h">{cfg?.provider === 'account' ? `Hull account${cfg.account?.email ? ` · ${cfg.account.email}` : ''}` : "Hull's builder"}{cfg && !cfg.hasKey && <span className="mp-need">{cfg.provider === 'account' ? 'sign in' : 'needs a key'}</span>}</div>
           {cfg?.provider !== 'openai' ? ANTHROPIC_MODELS.map((m) => (
             <button key={m.id} role="menuitemradio" aria-checked={via === 'hull' && model === m.id} onClick={() => void pickHull(m.id)}>
               <span><b>{modelName(m.id)}</b><small>{m.note}</small></span>{via === 'hull' && model === m.id && <Icon name="check" size={14} />}

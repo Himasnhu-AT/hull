@@ -3,7 +3,7 @@
 // Keys go to the main process and are never shown again; sign-in happens in the programs' own login, in a terminal here.
 
 import { useCallback, useEffect, useRef, useState, type JSX, type ReactNode } from 'react';
-import type { AgentInfo, AgentSettings, CliAction, CliId, CliStatus, KeyProvider, TermProgram } from '../../shared/agentApi.ts';
+import type { AgentInfo, AgentSettings, BuilderProvider, CliAction, CliId, CliStatus, KeyProvider, TermProgram } from '../../shared/agentApi.ts';
 import type { HullApp, OpenedProject } from '../../shared/appApi.ts';
 import { Icon, type IconName } from '../ui/Icon.tsx';
 import { LoginTerminal } from './LoginTerminal.tsx';
@@ -110,7 +110,7 @@ function useCopy(): [string, (id: string, text: string) => void] {
 
 // ---------- builder: model and keys ----------
 
-const PROVIDER_NAME: Record<KeyProvider, string> = { anthropic: 'Anthropic', openai: 'OpenAI-compatible' };
+const PROVIDER_NAME: Record<BuilderProvider, string> = { account: 'Hull account', anthropic: 'Anthropic', openai: 'OpenAI-compatible' };
 
 function BuilderKeys({ app, onKeysSaved }: { app: HullApp; onKeysSaved?: (() => void) | undefined }): JSX.Element {
   const [cur, setCur] = useState<AgentSettings | null>(null);
@@ -126,17 +126,33 @@ function BuilderKeys({ app, onKeysSaved }: { app: HullApp; onKeysSaved?: (() => 
   }, [app]);
 
   const env = cur?.source === 'environment';
-  const save = async (what: string, patch: { provider?: KeyProvider; apiKey?: string; keyFor?: KeyProvider; clearKey?: KeyProvider }): Promise<void> => {
+  const [signing, setSigning] = useState(false);
+  const [accountUrl, setAccountUrl] = useState('');
+  useEffect(() => { if (cur?.account) setAccountUrl(cur.account.url); }, [cur?.account?.url]); // eslint-disable-line react-hooks/exhaustive-deps
+  const signIn = async (): Promise<void> => {
+    setSigning(true); setError(''); setNote('');
+    try {
+      if (cur && accountUrl.trim() && accountUrl.trim() !== cur.account?.url) await app.setAgentSettings({ provider: 'account', accountUrl: accountUrl.trim(), ...(cur.model ? { model: cur.model } : {}) });
+      const next = await app.accountSignIn();
+      setCur(next); setNote(`Signed in as ${next.account?.email || 'your account'}.`);
+      onKeysSaved?.();
+    } catch (e) { setError(msg(e)); } finally { setSigning(false); }
+  };
+  const signOut = async (): Promise<void> => {
+    setBusy('signout'); setError(''); setNote('');
+    try { setCur(await app.accountSignOut()); setNote('Signed out.'); } catch (e) { setError(msg(e)); } finally { setBusy(''); }
+  };
+  const save = async (what: string, patch: { provider?: BuilderProvider; apiKey?: string; keyFor?: KeyProvider; clearKey?: KeyProvider }): Promise<void> => {
     if (!cur) return;
     setBusy(what); setError(''); setNote('');
     try {
       const provider = patch.provider ?? cur.provider;
       const next = await app.setAgentSettings({
-        provider, ...(patch.apiKey ? { apiKey: patch.apiKey, keyFor: patch.keyFor ?? provider } : {}), ...(patch.clearKey ? { clearKey: patch.clearKey } : {}),
+        provider, ...(patch.apiKey && patch.keyFor ? { apiKey: patch.apiKey, keyFor: patch.keyFor } : {}), ...(patch.clearKey ? { clearKey: patch.clearKey } : {}),
         ...(baseUrl.trim() ? { baseUrl: baseUrl.trim() } : {}), ...(model.trim() ? { model: model.trim() } : {}),
       });
       setCur(next);
-      if (patch.apiKey) { setDraft((d) => ({ ...d, [patch.keyFor ?? provider]: '' })); setNote(`${PROVIDER_NAME[patch.keyFor ?? provider]} key saved.`); }
+      if (patch.apiKey && patch.keyFor) { const k = patch.keyFor; setDraft((d) => ({ ...d, [k]: '' })); setNote(`${PROVIDER_NAME[k]} key saved.`); }
       else if (patch.clearKey) setNote(`${PROVIDER_NAME[patch.clearKey]} key removed.`);
       else setNote('Saved.');
       if (next.hasKey) onKeysSaved?.();
@@ -158,7 +174,7 @@ function BuilderKeys({ app, onKeysSaved }: { app: HullApp; onKeysSaved?: (() => 
 
   return (
     <div className="st-pane">
-      <header className="st-h"><h3>Builder</h3><p>Hull's own builder runs on your API key. Keys are encrypted by your Mac's keychain and handed to the builder when it starts; Hull never shows them again or writes them to a log.</p></header>
+      <header className="st-h"><h3>Builder</h3><p>Hull's own builder runs on your Hull account, or on an API key of your own. The sign-in and the keys are encrypted by your Mac's keychain and handed to the builder when it starts; Hull never shows them again or writes them to a log.</p></header>
       {cur === null && !error && <div className="skeleton" />}
       {env && <div className="st-callout">In this window the environment decides: set <code>ANTHROPIC_API_KEY</code>, or <code>HULL_AGENT_BASE_URL</code> and <code>HULL_AGENT_API_KEY</code>, before starting Hull. {cur?.hasKey ? 'A key is set.' : 'No key is set.'}</div>}
       {cur !== null && (
@@ -166,13 +182,26 @@ function BuilderKeys({ app, onKeysSaved }: { app: HullApp; onKeysSaved?: (() => 
           <Group title="Provider" foot="The builder uses one provider at a time. Each keeps its own key, so you can switch back and forth.">
             <Row label="Use">
               <div className="seg" role="radiogroup" aria-label="Provider">
-                {(['anthropic', 'openai'] as KeyProvider[]).map((p) => (
+                {(['account', 'anthropic', 'openai'] as BuilderProvider[]).map((p) => (
                   <button key={p} role="radio" aria-checked={cur.provider === p} className={cur.provider === p ? 'on' : ''} disabled={env || busy !== ''} onClick={() => { if (cur.provider !== p) void save('provider', { provider: p }); }}>{PROVIDER_NAME[p]}</button>
                 ))}
               </div>
             </Row>
             <Row label="Model" sub="Leave empty for the provider's default">
               <input className="field-in st-in" value={model} spellCheck={false} placeholder={cur.provider === 'anthropic' ? 'Default Claude model' : 'Default model of the endpoint'} onChange={(e) => setModel(e.target.value)} onBlur={() => { if ((cur.model ?? '') !== model.trim()) void save('model', {}); }} disabled={env} />
+            </Row>
+          </Group>
+          <Group title="Hull account" foot="Signing in opens your browser. You sign in there and allow Hull; the password never passes through Hull, and the builder uses the account's models.">
+            <Row label="Account" sub={cur.account?.email !== null && cur.account?.email !== undefined ? <span className="st-state ok"><i />Signed in{cur.account.email ? ` as ${cur.account.email}` : ''}</span> : <span className="st-state"><i />Not signed in</span>}>
+              {cur.account?.email !== null && cur.account?.email !== undefined
+                ? <button className="btn" onClick={() => void signOut()} disabled={busy !== '' || signing}>{busy === 'signout' ? 'Signing out...' : 'Sign out'}</button>
+                : signing
+                  ? <><span className="st-wait">Finish in your browser...</span><button className="btn ghost" onClick={() => void app.accountCancel()}>Cancel</button></>
+                  : <button className="btn primary" onClick={() => void signIn()} disabled={env || busy !== ''}>Sign in</button>}
+            </Row>
+            <Row label="Server" sub="Where your Hull account lives">
+              <input className="field-in st-in" value={accountUrl} spellCheck={false} placeholder="http://127.0.0.1:8787" onChange={(e) => setAccountUrl(e.target.value)}
+                onBlur={() => { if (cur.account && accountUrl.trim() && accountUrl.trim() !== cur.account.url) void app.setAgentSettings({ provider: cur.provider, accountUrl: accountUrl.trim(), ...(cur.model ? { model: cur.model } : {}) }).then(setCur, (e) => setError(msg(e))); }} disabled={env || signing} />
             </Row>
           </Group>
           <Group title="Anthropic">{keyRow('anthropic', 'sk-ant-...')}</Group>
