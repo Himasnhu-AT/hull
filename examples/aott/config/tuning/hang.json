@@ -1,9 +1,0 @@
-{
-  "kind": "tuning",
-  "note": "The soldier's hang numbers.",
-  "winch": 7,
-  "lower": 9,
-  "swing": 10,
-  "damp": 1.6,
-  "dampHeld": 0.25
-}

@@ -98,6 +98,8 @@ export class AottHost extends Behaviour {
   private frames = 0;
   private qualityApplied = false;
   private keysAttached = false;
+  private audioWanted = false;
+  private startAudio: () => boolean = () => false;
   private camera!: Camera;
   private sunOff: THREE.Vector3 | null = null;
   private readonly sum = new Digest();
@@ -127,6 +129,7 @@ export class AottHost extends Behaviour {
     if (!HEADLESS) {
       installAerialFog();
       (window as unknown as { game: Game }).game = game;   // handy for debugging; tests go through the control port
+      (window as unknown as { cfg: typeof CFG }).cfg = CFG;   // the live tunables, to read a value back from the console
       const fl = document.createElement('div');
       fl.style.cssText = 'position:fixed;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:3;mix-blend-mode:screen';
       document.body.appendChild(fl);
@@ -177,10 +180,15 @@ export class AottHost extends Behaviour {
       game.audio = await load(() => import('./audio/audio'), (m) => {
         const a = new m.Audio();
         // one AudioContext for the page: Hull's, with the game's synthesised mix joining its master bus
+        // (A run started from the page's query asks for sound before the page has mounted it: that waits for the first frame.)
         const init = a.init.bind(a);
-        a.init = (o = {}) => {
+        this.startAudio = (): boolean => {
           const av = views()?.audio;
-          return init(av?.context ? { ...o, context: av.context, destination: av.bus('master') ?? undefined } : o);
+          return init(av?.context ? { context: av.context, destination: av.bus('master') ?? undefined } : {});
+        };
+        a.init = (o = {}) => {
+          if (!views()?.audio) { this.audioWanted = true; return false; }
+          return o.context ? init(o) : this.startAudio();
         };
         return a;
       });
@@ -405,6 +413,7 @@ export class AottHost extends Behaviour {
     const game = this.g;
     if (!game?.flow) return;
     if (!this.keysAttached) { this.keysAttached = true; keys.attach(hub.view ?? hullInput); }
+    if (this.audioWanted && views()?.audio) { this.audioWanted = false; game.audio?.init?.(); }
     if (!this.qualityApplied && views()?.render) { this.qualityApplied = true; game.setQuality(game.quality, false); views()?.render?.setLook('look/' + (game.world?.atmosphere || 'day')); }
     // fog colour and the background follow the game's own scene (the Greatwood's canopy haze)
     const rs = backendScene(this.world);

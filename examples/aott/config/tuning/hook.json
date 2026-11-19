@@ -1,9 +1,0 @@
-{
-  "kind": "tuning",
-  "note": "The soldier's hook numbers.",
-  "range": 115,
-  "speed": 340,
-  "retract": 420,
-  "minLen": 1.8,
-  "spread": 0.022
-}

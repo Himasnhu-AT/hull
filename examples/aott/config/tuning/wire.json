@@ -1,8 +1,0 @@
-{
-  "kind": "tuning",
-  "note": "The soldier's wire numbers.",
-  "snapSpeed": 7,
-  "rebound": 0.08,
-  "slipFrom": 2.5,
-  "slipDecel": 85
-}

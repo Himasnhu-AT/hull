@@ -1,9 +1,0 @@
-{
-  "kind": "tuning",
-  "note": "Gravity, drag and the soldier body.",
-  "gravity": 14.5,
-  "drag": 0.0023,
-  "hardCap": 105,
-  "radius": 0.5,
-  "modelLift": 0.4
-}

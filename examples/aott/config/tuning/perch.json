@@ -1,9 +1,0 @@
-{
-  "kind": "tuning",
-  "note": "The soldier's perch numbers.",
-  "reach": 6,
-  "maxSpeed": 25,
-  "slide": 2.5,
-  "letGo": 0.6,
-  "climbReach": 12
-}

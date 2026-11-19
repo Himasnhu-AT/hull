@@ -1,7 +1,0 @@
-{
-  "kind": "tuning",
-  "note": "The soldier's flow numbers.",
-  "killGas": 0.14,
-  "rush": 3.5,
-  "rushReel": 1.25
-}

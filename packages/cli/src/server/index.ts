@@ -200,6 +200,8 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
     onAdded: (c) => {
       push('history.added', c, 'studio');
       // A change may add or clear an authorship problem; the app learns it from the problem state, not by running `check`.
+      // (A change found while the history opens arrives before `hist` is set; the problems are read right after, below.)
+      if (hist === undefined) return;
       void hist.authorshipProblems().then((a) => { authorship = a; pushProblems(); }).catch((e) => log(`authorship: ${(e as Error).message}`));
     },
     onExp: (name, change, exp) => push('exp.changed', { name, change, exp }, 'studio'),
