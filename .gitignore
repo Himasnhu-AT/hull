@@ -11,6 +11,7 @@ dist
 .hull/
 .claude/worktrees/
 
-# Hull backend: local database and real settings.
+# Hull backend: local database. Real settings live in the root .env (pnpm dev reads it).
 backend/data/
+.env
 backend/.env

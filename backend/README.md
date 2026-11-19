@@ -7,11 +7,13 @@ the key never leaves the server.
 
 ## Run
 
+Settings live in the repo root's `.env` (copy `.env.example` there and fill in ANTHROPIC_API_KEY and, for Google sign-in, GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET). `pnpm dev` reads it, starts the server, waits for /healthz and then starts the Hull app with HULL_BACKEND_URL; the app never gets the server's secrets.
+
 ```sh
-cd backend
-cp .env.example .env      # then fill in ANTHROPIC_API_KEY; the server reads the environment, not the file
-set -a; . ./.env; set +a
-go run ./cmd/hull-backend
+# from the repo root
+cp .env.example .env      # once; then fill in the keys
+pnpm dev                  # this server, then the Hull app pointed at it
+pnpm dev --no-app         # this server alone
 ```
 
 Without `ANTHROPIC_API_KEY` the server still starts: sign-in works and the AI routes answer 503.
