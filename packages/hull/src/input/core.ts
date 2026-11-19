@@ -103,6 +103,8 @@ export interface InputView {
   onBindingsChanged(fn: () => void): () => void;
   /** Problems found in the map, each naming its place. */
   readonly problems: readonly string[];
+  /** The device sources held right now ('KeyW', 'Mouse0', ...). Allocates: for tools and tests, not for frames. */
+  heldSources(): string[];
   dispose(): void;
 }
 
@@ -289,6 +291,8 @@ export class InputCore implements InputView {
     }
     for (let i = 0; i < 4; i++) this.padAxes[i] = axes[i] ?? 0;
   }
+
+  heldSources(): string[] { return [...this.held.keys()]; }
 
   /** Everything is up (the window lost focus): releases are recorded so no action stays stuck down. */
   releaseAll(): void {

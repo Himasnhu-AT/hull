@@ -3,6 +3,7 @@
 // game's tick, time and frame rate about four times a second. Dev only: a build never imports this file.
 import { config, setTunable, tuningProblems } from '../config/index.ts';
 import type { Game } from '../core/index.ts';
+import { input } from '../input/dom.ts';
 import type { ControlOp, ControlShot, ControlState, GameControl, GameReport, Pushes } from './protocol.ts';
 
 export interface DevConnection { dispose(): void }
@@ -53,7 +54,7 @@ export function connectDev(game: Game, opts: { url: string; /** Called for `rest
       const n = game.world.find(name);
       nodes[name] = n ? { found: true, x: n.position.x, y: n.position.y, z: n.position.z } : { found: false, x: 0, y: 0, z: 0 };
     }
-    return { tick: game.world.tick, time: game.world.time, checksum: game.world.checksum(), paused: game.paused, nodes };
+    return { tick: game.world.tick, time: game.world.time, checksum: game.world.checksum(), paused: game.paused, nodes, held: input.heldSources() };
   };
   const runControl = async (c: ControlOp): Promise<ControlState | ControlShot | Record<string, never>> => {
     switch (c.op) {
