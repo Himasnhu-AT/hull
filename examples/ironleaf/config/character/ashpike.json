@@ -215,6 +215,44 @@
         ],
         "color": "#c2371f"
       }
+    ],
+    "bones": [
+      {
+        "name": "ragL1",
+        "parent": "hips",
+        "offset": [
+          -0.11,
+          -0.08,
+          -0.12
+        ]
+      },
+      {
+        "name": "ragL2",
+        "parent": "ragL1",
+        "offset": [
+          0,
+          -0.12,
+          -0.01
+        ]
+      },
+      {
+        "name": "flag1",
+        "parent": "chest",
+        "offset": [
+          0.075,
+          0.78,
+          0.115
+        ]
+      },
+      {
+        "name": "flag2",
+        "parent": "flag1",
+        "offset": [
+          0,
+          -0.25,
+          0
+        ]
+      }
     ]
   },
   "materials": {

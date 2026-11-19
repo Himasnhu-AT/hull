@@ -409,6 +409,116 @@
         ],
         "color": "#b8923a"
       }
+    ],
+    "bones": [
+      {
+        "name": "pony1",
+        "parent": "head",
+        "offset": [
+          0,
+          0.17,
+          0.085
+        ]
+      },
+      {
+        "name": "pony2",
+        "parent": "pony1",
+        "offset": [
+          0,
+          -0.13,
+          0.03
+        ]
+      },
+      {
+        "name": "pony3",
+        "parent": "pony2",
+        "offset": [
+          0,
+          -0.13,
+          0.015
+        ]
+      },
+      {
+        "name": "sashL1",
+        "parent": "spine",
+        "offset": [
+          -0.045,
+          0.08,
+          0.125
+        ]
+      },
+      {
+        "name": "sashL2",
+        "parent": "sashL1",
+        "offset": [
+          0,
+          -0.15,
+          0.012
+        ]
+      },
+      {
+        "name": "sashL3",
+        "parent": "sashL2",
+        "offset": [
+          0,
+          -0.15,
+          0.008
+        ]
+      },
+      {
+        "name": "sashR1",
+        "parent": "spine",
+        "offset": [
+          0.045,
+          0.08,
+          0.125
+        ]
+      },
+      {
+        "name": "sashR2",
+        "parent": "sashR1",
+        "offset": [
+          0,
+          -0.15,
+          0.012
+        ]
+      },
+      {
+        "name": "sashR3",
+        "parent": "sashR2",
+        "offset": [
+          0,
+          -0.15,
+          0.008
+        ]
+      },
+      {
+        "name": "scarf1",
+        "parent": "neck",
+        "offset": [
+          0.035,
+          0,
+          0.06
+        ]
+      },
+      {
+        "name": "scarf2",
+        "parent": "scarf1",
+        "offset": [
+          0,
+          -0.13,
+          0.03
+        ]
+      },
+      {
+        "name": "scarf3",
+        "parent": "scarf2",
+        "offset": [
+          0,
+          -0.13,
+          0.02
+        ]
+      }
     ]
   },
   "materials": {

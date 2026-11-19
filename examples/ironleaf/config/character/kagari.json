@@ -277,6 +277,89 @@
         ],
         "color": "#e3e8ee"
       }
+    ],
+    "bones": [
+      {
+        "name": "pony1",
+        "parent": "head",
+        "offset": [
+          0,
+          0.2,
+          0.1
+        ]
+      },
+      {
+        "name": "pony2",
+        "parent": "pony1",
+        "offset": [
+          0,
+          -0.2,
+          0.04
+        ]
+      },
+      {
+        "name": "pony3",
+        "parent": "pony2",
+        "offset": [
+          0,
+          -0.2,
+          0.03
+        ]
+      },
+      {
+        "name": "coatL1",
+        "parent": "hips",
+        "offset": [
+          -0.09,
+          -0.03,
+          0.115
+        ]
+      },
+      {
+        "name": "coatL2",
+        "parent": "coatL1",
+        "offset": [
+          0,
+          -0.26,
+          0.03
+        ]
+      },
+      {
+        "name": "coatL3",
+        "parent": "coatL2",
+        "offset": [
+          0,
+          -0.26,
+          0.025
+        ]
+      },
+      {
+        "name": "coatR1",
+        "parent": "hips",
+        "offset": [
+          0.09,
+          -0.03,
+          0.115
+        ]
+      },
+      {
+        "name": "coatR2",
+        "parent": "coatR1",
+        "offset": [
+          0,
+          -0.26,
+          0.03
+        ]
+      },
+      {
+        "name": "coatR3",
+        "parent": "coatR2",
+        "offset": [
+          0,
+          -0.26,
+          0.025
+        ]
+      }
     ]
   },
   "materials": {
