@@ -12,11 +12,13 @@ import type { FileMap } from './diff.ts';
 const fs = nodeFs;
 const TOP = ['src', 'config', 'assets'];
 const MANIFEST = 'hull.json';
+/** The brief (docs/IDEA-TO-PLAY.md section 4.1) is the one project file at the root besides the manifest that the history keeps. */
+const BRIEF = 'GAME.md';
 const SKIP = new Set(['node_modules', '.hull', 'dist', '.DS_Store']);
 
-export const isTracked = (rel: string): boolean => rel === MANIFEST || TOP.some((t) => rel.startsWith(`${t}/`));
+export const isTracked = (rel: string): boolean => rel === MANIFEST || rel === BRIEF || TOP.some((t) => rel.startsWith(`${t}/`));
 
-/** The project's tracked files (src/, config/, assets/, hull.json; never .hull or dist). */
+/** The project's tracked files (src/, config/, assets/, hull.json, GAME.md; never .hull or dist). */
 export function readTracked(dir: string): FileMap {
   const out: FileMap = new Map();
   const walk = (rel: string): void => {
@@ -32,6 +34,7 @@ export function readTracked(dir: string): FileMap {
     }
   };
   try { out.set(MANIFEST, readFileSync(join(dir, MANIFEST))); } catch { /* no manifest */ }
+  try { out.set(BRIEF, readFileSync(join(dir, BRIEF))); } catch { /* no brief yet */ }
   for (const t of TOP) walk(t);
   return out;
 }

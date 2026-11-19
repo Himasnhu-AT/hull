@@ -179,6 +179,9 @@ export interface ControlState {
 }
 export interface ControlShot { png: string; width: number; height: number }
 
+/** Game to server: what the engine's trace hook heard since the last batch (dev/recent.ts), oldest first. */
+export interface GameEvents { items: RecentEvent[] }
+
 export interface GameReport {
   tick: number;
   time: number;
@@ -230,7 +233,7 @@ export interface AssetResult {
 }
 
 /** Methods the server answers. */
-export interface Methods {
+export interface Methods extends CreateMethods {
   'project.info': { params: Record<string, never>; result: ProjectInfo };
   /**
    * The page options the game opens with (`start=camp&look=night`, no leading `?`). Called with no `query` it reads them; with one it
@@ -323,7 +326,7 @@ export interface ReviewEntry {
 }
 
 /** Notifications the server pushes (JSON-RPC notifications: method + params, no id). */
-export interface Pushes {
+export interface Pushes extends CreatePushes {
   /** A config file changed (from the app, an agent, or an editor on disk). Games call config.update. */
   'config.changed': { id: string; path: string; text: string };
   'config.removed': { id: string; path: string };
@@ -351,8 +354,8 @@ export type MethodName = keyof Methods;
 export type PushName = keyof Pushes;
 
 // ---- M11: idea to play -------------------------------------------------------------------------------------------------
-// CONTRACT for docs/IDEA-TO-PLAY.md section 4. Types only. `CreateMethods` and `CreatePushes` join `Methods` and `Pushes` when
-// the project server implements them (work package A); until then nothing calls them.
+// CONTRACT for docs/IDEA-TO-PLAY.md section 4. Types only. `CreateMethods` and `CreatePushes` are part of `Methods` and `Pushes`
+// (they extend them above).
 
 /** Something the running game just did, for the "Just now" strip and for a frozen moment. Game time, never wall time. */
 export interface RecentEvent {

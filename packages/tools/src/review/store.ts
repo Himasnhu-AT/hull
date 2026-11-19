@@ -6,6 +6,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, statSync,
 import { join } from 'node:path';
 import type { Problem } from 'hull';
 import type { Author, ReviewEntry, ReviewState } from 'hull/dev/protocol';
+import { explainHash } from '../create/explain.ts';
 import { findTunables } from '../server/tsTunables.ts';
 
 interface Stored { state: ReviewState; note?: string; at?: string; by?: Author; hash: string }
@@ -39,6 +40,7 @@ export function hashOf(root: string, key: string): string | null {
     }
     return null;
   }
+  if (base.startsWith('explain:')) return explainHash(root, base.slice('explain:'.length));
   if (!/^[A-Za-z0-9_-]+(\/[A-Za-z0-9_.-]+)+$/.test(base) || base.includes('..')) return null;
   try { return sha(readFileSync(join(root, 'config', `${base}.json`), 'utf8')); } catch { return null; }
 }
@@ -82,7 +84,7 @@ const bad = (message: string): ReviewResult => ({ ok: false, problems: [{ file: 
 export function setReview(root: string, a: { key: string; state: ReviewState; note?: string; author: Author }): ReviewResult {
   if (!REVIEW_STATES.includes(a.state)) return bad(`state must be one of ${REVIEW_STATES.join(', ')}, got "${String(a.state)}"`);
   const hash = hashOf(root, a.key);
-  if (hash === null) return bad(`"${a.key}" is not a config id like 'sound/sword/hit' or a tunables block like 'tunables:player' that exists in this project`);
+  if (hash === null) return bad(`"${a.key}" is not a config id like 'sound/sword/hit', a tunables block like 'tunables:player' or an explain document like 'explain:enemy-guard' that exists in this project`);
   const f = read(root);
   const old = f.items[a.key];
   const s: Stored = { state: a.state, at: new Date().toISOString(), by: a.author, hash };
