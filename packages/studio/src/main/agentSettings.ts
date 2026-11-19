@@ -7,7 +7,7 @@ import { dirname, join } from 'node:path';
 import type { AgentSettings, AgentSettingsInput, KeyProvider } from '../shared/agentApi.ts';
 
 /** Electron's safeStorage, reduced to what this needs (so tests can pass a stand-in). */
-export interface KeyCrypto { available(): boolean; encrypt(plain: string): string; decrypt(cipher: string): string }
+export interface KeyCrypto { available(): boolean | Promise<boolean>; encrypt(plain: string): string | Promise<string>; decrypt(cipher: string): string | Promise<string> }
 
 /** On disk. `keys` holds one encrypted key per provider; `key` is the single key older versions kept, read as the key of `provider`. */
 interface Stored { provider: KeyProvider; baseUrl?: string; model?: string; keys?: Partial<Record<KeyProvider, string>>; key?: string }
@@ -61,7 +61,9 @@ const envSettings = (env: NodeJS.ProcessEnv): AgentSettings => ({
 export function createSettingsStore(o: { dataDir: string; crypto?: KeyCrypto | undefined; env?: NodeJS.ProcessEnv | undefined }): SettingsStore {
   const file = join(o.dataDir, 'agent-settings.json');
   const procEnv = (): NodeJS.ProcessEnv => o.env ?? process.env;
-  const crypto = o.crypto && o.crypto.available() ? o.crypto : null;
+  // Electron's keychain answers asynchronously; asked once, on first use.
+  let ready: Promise<KeyCrypto | null> | null = null;
+  const cryptoOf = (): Promise<KeyCrypto | null> => (ready ??= (async () => (o.crypto && (await o.crypto.available()) ? o.crypto : null))());
 
   async function read(): Promise<Stored | null> {
     try {
@@ -69,25 +71,27 @@ export function createSettingsStore(o: { dataDir: string; crypto?: KeyCrypto | u
       return j && isProvider(j.provider) ? j : null;
     } catch { return null; }
   }
-  const keyFor = (s: Stored | null, p: KeyProvider): string | null => {
+  const keyFor = async (s: Stored | null, p: KeyProvider): Promise<string | null> => {
     const c = cipherKeys(s)[p];
+    const crypto = await cryptoOf();
     if (!c || !crypto) return null;
-    try { return crypto.decrypt(c) || null; } catch { return null; }
+    try { return (await crypto.decrypt(c)) || null; } catch { return null; }
   };
-  const keyOf = (s: Stored | null): string | null => (s ? keyFor(s, s.provider) : null);
+  const keyOf = (s: Stored | null): Promise<string | null> => (s ? keyFor(s, s.provider) : Promise.resolve(null));
 
   return {
     async get() {
-      if (!crypto) return envSettings(procEnv());
+      if (!(await cryptoOf())) return envSettings(procEnv());
       const s = await read();
       const envHas = KEY_ENV.some((k) => !!procEnv()[k]);
-      const keys = { anthropic: keyFor(s, 'anthropic') !== null, openai: keyFor(s, 'openai') !== null };
+      const keys = { anthropic: (await keyFor(s, 'anthropic')) !== null, openai: (await keyFor(s, 'openai')) !== null };
       return {
-        provider: s?.provider ?? 'anthropic', hasKey: keyOf(s) !== null || envHas, keys,
+        provider: s?.provider ?? 'anthropic', hasKey: (await keyOf(s)) !== null || envHas, keys,
         ...(s?.baseUrl ? { baseUrl: s.baseUrl } : {}), ...(s?.model ? { model: s.model } : {}), source: 'app',
       };
     },
     async set(input) {
+      const crypto = await cryptoOf();
       if (!crypto) throw new Error(o.crypto ? 'This computer has no safe place to keep a key (no keychain). Set ANTHROPIC_API_KEY in the environment instead.' : 'In web mode the environment decides which key the builder uses: set ANTHROPIC_API_KEY (or HULL_AGENT_BASE_URL and HULL_AGENT_API_KEY) and restart.');
       if (!isProvider(input.provider)) throw new Error('The provider must be anthropic or openai.');
       if (input.clearKey !== undefined && !isProvider(input.clearKey)) throw new Error('clearKey must be anthropic or openai.');
@@ -100,7 +104,7 @@ export function createSettingsStore(o: { dataDir: string; crypto?: KeyCrypto | u
       // Each provider keeps its own key. An empty key field keeps the one already saved; a new one replaces it.
       const keys = cipherKeys(prev);
       const typed = input.apiKey?.trim();
-      if (typed) keys[input.keyFor ?? input.provider] = crypto.encrypt(typed);
+      if (typed) keys[input.keyFor ?? input.provider] = await crypto.encrypt(typed);
       if (input.clearKey) delete keys[input.clearKey];
       const kept = Object.fromEntries(PROVIDERS.filter((p) => keys[p]).map((p) => [p, keys[p]!])) as Partial<Record<KeyProvider, string>>;
       if (Object.keys(kept).length > 0) next.keys = kept;
@@ -108,7 +112,7 @@ export function createSettingsStore(o: { dataDir: string; crypto?: KeyCrypto | u
       await writeFile(file, JSON.stringify(next, null, 2) + '\n', { mode: 0o600 });
       return this.get();
     },
-    async env(base) { const s = await read(); return agentEnv(base, s, keyOf(s)); },
+    async env(base) { const s = await read(); return agentEnv(base, s, await keyOf(s)); },
     async needs(base) {
       const e = await this.env(base);
       return KEY_ENV.some((k) => !!e[k]) ? null : NEEDS_KEY;

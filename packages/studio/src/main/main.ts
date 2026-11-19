@@ -17,7 +17,11 @@ const here = dirname(fileURLToPath(import.meta.url));
 // The builder's API key is kept encrypted with the OS keychain (safeStorage), as base64 text in userData.
 const host = createHost({
   dataDir: app.getPath('userData'), log: (l) => console.log(`[hull] ${l}`), trash: (p) => shell.trashItem(p),
-  crypto: { available: () => safeStorage.isEncryptionAvailable(), encrypt: (s) => safeStorage.encryptString(s).toString('base64'), decrypt: (b) => safeStorage.decryptString(Buffer.from(b, 'base64')) },
+  crypto: {
+    available: () => safeStorage.isAsyncEncryptionAvailable(),
+    encrypt: async (s) => (await safeStorage.encryptStringAsync(s)).toString('base64'),
+    decrypt: async (b) => (await safeStorage.decryptStringAsync(Buffer.from(b, 'base64'))).result,
+  },
 });
 let win: BrowserWindow | null = null;
 
