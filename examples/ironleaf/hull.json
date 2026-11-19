@@ -13,5 +13,6 @@
   ],
   "render": {
     "backend": "webgl2"
-  }
+  },
+  "models": "src/bench/models.ts"
 }
