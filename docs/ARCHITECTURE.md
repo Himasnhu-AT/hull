@@ -25,13 +25,16 @@ hull/
         platform/        browser and desktop shell differences
         kits/            reusable gameplay pieces
         dev/             control API, benches, scenario runner, golden images, budgets (not in ship builds)
-    cli/                 the `hull` command; also the project server the Studio talks to
-      src/tools/         every tool, defined once; exposed as commands, as MCP tools and to Marl AI
+    tools/               @hull/tools: every tool, defined once; the app, MCP and Marl AI call them (no command line)
+      src/tools/         the tool list (typed function + JSON Schema each)
+      src/mcp/           the MCP server library: stdio and streamable HTTP
+      src/server/        the project server the Studio talks to
       src/history/       the history store, the diff, experiments, merge
       src/edit/          writes to JSON and to TypeScript literals
+      bin/hull-mcp.js    stdio launcher, MCP only
     studio/              Hull Studio (Electron app, React inside)
   schemas/               generated JSON Schema files
-  templates/             starting points for `hull new`
+  templates/             starting points for the `new` tool
   shell/                 desktop shells for games: electron/ (default), tauri/ (experimental)
   examples/              small games used as tests of the engine itself
   docs/
@@ -420,13 +423,13 @@ Hull Studio (Electron window)          project server (inside `hull studio`)    
 
 ## 9. Tools for the agent
 
-Every tool is defined once, in `packages/cli/src/tools/`, as a typed function with a JSON Schema for its input.
-Three fronts expose the same list:
+Every tool is defined once, in `packages/tools/src/tools/` (`@hull/tools`), as a typed function with a JSON Schema for
+its input. There is no command line: the app is the product, so one front less to keep. Three fronts expose the list:
 
 | Front | For | Notes |
 |---|---|---|
-| `hull <command>` | A local agent in a terminal (Claude Code, Codex) | Text, or data with `--json` |
-| `hull mcp` | Any MCP client | The same list as MCP tools |
+| The Hull desktop app | The person | Calls the tool functions directly. |
+| MCP | A local agent (Claude Code, Codex, any MCP client) | `createMcpServer(projectRoot)` in `@hull/tools`. The app hosts it over streamable HTTP on 127.0.0.1 for the open project and shows how to connect; `bin/hull-mcp.js` serves it over stdio when the app is closed. |
 | Marl AI | Customers of the hosted Studio, and the Studio's chat panel | A separate backend service. It runs the agent loop with a model from Marl's list, calls the tools on the project server, streams text and changes back, and meters usage. One turn ends as one change in the history. |
 
 The author of a change records the front and the model (`you`, `ai:local`, `ai:mcp`, `ai:marl/<model>`), so the

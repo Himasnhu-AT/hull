@@ -101,33 +101,37 @@ Kinds in the first version: `game`, `tuning`, `sound`, `music`, `mixer`, `charac
 
 `docs/SCHEMAS.md` has every kind with its schema and an example.
 
-### 3.3 Tools: the command line and Hull Studio
+### 3.3 Tools and Hull Studio
 
-**The Hull desktop app is the product, and comes first.** You make a project in it and work in it, the way you
-work in Unreal or Unity: a launcher to create a project from a template or open one, then the editor with the game
-running inside it, the Library, the Inspector, the benches, History and the Build button. The project server runs
-inside the app (its main process) and speaks the same protocol a remote one will, so the hosted Studio of M8 is the
-same front end. The `hull` command line below is **paused**: the tools stay defined once in the tools package and
-the app calls them; their command-line front is kept working as it is (for agents and CI) but not extended until the
-app is done.
+**The Hull desktop app is the product.** You make a project in it and work in it, the way you work in Unreal or
+Unity: a launcher to create a project from a template or open one, then the editor with the game running inside it,
+the Library, the Inspector, the benches, History and the Build button. The project server runs inside the app (its
+main process) and speaks the same protocol a remote one will, so the hosted Studio of M8 is the same front end.
 
-One command, `hull`, made to be run by an agent. Every command prints errors as `file:line: message` and can
-print JSON.
+**There is no `hull` command line.** It is removed (plan change, M6 wave 2): the app is the product, and a command
+line was one more front to keep working and document. Every tool is defined once, in the shared package
+`packages/tools` (`@hull/tools`), as a typed function with a JSON Schema, and exposed to the Hull desktop app, over
+MCP, and later to Marl AI. The desktop app hosts the MCP server (streamable HTTP on 127.0.0.1) for the open project,
+so a local agent (Claude Code, Codex, any MCP client) connects to the app and works on the same project the person
+has open; the app shows how to connect. One small stdio launcher (`packages/tools/bin/hull-mcp.js`, MCP only, no
+commands) starts the same server when the app is not open. Repo maintainers have dev scripts under `scripts/`
+(`pnpm project:check <dir>`, `project:build`, `project:dev`) that call the tools; they never ship.
 
-| Command | Does |
+The tools:
+
+| Tool | Does |
 |---|---|
-| `hull new <name> --template <t>` | A new game from a template. |
-| `hull dev` | The game in a browser with live reload of code and config. |
-| `hull studio` | Opens Hull Studio on the project. |
-| `hull check` | Types, config against schemas, references between config and code, house rules. |
-| `hull test` | Scenario tests of the simulation in Node. |
-| `hull play <steps.json>` | Runs the real game in a headless browser through a script of inputs, waits and checks; saves screenshots. |
-| `hull bench sound\|perf` | Renders every sound offline and measures it; runs frame-time budgets. |
-| `hull history`, `hull exp` | Lists changes, makes checkpoints, starts, compares and adopts experiments. |
-| `hull review` | Lists your notes for the AI. |
-| `hull build` | `dist/web/game.js` + `index.html`. |
-| `hull package --mac --win --linux` | Desktop apps from the same build (Electron; `--shell tauri` is experimental). |
-| `hull mcp` | The same controls as tools an agent can call while the game runs. |
+| `new` | A new game from a template (the app's launcher). |
+| `dev` | The game in a browser with live reload of code and config. |
+| `check` | Types, config against schemas, references between config and code, house rules. |
+| `test` | Scenario tests of the simulation in Node. |
+| `play` | Runs the real game in a headless browser through a script of inputs, waits and checks; saves screenshots. |
+| `bench` | Renders every sound offline and measures it; runs frame-time budgets. |
+| `history.*`, `exp.*` | Lists changes, makes checkpoints, starts, compares and adopts experiments. |
+| `review.*` | Lists your notes for the AI. |
+| `build` | `dist/web/game.js` + `index.html`. |
+| `package` | Desktop apps from the same build (Electron; Tauri is experimental). |
+| `game.run`, `config.*`, `tunables.*` | The running game's controls and the project's files. |
 
 **Hull Studio** is a desktop app (its own window):
 
@@ -155,8 +159,8 @@ reached three ways. The project cannot tell them apart, and the history records 
 
 | Way | Who runs the model | How it reaches Hull |
 |---|---|---|
-| A local agent | You: Claude Code, Codex or any coding agent in a terminal | The `hull` command line |
-| MCP | Any MCP client | `hull mcp` |
+| The Hull app | You | The app calls the tools in `@hull/tools` directly |
+| MCP | A local agent you run: Claude Code, Codex, any MCP client | The MCP server the app hosts (streamable HTTP on 127.0.0.1), or the stdio launcher when the app is closed |
 | Marl AI | Marl's backend, with the models Marl offers | Marl's API: the backend runs the agent loop and calls the same tools on the project |
 
 Marl AI is what a customer of the hosted Studio uses by default, from a chat panel in the Studio. Locally all
@@ -364,7 +368,7 @@ that stream for action games (target under about 80 ms from input to picture), a
 | D10 | Visibility | Private. |
 | D11 | AI-generated assets | A later track. |
 | D12 | Other 3D engines | A later track. |
-| D13 | Who runs the AI | Three ways: a local agent through the command line, any MCP client, or Marl AI through Marl's API and models. |
+| D13 | Who runs the AI | Three ways: the Hull app, a local agent over MCP (Claude Code, Codex, any MCP client), or Marl AI through Marl's API and models. |
 
 ## 10. Still open
 
