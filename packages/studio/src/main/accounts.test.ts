@@ -53,9 +53,9 @@ describe('accounts', () => {
   it('connects each program with its own command, replacing an old entry', async () => {
     const { run, calls } = fake({
       'claude mcp remove hull -s local': { code: 1, out: 'No MCP server found' },
-      [`claude mcp add --transport http hull ${project.mcp.url}`]: { code: 0, out: 'Added' },
+      [`claude mcp add --transport http hull ${project.mcp.url} --header x-hull-author: Claude Code`]: { code: 0, out: 'Added' },
       'codex mcp remove hull': { code: 0, out: 'Removed' },
-      [`codex mcp add hull -- ${join(bin, 'node')} /app/hull-mcp.js /games/ironleaf`]: { code: 0, out: 'Added' },
+      [`codex mcp add hull --env HULL_MCP_AUTHOR=Codex -- ${join(bin, 'node')} /app/hull-mcp.js /games/ironleaf`]: { code: 0, out: 'Added' },
       'codex logout': { code: 0, out: 'Logged out' },
     });
     const acc = createAccounts({ project: () => project, env, run });
@@ -65,14 +65,14 @@ describe('accounts', () => {
     // Hull never handles Claude accounts (PLAN D15).
     await expect(acc.run('claude', 'logout')).rejects.toThrow(/inside Claude Code/);
     expect(calls).toEqual([
-      'claude mcp remove hull -s local', `claude mcp add --transport http hull ${project.mcp.url}`,
-      'codex mcp remove hull', `codex mcp add hull -- ${join(bin, 'node')} /app/hull-mcp.js /games/ironleaf`,
+      'claude mcp remove hull -s local', `claude mcp add --transport http hull ${project.mcp.url} --header x-hull-author: Claude Code`,
+      'codex mcp remove hull', `codex mcp add hull --env HULL_MCP_AUTHOR=Codex -- ${join(bin, 'node')} /app/hull-mcp.js /games/ironleaf`,
       'codex logout',
     ]);
   });
 
   it('reports a failed command with the program\'s own words', async () => {
-    const { run } = fake({ [`claude mcp add --transport http hull ${project.mcp.url}`]: { code: 1, out: 'Error: config is read-only' } });
+    const { run } = fake({ [`claude mcp add --transport http hull ${project.mcp.url} --header x-hull-author: Claude Code`]: { code: 1, out: 'Error: config is read-only' } });
     await expect(createAccounts({ project: () => project, env, run }).run('claude', 'connect')).rejects.toThrow('Claude Code could not add Hull: Error: config is read-only');
   });
 

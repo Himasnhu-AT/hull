@@ -57,6 +57,7 @@ export interface Host {
   renameProject(root: string, title: string): Promise<string>;
   trashProject(root: string): Promise<void>;
   saveThumb(root: string, jpeg: string): Promise<void>;
+  openClaude(prompt?: string): Promise<void>;
   /** Agents (ACP) and the Claude Code terminal, working on the open project. */
   agents: Hub;
   terminals: Terminals;
@@ -225,6 +226,22 @@ export function createHost(opts: HostOptions): Host {
       if (running?.root === root) await host.closeProject();
       await opts.trash(root);
       await host.forgetRecent(root);
+    },
+
+    async openClaude(prompt) {
+      if (process.platform !== 'darwin') throw new Error('Opening Terminal for you works on macOS. Run the folder line yourself.');
+      if (!running) throw new Error('Open a game first.');
+      if (prompt !== undefined && (typeof prompt !== 'string' || prompt.length > 8000)) throw new Error('The first message is too long.');
+      const claude = (await import('./agents.ts')).which('claude', opts.env ?? process.env);
+      if (!claude) throw new Error('Claude Code was not found on this Mac. Install it first: npm install -g @anthropic-ai/claude-code');
+      // A .command file is what Terminal opens with a double-click: the person's own claude, unmodified, in its own window (D15).
+      const q = (s: string): string => `'${s.replace(/'/g, `'\\''`)}'`;
+      const dir = join(running.root, '.hull', 'tmp');
+      await mkdir(dir, { recursive: true });
+      const file = join(dir, 'open-claude.command');
+      await writeFile(file, `#!/bin/sh\ncd ${q(running.root)} || exit 1\nexec ${q(claude)}${prompt ? ` ${q(prompt)}` : ''}\n`, { mode: 0o755 });
+      const { spawn } = await import('node:child_process');
+      await new Promise<void>((res, rej) => { const c = spawn('open', ['-a', 'Terminal', file]); c.on('error', rej); c.on('exit', (code) => (code === 0 ? res() : rej(new Error(`Terminal did not open (${code}).`)))); });
     },
 
     async saveThumb(root, jpeg) {

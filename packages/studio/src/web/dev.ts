@@ -49,6 +49,7 @@ const api: Record<string, (arg: never) => unknown> = {
   renameProject: (o: { a: [string, string] }) => host.renameProject(...o.a),
   trashProject: (root: string) => host.trashProject(root),
   saveThumb: (o: { a: [string, string] }) => host.saveThumb(...o.a),
+  openClaude: (prompt: string | null) => host.openClaude(prompt ?? undefined),
   reveal: (path: string) => { console.log(`[hull] reveal ${path}`); },
   agentList: () => host.agents.list(),
   agentStart: (o: { a: [string] }) => host.agents.start(...o.a),

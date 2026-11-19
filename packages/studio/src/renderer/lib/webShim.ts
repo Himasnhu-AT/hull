@@ -29,6 +29,7 @@ export function webShim(): HullApp {
     renameProject: (root, title) => call('renameProject', { a: [root, title] }),
     trashProject: (root) => call('trashProject', root),
     saveThumb: (root, jpeg) => call('saveThumb', { a: [root, jpeg] }),
+    openClaude: (prompt) => call('openClaude', prompt ?? null),
     reveal: (path) => call('reveal', path),
     agentList: () => call('agentList'),
     agentStart: (id) => call('agentStart', { a: [id] }),

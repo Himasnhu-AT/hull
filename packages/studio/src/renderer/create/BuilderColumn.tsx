@@ -56,7 +56,7 @@ export function BuilderColumn({ project, attached, onClearAttached, moment = nul
         <button className="btn ghost" onClick={b.openSettings} aria-label="Settings" title="Settings (⌘,)"><Icon name="gear" size={14} /></button>
       </div>
       {setup && <div className="cr-b-setup"><BuilderSetup onDone={() => setChoosing(false)} /></div>}
-      {!setup && b.via === 'claude' && <ExternalAgent root={project.root} prompt="Play this game with Hull's tools (game.run, game.moment) and fix what feels wrong. Use the hull MCP tools for every change." />}
+      {!setup && b.via === 'claude' && <ExternalAgent rpc={b.rpc} root={project.root} prompt="Play this game with Hull's tools (game.run, game.moment) and fix what feels wrong. Use the hull MCP tools for every change." />}
       {!setup && b.via !== 'claude' && (
         <>
           <TranscriptView t={t} showEvents={false} thinking={t.running && waiting(t).length === 0} label="Conversation with the builder" className="cr-b-log"

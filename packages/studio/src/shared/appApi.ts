@@ -41,6 +41,8 @@ export interface HullApp extends HullAppAgents {
   trashProject(root: string): Promise<void>;
   /** Keeps a small screenshot of the game (a JPEG data: URL) as its thumbnail in .hull/thumb.jpg. */
   saveThumb(root: string, jpeg: string): Promise<void>;
+  /** Opens the person's own Claude Code in a Terminal window, in the open game's folder, with `prompt` as its first message. macOS only. */
+  openClaude(prompt?: string): Promise<void>;
   /** Shows a file or folder in Finder / Explorer. */
   reveal(path: string): Promise<void>;
   /** Web dev mode: the project to open without asking (`--project <dir>`). */

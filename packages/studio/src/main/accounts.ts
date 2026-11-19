@@ -114,12 +114,13 @@ export function createAccounts(o: { project(): AgentProject | null; env?: NodeJS
       }
       await exec(path, remove, p.root);
       let add: string[];
-      if (id === 'claude') add = ['mcp', 'add', '--transport', 'http', 'hull', p.mcp.url];
+      // Each says who it is, so the history names Claude Code or Codex rather than a generic builder.
+      if (id === 'claude') add = ['mcp', 'add', '--transport', 'http', 'hull', p.mcp.url, '--header', 'x-hull-author: Claude Code'];
       else {
         // Codex starts Hull's tools itself (stdio), so they work while the app is closed too.
         const node = find('node');
         if (!node) throw new Error('Codex starts Hull\'s tools with Node, and node was not found on this Mac.');
-        add = ['mcp', 'add', 'hull', '--', node, p.mcp.launcher, p.root];
+        add = ['mcp', 'add', 'hull', '--env', 'HULL_MCP_AUTHOR=Codex', '--', node, p.mcp.launcher, p.root];
       }
       const r = await exec(path, add, p.root);
       if (r.code !== 0) throw new Error(`${NAME[id]} could not add Hull: ${tail(r.out)}`);

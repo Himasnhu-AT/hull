@@ -19,6 +19,7 @@ contextBridge.exposeInMainWorld('hullApp', {
   renameProject: call('renameProject'),
   trashProject: call('trashProject'),
   saveThumb: call('saveThumb'),
+  openClaude: call('openClaude'),
   reveal: call('reveal'),
   agentList: call('agentList'),
   agentStart: call('agentStart'),

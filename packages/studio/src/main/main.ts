@@ -46,6 +46,7 @@ function registerIpc(): void {
   handle('renameProject', (root: string, title: string) => host.renameProject(root, title));
   handle('trashProject', (root: string) => host.trashProject(root));
   handle('saveThumb', (root: string, jpeg: string) => host.saveThumb(root, jpeg));
+  handle('openClaude', (prompt?: string) => host.openClaude(prompt));
   handle('agentList', () => host.agents.list());
   handle('agentStart', (id: string) => host.agents.start(id));
   handle('agentPrompt', (sid: string, text: string, options?: PromptOptions) => host.agents.prompt(sid, text, options));
