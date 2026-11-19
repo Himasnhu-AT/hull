@@ -5,14 +5,13 @@ CLAUDE.md, then PLAN.md §7. Those three files are enough to pick up the work.
 
 ## 1. State
 
-- **Branch:** `main`, pushed to `origin` (github.com/Himasnhu-AT/hull) at 9832d8d. It is the only branch and
-  there are no worktrees.
-- **Checks:** `pnpm check` (TypeScript 7 strict plus Vitest) passes: 449 tests, about 1 minute.
-- **Built:** M0–M5 and M7. PLAN.md §7, "Where each milestone stands", lists each milestone's state, how it was
-  checked, and its known gaps.
-- **Next:** M6, rebuilding AOTT (`../aot`) on Hull. The owner stopped the port the first time and said "we'll port
-  it tomorrow". **Wait for the owner to start it.**
-- **Not started:** M8 (hosted) and M9 (Marl AI backend).
+- **Updated:** 19 Nov 2026, end of the session that finished M6.
+- **Branch:** `main`. No other branches or worktrees. The owner pushes; nothing from this session is pushed yet.
+- **Checks:** `pnpm check` passes: 517 tests. `pnpm project:check examples/aott` passes.
+- **Built:** M0–M7. M6 (AOTT on Hull, `examples/aott`) was checked in the app: look and tunable edits changed the running game with no reload, and Build wrote one 2.6 MB file that boots and plays Holdout. `examples/aott/PORT.md` says what was ported how and what stays in code.
+- **The `hull` command line is gone.** Tools, MCP and the project server are in `packages/tools` (`@hull/tools`); the app hosts MCP over HTTP on 127.0.0.1; `packages/tools/bin/hull-mcp.js` serves MCP over stdio. Maintainer scripts: `pnpm project:check|build|dev <dir>`, `pnpm project:run <tool> <dir> [json]`.
+- **Next:** M9, the agent panel and Hull's own harness, as decided in PLAN.md §3.4 and D13–D16. The research and the decision are on https://claude.ai/artifact/ByfyFGHAAE2PgKkRyskJtG. Order: ACP client in the app → Hull's agent (loop, tools in-process, user key and ai.marlstudio.com) → edit/patch, compaction, plan mode, subagents, evals → notices file.
+- **Not started:** M8 (hosted).
 
 ## 2. What the owner wants (standing instructions)
 
@@ -101,49 +100,17 @@ templates/              cube, arena, fps, third-person
 - **Wall-clock budgets in the shared suite are flaky under load.** The physics budget runs only with
   `HULL_PERF=1`.
 
-## 6. Known gaps (also in PLAN.md §7)
+## 6. Known gaps
 
-- **Not judged:**
-  - No sound was ever heard, only measured.
-  - The app was checked mostly in web mode; the Electron window was opened only a few times.
-- **Desktop builds:**
-  - The Studio's main process runs through tsx. Packaging the app itself needs bundling.
-  - Windows and Linux game packages are untested.
-- **Characters and animation:** rigid-part bodies (not skinned), glTF clips skipped.
-- **Renderer:**
-  - Every build ships both backends: the arena is 1.68 MB.
-  - GPU timestamps are wrong on Apple GPUs.
-- **History:** experiments don't overlay kit values in the app; the line diff is coarse.
-- **Control port:** only step, press, release, state and screenshot.
-- **Inspector:** arrays of objects (anim-graph transitions) and arrays of enums still fall back to a JSON box.
-- **Docs:** ARCHITECTURE.md lags the code for anim, physics, vfx, platform, kits and mcp; workers documented in
-  module READMEs and code. SCHEMAS §6 still shows `anim/soldier`; the real ids are `anim-set/…` and
-  `anim-graph/…`.
+- **Not judged by a person:** no sound has been heard; AOTT has not been played by hand (mouse look, hit-stop, the feel of the soldier); dawn's look was captured but not compared by eye.
+- **AOTT:** WebGL2 only (its materials are GLSL); meshes, decals, slash arcs, the light pillar and the orbit camera stay in code; the whole frame runs per 120 Hz step with no interpolation (PORT.md §5).
+- **Benches:** code sound recipes render for a fixed 3 s, so their length is not measured.
+- **Desktop builds:** the Studio's main process runs through tsx; packaging the app needs bundling. Windows and Linux game packages are untested.
+- **Renderer:** every build ships both backends; GPU timestamps are wrong on Apple GPUs.
+- **Build:** assets are inlined into `game.js`; `targets.web.singleFile` and `budgets` are not acted on.
+- **Worktrees:** `agent-browser eval` is refused inside agent worktrees, so workers read page state with `agent-browser wait --fn` or by URL.
+- **Browser checks:** use one `agent-browser --session <name>` per worker and close it; wait for servers with one command (a small Python poll script), never a loop of curl calls.
 
-## 7. Next: the AOTT port (M6)
+## 7. Done: the AOTT port (M6)
 
-AOTT is 27k lines of TypeScript and three.js, everything generated in code, fixed 120 Hz, with a shared `game`
-object and optional-chained subsystems. Read `../aot/ARCHITECTURE.md` (§1 boot and frame, §2 game object, §11
-render, fx and sound, §16 traps).
-
-**The plan, already briefed once:**
-1. **Phase 1, one lead worker:**
-   - Copy `../aot/src` into `examples/aott/`, with `hull.json` step 120.
-   - Boot through `defineGame`.
-   - Hull loop, render bridge (no own `WebGLRenderer`), look and post, input-map, audio context.
-   - `CFG` → `tunables()` blocks; titan constants → tuning.
-   - Analytics → a no-op (no posthog).
-   - `Math.random` and `setTimeout` → `world.random` and `world.after`.
-   - Add an engine escape hatch only if needed (for example a `hull/three` re-export), additively.
-   - **Done when:** typecheck passes; a deterministic headless Holdout run passes; it boots and plays in the dev
-     page; `tunables.set` changes play live with no reload; the build runs.
-   - The lead also writes `examples/aott/PORT.md` with 4–6 parallel phase-2 packages.
-2. **Phase 2, a parallel fan-out:**
-   - sounds → `sound` configs on the sound bench
-   - people and titans → `character` and anim configs on the character bench
-   - effects → `vfx` configs
-   - look → `look` config
-   - collision → `hull/physics` where it fits
-   - kits where they match: the follow camera, health with hit zones, pickups (gas and blades), the spawner
-3. **Final check (the owner's goal):** open `examples/aott` in the Hull app, change config and tunables, see the
-   game update live, and press Build.
+Phase 1 (one lead) and phase 2 (sound, characters, effects, look, collision, kits in parallel) are merged. `examples/aott/PORT.md` is the record.
