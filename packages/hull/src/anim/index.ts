@@ -5,6 +5,7 @@ export { registerGenerator, generatorNames, compileClip, sampleClip, evalCurve }
 export type { Clip, ClipEvent, Generated, GeneratorFactory } from './clip.ts';
 export { Graph, compileCondition } from './graph.ts';
 export { twoBone, lookAt } from './ik.ts';
+export type { BenchView, BenchModel, BenchModelBuilder, RegisterBenchModel } from './bench.ts';
 export { characterHits } from './hits.ts';
 export type { ResolvedHit } from './hits.ts';
 export { Skeleton, Pose, buildBody, humanoidDims, accumulate, composite, REF_HEIGHT } from './skeleton.ts';

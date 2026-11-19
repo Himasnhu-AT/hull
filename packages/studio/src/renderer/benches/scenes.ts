@@ -2,12 +2,16 @@
 // has loaded. Scene code here is the bench's, not a game's: it may use the real clock where the game has none.
 
 import type { Game, Node } from 'hull';
-import type { Animator } from 'hull/anim';
+import type { Animator, BenchModel, BenchModelBuilder } from 'hull/anim';
 import type { Engine } from './engine.ts';
 
 export interface CharacterScene {
-  /** Replaces the character on the turntable. Returns its animator. */
-  setCharacter(id: string | null): Animator | null;
+  /** Replaces the character on the turntable, drawn by the project's builder when it gave one. Returns its animator. */
+  setCharacter(id: string | null, build?: BenchModelBuilder | null): Animator | null;
+  /** Where the body on show comes from, and what went wrong with the project's builder. */
+  source(): { kind: 'project' | 'stand-in'; error: string | null };
+  /** The clip the bench is holding (null in State graph mode) and whether it is playing: what a project model's update sees. */
+  setView(clip: string | null, playing: boolean): void;
   animator(): Animator | null;
   /** Radians a second; 0 stops the turntable. */
   setTurn(rate: number): void;
@@ -18,9 +22,38 @@ export interface CharacterScene {
 /** A turntable: the character in the middle of a dark floor, a sun, and a camera that keeps its height in frame. */
 export function buildCharacterScene(eng: Engine, game: Game): CharacterScene {
   const { Behaviour, config } = eng.hull;
-  const { Camera, Light, Mesh } = eng.render;
+  const { Camera, Light, Mesh, SceneObject } = eng.render;
   const { Animator: A } = eng.anim;
+  const { Box3, Vector3 } = eng.three;
   const w = game.world;
+
+  /** Puts a project's body on the character: its own update, then the skeleton's pose copied onto its joints. */
+  class Drive extends Behaviour {
+    model: BenchModel | null = null;
+    anim: Animator | null = null;
+    clip: string | null = null;
+    playing = true;
+    private t = 0;
+    override update(dt: number): void {
+      const m = this.model, a = this.anim;
+      if (!m || !a) return;
+      this.t += dt;
+      // The bench's own rigid stand-in stays out of sight; the Animator rebuilds it when its files change.
+      for (const c of this.node.object3d.children) if (c !== m.object) c.visible = false;
+      m.update?.(dt, { animator: a, clip: this.clip, playing: this.playing, time: this.t });
+      if (m.bones) {
+        const turned = m.turned !== false;
+        for (const name in m.bones) {
+          const src = a.bone(name), dst = m.bones[name]!;
+          if (!src) continue;
+          const q = src.quaternion;
+          if (turned) dst.quaternion.set(-q.x, q.y, -q.z, q.w); else dst.quaternion.copy(q);
+          if (m.offsets) { if (turned) dst.position.set(-src.position.x, src.position.y, -src.position.z); else dst.position.copy(src.position); }
+        }
+      }
+      m.posed?.();
+    }
+  }
 
   class Turn extends Behaviour {
     rate = 0.6;
@@ -31,12 +64,32 @@ export function buildCharacterScene(eng: Engine, game: Game): CharacterScene {
   class Frame extends Behaviour {
     id: string | null = null;
     anim: Animator | null = null;
+    /** The project's body, when there is one: it is framed by its own box (metres), not by the skeleton's rest numbers. */
+    model: BenchModel | null = null;
+    private box = new Box3();
+    private size = new Vector3();
+    private age = 0;
+    private top0 = 0;
+    private half0 = 0;
     /** Bone positions at rest, model space (3 numbers a bone). Reused between frames. */
     private pos = new Float64Array(0);
     override update(): void {
       const sk = this.anim?.skeleton as { n: number; parent: Int16Array; rest: Float64Array } | undefined;
       let top = 1.78, half = 0.5;
-      if (this.id && sk && sk.n > 0) {
+      if (this.id && this.model) {
+        // Measured now and then, not every frame: the box of a posed body moves a little, and the shot should not breathe.
+        if (this.age++ % 45 === 0) {
+          const b = this.model.bounds?.() ?? null;
+          if (b) this.box.set(this.size.set(b.min[0], b.min[1], b.min[2]), new Vector3(b.max[0], b.max[1], b.max[2]));
+          else this.box.setFromObject(this.model.object);
+          if (!this.box.isEmpty()) {
+            this.box.getSize(this.size);
+            this.top0 = Math.max(this.box.max.y, this.size.y);
+            this.half0 = Math.max(Math.abs(this.box.min.x), Math.abs(this.box.max.x), Math.abs(this.box.min.z), Math.abs(this.box.max.z));
+          }
+        }
+        if (this.top0 > 0) { top = this.top0; half = Math.max(this.half0 * 1.1, top * 0.2); }
+      } else if (this.id && sk && sk.n > 0) {
         if (this.pos.length < sk.n * 3) this.pos = new Float64Array(sk.n * 3);
         const p = this.pos;
         let maxY = 0, reach = 0;
@@ -74,6 +127,7 @@ export function buildCharacterScene(eng: Engine, game: Game): CharacterScene {
   const cam = w.spawn('camera');
   cam.add(Camera, { fov: 40, far: 800 });
   const frame = cam.add(Frame);
+  const framed = (): void => { frame.model = driver?.model ?? null; };
   const marker = w.spawn('target');
   marker.add(Mesh, { shape: 'sphere', color: '#ffb340', castShadow: false });
   marker.scale.set(0.12, 0.12, 0.12);
@@ -81,22 +135,41 @@ export function buildCharacterScene(eng: Engine, game: Game): CharacterScene {
 
   let node: Node | null = null;
   let anim: Animator | null = null;
+  let driver: Drive | null = null;
+  let src: { kind: 'project' | 'stand-in'; error: string | null } = { kind: 'stand-in', error: null };
   let rate = 0.6;
   return {
-    setCharacter(id) {
+    setCharacter(id, build) {
+      driver?.model?.dispose?.();
       node?.destroy();
       node = null;
       anim = null;
+      driver = null;
       frame.id = id;
       frame.anim = null;
-      if (!id) return null;
+      src = { kind: 'stand-in', error: null };
+      if (!id) { framed(); return null; }
       node = w.spawn('character');
       anim = node.add(A, { character: id });
       frame.anim = anim;
       anim.ground = () => 0;
       node.add(Turn, { rate });
+      if (build) {
+        try {
+          const model = build(id);
+          node.add(SceneObject, { object: model.object });
+          driver = node.add(Drive, { model, anim });
+          src = { kind: 'project', error: null };
+        } catch (e) {
+          // A builder that throws leaves the stand-in on show, with the reason beside it.
+          src = { kind: 'stand-in', error: e instanceof Error ? e.message : String(e) };
+        }
+      }
+      framed();
       return anim;
     },
+    source: () => src,
+    setView(clip, playing) { if (driver) { driver.clip = clip; driver.playing = playing; } },
     animator: () => anim,
     setTurn(r) {
       rate = r;

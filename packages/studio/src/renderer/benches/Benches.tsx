@@ -8,13 +8,14 @@ import type { Animator } from 'hull/anim';
 import type { RpcClient } from '../lib/rpc.ts';
 import { throttle } from '../lib/math.ts';
 import { Icon } from '../ui/Icon.tsx';
+import { loadProjectModels, type ProjectModels } from '../lib/modelsApi.ts';
 import { createStage, loadEngine, syncConfig, type Engine, type Stage } from './engine.ts';
 import { GraphView, type GraphDef, type Live } from './GraphView.tsx';
 import { buildCharacterScene, buildYard, type CharacterScene, type YardScene } from './scenes.ts';
 import './benches.css';
 
 export type BenchKind = 'character' | 'vfx' | 'look';
-interface Props { kind: BenchKind; rpc: RpcClient; items: LibraryItem[]; selected: string | null; onSelect(id: string): void }
+interface Props { kind: BenchKind; rpc: RpcClient; /** The project's game page: it serves the bundle of the game's own character builders. */ gameUrl: string; items: LibraryItem[]; selected: string | null; onSelect(id: string): void }
 
 const short = (id: string): string => id.slice(id.indexOf('/') + 1);
 const esc = (s: string): string => s.replace(/~/g, '~0').replace(/\//g, '~1');
@@ -80,11 +81,27 @@ function Metric({ label, value, unit, tone }: { label: string; value: string; un
 
 interface ClipInfo { length: number; loop: boolean; speed: number; travel: number; events: { name: string; time: number }[] }
 
-function CharacterBench({ rpc, eng, items, selected, onSelect }: Omit<Props, 'kind'> & { eng: Engine }): JSX.Element {
+function CharacterBench({ rpc, gameUrl, eng, items, selected }: Omit<Props, 'kind' | 'onSelect'> & { eng: Engine }): JSX.Element {
   const chars = useMemo(() => items.filter((i) => i.kind === 'character').map((i) => i.id), [items]);
-  const id = chars.includes(selected ?? '') ? selected : (chars[0] ?? null);
-  // The Inspector follows the bench: the character on show is the one it edits.
-  useEffect(() => { if (id && id !== selected) onSelect(id); }, [id, selected, onSelect]);
+  // The bench shows what the Library has selected. Selecting something that is not a character leaves the last one on show.
+  const isChar = selected !== null && chars.includes(selected);
+  const lastChar = useRef<string | null>(null);
+  if (isChar) lastChar.current = selected;
+  else if (lastChar.current && !chars.includes(lastChar.current)) lastChar.current = null;
+  const id = isChar ? selected : (lastChar.current ?? chars[0] ?? null);
+
+  // The game's own bodies, when its hull.json has a "models" module.
+  const [models, setModels] = useState<ProjectModels | null>(null);
+  const [modelsError, setModelsError] = useState<string | null>(null);
+  useEffect(() => {
+    let live = true;
+    loadProjectModels(gameUrl, eng).then(
+      (m) => { if (live) { setModels(m); setModelsError(null); } },
+      (e: unknown) => { if (live) { setModels({ find: () => null }); setModelsError(e instanceof Error ? e.message : String(e)); } },
+    );
+    return () => { live = false; };
+  }, [gameUrl, eng]);
+  const [bodySrc, setBodySrc] = useState<{ kind: 'project' | 'stand-in'; error: string | null }>({ kind: 'stand-in', error: null });
 
   const look = useMemo(() => (eng.hull.config.has('look/dusk') ? 'look/dusk' : eng.hull.config.ids('look')[0] ? `look/${eng.hull.config.ids('look')[0]}` : undefined), [eng]);
   const { host, stage, error } = useStage<CharacterScene>(eng, (e, g) => buildCharacterScene(e, g), { look });
@@ -117,15 +134,17 @@ function CharacterBench({ rpc, eng, items, selected, onSelect }: Omit<Props, 'ki
 
   // The character on the turntable follows the selection.
   useEffect(() => {
-    if (!stage) return;
-    animRef.current = stage.scene.setCharacter(id);
+    if (!stage || !models) return;
+    animRef.current = stage.scene.setCharacter(id, id ? models.find(id) : null);
+    setBodySrc(stage.scene.source());
     setAnimTick(animRef.current);
     lastRt.current = null;
     params.current = {};
     setClip(null);
     setGraphDef(null);
     tRef.current = 0;
-  }, [stage, id]);
+  }, [stage, id, models]);
+  useEffect(() => { stage?.scene.setView(mode === 'clips' ? clip : null, playing); }, [stage, mode, clip, playing, models, id]);
 
   useEffect(() => { stage?.scene.setTurn(turn ? 0.6 : 0); }, [stage, turn]);
 
@@ -226,7 +245,7 @@ function CharacterBench({ rpc, eng, items, selected, onSelect }: Omit<Props, 'ki
   return (
     <div className="bench bb">
       <div className="bb-row">
-        <Picker label="Character" ids={chars} id={id} onSelect={onSelect} />
+        <span className="mono bb-dim" title="The Library's selection">{id ?? ''}</span>
         <div className="seg" role="group" aria-label="What to look at">
           <button className={mode === 'clips' ? 'on' : ''} onClick={() => setMode('clips')}>Clips</button>
           <button className={mode === 'graph' ? 'on' : ''} onClick={() => setMode('graph')}>State graph</button>
@@ -240,7 +259,8 @@ function CharacterBench({ rpc, eng, items, selected, onSelect }: Omit<Props, 'ki
       <div className="bb-view" ref={host}>
         {!stage && !error && <div className="bb-load">Starting the engine...</div>}
         {error && <div className="note-err" role="alert" style={{ margin: 12 }}>{error}</div>}
-        {stage && <div className="bb-tag mono">{id}</div>}
+        {stage && <div className="bb-tag mono">{id}{bodySrc.kind === 'project' ? ' · the game\'s model' : ''}</div>}
+        {!isChar && id && <div className="bb-hint">Select a character in the Library to show it here.</div>}
       </div>
         {mode === 'graph' && (
           <div className="bb-side">
@@ -277,6 +297,7 @@ function CharacterBench({ rpc, eng, items, selected, onSelect }: Omit<Props, 'ki
 
       {problems.length > 0 && <div className="note-err" role="alert">{problems.slice(0, 4).map((p, i) => <div key={i}>{p}</div>)}</div>}
 
+      {(modelsError || bodySrc.error) && <div className="note-err" role="alert">{modelsError ? `The game's models did not load, so stand-ins are shown: ${modelsError}` : `The game's model for ${id} failed, so the stand-in is shown: ${bodySrc.error}`}</div>}
       {mode === 'clips' && (
         <div className="bcard">
           <h3>Clips ({clipNames.length})</h3>
@@ -336,7 +357,7 @@ function useYard(eng: Engine, items: LibraryItem[], lookId: string | null): { ho
   return r;
 }
 
-function VfxBench({ eng, items, selected, onSelect }: Omit<Props, 'kind' | 'rpc'> & { eng: Engine }): JSX.Element {
+function VfxBench({ eng, items, selected, onSelect }: Omit<Props, 'kind' | 'rpc' | 'gameUrl'> & { eng: Engine }): JSX.Element {
   const ids = useMemo(() => items.filter((i) => i.kind === 'vfx').map((i) => i.id), [items]);
   const id = ids.includes(selected ?? '') ? selected : (ids[0] ?? null);
   useEffect(() => { if (id && id !== selected) onSelect(id); }, [id, selected, onSelect]);
@@ -425,7 +446,7 @@ function VfxBench({ eng, items, selected, onSelect }: Omit<Props, 'kind' | 'rpc'
   );
 }
 
-function LookBench({ eng, items, selected, onSelect }: Omit<Props, 'kind' | 'rpc'> & { eng: Engine }): JSX.Element {
+function LookBench({ eng, items, selected, onSelect }: Omit<Props, 'kind' | 'rpc' | 'gameUrl'> & { eng: Engine }): JSX.Element {
   const ids = useMemo(() => items.filter((i) => i.kind === 'look').map((i) => i.id), [items]);
   const id = ids.includes(selected ?? '') ? selected : (ids[0] ?? null);
   useEffect(() => { if (id && id !== selected) onSelect(id); }, [id, selected, onSelect]);
@@ -454,13 +475,13 @@ function LookBench({ eng, items, selected, onSelect }: Omit<Props, 'kind' | 'rpc
 
 /* ---------------------------------------------------------------- entry ---------------------------------------------------------------- */
 
-export function BenchView({ kind, rpc, items, selected, onSelect }: Props): JSX.Element {
+export function BenchView({ kind, rpc, gameUrl, items, selected, onSelect }: Props): JSX.Element {
   const { eng, error, problems } = useEngine(rpc);
   if (error) return <div className="overlay-msg"><div className="note-err" role="alert">The engine did not load: {error}</div></div>;
   if (!eng) return <div className="overlay-msg"><div>Loading the engine...</div></div>;
   return (
     <>
-      {kind === 'character' && <CharacterBench rpc={rpc} eng={eng} items={items} selected={selected} onSelect={onSelect} />}
+      {kind === 'character' && <CharacterBench rpc={rpc} gameUrl={gameUrl} eng={eng} items={items} selected={selected} />}
       {kind === 'vfx' && <VfxBench eng={eng} items={items} selected={selected} onSelect={onSelect} />}
       {kind === 'look' && <LookBench eng={eng} items={items} selected={selected} onSelect={onSelect} />}
       {problems.length > 0 && <div className="bb-probs" title={problems.join('\n')}>{problems.length} config problem{problems.length === 1 ? '' : 's'} on load</div>}

@@ -12,13 +12,14 @@ export interface Engine {
   render: typeof import('hull/render');
   anim: typeof import('hull/anim');
   vfx: typeof import('hull/vfx');
+  three: typeof import('hull/three');
 }
 
 let engine: Promise<Engine> | null = null;
 
 export function loadEngine(): Promise<Engine> {
-  engine ??= Promise.all([import('hull'), import('hull/render'), import('hull/anim'), import('hull/vfx')])
-    .then(([hull, render, anim, vfx]) => ({ hull, render, anim, vfx }));
+  engine ??= Promise.all([import('hull'), import('hull/render'), import('hull/anim'), import('hull/vfx'), import('hull/three')])
+    .then(([hull, render, anim, vfx, three]) => ({ hull, render, anim, vfx, three }));
   return engine;
 }
 

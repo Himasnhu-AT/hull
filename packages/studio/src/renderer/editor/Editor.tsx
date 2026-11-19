@@ -193,7 +193,7 @@ function EditorBody({ rpc, project, platform, onClose }: { rpc: RpcClient; proje
           )}
           {view === 'compare' && <Compare rpc={rpc} h={h} mainUrl={project.gameUrl} a={compareNow.a} b={compareNow.b} onPick={(a, b) => setPair({ a, b })} version={h.exps.map((e) => `${e.name}${e.tip}`).join()} />}
           {view === 'sound' && <SoundBench rpc={rpc} gameUrl={project.gameUrl} sounds={sounds} selected={selected} onSelect={select} />}
-          {(view === 'character' || view === 'vfx' || view === 'look') && <BenchView key={view} kind={view} rpc={rpc} items={items} selected={selected} onSelect={select} />}
+          {(view === 'character' || view === 'vfx' || view === 'look') && <BenchView key={view} kind={view} rpc={rpc} gameUrl={project.gameUrl} items={items} selected={selected} onSelect={select} />}
         </div>
       </main>
 
