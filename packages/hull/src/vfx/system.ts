@@ -18,6 +18,7 @@ import {
 } from 'three';
 import { config } from '../config/index.ts';
 import type { Node, Random, World } from '../core/index.ts';
+import { isTracing, trace } from '../core/trace.ts';
 import { renderRuntime, webgpuVfx, type RenderRuntime } from '../render/runtime.ts';
 import type { Vfx } from '../schema/vfx.ts';
 import { compile, drawCount, look, Pool, spawnOne, type Compiled, type GroundFn, type SpawnMods, type V3 } from './emitter.ts';
@@ -417,6 +418,8 @@ export class VfxSystem {
   burst(id: string, at: V3, dir?: V3, opts?: BurstOptions): void {
     const fx = this.effect(id);
     if (!fx) return;
+    // The "Just now" feed hears every effect the game asks for here: once per burst, never per particle or per frame.
+    if (isTracing()) trace('vfx', fx.id);
     // Always one draw for the count, so a caller's override does not shift the stream.
     const drawn = drawCount(fx.c, this.rng);
     const n = opts?.count !== undefined ? Math.max(0, Math.round(opts.count)) : drawn;
@@ -444,6 +447,7 @@ export class VfxSystem {
   /** Emits `emit.rate` particles a second along the path of `node` until stopped or the node is destroyed. */
   trail(id: string, node: Node): TrailHandle {
     const fx = this.effect(id);
+    if (fx && isTracing()) trace('vfx', fx.id, node.name);
     const t: Trail = {
       fx: fx as Effect,
       node,

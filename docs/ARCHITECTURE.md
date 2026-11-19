@@ -544,6 +544,20 @@ Hull Studio (Electron window)          project server (inside the app)          
   field sends one `set` to the project server, which writes the file and pushes the new value to the running game.
 * **Review** state per id (`unreviewed`, `approved`, `needs-change`, a note, the content hash) lives in
   `.hull/review.json`. When a piece changes, its state returns to `unreviewed`.
+* The **brief and the build's state** are three more project files, read and written only through tools: `GAME.md` at the
+  root (the history tracks it), `.hull/explain/<id>.json` (the drawings for what a person cannot judge by looking or
+  listening) and `.hull/create.json` (the flow's step and the seven stages). Formats are in SCHEMAS section 14.
+* **The "Just now" feed.** The engine calls `trace(kind, id, node?)` (`core/trace.ts`) where a sound starts
+  (`audio/engine.ts` `play`), a vfx burst or trail is spawned (`vfx/system.ts`), an animation graph changes state
+  (`anim/graph.ts`, decided by the graph, once per change) and a character's animator first builds its body (`actor`, in
+  `anim/animator.ts` `build`; chosen because it runs once per character, so nothing is added per frame). With no listener
+  the call returns at once and allocates nothing; call sites that build an id with a template check `isTracing()` first. Only
+  `dev/runtime.ts` installs a listener: a ring of 64 slots (`dev/recent.ts`, reused, no allocation per event) stamped with
+  game time, flushed to the server in one `game.events` message at most ten times a second and not at all when empty. The
+  server keeps the last 256 per game and answers `game.recent` (the last N game-seconds, newest first); each batch is also
+  pushed to studios as `game.recent`. `game.moment` pauses the game, reads its state and a screenshot through the control
+  port, and returns them with the recent events. A game that reconnects starts a fresh feed. Labels are the config's
+  `title` or the last part of the id.
 * **Measurements** come from the same tool code the MCP server calls, so the Studio and the AI see the same numbers.
 * **Hosted** (PLAN section 8): the project server runs on Marl's machines and holds the code; the Studio's front
   end is served to the customer's browser; `GameView` switches to a remote source (a video stream, or a
@@ -583,7 +597,8 @@ The registry (`tools`) holds files-and-processes tools. Each takes a project roo
 The **project methods** (`projectTools`) go through the project's server, so an open app hears them: `project.info`,
 `library.list`, `config.read`, `config.set`, `tunables.list`, `tunables.set`, `journal.list`, `history.list`, `history.diff`,
 `history.restore`, `history.checkpoint`, `exp.start`, `exp.list`, `exp.compare`, `exp.adopt`, `exp.discard`, `game.control`,
-`game.run`, `problems.list`, the review methods, and the code methods below. `openProject` attaches to the server the app started (it writes
+`game.run`, `problems.list`, the review methods, the idea-to-play methods (`brief.read`, `brief.write`, `docs.list`, `docs.read`,
+`explain.list`, `explain.write`, `create.get`, `create.set`, `game.recent`, `game.moment`), and the code methods below. `openProject` attaches to the server the app started (it writes
 `.hull/server.json`) or starts one in process, so two servers never fight over one project. `allTools` is the union;
 where a name is in both lists the method wins.
 

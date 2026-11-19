@@ -1,0 +1,75 @@
+{
+  "id": "enemy-guard-behaviour",
+  "title": "How a guard fights",
+  "stage": "rules",
+  "why": "The guard waits, closes in when it sees you, and backs off to heal when hurt, so a fight has a rhythm.",
+  "body": {
+    "type": "flow",
+    "nodes": [
+      {
+        "id": "idle",
+        "text": "Stands watch"
+      },
+      {
+        "id": "see",
+        "text": "Sees the player?",
+        "kind": "ask"
+      },
+      {
+        "id": "chase",
+        "text": "Walks toward the player"
+      },
+      {
+        "id": "hit",
+        "text": "Swings when close"
+      },
+      {
+        "id": "low",
+        "text": "Health under a quarter?",
+        "kind": "ask"
+      },
+      {
+        "id": "flee",
+        "text": "Backs off and heals",
+        "kind": "end"
+      }
+    ],
+    "edges": [
+      {
+        "from": "idle",
+        "to": "see"
+      },
+      {
+        "from": "see",
+        "to": "chase",
+        "label": "yes"
+      },
+      {
+        "from": "see",
+        "to": "idle",
+        "label": "no"
+      },
+      {
+        "from": "chase",
+        "to": "hit"
+      },
+      {
+        "from": "hit",
+        "to": "low"
+      },
+      {
+        "from": "low",
+        "to": "flee",
+        "label": "yes"
+      },
+      {
+        "from": "low",
+        "to": "chase",
+        "label": "no"
+      }
+    ]
+  },
+  "covers": [
+    "enemy/guard"
+  ]
+}

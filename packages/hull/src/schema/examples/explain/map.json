@@ -1,0 +1,24 @@
+{
+  "id": "world-camp-layout",
+  "title": "The camp",
+  "stage": "world",
+  "why": "The gate faces the path so the first fight starts in the open, with the well behind you as a place to retreat.",
+  "body": {
+    "type": "map",
+    "image": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==",
+    "width": 1,
+    "height": 1,
+    "marks": [
+      {
+        "x": 0.2,
+        "y": 0.8,
+        "label": "Gate"
+      },
+      {
+        "x": 0.7,
+        "y": 0.3,
+        "label": "Well"
+      }
+    ]
+  }
+}

@@ -10,6 +10,7 @@
     "./vfx": "./src/vfx/index.ts",
     "./physics": "./src/physics/index.ts",
     "./schema": "./src/schema/index.ts",
+    "./schema/check": "./src/schema/check.ts",
     "./anim": "./src/anim/index.ts",
     "./audio": "./src/audio/index.ts",
     "./input": "./src/input/index.ts",
@@ -18,7 +19,8 @@
     "./kits": "./src/kits/index.ts",
     "./kits/testing": "./src/kits/testing.ts",
     "./dev": "./src/dev/index.ts",
-    "./dev/protocol": "./src/dev/protocol.ts"
+    "./dev/protocol": "./src/dev/protocol.ts",
+    "./dev/recent": "./src/dev/recent.ts"
   },
   "dependencies": {
     "ajv": "8.20.0",
