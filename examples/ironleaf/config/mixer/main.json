@@ -1,0 +1,27 @@
+{
+  "kind": "mixer",
+  "buses": {
+    "master": {
+      "level": 0
+    },
+    "sfx": {
+      "to": "master",
+      "level": 0
+    },
+    "ui": {
+      "to": "master",
+      "level": -4
+    },
+    "music": {
+      "to": "master",
+      "level": -8
+    }
+  },
+  "master": {
+    "compressor": {
+      "threshold": -16,
+      "ratio": 3
+    },
+    "limiter": -1
+  }
+}

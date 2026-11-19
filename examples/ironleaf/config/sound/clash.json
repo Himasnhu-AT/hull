@@ -1,0 +1,79 @@
+{
+  "kind": "sound",
+  "note": "Steel on steel: a bright ring with a hard tick and a short low knock.",
+  "bus": "sfx",
+  "level": -9,
+  "pitch": [
+    0.93,
+    1.07
+  ],
+  "limit": {
+    "minGap": 0.05,
+    "voices": 4
+  },
+  "spatial": {
+    "ref": 6,
+    "max": 70
+  },
+  "source": {
+    "type": "synth",
+    "length": 1.1,
+    "layers": {
+      "ring": {
+        "from": {
+          "modes": [
+            1750,
+            2610,
+            3480,
+            5230,
+            6900
+          ],
+          "decay": 0.55,
+          "tilt": 0.5
+        }
+      },
+      "tick": {
+        "from": {
+          "noise": "white"
+        },
+        "then": [
+          {
+            "filter": "highpass",
+            "freq": 3200
+          },
+          {
+            "envelope": {
+              "attack": 0.001,
+              "decay": 0.05
+            }
+          },
+          {
+            "gain": -4
+          }
+        ]
+      },
+      "knock": {
+        "from": {
+          "osc": "sine",
+          "freq": [
+            220,
+            260
+          ],
+          "glideTo": 0.5,
+          "glideTime": 0.08
+        },
+        "then": [
+          {
+            "envelope": {
+              "attack": 0.001,
+              "decay": 0.1
+            }
+          },
+          {
+            "gain": -8
+          }
+        ]
+      }
+    }
+  }
+}

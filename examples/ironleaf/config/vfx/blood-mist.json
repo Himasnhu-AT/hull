@@ -1,0 +1,77 @@
+{
+  "kind": "vfx",
+  "note": "Stylised blood: a dark red ink mist that blooms and thins.",
+  "emit": {
+    "count": [
+      14,
+      18
+    ],
+    "over": 0.04,
+    "shape": {
+      "sphere": 0.12
+    }
+  },
+  "particle": {
+    "life": [
+      0.35,
+      0.8
+    ],
+    "speed": [
+      1.5,
+      4.5
+    ],
+    "direction": {
+      "cone": [
+        0,
+        1,
+        0
+      ],
+      "angleDeg": 80
+    },
+    "gravity": -3.2,
+    "drag": 2.4,
+    "size": [
+      [
+        0,
+        0.16
+      ],
+      [
+        0.4,
+        0.5
+      ],
+      [
+        1,
+        0.8
+      ]
+    ],
+    "color": [
+      [
+        0,
+        "#7c0f12"
+      ],
+      [
+        1,
+        "#3b0709"
+      ]
+    ],
+    "alpha": [
+      [
+        0,
+        0.8
+      ],
+      [
+        0.5,
+        0.5
+      ],
+      [
+        1,
+        0
+      ]
+    ],
+    "sprite": "smoke",
+    "blend": "alpha"
+  },
+  "budget": {
+    "max": 400
+  }
+}

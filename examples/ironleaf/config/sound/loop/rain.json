@@ -1,0 +1,86 @@
+{
+  "kind": "sound",
+  "note": "Steady rain on grass and thatch.",
+  "bus": "sfx",
+  "level": -12,
+  "loop": true,
+  "limit": {
+    "voices": 1,
+    "over": "skip"
+  },
+  "source": {
+    "type": "synth",
+    "length": 5,
+    "layers": {
+      "hiss": {
+        "from": {
+          "noise": "white"
+        },
+        "then": [
+          {
+            "filter": "highpass",
+            "freq": 2500
+          },
+          {
+            "envelope": {
+              "attack": 0.02,
+              "decay": 0.05,
+              "hold": 4.9
+            }
+          },
+          {
+            "gain": -4
+          }
+        ]
+      },
+      "body": {
+        "from": {
+          "noise": "pink"
+        },
+        "then": [
+          {
+            "filter": "bandpass",
+            "freq": 1100,
+            "q": 0.5
+          },
+          {
+            "envelope": {
+              "attack": 0.02,
+              "decay": 0.05,
+              "hold": 4.9
+            }
+          },
+          {
+            "gain": -2
+          }
+        ]
+      },
+      "drops": {
+        "from": {
+          "noise": "white"
+        },
+        "then": [
+          {
+            "filter": "bandpass",
+            "freq": 5200,
+            "q": 6
+          },
+          {
+            "envelope": {
+              "attack": 0.001,
+              "decay": 0.02
+            }
+          },
+          {
+            "gain": -18
+          }
+        ],
+        "repeat": {
+          "count": 40,
+          "every": 0.12,
+          "falloff": 0
+        }
+      }
+    }
+  }
+}

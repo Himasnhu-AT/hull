@@ -24,6 +24,9 @@
     },
     {
       "path": "examples/aott"
+    },
+    {
+      "path": "examples/ironleaf"
     }
   ]
 }

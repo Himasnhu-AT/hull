@@ -1,0 +1,94 @@
+{
+  "kind": "sound",
+  "note": "A step on packed earth: a dull thump and grit.",
+  "bus": "sfx",
+  "level": -2,
+  "pitch": [
+    0.88,
+    1.12
+  ],
+  "limit": {
+    "minGap": 0.12,
+    "voices": 4,
+    "over": "skip"
+  },
+  "spatial": {
+    "ref": 3,
+    "max": 28
+  },
+  "source": {
+    "type": "synth",
+    "length": 0.2,
+    "layers": {
+      "heel": {
+        "from": {
+          "noise": "brown"
+        },
+        "then": [
+          {
+            "filter": "lowpass",
+            "freq": [
+              420,
+              560
+            ]
+          },
+          {
+            "envelope": {
+              "attack": 0.002,
+              "decay": 0.09
+            }
+          },
+          {
+            "gain": 2
+          }
+        ]
+      },
+      "grit": {
+        "from": {
+          "noise": "pink"
+        },
+        "then": [
+          {
+            "filter": "bandpass",
+            "freq": [
+              1000,
+              1500
+            ],
+            "q": 1.2
+          },
+          {
+            "envelope": {
+              "attack": 0.001,
+              "decay": 0.05
+            }
+          },
+          {
+            "gain": -6
+          }
+        ]
+      },
+      "tap": {
+        "from": {
+          "osc": "sine",
+          "freq": [
+            85,
+            100
+          ],
+          "glideTo": 0.5,
+          "glideTime": 0.06
+        },
+        "then": [
+          {
+            "envelope": {
+              "attack": 0.002,
+              "decay": 0.08
+            }
+          },
+          {
+            "gain": -7
+          }
+        ]
+      }
+    }
+  }
+}

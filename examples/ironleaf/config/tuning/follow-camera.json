@@ -1,0 +1,13 @@
+{
+  "kind": "tuning",
+  "note": "A close follow camera over the right shoulder.",
+  "distance": 4.2,
+  "height": 1.5,
+  "shoulder": 0.5,
+  "pitch": 0.22,
+  "fov": 58,
+  "fovPerSpeed": 0.35,
+  "fovMaxExtra": 8,
+  "distancePerSpeed": 0.05,
+  "distanceMaxExtra": 1
+}

@@ -1,0 +1,84 @@
+{
+  "kind": "sound",
+  "note": "The katana leaves its sheath: a long steel rasp that rises, and a short ring at the end.",
+  "bus": "sfx",
+  "level": -4,
+  "spatial": {
+    "ref": 4,
+    "max": 40
+  },
+  "source": {
+    "type": "synth",
+    "length": 0.9,
+    "layers": {
+      "rasp": {
+        "from": {
+          "noise": "white"
+        },
+        "then": [
+          {
+            "filter": "bandpass",
+            "freq": 1800,
+            "q": 2.5,
+            "glideTo": 3.2,
+            "glideTime": 0.55
+          },
+          {
+            "envelope": {
+              "attack": 0.05,
+              "decay": 0.5,
+              "curve": "linear"
+            }
+          },
+          {
+            "gain": -6
+          }
+        ]
+      },
+      "grit": {
+        "from": {
+          "noise": "pink"
+        },
+        "then": [
+          {
+            "filter": "highpass",
+            "freq": 4500
+          },
+          {
+            "envelope": {
+              "attack": 0.05,
+              "decay": 0.45,
+              "curve": "linear"
+            }
+          },
+          {
+            "gain": -14
+          }
+        ]
+      },
+      "tail": {
+        "at": 0.5,
+        "from": {
+          "modes": [
+            2300,
+            3400,
+            5100
+          ],
+          "decay": 0.35,
+          "tilt": 0.4
+        },
+        "then": [
+          {
+            "envelope": {
+              "attack": 0.002,
+              "decay": 0.3
+            }
+          },
+          {
+            "gain": -14
+          }
+        ]
+      }
+    }
+  }
+}

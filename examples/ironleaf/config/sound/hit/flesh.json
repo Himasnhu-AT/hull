@@ -1,0 +1,89 @@
+{
+  "kind": "sound",
+  "note": "A cut landing: a wet low thud and a short cloth-and-air rip.",
+  "bus": "sfx",
+  "level": -2,
+  "pitch": [
+    0.9,
+    1.1
+  ],
+  "limit": {
+    "minGap": 0.06,
+    "voices": 4
+  },
+  "spatial": {
+    "ref": 5,
+    "max": 50
+  },
+  "source": {
+    "type": "synth",
+    "length": 0.4,
+    "layers": {
+      "thud": {
+        "from": {
+          "osc": "sine",
+          "freq": [
+            110,
+            150
+          ],
+          "glideTo": 0.4,
+          "glideTime": 0.12
+        },
+        "then": [
+          {
+            "envelope": {
+              "attack": 0.002,
+              "decay": 0.16
+            }
+          },
+          {
+            "gain": -1
+          }
+        ]
+      },
+      "slice": {
+        "from": {
+          "noise": "pink"
+        },
+        "then": [
+          {
+            "filter": "bandpass",
+            "freq": 2200,
+            "q": 1.3,
+            "glideTo": 0.4,
+            "glideTime": 0.12
+          },
+          {
+            "envelope": {
+              "attack": 0.002,
+              "decay": 0.12
+            }
+          },
+          {
+            "gain": -3
+          }
+        ]
+      },
+      "wet": {
+        "from": {
+          "noise": "brown"
+        },
+        "then": [
+          {
+            "filter": "lowpass",
+            "freq": 700
+          },
+          {
+            "envelope": {
+              "attack": 0.004,
+              "decay": 0.2
+            }
+          },
+          {
+            "gain": 0
+          }
+        ]
+      }
+    }
+  }
+}

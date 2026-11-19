@@ -1,0 +1,89 @@
+{
+  "kind": "sound",
+  "note": "The blade slides home and the guard clicks on the mouth of the sheath.",
+  "bus": "sfx",
+  "level": -6,
+  "spatial": {
+    "ref": 4,
+    "max": 40
+  },
+  "source": {
+    "type": "synth",
+    "length": 0.7,
+    "layers": {
+      "slide": {
+        "from": {
+          "noise": "white"
+        },
+        "then": [
+          {
+            "filter": "bandpass",
+            "freq": 5200,
+            "q": 2,
+            "glideTo": 0.35,
+            "glideTime": 0.35
+          },
+          {
+            "envelope": {
+              "attack": 0.02,
+              "decay": 0.3,
+              "curve": "linear"
+            }
+          },
+          {
+            "gain": -8
+          }
+        ]
+      },
+      "click": {
+        "at": 0.4,
+        "from": {
+          "osc": "square",
+          "freq": [
+            1100,
+            1300
+          ]
+        },
+        "then": [
+          {
+            "filter": "bandpass",
+            "freq": 1800,
+            "q": 4
+          },
+          {
+            "envelope": {
+              "attack": 0.001,
+              "decay": 0.04
+            }
+          },
+          {
+            "gain": -8
+          }
+        ]
+      },
+      "thunk": {
+        "at": 0.4,
+        "from": {
+          "osc": "sine",
+          "freq": [
+            170,
+            200
+          ],
+          "glideTo": 0.6,
+          "glideTime": 0.06
+        },
+        "then": [
+          {
+            "envelope": {
+              "attack": 0.002,
+              "decay": 0.08
+            }
+          },
+          {
+            "gain": -9
+          }
+        ]
+      }
+    }
+  }
+}

@@ -1,0 +1,65 @@
+{
+  "kind": "vfx",
+  "note": "Rain hitting the ground near Aya: tiny pale droplets that jump and fall.",
+  "emit": {
+    "rate": 140,
+    "shape": {
+      "disc": 14
+    }
+  },
+  "particle": {
+    "life": [
+      0.15,
+      0.3
+    ],
+    "speed": [
+      0.8,
+      1.8
+    ],
+    "direction": {
+      "cone": [
+        0,
+        1,
+        0
+      ],
+      "angleDeg": 40
+    },
+    "gravity": -9,
+    "drag": 1,
+    "size": [
+      [
+        0,
+        0.025
+      ],
+      [
+        1,
+        0.01
+      ]
+    ],
+    "color": [
+      [
+        0,
+        "#d9e6ee"
+      ],
+      [
+        1,
+        "#b0c2cc"
+      ]
+    ],
+    "alpha": [
+      [
+        0,
+        0.6
+      ],
+      [
+        1,
+        0
+      ]
+    ],
+    "ground": "die",
+    "sprite": "soft"
+  },
+  "budget": {
+    "max": 500
+  }
+}

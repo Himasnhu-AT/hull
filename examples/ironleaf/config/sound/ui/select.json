@@ -1,0 +1,53 @@
+{
+  "kind": "sound",
+  "note": "A soft wooden tick for menu moves.",
+  "bus": "ui",
+  "level": -8,
+  "source": {
+    "type": "synth",
+    "length": 0.12,
+    "layers": {
+      "tick": {
+        "from": {
+          "osc": "triangle",
+          "freq": [
+            780,
+            840
+          ]
+        },
+        "then": [
+          {
+            "envelope": {
+              "attack": 0.001,
+              "decay": 0.06
+            }
+          },
+          {
+            "gain": -4
+          }
+        ]
+      },
+      "click": {
+        "from": {
+          "noise": "white"
+        },
+        "then": [
+          {
+            "filter": "bandpass",
+            "freq": 3000,
+            "q": 3
+          },
+          {
+            "envelope": {
+              "attack": 0.001,
+              "decay": 0.02
+            }
+          },
+          {
+            "gain": -14
+          }
+        ]
+      }
+    }
+  }
+}
