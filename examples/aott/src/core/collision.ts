@@ -1,6 +1,11 @@
-// CollisionWorld: analytic shapes (oriented boxes, vertical cylinders, capsules, spheres, a height-field ground)
-// in a uniform-grid broadphase. Static shapes for the world, dynamic shapes that ride on Object3Ds (titan limbs).
-// Used for tether-gear anchor raycasts, the player's swept sphere and titan steering.
+// CollisionWorld: the game's face of collision. Oriented boxes, spheres and capsules (static world pieces and the dynamic
+// ones that ride on Object3Ds, titan limbs) live in hull/physics and are answered by its raycast and overlap queries.
+// What hull/physics has no shape for stays here: vertical cylinders (trunks, posts) in a small grid of their own, and
+// the analytic height-field ground (AOTT's ground is a function, not a sampled grid). A collider is still the game's
+// object (material, hookable, userData, the world pose fields player.ts reads); each carries the physics Shape that
+// answers for it. Used for tether-gear anchor raycasts, the player's swept sphere and titan steering.
+import { physicsOf, usePhysics, type Hit, type Physics, type QueryFilter, type Shape } from 'hull/physics';
+import type { World } from 'hull';
 import * as THREE from 'hull/three';
 import type { SurfaceMaterial } from '../types';
 
@@ -9,8 +14,10 @@ const hypot = (a: number, b: number, c = 0): number => Math.sqrt(a * a + b * b +
 
 
 const CELL = 24;
-const _v = new THREE.Vector3(), _w = new THREE.Vector3(), _u = new THREE.Vector3();
-const _m3 = new THREE.Matrix3();
+// Layer bits: which kind of collider a physics shape is, so a query can leave out dynamic or non-hookable ones.
+const L_STATIC_HOOK = 1, L_STATIC = 2, L_DYN_HOOK = 4, L_DYN = 8;
+const M_ALL = 15, M_STATIC = L_STATIC_HOOK | L_STATIC, M_HOOK = L_STATIC_HOOK | L_DYN_HOOK, M_STATIC_HOOK = L_STATIC_HOOK;
+const _w = new THREE.Vector3();
 const _q = new THREE.Quaternion(), _s = new THREE.Vector3(), _p = new THREE.Vector3();
 let _ids = 1, _stamp = 1;
 
@@ -23,6 +30,10 @@ interface ColliderBase {
   userData: Record<string, any>;
   /** Dynamic colliders follow this object's matrixWorld (shape given in its local space). */
   object3D: THREE.Object3D | null;
+  /** The physics shape that answers for this collider (boxes, spheres, capsules); null for cylinders. */
+  _phys: Shape | null;
+  /** Set by the game while a collider is taken out of play (town houses); remove/_register keep the shape in step. */
+  removed?: boolean;
   _stamp: number;
   _cells: number[] | null;
   min: THREE.Vector3;
@@ -91,16 +102,26 @@ export type SphereContact = Contact;
 export type GroundFn = (x: number, z: number) => number;
 
 export class CollisionWorld {
-  grid = new Map<number, ShapeCollider[]>();
+  /** Vertical cylinders only (what hull/physics has no shape for), in a uniform grid. */
+  grid = new Map<number, CylinderCollider[]>();
+  /** Every static collider, of every type. */
   statics: ShapeCollider[] = [];
   dynamics: ShapeCollider[] = [];
   groundFn: GroundFn = () => 0;
+  readonly physics: Physics;
+  private _filter: QueryFilter = { mask: M_ALL };
+  private _skipped: Shape[] = [];
+  private _found: Shape[] = [];
+  private _dir = { x: 0, y: 0, z: 0 };
+
+  /** `world` is the Hull world; its physics is used (installed if the game has not). */
+  constructor(world: World) { this.physics = physicsFor(world); }
 
   // ---------- shape creation ----------
   _make(o: ColliderOptions): ColliderBase {
     return {
       id: _ids++, material: o.material || 'stone', hookable: o.hookable !== false,
-      dynamic: !!o.dynamic, userData: o.userData || {}, object3D: o.object3D || null, _stamp: 0, _cells: null,
+      dynamic: !!o.dynamic, userData: o.userData || {}, object3D: o.object3D || null, _phys: null, _stamp: 0, _cells: null,
       min: new THREE.Vector3(), max: new THREE.Vector3(),
     };
   }
@@ -138,10 +159,14 @@ export class CollisionWorld {
     return out.set(-hx, 2 * e, -hz).normalize();
   }
 
+  /** Puts a collider in play (also how a removed one comes back). */
   _register<C extends ShapeCollider>(c: C): C {
+    c.removed = false;
+    if (c.type !== 'cylinder') c._phys = this._makeShape(c);
     if (c.dynamic) { this._dynPose(c); this.dynamics.push(c); return c; }
     this._bounds(c);
     this.statics.push(c);
+    if (c.type !== 'cylinder') return c;
     const x0 = Math.floor(c.min.x / CELL), x1 = Math.floor(c.max.x / CELL);
     const z0 = Math.floor(c.min.z / CELL), z1 = Math.floor(c.max.z / CELL);
     const cells: number[] = c._cells = [];
@@ -154,9 +179,29 @@ export class CollisionWorld {
     return c;
   }
   remove(c: ShapeCollider): void {
+    if (c._phys) { this.physics.remove(c._phys); c._phys = null; }
     if (c.dynamic) { const i = this.dynamics.indexOf(c); if (i >= 0) this.dynamics.splice(i, 1); return; }
     const i = this.statics.indexOf(c); if (i >= 0) this.statics.splice(i, 1);
-    for (const key of c._cells || []) { const arr = this.grid.get(key); const j = arr ? arr.indexOf(c) : -1; if (arr && j >= 0) arr.splice(j, 1); }
+    if (c.type === 'cylinder') for (const key of c._cells || []) { const arr = this.grid.get(key); const j = arr ? arr.indexOf(c) : -1; if (arr && j >= 0) arr.splice(j, 1); }
+  }
+
+  /** The physics shape for a box, sphere or capsule. A dynamic one starts with no object to follow: updateDynamic places it. */
+  private _makeShape(c: BoxCollider | SphereCollider | CapsuleCollider): Shape {
+    const layer = c.dynamic ? (c.hookable ? L_DYN_HOOK : L_DYN) : (c.hookable ? L_STATIC_HOOK : L_STATIC);
+    const o = { layer, static: !c.dynamic, userData: c };
+    // An oriented box carries its rotation in the pose, so its centre is the pose's position (or the local centre
+    // for a dynamic one, whose pose comes from the object's matrix).
+    if (c.type === 'box') {
+      const size: [number, number, number] = [c.lh.x * 2, c.lh.y * 2, c.lh.z * 2];
+      if (c.dynamic) return this.physics.add({ type: 'box', size }, o);
+      return this.physics.add({ type: 'box', size }, { ...o, position: c.lc, quaternion: c.lq });
+    }
+    if (c.type === 'sphere') {
+      return c.dynamic ? this.physics.add({ type: 'sphere', radius: c.lr, center: [c.lc.x, c.lc.y, c.lc.z] }, o)
+        : this.physics.addSphere(c.lc, c.lr, o);
+    }
+    return c.dynamic ? this.physics.add({ type: 'capsule', radius: c.lr, a: [c.la.x, c.la.y, c.la.z], b: [c.lb.x, c.lb.y, c.lb.z] }, o)
+      : this.physics.addCapsule(c.la, c.lb, c.lr, o);
   }
 
   _boxAxes(c: BoxCollider): void {
@@ -178,6 +223,7 @@ export class CollisionWorld {
       c.min.copy(c.center).subScalar(c.r); c.max.copy(c.center).addScalar(c.r);
     }
   }
+  /** Reads a dynamic collider's pose from its object into the game-side fields and into its physics shape. */
   _dynPose(c: ShapeCollider): void {
     const o = c.object3D;
     if (!o) { this._bounds(c); return; }
@@ -187,10 +233,14 @@ export class CollisionWorld {
     if (c.type === 'box') {
       c.center.copy(c.lc).applyMatrix4(mw); c.q.copy(_q).multiply(c.lq); c.half.copy(c.lh).multiply(_s.set(Math.abs(_s.x), Math.abs(_s.y), Math.abs(_s.z)));
       this._boxAxes(c);
+      // the shape's pose is the object's matrix, then the local centre and rotation
+      if (c._phys) c._phys.setMatrix(_m4.compose(c.lc, c.lq, _one).premultiply(mw).elements);
     } else if (c.type === 'capsule') {
       c.a.copy(c.la).applyMatrix4(mw); c.b.copy(c.lb).applyMatrix4(mw); c.r = c.lr * sc;
+      if (c._phys) c._phys.setMatrix(mw.elements);
     } else if (c.type === 'sphere') {
       c.center.copy(c.lc).applyMatrix4(mw); c.r = c.lr * sc;
+      if (c._phys) c._phys.setMatrix(mw.elements);
     }
     this._bounds(c);
   }
@@ -207,8 +257,8 @@ export class CollisionWorld {
     return out.copy(localPoint).applyMatrix4(c.object3D.matrixWorld);
   }
 
-  // ---------- broadphase ----------
-  _gather(minx: number, minz: number, maxx: number, maxz: number, out: ShapeCollider[]): ShapeCollider[] {
+  // ---------- broadphase (cylinders) ----------
+  _gather(minx: number, minz: number, maxx: number, maxz: number, out: CylinderCollider[]): CylinderCollider[] {
     const st = ++_stamp;
     const x0 = Math.floor(minx / CELL), x1 = Math.floor(maxx / CELL), z0 = Math.floor(minz / CELL), z1 = Math.floor(maxz / CELL);
     for (let i = x0; i <= x1; i++) for (let k = z0; k <= z1; k++) {
@@ -223,27 +273,43 @@ export class CollisionWorld {
   raycast(origin: THREE.Vector3, dir: THREE.Vector3, maxDist: number, opts: RayOptions = {}): RayHit | null {
     const dynamic = opts.dynamic !== false, hookOnly = !!opts.hookableOnly, ignore = opts.ignore;
     let best = maxDist, hit = null as Collider | null;
-    const test = (c: ShapeCollider) => {
-      if (hookOnly && !c.hookable) return;
-      if (ignore && ignore.has(c)) return;
-      const t = rayShape(c, origin, dir, best, _n);
-      if (t !== null && t < best) { best = t; hit = c; _bestN.copy(_n); }
-    };
-    // walk the grid along the ray in CELL steps (coarse DDA)
-    const steps = Math.ceil(maxDist / (CELL * 0.5)) + 1;
-    const st = ++_stamp;
-    for (let s = 0; s <= steps; s++) {
-      const t = Math.min(maxDist, s * CELL * 0.5);
-      if (t > best + CELL) break;
-      const px = origin.x + dir.x * t, pz = origin.z + dir.z * t;
-      const ci = Math.floor(px / CELL), ck = Math.floor(pz / CELL);
-      for (let i = ci - 1; i <= ci + 1; i++) for (let k = ck - 1; k <= ck + 1; k++) {
-        const arr = this.grid.get(i * 73856093 ^ k * 19349663);
-        if (!arr) continue;
-        for (const c of arr) if (c._stamp !== st) { c._stamp = st; test(c); }
+    // cylinders: walk the grid along the ray in half-cell steps
+    if (this.grid.size > 0) {
+      const steps = Math.ceil(maxDist / (CELL * 0.5)) + 1;
+      const st = ++_stamp;
+      for (let s = 0; s <= steps; s++) {
+        const t = Math.min(maxDist, s * CELL * 0.5);
+        if (t > best + CELL) break;
+        const px = origin.x + dir.x * t, pz = origin.z + dir.z * t;
+        const ci = Math.floor(px / CELL), ck = Math.floor(pz / CELL);
+        for (let i = ci - 1; i <= ci + 1; i++) for (let k = ck - 1; k <= ck + 1; k++) {
+          const arr = this.grid.get(i * 73856093 ^ k * 19349663);
+          if (!arr) continue;
+          for (const c of arr) {
+            if (c._stamp === st) continue;
+            c._stamp = st;
+            if (hookOnly && !c.hookable) continue;
+            if (ignore && ignore.has(c)) continue;
+            const t2 = rayCylinder(c, origin, dir, best, _n);
+            if (t2 !== null && t2 < best) { best = t2; hit = c; _bestN.copy(_n); }
+          }
+        }
       }
     }
-    if (dynamic) for (const c of this.dynamics) test(c);
+    // everything else: hull/physics. A box the ray starts inside is not a hit (the soldier stands in houses' bounds
+    // while walking through doors); ignored colliders are switched off for the cast and back on after.
+    const f = this._filter;
+    f.mask = dynamic ? (hookOnly ? M_HOOK : M_ALL) : (hookOnly ? M_STATIC_HOOK : M_STATIC);
+    const skipped = this._skipped; skipped.length = 0;
+    for (let n = 0; n < 64; n++) {
+      const h: Hit | null = this.physics.raycast(origin, dir, best, f);
+      if (!h || !h.shape) break;
+      const c = h.shape.userData as ShapeCollider;
+      if ((ignore && ignore.has(c)) || (h.inside && c.type === 'box')) { h.shape.enabled = false; skipped.push(h.shape); continue; }
+      best = h.distance; hit = c; _bestN.set(h.nx, h.ny, h.nz);
+      break;
+    }
+    for (let i = 0; i < skipped.length; i++) skipped[i]!.enabled = true;
     // ground (ray-march + bisection)
     const gt = this._rayGround(origin, dir, best);
     if (gt !== null && gt < best) {
@@ -281,29 +347,39 @@ export class CollisionWorld {
   // ---------- overlap / contacts ----------
   querySphere(center: THREE.Vector3, radius: number, opts: { dynamic?: boolean } = {}): ShapeCollider[] {
     const out: ShapeCollider[] = [];
-    const cand = this._gather(center.x - radius, center.z - radius, center.x + radius, center.z + radius, []);
-    if (opts.dynamic) cand.push(...this.dynamics);
-    for (const c of cand) {
-      if (c.max.y < center.y - radius || c.min.y > center.y + radius) continue;
-      if (closestOnShape(c, center, _w) <= radius * radius) out.push(c);
+    if (this.grid.size > 0) {
+      const cand = this._gather(center.x - radius, center.z - radius, center.x + radius, center.z + radius, []);
+      for (const c of cand) {
+        if (c.max.y < center.y - radius || c.min.y > center.y + radius) continue;
+        if (closestOnCylinder(c, center, _w) <= radius * radius) out.push(c);
+      }
     }
+    this._filter.mask = opts.dynamic ? M_ALL : M_STATIC;
+    const found = this.physics.overlapSphere(center, radius, this._filter, this._found);
+    for (let i = 0; i < found.length; i++) out.push(found[i]!.userData as ShapeCollider);
     return out;
   }
 
   /** Contacts that push a sphere out of every overlapping shape (incl. ground). */
   collideSphere(center: THREE.Vector3, radius: number, opts: { dynamic?: boolean } = {}): Contact[] {
     const out: Contact[] = [];
-    _cand.length = 0;
-    const cand = this._gather(center.x - radius, center.z - radius, center.x + radius, center.z + radius, _cand);
-    if (opts.dynamic !== false) for (const c of this.dynamics) cand.push(c);
-    for (const c of cand) {
-      if (c.max.y < center.y - radius || c.min.y > center.y + radius) continue;
-      if (c.max.x < center.x - radius || c.min.x > center.x + radius) continue;
-      if (c.max.z < center.z - radius || c.min.z > center.z + radius) continue;
-      const contact = sphereContact(c, center, radius);
-      if (contact) out.push(contact);
+    if (this.grid.size > 0) {
+      _cand.length = 0;
+      const cand = this._gather(center.x - radius, center.z - radius, center.x + radius, center.z + radius, _cand);
+      for (const c of cand) {
+        if (c.max.y < center.y - radius || c.min.y > center.y + radius) continue;
+        const contact = cylinderContact(c, center, radius);
+        if (contact) out.push(contact);
+      }
+      cand.length = 0;
     }
-    cand.length = 0;
+    this._filter.mask = opts.dynamic !== false ? M_ALL : M_STATIC;
+    const found = this.physics.overlapSphere(center, radius, this._filter, this._found);
+    for (let i = 0; i < found.length; i++) {
+      const s = found[i]!;
+      const d = this.physics.distanceTo(s, center, this._dir);
+      out.push({ normal: new THREE.Vector3(this._dir.x, this._dir.y, this._dir.z), depth: radius - d, collider: s.userData as ShapeCollider });
+    }
     const gh = this.groundFn(center.x, center.z);
     if (center.y - radius < gh + 0.001) {
       const n = this.groundNormal(center.x, center.z);
@@ -314,199 +390,71 @@ export class CollisionWorld {
   }
 }
 
+/** The world's physics, installed on first use. */
+export function physicsFor(world: World): Physics {
+  try { return physicsOf(world); } catch { return usePhysics(world, { cell: CELL }); }
+}
+
 export const GROUND: GroundCollider = { id: 0, type: 'ground', material: 'ground', hookable: true, dynamic: false, userData: {} };
 const _n = new THREE.Vector3(), _bestN = new THREE.Vector3();
-const _cand: ShapeCollider[] = [];
+const _cand: CylinderCollider[] = [];
+const _m4 = new THREE.Matrix4(), _one = new THREE.Vector3(1, 1, 1);
 
-// ---------- narrow phase helpers ----------
-function rayAABBLocal(o: THREE.Vector3, d: THREE.Vector3, h: THREE.Vector3, maxT: number, nOut: THREE.Vector3): number | null {
-  // slab test in box-local coordinates, returns entry t (or null), normal in local space
-  let tmin = -Infinity, tmax = Infinity, axis = -1, sign = 0;
-  for (let i = 0; i < 3; i++) {
-    const oi = i === 0 ? o.x : i === 1 ? o.y : o.z, di = i === 0 ? d.x : i === 1 ? d.y : d.z, hi = i === 0 ? h.x : i === 1 ? h.y : h.z;
-    if (Math.abs(di) < 1e-9) { if (oi < -hi || oi > hi) return null; continue; }
-    let t1 = (-hi - oi) / di, t2 = (hi - oi) / di, s = -1;
-    if (t1 > t2) { const tt = t1; t1 = t2; t2 = tt; s = 1; }
-    if (t1 > tmin) { tmin = t1; axis = i; sign = s; }
-    if (t2 < tmax) tmax = t2;
-    if (tmin > tmax || tmax < 0) return null;
-  }
-  if (tmin < 0 || tmin > maxT || axis < 0) return null;
-  nOut.set(0, 0, 0); if (axis === 0) nOut.x = sign; else if (axis === 1) nOut.y = sign; else nOut.z = sign;
-  return tmin;
-}
-const _lo = new THREE.Vector3(), _ld = new THREE.Vector3();
-function rayShape(c: ShapeCollider, o: THREE.Vector3, d: THREE.Vector3, maxT: number, nOut: THREE.Vector3): number | null {
-  if (c.type === 'box') {
-    _v.subVectors(o, c.center);
-    _lo.set(_v.dot(c.axes[0]), _v.dot(c.axes[1]), _v.dot(c.axes[2]));
-    _ld.set(d.dot(c.axes[0]), d.dot(c.axes[1]), d.dot(c.axes[2]));
-    const t = rayAABBLocal(_lo, _ld, c.half, maxT, nOut);
-    if (t === null) return null;
-    const lx = nOut.x, ly = nOut.y, lz = nOut.z;
-    nOut.set(0, 0, 0).addScaledVector(c.axes[0], lx).addScaledVector(c.axes[1], ly).addScaledVector(c.axes[2], lz);
-    return t;
-  }
-  if (c.type === 'sphere') return raySphere(o, d, c.center, c.r, maxT, nOut);
-  if (c.type === 'cylinder') {
-    // infinite vertical cylinder in xz, clipped to y range, plus caps
-    const ox = o.x - c.x, oz = o.z - c.z;
-    const a = d.x * d.x + d.z * d.z;
-    let best: number | null = null;
-    if (a > 1e-9) {
-      const b = ox * d.x + oz * d.z, cc = ox * ox + oz * oz - c.r * c.r;
-      const disc = b * b - a * cc;
-      if (disc >= 0) {
-        const t = (-b - Math.sqrt(disc)) / a;
-        if (t >= 0 && t <= maxT) {
-          const y = o.y + d.y * t;
-          if (y >= c.y0 && y <= c.y1) { best = t; nOut.set(ox + d.x * t, 0, oz + d.z * t).normalize(); }
-        }
-      }
-    }
-    // top cap
-    if (Math.abs(d.y) > 1e-9) {
-      for (const yc of [c.y1, c.y0]) {
-        const t = (yc - o.y) / d.y;
-        if (t >= 0 && t <= maxT && (best === null || t < best)) {
-          const px = ox + d.x * t, pz = oz + d.z * t;
-          if (px * px + pz * pz <= c.r * c.r && ((yc === c.y1 && d.y < 0) || (yc === c.y0 && d.y > 0))) { best = t; nOut.set(0, yc === c.y1 ? 1 : -1, 0); }
-        }
-      }
-    }
-    return best;
-  }
-  if (c.type === 'capsule') return rayCapsule(o, d, c.a, c.b, c.r, maxT, nOut);
-  return null;
-}
-function raySphere(o: THREE.Vector3, d: THREE.Vector3, ctr: THREE.Vector3, r: number, maxT: number, nOut: THREE.Vector3): number | null {
-  _w.subVectors(o, ctr);
-  const b = _w.dot(d), cc = _w.lengthSq() - r * r;
-  if (cc > 0 && b > 0) return null;
-  const disc = b * b - cc;
-  if (disc < 0) return null;
-  let t = -b - Math.sqrt(disc);
-  if (t < 0) t = 0;
-  if (t > maxT) return null;
-  nOut.copy(o).addScaledVector(d, t).sub(ctr).normalize();
-  return t;
-}
-const _w2 = new THREE.Vector3(), _ba = new THREE.Vector3(), _oa = new THREE.Vector3(), _tmp = new THREE.Vector3();
-function rayCapsule(o: THREE.Vector3, d: THREE.Vector3, a: THREE.Vector3, b: THREE.Vector3, r: number, maxT: number, nOut: THREE.Vector3): number | null {
-  _ba.subVectors(b, a); _oa.subVectors(o, a);
-  const baba = _ba.dot(_ba), bard = _ba.dot(d), baoa = _ba.dot(_oa), rdoa = d.dot(_oa), oaoa = _oa.dot(_oa);
-  const A = baba - bard * bard, B = baba * rdoa - baoa * bard, C = baba * oaoa - baoa * baoa - r * r * baba;
+// ---------- cylinders (no hull/physics shape for them) ----------
+function rayCylinder(c: CylinderCollider, o: THREE.Vector3, d: THREE.Vector3, maxT: number, nOut: THREE.Vector3): number | null {
+  // infinite vertical cylinder in xz, clipped to y range, plus caps
+  const ox = o.x - c.x, oz = o.z - c.z;
+  const a = d.x * d.x + d.z * d.z;
   let best: number | null = null;
-  if (A > 1e-9) {
-    const h = B * B - A * C;
-    if (h >= 0) {
-      const t = (-B - Math.sqrt(h)) / A;
-      const y = baoa + t * bard;
-      if (t >= 0 && t <= maxT && y > 0 && y < baba) {
-        best = t;
-        _tmp.copy(o).addScaledVector(d, t);
-        const s = y / baba;
-        nOut.copy(_tmp).sub(_v.copy(a).addScaledVector(_ba, s)).normalize();
+  if (a > 1e-9) {
+    const b = ox * d.x + oz * d.z, cc = ox * ox + oz * oz - c.r * c.r;
+    const disc = b * b - a * cc;
+    if (disc >= 0) {
+      const t = (-b - Math.sqrt(disc)) / a;
+      if (t >= 0 && t <= maxT) {
+        const y = o.y + d.y * t;
+        if (y >= c.y0 && y <= c.y1) { best = t; nOut.set(ox + d.x * t, 0, oz + d.z * t).normalize(); }
       }
     }
   }
-  if (best === null) {
-    const t1 = raySphere(o, d, a, r, maxT, _u);
-    const t2 = raySphere(o, d, b, r, maxT, _w2);
-    if (t1 !== null && (t2 === null || t1 <= t2)) { best = t1; nOut.copy(_u); }
-    else if (t2 !== null) { best = t2; nOut.copy(_w2); }
+  if (Math.abs(d.y) > 1e-9) {
+    for (const yc of [c.y1, c.y0]) {
+      const t = (yc - o.y) / d.y;
+      if (t >= 0 && t <= maxT && (best === null || t < best)) {
+        const px = ox + d.x * t, pz = oz + d.z * t;
+        if (px * px + pz * pz <= c.r * c.r && ((yc === c.y1 && d.y < 0) || (yc === c.y0 && d.y > 0))) { best = t; nOut.set(0, yc === c.y1 ? 1 : -1, 0); }
+      }
+    }
   }
   return best;
 }
 
-/** Writes the closest point on shape to p into out; returns squared distance (0 if inside). */
-function closestOnShape(c: ShapeCollider, p: THREE.Vector3, out: THREE.Vector3): number {
-  if (c.type === 'box') {
-    _v.subVectors(p, c.center);
-    out.copy(c.center);
-    for (let i = 0; i < 3; i++) {
-      const h = i === 0 ? c.half.x : i === 1 ? c.half.y : c.half.z;
-      const dd = THREE.MathUtils.clamp(_v.dot(c.axes[i]), -h, h);
-      out.addScaledVector(c.axes[i], dd);
-    }
-    return out.distanceToSquared(p);
-  }
-  if (c.type === 'sphere') {
-    _v.subVectors(p, c.center); const l = _v.length();
-    if (l <= c.r) { out.copy(p); return 0; }
-    out.copy(c.center).addScaledVector(_v, c.r / l); return out.distanceToSquared(p);
-  }
-  if (c.type === 'cylinder') {
-    const y = THREE.MathUtils.clamp(p.y, c.y0, c.y1);
-    const dx = p.x - c.x, dz = p.z - c.z, l = hypot(dx, dz);
-    const k = l > c.r ? c.r / l : 1;
-    out.set(c.x + dx * k, y, c.z + dz * k); return out.distanceToSquared(p);
-  }
-  if (c.type === 'capsule') {
-    _ba.subVectors(c.b, c.a);
-    const t = THREE.MathUtils.clamp(_v.subVectors(p, c.a).dot(_ba) / Math.max(_ba.lengthSq(), 1e-9), 0, 1);
-    _u.copy(c.a).addScaledVector(_ba, t);
-    _v.subVectors(p, _u); const l = _v.length();
-    if (l <= c.r) { out.copy(p); return 0; }
-    out.copy(_u).addScaledVector(_v, c.r / l); return out.distanceToSquared(p);
-  }
-  return Infinity;
+/** Writes the closest point on the cylinder to p into out; returns squared distance (0 if inside). */
+function closestOnCylinder(c: CylinderCollider, p: THREE.Vector3, out: THREE.Vector3): number {
+  const y = THREE.MathUtils.clamp(p.y, c.y0, c.y1);
+  const dx = p.x - c.x, dz = p.z - c.z, l = hypot(dx, dz);
+  const k = l > c.r ? c.r / l : 1;
+  out.set(c.x + dx * k, y, c.z + dz * k); return out.distanceToSquared(p);
 }
 
-/** Sphere-vs-shape contact: { normal (out of the shape), depth, collider } or null. */
-function sphereContact(c: ShapeCollider, p: THREE.Vector3, r: number): Contact | null {
-  if (c.type === 'box') {
-    _v.subVectors(p, c.center);
-    const lx = _v.dot(c.axes[0]), ly = _v.dot(c.axes[1]), lz = _v.dot(c.axes[2]);
-    const cx = THREE.MathUtils.clamp(lx, -c.half.x, c.half.x), cy = THREE.MathUtils.clamp(ly, -c.half.y, c.half.y), cz = THREE.MathUtils.clamp(lz, -c.half.z, c.half.z);
-    const dx = lx - cx, dy = ly - cy, dz = lz - cz;
-    const d2 = dx * dx + dy * dy + dz * dz;
-    if (d2 > r * r) return null;
-    const n = new THREE.Vector3();
-    if (d2 > 1e-12) {
-      const d = Math.sqrt(d2);
-      n.copy(c.axes[0]).multiplyScalar(dx / d).addScaledVector(c.axes[1], dy / d).addScaledVector(c.axes[2], dz / d);
-      return { normal: n, depth: r - d, collider: c };
-    }
-    // centre inside: push out through the nearest face
-    const px = c.half.x - Math.abs(lx), py = c.half.y - Math.abs(ly), pz = c.half.z - Math.abs(lz);
-    if (px <= py && px <= pz) { n.copy(c.axes[0]).multiplyScalar(Math.sign(lx) || 1); return { normal: n, depth: px + r, collider: c }; }
-    if (py <= pz) { n.copy(c.axes[1]).multiplyScalar(Math.sign(ly) || 1); return { normal: n, depth: py + r, collider: c }; }
-    n.copy(c.axes[2]).multiplyScalar(Math.sign(lz) || 1); return { normal: n, depth: pz + r, collider: c };
+/** Sphere-vs-cylinder contact: { normal (out of the shape), depth, collider } or null. */
+function cylinderContact(c: CylinderCollider, p: THREE.Vector3, r: number): Contact | null {
+  const dx = p.x - c.x, dz = p.z - c.z, l = hypot(dx, dz);
+  if (l > c.r + r) return null;
+  if (p.y > c.y1 + r || p.y < c.y0 - r) return null;
+  if (p.y > c.y1) { // above the top cap
+    if (l <= c.r) return { normal: new THREE.Vector3(0, 1, 0), depth: c.y1 + r - p.y, collider: c };
+    const ex = c.x + dx / l * c.r, ez = c.z + dz / l * c.r;
+    const n = new THREE.Vector3(p.x - ex, p.y - c.y1, p.z - ez); const d = n.length();
+    if (d > r || d < 1e-9) return null; n.multiplyScalar(1 / d); return { normal: n, depth: r - d, collider: c };
   }
-  if (c.type === 'cylinder') {
-    const dx = p.x - c.x, dz = p.z - c.z, l = hypot(dx, dz);
-    if (l > c.r + r) return null;
-    if (p.y > c.y1 + r || p.y < c.y0 - r) return null;
-    if (p.y > c.y1) { // above the top cap
-      if (l <= c.r) return { normal: new THREE.Vector3(0, 1, 0), depth: c.y1 + r - p.y, collider: c };
-      const ex = c.x + dx / l * c.r, ez = c.z + dz / l * c.r;
-      const n = new THREE.Vector3(p.x - ex, p.y - c.y1, p.z - ez); const d = n.length();
-      if (d > r || d < 1e-9) return null; n.multiplyScalar(1 / d); return { normal: n, depth: r - d, collider: c };
-    }
-    if (p.y < c.y0) {
-      if (l <= c.r) return { normal: new THREE.Vector3(0, -1, 0), depth: p.y - (c.y0 - r), collider: c };
-      return null;
-    }
-    const side = c.r + r - l;
-    const top = c.y1 + r - p.y;
-    if (top < side && l < c.r) return { normal: new THREE.Vector3(0, 1, 0), depth: top, collider: c };
-    const n = l > 1e-9 ? new THREE.Vector3(dx / l, 0, dz / l) : new THREE.Vector3(1, 0, 0);
-    return { normal: n, depth: side, collider: c };
+  if (p.y < c.y0) {
+    if (l <= c.r) return { normal: new THREE.Vector3(0, -1, 0), depth: p.y - (c.y0 - r), collider: c };
+    return null;
   }
-  if (c.type === 'sphere' || c.type === 'capsule') {
-    let cx: number, cy: number, cz: number;
-    if (c.type === 'sphere') { cx = c.center.x; cy = c.center.y; cz = c.center.z; }
-    else {
-      _ba.subVectors(c.b, c.a);
-      const t = THREE.MathUtils.clamp(_v.subVectors(p, c.a).dot(_ba) / Math.max(_ba.lengthSq(), 1e-9), 0, 1);
-      cx = c.a.x + _ba.x * t; cy = c.a.y + _ba.y * t; cz = c.a.z + _ba.z * t;
-    }
-    const n = new THREE.Vector3(p.x - cx, p.y - cy, p.z - cz);
-    const d = n.length();
-    if (d > c.r + r) return null;
-    if (d < 1e-9) n.set(0, 1, 0); else n.multiplyScalar(1 / d);
-    return { normal: n, depth: c.r + r - d, collider: c };
-  }
-  return null;
+  const side = c.r + r - l;
+  const top = c.y1 + r - p.y;
+  if (top < side && l < c.r) return { normal: new THREE.Vector3(0, 1, 0), depth: top, collider: c };
+  const n = l > 1e-9 ? new THREE.Vector3(dx / l, 0, dz / l) : new THREE.Vector3(1, 0, 0);
+  return { normal: n, depth: side, collider: c };
 }
