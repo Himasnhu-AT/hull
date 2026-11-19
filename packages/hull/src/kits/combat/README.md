@@ -32,6 +32,10 @@ follow camera. Its default config uses the materials and sounds of the third-per
   (weight, from the 'brain' random stream), takes a place in `attackTokens(world)` (`brainTuning.maxAttackers`, default 2),
   shows the tell for the step's `telegraph`, then plays the move; steps may feint or be unblockable. Phases come from
   the enemy's `phases` health fractions.
+- **Ranged and movement (M10)**: a move's `shoot` releases a `Projectile` (`projectile.ts`) that flies straight and lands through the
+  target's `receive`; a deflect turns it back at the shooter, a dodge lets it fly on; `hub.shot` lets the game hang a mesh on it. A pattern
+  step may be a pure `travel` (dash in, back-step, retreat), patterns read the target's stance (`when.stance`, `answers`), wait their turn at
+  `spacing.wait`, and an `EnemyBrain` can be `dormant` until `wake()`. The brain also drives the animator's `speed`.
 - **Player**: `FighterInput` (actions `move`, `attack`, `heavy` (hold for charged), `guard`, `dodge`, `stance1-3`,
   `stanceNext`, `lock`, `lockNext`), `LockOn` (`pickLockTarget`, camera lock and the shake wiring), `FollowCamera`
   gained `lockTarget` and `shake(amount, seconds)`. `Standoff`: hidden wait, a twitch, a window to release.

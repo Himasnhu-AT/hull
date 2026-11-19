@@ -9,11 +9,21 @@ const range = Type.Unsafe<[number, number]>({
 
 const step = Type.Object(
   {
-    move: Type.String({ minLength: 1, ...ui({ help: 'A move of the enemy\'s move-set.' }) }),
+    move: Type.Optional(Type.String({ minLength: 1, ...ui({ help: 'A move of the enemy\'s move-set. Leave it out for a step that only travels (a retreat).' }) })),
     telegraph: Type.Number({ minimum: 0, default: 0.5, ...ui({ widget: 'dial', unit: 's', step: 0.05, help: 'Seconds the enemy shows the tell before the move starts: the time you get to read it.' }) }),
     gap: Type.Optional(Type.Number({ minimum: 0, default: 0, ...ui({ unit: 's', step: 0.05, help: 'Pause after the move, before the next step.' }) })),
     feint: Type.Optional(Type.Number({ exclusiveMinimum: 0, ...ui({ unit: 's', step: 0.05, help: 'Cut the move short this many seconds in: a feint that baits a block or a dodge.' }) })),
     unblockable: Type.Optional(Type.Boolean({ ...ui({ help: 'Overrides the move: a red-flash attack.' }) })),
+    travel: Type.Optional(
+      Type.Object(
+        {
+          by: Type.Optional(Type.Number({ ...ui({ unit: 'm', step: 0.1, help: 'Metres to close (positive) or open (negative) on the target, after the tell and before the move.' }) })),
+          to: Type.Optional(Type.Number({ minimum: 0, ...ui({ unit: 'm', step: 0.1, help: 'Distance to the target to stop at. Wins over "by".' }) })),
+          speed: Type.Optional(Type.Number({ exclusiveMinimum: 0, default: 5, ...ui({ unit: 'm/s', step: 0.1 }) })),
+        },
+        { additionalProperties: false, ...ui({ help: 'A dash in, a back-step or a retreat: the enemy runs (the animator\'s speed parameter is set) before the move starts.' }) },
+      ),
+    ),
   },
   { additionalProperties: false },
 );
@@ -23,6 +33,8 @@ const when = Type.Object(
     distance: Type.Optional(range),
     health: Type.Optional(Type.Unsafe<[number, number]>({ ...range, ...ui({ help: 'Fraction of full health, 0 to 1.' }) })),
     phase: Type.Optional(Type.Unsafe<[number, number]>({ ...range, ...ui({ help: 'Phases are counted by \'phases\' below, from 0.' }) })),
+    stance: Type.Optional(Type.Array(Type.String(), ui({ help: 'Only while the target fights in one of these stances.' }))),
+    clear: Type.Optional(Type.Number({ minimum: 0, ...ui({ unit: 'm', help: 'Only while no friend of this enemy is within this many metres of the target (an archer waits for a clear line).' }) })),
   },
   { additionalProperties: false },
 );
@@ -35,6 +47,7 @@ const pattern = Type.Object(
     recover: Type.Optional(Type.Number({ minimum: 0, default: 0.8, ...ui({ unit: 's', step: 0.05, help: 'Time before the enemy thinks again.' }) })),
     token: Type.Optional(Type.Boolean({ default: true, ...ui({ help: 'false: may start without a place in the attack queue (a ranged shot).' }) })),
     when: Type.Optional(when),
+    answers: Type.Optional(Type.Record(Type.String(), Type.Number({ minimum: 0 }), ui({ help: 'Weight multiplier by the target\'s stance: { "stone": 3 } makes this pattern three times likelier against a target in Stone.' }))),
   },
   { additionalProperties: false },
 );
@@ -64,6 +77,7 @@ export const enemySchema = Type.Object(
         {
           walk: Type.Number({ minimum: 0, default: 2.4, ...ui({ unit: 'm/s', step: 0.1 }) }),
           circle: Type.Optional(Type.Number({ minimum: 0, default: 1.4, ...ui({ unit: 'm/s', step: 0.1 }) })),
+          run: Type.Optional(Type.Number({ minimum: 0, ...ui({ unit: 'm/s', step: 0.1, help: 'Speed when the target is far (more than 1.5 m outside the band).' }) })),
           turn: Type.Optional(Type.Number({ minimum: 0, default: 6, ...ui({ unit: 'rad/s', step: 0.5 }) })),
         },
         { additionalProperties: false },
@@ -71,7 +85,11 @@ export const enemySchema = Type.Object(
     ),
     spacing: Type.Optional(
       Type.Object(
-        { min: Type.Number({ minimum: 0, ...ui({ unit: 'm' }) }), max: Type.Number({ minimum: 0, ...ui({ unit: 'm' }) }) },
+        {
+          min: Type.Number({ minimum: 0, ...ui({ unit: 'm' }) }),
+          max: Type.Number({ minimum: 0, ...ui({ unit: 'm' }) }),
+          wait: Type.Optional(Type.Unsafe<[number, number]>({ ...range, ...ui({ help: 'The band to keep while another enemy holds the attack places: circling at a distance instead of crowding in.' }) })),
+        },
         { additionalProperties: false, ...ui({ help: 'The band of distance the enemy likes to keep from its target: closer and it backs off, farther and it approaches, inside it circles.' }) },
       ),
     ),

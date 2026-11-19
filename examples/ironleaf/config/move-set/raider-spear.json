@@ -1,0 +1,73 @@
+{
+ "kind": "move-set",
+ "note": "Ashpike (spearman). The weapon line is the whole shaft and head so a thrust at 3 m lands.",
+ "weapon": {
+  "socket": "handR",
+  "base": [
+   0,
+   -0.3,
+   0.02
+  ],
+  "tip": [
+   0,
+   -1.4,
+   0.02
+  ],
+  "radius": 0.06
+ },
+ "moves": {
+  "spear-thrust": {
+   "clip": "spear-thrust",
+   "length": 0.7,
+   "damage": 16,
+   "posture": 14,
+   "reach": 3.1,
+   "windows": {
+    "trace": [
+     0.33,
+     0.45
+    ]
+   },
+   "lunge": {
+    "distance": 0.8,
+    "from": 0.28,
+    "to": 0.42
+   },
+   "sound": "sound/swing/light"
+  },
+  "spear-jab": {
+   "clip": "spear-thrust",
+   "length": 0.5,
+   "damage": 14,
+   "posture": 12,
+   "reach": 3.1,
+   "windows": {
+    "trace": [
+     0.33,
+     0.45
+    ]
+   },
+   "lunge": {
+    "distance": 0.8,
+    "from": 0.28,
+    "to": 0.42
+   },
+   "sound": "sound/swing/light"
+  },
+  "spear-sweep": {
+   "clip": "spear-sweep",
+   "length": 0.85,
+   "damage": 14,
+   "posture": 18,
+   "reach": 2.7,
+   "windows": {
+    "trace": [
+     0.43,
+     0.58
+    ]
+   },
+   "sound": "sound/swing/heavy",
+   "note": "A low sweep: jump or dodge."
+  }
+ }
+}

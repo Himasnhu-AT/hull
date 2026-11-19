@@ -1,0 +1,67 @@
+{
+ "kind": "vfx",
+ "note": "The glint on a blade or spear head that tells you a blow is coming: one hard white-gold star.",
+ "emit": {
+  "count": [
+   6,
+   6
+  ],
+  "shape": "point"
+ },
+ "particle": {
+  "life": [
+   0.18,
+   0.3
+  ],
+  "speed": [
+   0.4,
+   1.6
+  ],
+  "direction": {
+   "outward": true
+  },
+  "gravity": 0,
+  "drag": 3,
+  "size": [
+   [
+    0,
+    0.16
+   ],
+   [
+    0.4,
+    0.1
+   ],
+   [
+    1,
+    0
+   ]
+  ],
+  "color": [
+   [
+    0,
+    "#ffffff"
+   ],
+   [
+    1,
+    "#ffd98a"
+   ]
+  ],
+  "alpha": [
+   [
+    0,
+    1
+   ],
+   [
+    1,
+    0
+   ]
+  ],
+  "glow": 3,
+  "stretch": 0,
+  "sprite": "spark",
+  "blend": "additive"
+ },
+ "budget": {
+  "max": 200
+ }
+}

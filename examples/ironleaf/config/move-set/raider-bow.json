@@ -1,0 +1,41 @@
+{
+ "kind": "move-set",
+ "note": "Ashkite (archer): no blade, the shot leaves the arrow socket at 0.6 s (the brain tells for 0.1 s before).",
+ "weapon": {
+  "socket": "arrow",
+  "base": [
+   0,
+   0,
+   0
+  ],
+  "tip": [
+   0,
+   -0.5,
+   0
+  ],
+  "radius": 0.03
+ },
+ "moves": {
+  "bow-shoot": {
+   "clip": "bow-shoot",
+   "length": 1,
+   "damage": 12,
+   "posture": 8,
+   "reach": 18,
+   "shoot": {
+    "at": 0.6,
+    "speed": 26,
+    "socket": "arrow",
+    "range": 45,
+    "radius": 0.35
+   },
+   "windows": {
+    "telegraph": [
+     0,
+     0.6
+    ]
+   },
+   "sound": "sound/swing/light"
+  }
+ }
+}

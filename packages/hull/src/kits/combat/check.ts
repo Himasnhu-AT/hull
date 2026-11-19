@@ -13,7 +13,7 @@ export function checkMoveSet(def: MoveSet, at = 'move-set'): string[] {
     const here = at + '#/moves/' + name;
     (m.cancelsInto ?? []).forEach((n, i) => { if (!def.moves[n]) out.push(here + '/cancelsInto/' + i + ': there is no move "' + n + '" (moves: ' + names.join(', ') + ')'); });
     if (m.cancelsInto?.length && !m.windows?.['cancel']) out.push(here + '/windows: cancelsInto needs a cancel window to say when');
-    if (m.damage > 0 && !m.windows?.['trace'] && m.windowsFrom !== 'clip') out.push(here + '/windows: a move with damage needs a trace window, or nothing can ever hit');
+    if (m.damage > 0 && !m.windows?.['trace'] && m.windowsFrom !== 'clip' && !m.shoot) out.push(here + '/windows: a move with damage needs a trace window, or nothing can ever hit');
     if (m.stance && def.stances && !def.stances.includes(m.stance)) out.push(here + '/stance: "' + m.stance + '" is not one of the stances (' + def.stances.join(', ') + ')');
     for (const [wn, w] of Object.entries(m.windows ?? {})) {
       if (!KNOWN.has(wn)) continue;
@@ -32,6 +32,7 @@ export function checkMoveSet(def: MoveSet, at = 'move-set'): string[] {
 export function checkEnemy(def: Enemy, moves: MoveSet, at = 'enemy'): string[] {
   const out: string[] = [];
   def.patterns.forEach((p, i) => p.steps.forEach((s, j) => {
+    if (s.move === undefined) { if (!s.travel) out.push(at + '#/patterns/' + i + '/steps/' + j + ': a step with no move needs a travel'); return; }
     if (!moves.moves[s.move]) out.push(at + '#/patterns/' + i + '/steps/' + j + '/move: there is no move "' + s.move + '" in the move-set (moves: ' + Object.keys(moves.moves).join(', ') + ')');
     if (s.feint !== undefined && moves.moves[s.move] && s.feint >= moves.moves[s.move]!.length) out.push(at + '#/patterns/' + i + '/steps/' + j + '/feint: the feint comes after the move has ended');
   }));

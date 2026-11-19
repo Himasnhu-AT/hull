@@ -1,0 +1,67 @@
+{
+ "kind": "vfx",
+ "note": "The red flash of an attack that cannot be blocked: a pulse of red light around the body.",
+ "emit": {
+  "count": [
+   22,
+   22
+  ],
+  "shape": {"sphere": 0.5}
+ },
+ "particle": {
+  "life": [
+   0.3,
+   0.45
+  ],
+  "speed": [
+   0.2,
+   1.2
+  ],
+  "direction": {
+   "outward": true
+  },
+  "gravity": 0,
+  "drag": 2,
+  "size": [
+   [
+    0,
+    0.5
+   ],
+   [
+    0.5,
+    0.7
+   ],
+   [
+    1,
+    0
+   ]
+  ],
+  "color": [
+   [
+    0,
+    "#ff2a1a"
+   ],
+   [
+    1,
+    "#7a0a05"
+   ]
+  ],
+  "alpha": [
+   [
+    0,
+    0.9
+   ],
+   [
+    1,
+    0
+   ]
+  ],
+  "glow": 3.5,
+  "stretch": 0,
+  "sprite": "spark",
+  "blend": "additive"
+ },
+ "budget": {
+  "max": 200
+ }
+}

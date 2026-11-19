@@ -50,6 +50,18 @@ const move = Type.Object(
       ),
     ),
     sound: Type.Optional(Type.String({ ...ref('sound', { help: 'Played when the move starts.' }) })),
+    shoot: Type.Optional(
+      Type.Object(
+        {
+          at: Type.Number({ minimum: 0, ...ui({ unit: 's', step: 0.01, help: 'Seconds into the move when the shot leaves.' }) }),
+          speed: Type.Number({ exclusiveMinimum: 0, default: 24, ...ui({ unit: 'm/s', step: 0.5 }) }),
+          socket: Type.Optional(Type.String({ ...ui({ help: 'Character socket the shot leaves from. Default: the weapon socket.' }) })),
+          range: Type.Optional(Type.Number({ exclusiveMinimum: 0, default: 40, ...ui({ unit: 'm' }) })),
+          radius: Type.Optional(Type.Number({ exclusiveMinimum: 0, default: 0.35, ...ui({ unit: 'm', step: 0.05, help: 'How close to the body line the shot must pass to hit.' }) })),
+        },
+        { additionalProperties: false, ...ui({ help: 'A ranged move: instead of a blade trace, a projectile leaves at this time, flies straight at where the target was and hits like a blow (damage, posture, unblockable). A deflect or perfect deflect sends it back at the shooter.' }) },
+      ),
+    ),
   },
   { additionalProperties: false },
 );

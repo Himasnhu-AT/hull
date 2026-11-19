@@ -1,0 +1,193 @@
+{
+ "kind": "enemy",
+ "note": "Kagari, the duelist (boss): three phases, reads the stance you fight in. A duel starts with a standoff.",
+ "moveSet": "move-set/raider-duel",
+ "character": "character/kagari",
+ "health": 400,
+ "posture": {
+  "max": 200,
+  "recover": 8,
+  "delay": 1.5,
+  "broken": 2.6
+ },
+ "finisherDamage": 1,
+ "speed": {
+  "walk": 1.8,
+  "run": 5.4,
+  "circle": 1.5,
+  "turn": 8
+ },
+ "spacing": {
+  "min": 1.7,
+  "max": 2.3,
+  "wait": [
+   3,
+   4.5
+  ]
+ },
+ "think": 0.3,
+ "phases": [
+  0.66,
+  0.33
+ ],
+ "patterns": [
+  {
+   "name": "cut",
+   "weight": 4,
+   "steps": [
+    {
+     "move": "duel-cut",
+     "telegraph": 0.1
+    }
+   ],
+   "recover": 0.7,
+   "when": {
+    "distance": [
+     0,
+     2.4
+    ]
+   }
+  },
+  {
+   "name": "cut-thrust",
+   "weight": 3,
+   "steps": [
+    {
+     "move": "duel-cut-b",
+     "telegraph": 0.1,
+     "gap": 0
+    },
+    {
+     "move": "duel-thrust",
+     "telegraph": 0.1
+    }
+   ],
+   "recover": 0.9,
+   "answers": {
+    "wind": 2.5
+   },
+   "when": {
+    "distance": [
+     0,
+     2.6
+    ]
+   }
+  },
+  {
+   "name": "sweep",
+   "weight": 3,
+   "steps": [
+    {
+     "move": "duel-sweep",
+     "telegraph": 0.13
+    }
+   ],
+   "recover": 0.9,
+   "answers": {
+    "stone": 2.5
+   },
+   "when": {
+    "distance": [
+     0,
+     2.4
+    ],
+    "phase": [
+     1,
+     2
+    ]
+   }
+  },
+  {
+   "name": "rush",
+   "weight": 2,
+   "steps": [
+    {
+     "travel": {
+      "to": 1.8,
+      "speed": 9
+     },
+     "telegraph": 0.5
+    },
+    {
+     "move": "duel-cut-b",
+     "telegraph": 0
+    },
+    {
+     "move": "duel-thrust-r",
+     "telegraph": 0.3,
+     "unblockable": true
+    }
+   ],
+   "recover": 1.1,
+   "answers": {
+    "water": 3
+   },
+   "when": {
+    "distance": [
+     5,
+     16
+    ],
+    "phase": [
+     1,
+     2
+    ]
+   }
+  },
+  {
+   "name": "triple",
+   "weight": 2,
+   "steps": [
+    {
+     "move": "duel-cut-b",
+     "telegraph": 0.1,
+     "gap": 0.15
+    },
+    {
+     "move": "duel-thrust-b",
+     "telegraph": 0.1,
+     "gap": 0.15
+    },
+    {
+     "move": "duel-sweep-t",
+     "telegraph": 0
+    }
+   ],
+   "recover": 1.2,
+   "when": {
+    "distance": [
+     0,
+     2.4
+    ],
+    "phase": [
+     2,
+     2
+    ],
+    "health": [
+     0,
+     0.33
+    ]
+   }
+  },
+  {
+   "name": "reset",
+   "weight": 1,
+   "steps": [
+    {
+     "travel": {
+      "to": 4,
+      "speed": 6
+     },
+     "telegraph": 0.2
+    }
+   ],
+   "recover": 0.6,
+   "token": false,
+   "when": {
+    "distance": [
+     0,
+     3.2
+    ]
+   }
+  }
+ ]
+}

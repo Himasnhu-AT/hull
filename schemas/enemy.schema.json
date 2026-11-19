@@ -128,6 +128,15 @@
             "step": 0.1
           }
         },
+        "run": {
+          "type": "number",
+          "minimum": 0,
+          "x-ui": {
+            "unit": "m/s",
+            "step": 0.1,
+            "help": "Speed when the target is far (more than 1.5 m outside the band)."
+          }
+        },
         "turn": {
           "type": "number",
           "minimum": 0,
@@ -159,6 +168,23 @@
           "minimum": 0,
           "x-ui": {
             "unit": "m"
+          }
+        },
+        "wait": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "minItems": 2,
+          "maxItems": 2,
+          "items": false,
+          "x-ui": {
+            "help": "The band to keep while another enemy holds the attack places: circling at a distance instead of crowding in."
           }
         }
       },
@@ -217,7 +243,6 @@
             "items": {
               "type": "object",
               "required": [
-                "move",
                 "telegraph"
               ],
               "properties": {
@@ -225,7 +250,7 @@
                   "type": "string",
                   "minLength": 1,
                   "x-ui": {
-                    "help": "A move of the enemy's move-set."
+                    "help": "A move of the enemy's move-set. Leave it out for a step that only travels (a retreat)."
                   }
                 },
                 "telegraph": {
@@ -262,6 +287,41 @@
                   "type": "boolean",
                   "x-ui": {
                     "help": "Overrides the move: a red-flash attack."
+                  }
+                },
+                "travel": {
+                  "type": "object",
+                  "properties": {
+                    "by": {
+                      "type": "number",
+                      "x-ui": {
+                        "unit": "m",
+                        "step": 0.1,
+                        "help": "Metres to close (positive) or open (negative) on the target, after the tell and before the move."
+                      }
+                    },
+                    "to": {
+                      "type": "number",
+                      "minimum": 0,
+                      "x-ui": {
+                        "unit": "m",
+                        "step": 0.1,
+                        "help": "Distance to the target to stop at. Wins over \"by\"."
+                      }
+                    },
+                    "speed": {
+                      "type": "number",
+                      "exclusiveMinimum": 0,
+                      "default": 5,
+                      "x-ui": {
+                        "unit": "m/s",
+                        "step": 0.1
+                      }
+                    }
+                  },
+                  "additionalProperties": false,
+                  "x-ui": {
+                    "help": "A dash in, a back-step or a retreat: the enemy runs (the animator's speed parameter is set) before the move starts."
                   }
                 }
               },
@@ -336,9 +396,38 @@
                 "x-ui": {
                   "help": "Phases are counted by 'phases' below, from 0."
                 }
+              },
+              "stance": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "x-ui": {
+                  "help": "Only while the target fights in one of these stances."
+                }
+              },
+              "clear": {
+                "type": "number",
+                "minimum": 0,
+                "x-ui": {
+                  "unit": "m",
+                  "help": "Only while no friend of this enemy is within this many metres of the target (an archer waits for a clear line)."
+                }
               }
             },
             "additionalProperties": false
+          },
+          "answers": {
+            "type": "object",
+            "patternProperties": {
+              "^.*$": {
+                "type": "number",
+                "minimum": 0
+              }
+            },
+            "x-ui": {
+              "help": "Weight multiplier by the target's stance: { \"stone\": 3 } makes this pattern three times likelier against a target in Stone."
+            }
           }
         },
         "additionalProperties": false

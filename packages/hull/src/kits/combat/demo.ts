@@ -33,7 +33,9 @@ export class DuelDemo extends Behaviour {
     const m = foe.move;
     const dt = this.world.dt;
     if (m && best < (m.reach ?? 2) + 1) {
-      const until = foe.untilWindow('trace');
+      // A shot lands when it has flown the distance: the release time plus the flight.
+      const sh = m.shoot;
+      const until = sh ? (foe.moveT < sh.at + best / (sh.speed ?? 24) ? sh.at + best / (sh.speed ?? 24) - foe.moveT : -1) : foe.untilWindow('trace');
       const unb = foe.unblockableOverride ?? m.unblockable;
       if (unb && this.dodgeUnblockable) {
         if (until >= 0 && until <= 0.12) c.dodge(c.node.position.x - foe.node.position.x, c.node.position.z - foe.node.position.z);
