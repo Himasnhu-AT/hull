@@ -35,6 +35,14 @@ describe('MCP over streamable HTTP', () => {
     expect(call.structuredContent).toMatchObject({ ok: true, problems: [] });
   }, 120_000);
 
+  it('names the author from the x-hull-author header, over the client name', async () => {
+    const init = await post({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'probe', version: '1' } } }, { 'x-hull-author': 'Fake agent' });
+    const session = init.headers.get('mcp-session-id')!;
+    await init.json();
+    const r = ((await (await post({ jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'review.note', arguments: { key: 'tunables:player', note: 'who am I' } } }, { 'mcp-session-id': session })).json()) as any).result;
+    expect(JSON.stringify(r.structuredContent)).toContain('ai:Fake agent');
+  }, 60_000);
+
   it('refuses a web page from another origin and a GET', async () => {
     expect((await post({ jsonrpc: '2.0', id: 1, method: 'ping' }, { origin: 'https://evil.example' })).status).toBe(403);
     expect((await fetch(http.url)).status).toBe(405);
