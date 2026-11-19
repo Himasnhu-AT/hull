@@ -128,7 +128,7 @@ export function characterOf(d: Dims, data: RigData = rigDataOf(d)): Character {
     body: { type: 'generated', recipe: 'custom', bones, parts },
     materials: { skin: 'material/titan-skin', behemoth: 'material/titan-behemoth' },
     hits,
-    animSet: 'anim-set/humanoid',
+    animSet: 'anim-set/titan',
     animGraph: 'anim-graph/titan',
   };
 }

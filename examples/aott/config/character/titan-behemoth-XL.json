@@ -697,6 +697,6 @@
       ]
     }
   ],
-  "animSet": "anim-set/humanoid",
+  "animSet": "anim-set/titan",
   "animGraph": "anim-graph/titan"
 }
