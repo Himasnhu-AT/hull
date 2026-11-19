@@ -1,0 +1,125 @@
+{
+  "kind": "ui-screen",
+  "note": "The pause menu. Slots come from the SaveSlots kit; edit the layout freely, keep the action names.",
+  "pausesGame": true,
+  "root": {
+    "panel": {
+      "align": "center",
+      "menu": true,
+      "label": "Paused",
+      "gap": 10,
+      "width": 420
+    },
+    "on": {
+      "back": "pause.resume"
+    },
+    "children": [
+      {
+        "title": {
+          "text": "Paused"
+        }
+      },
+      {
+        "button": {
+          "text": "Resume",
+          "primary": true
+        },
+        "on": {
+          "press": "pause.resume"
+        }
+      },
+      {
+        "row": {
+          "gap": 10
+        },
+        "children": [
+          {
+            "text": {
+              "bind": "slot.1",
+              "width": 170
+            }
+          },
+          {
+            "button": {
+              "text": "Save"
+            },
+            "on": {
+              "press": "pause.save.1"
+            }
+          },
+          {
+            "button": {
+              "text": "Load"
+            },
+            "on": {
+              "press": "pause.load.1"
+            }
+          }
+        ]
+      },
+      {
+        "row": {
+          "gap": 10
+        },
+        "children": [
+          {
+            "text": {
+              "bind": "slot.2",
+              "width": 170
+            }
+          },
+          {
+            "button": {
+              "text": "Save"
+            },
+            "on": {
+              "press": "pause.save.2"
+            }
+          },
+          {
+            "button": {
+              "text": "Load"
+            },
+            "on": {
+              "press": "pause.load.2"
+            }
+          }
+        ]
+      },
+      {
+        "row": {
+          "gap": 10
+        },
+        "children": [
+          {
+            "text": {
+              "bind": "slot.3",
+              "width": 170
+            }
+          },
+          {
+            "button": {
+              "text": "Save"
+            },
+            "on": {
+              "press": "pause.save.3"
+            }
+          },
+          {
+            "button": {
+              "text": "Load"
+            },
+            "on": {
+              "press": "pause.load.3"
+            }
+          }
+        ]
+      },
+      {
+        "text": {
+          "bind": "message"
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,61 @@
+{
+  "kind": "sound",
+  "note": "Small waves on the beach, far off.",
+  "bus": "sfx",
+  "level": -18,
+  "loop": true,
+  "limit": {
+    "voices": 1,
+    "over": "skip"
+  },
+  "source": {
+    "type": "synth",
+    "length": 8,
+    "layers": {
+      "wave": {
+        "from": {
+          "noise": "brown"
+        },
+        "then": [
+          {
+            "filter": "lowpass",
+            "freq": 500,
+            "glideTo": 2.4,
+            "glideTime": 3.5
+          },
+          {
+            "envelope": {
+              "attack": 3.5,
+              "decay": 4,
+              "curve": "linear"
+            }
+          },
+          {
+            "gain": 4
+          }
+        ]
+      },
+      "foam": {
+        "from": {
+          "noise": "white"
+        },
+        "then": [
+          {
+            "filter": "highpass",
+            "freq": 3000
+          },
+          {
+            "envelope": {
+              "attack": 4,
+              "decay": 3.5,
+              "curve": "linear"
+            }
+          },
+          {
+            "gain": -20
+          }
+        ]
+      }
+    }
+  }
+}

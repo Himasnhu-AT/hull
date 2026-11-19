@@ -1,0 +1,341 @@
+{
+  "kind": "character",
+  "note": "Ashpike, the spear raider. 1.82 m. Rust tunic, grey leg wraps, a bandaged face, a headband, a two metre spear with a leaf blade.",
+  "body": {
+    "type": "generated",
+    "recipe": "humanoid",
+    "proportions": {
+      "height": 1.82,
+      "shoulders": 0.44954,
+      "legs": 0.52,
+      "head": 0.23478000000000002,
+      "build": 0.98
+    },
+    "parts": [
+      {
+        "bone": "chest",
+        "shape": "box",
+        "center": [
+          0,
+          0.16142763,
+          0
+        ],
+        "size": [
+          0.32,
+          0.32285526,
+          0.19
+        ],
+        "color": "#7a3b24"
+      },
+      {
+        "bone": "spine",
+        "shape": "box",
+        "center": [
+          0,
+          0.11689587,
+          0
+        ],
+        "size": [
+          0.28,
+          0.25379174,
+          0.17
+        ],
+        "color": "#3a322c"
+      },
+      {
+        "bone": "shinL",
+        "shape": "limb",
+        "from": [
+          0,
+          0,
+          0
+        ],
+        "to": [
+          0,
+          -0.43225,
+          0
+        ],
+        "radius": 0.05,
+        "radiusEnd": 0.04,
+        "color": "#b5ad9f"
+      },
+      {
+        "bone": "shinR",
+        "shape": "limb",
+        "from": [
+          0,
+          0,
+          0
+        ],
+        "to": [
+          0,
+          -0.43225,
+          0
+        ],
+        "radius": 0.05,
+        "radiusEnd": 0.04,
+        "color": "#b5ad9f"
+      },
+      {
+        "bone": "head",
+        "shape": "sphere",
+        "center": [
+          0,
+          0.13147680000000003,
+          0.015
+        ],
+        "size": [
+          0.1925196,
+          0.21130200000000002,
+          0.2206932
+        ],
+        "color": "#b5ad9f"
+      },
+      {
+        "bone": "head",
+        "shape": "box",
+        "center": [
+          0,
+          0.22304100000000002,
+          0
+        ],
+        "size": [
+          0.2,
+          0.03,
+          0.2
+        ],
+        "color": "#c2371f"
+      },
+      {
+        "bone": "head",
+        "shape": "box",
+        "center": [
+          -0.032,
+          0.12912900000000002,
+          -0.10330320000000001
+        ],
+        "size": [
+          0.02,
+          0.013,
+          0.012
+        ],
+        "color": "#1a1412"
+      },
+      {
+        "bone": "head",
+        "shape": "box",
+        "center": [
+          0.032,
+          0.12912900000000002,
+          -0.10330320000000001
+        ],
+        "size": [
+          0.02,
+          0.013,
+          0.012
+        ],
+        "color": "#1a1412"
+      },
+      {
+        "bone": "armL",
+        "shape": "limb",
+        "from": [
+          0,
+          0,
+          0
+        ],
+        "to": [
+          0,
+          -0.30976400000000004,
+          0
+        ],
+        "radius": 0.047,
+        "radiusEnd": 0.04,
+        "color": "#7a3b24"
+      },
+      {
+        "bone": "armR",
+        "shape": "limb",
+        "from": [
+          0,
+          0,
+          0
+        ],
+        "to": [
+          0,
+          -0.30976400000000004,
+          0
+        ],
+        "radius": 0.047,
+        "radiusEnd": 0.04,
+        "color": "#7a3b24"
+      },
+      {
+        "bone": "handR",
+        "shape": "box",
+        "center": [
+          0,
+          -0.06,
+          -0.1
+        ],
+        "size": [
+          0.03,
+          0.03,
+          2
+        ],
+        "color": "#5a3d27"
+      },
+      {
+        "bone": "handR",
+        "shape": "box",
+        "center": [
+          0,
+          -0.06,
+          -1.22
+        ],
+        "size": [
+          0.025,
+          0.045,
+          0.32
+        ],
+        "color": "#aeb5bd"
+      },
+      {
+        "bone": "handR",
+        "shape": "box",
+        "center": [
+          0,
+          -0.06,
+          -1
+        ],
+        "size": [
+          0.05,
+          0.05,
+          0.04
+        ],
+        "color": "#c2371f"
+      }
+    ]
+  },
+  "materials": {
+    "skin": "material/skin",
+    "cloth": "material/cloth-ash",
+    "metal": "material/steel",
+    "boots": "material/boots"
+  },
+  "sockets": {
+    "handR": {
+      "joint": "handR",
+      "offset": [
+        0,
+        -0.06,
+        0
+      ]
+    },
+    "bladeBase": {
+      "joint": "handR",
+      "offset": [
+        0,
+        -0.06,
+        -1
+      ]
+    },
+    "bladeTip": {
+      "joint": "handR",
+      "offset": [
+        0,
+        -0.06,
+        -1.4
+      ]
+    }
+  },
+  "collider": {
+    "shape": "capsule",
+    "radius": 0.32,
+    "height": 1.82
+  },
+  "hits": [
+    {
+      "bone": "head",
+      "shape": "sphere",
+      "part": "head",
+      "group": "body",
+      "c": [
+        0,
+        0.11739000000000001,
+        0
+      ],
+      "r": 0.11739000000000001
+    },
+    {
+      "bone": "chest",
+      "shape": "capsule",
+      "part": "torso",
+      "group": "body",
+      "a": [
+        0,
+        0.04,
+        0
+      ],
+      "b": [
+        0,
+        0.28285526,
+        0
+      ],
+      "r": 0.1568
+    },
+    {
+      "bone": "spine",
+      "shape": "capsule",
+      "part": "torso",
+      "group": "body",
+      "a": [
+        0,
+        0,
+        0
+      ],
+      "b": [
+        0,
+        0.23379174,
+        0
+      ],
+      "r": 0.147
+    },
+    {
+      "bone": "legL",
+      "shape": "capsule",
+      "part": "leg",
+      "group": "body",
+      "a": [
+        0,
+        0,
+        0
+      ],
+      "b": [
+        0,
+        -0.8645,
+        0
+      ],
+      "r": 0.0784
+    },
+    {
+      "bone": "legR",
+      "shape": "capsule",
+      "part": "leg",
+      "group": "body",
+      "a": [
+        0,
+        0,
+        0
+      ],
+      "b": [
+        0,
+        -0.8645,
+        0
+      ],
+      "r": 0.0784
+    }
+  ],
+  "animSet": "anim-set/raider",
+  "animGraph": "anim-graph/ashpike"
+}

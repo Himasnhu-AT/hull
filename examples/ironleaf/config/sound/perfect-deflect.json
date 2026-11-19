@@ -1,0 +1,93 @@
+{
+  "kind": "sound",
+  "note": "The perfect deflect: a sharp ring that the whole island hears, a deep boom under it, and a second ring.",
+  "bus": "sfx",
+  "level": 0,
+  "limit": {
+    "minGap": 0.2,
+    "voices": 2
+  },
+  "spatial": {
+    "ref": 10,
+    "max": 90
+  },
+  "source": {
+    "type": "synth",
+    "length": 1.8,
+    "layers": {
+      "ring": {
+        "from": {
+          "modes": [
+            1960,
+            2940,
+            4410,
+            5880,
+            8820
+          ],
+          "decay": 1.3,
+          "tilt": 0.3
+        }
+      },
+      "ring2": {
+        "at": 0.07,
+        "from": {
+          "modes": [
+            1200,
+            1800,
+            2700
+          ],
+          "decay": 0.8,
+          "tilt": 0.5
+        },
+        "then": [
+          {
+            "gain": -8
+          }
+        ]
+      },
+      "boom": {
+        "from": {
+          "osc": "sine",
+          "freq": [
+            75,
+            85
+          ],
+          "glideTo": 0.45,
+          "glideTime": 0.4
+        },
+        "then": [
+          {
+            "envelope": {
+              "attack": 0.002,
+              "decay": 0.55
+            }
+          },
+          {
+            "gain": 2
+          }
+        ]
+      },
+      "crack": {
+        "from": {
+          "noise": "white"
+        },
+        "then": [
+          {
+            "filter": "highpass",
+            "freq": 2500
+          },
+          {
+            "envelope": {
+              "attack": 0.001,
+              "decay": 0.08
+            }
+          },
+          {
+            "gain": -2
+          }
+        ]
+      }
+    },
+    "reverb": 0.3
+  }
+}

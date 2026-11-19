@@ -1,0 +1,68 @@
+{
+  "kind": "vfx",
+  "note": "Dust and grass bits kicked up by a dodge roll.",
+  "emit": {
+    "count": [
+      12,
+      16
+    ],
+    "shape": {
+      "disc": 0.3
+    }
+  },
+  "particle": {
+    "life": [
+      0.4,
+      0.9
+    ],
+    "speed": [
+      1.2,
+      3.6
+    ],
+    "direction": {
+      "cone": [
+        0,
+        1,
+        0
+      ],
+      "angleDeg": 75
+    },
+    "gravity": -1.2,
+    "drag": 2.6,
+    "size": [
+      [
+        0,
+        0.18
+      ],
+      [
+        1,
+        0.55
+      ]
+    ],
+    "color": [
+      [
+        0,
+        "#cdbf9f"
+      ],
+      [
+        1,
+        "#a39a82"
+      ]
+    ],
+    "alpha": [
+      [
+        0,
+        0.55
+      ],
+      [
+        1,
+        0
+      ]
+    ],
+    "sprite": "smoke",
+    "blend": "alpha"
+  },
+  "budget": {
+    "max": 300
+  }
+}
