@@ -1,12 +1,12 @@
 // The project server: one HTTP port that serves the game's dev page (Vite) and, on the same port, the JSON-RPC
 // WebSocket of dev/protocol.ts. The app's front end and every running game connect here; nothing outside this process
 // touches the project's files (CLAUDE.md: the Studio never touches the disk).
-import { mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, statSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmdirSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import type { IncomingMessage } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { join, relative, resolve } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 import type { ConfigSource, Problem } from 'hull';
-import type { Author, Change, GameControl, LibraryItem, MethodName, Methods, ProjectInfo, PushName, Pushes, TunableWire, WriteResult } from 'hull/dev/protocol';
+import type { AssetResult, Author, Change, GameControl, LibraryItem, MethodName, Methods, ProjectInfo, PushName, Pushes, TunableWire, WriteResult } from 'hull/dev/protocol';
 import { createServer, type ViteDevServer } from 'vite';
 import { WebSocket, WebSocketServer } from 'ws';
 import { loadManifest, readConfigFiles, readManifest, writeIds } from '../tools/config.ts';
@@ -22,6 +22,8 @@ import { findTunables, rewriteTunable, type FoundTunable } from './tsTunables.ts
 import { kitImports, kitTunables } from './kitTunables.ts';
 import { engineAliases, hullResolve, virtualModule } from './vitePlugins.ts';
 import { buildBenchAudio, buildBenchModels } from './bench.ts';
+import { findRefs, FOLDER_RE, ID_RE, planDelete, planDuplicate, planMoves, planNew, STARTERS, usesOf, type Plan, type Sources } from './assets.ts';
+import { thumbOf } from './thumbs.ts';
 
 export { createProject, listTemplates } from './templates.ts';
 export { listCommunity, openCommunity } from './community.ts';
@@ -484,6 +486,87 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
     return r;
   };
 
+  // ---- Assets: the Content Browser's operations (assets.ts plans them; this applies, validates and records) -----------------
+  const assetSources = (): Sources => ({
+    configs: configFiles().map((f) => ({ path: f.path, text: f.text })),
+    code: walk(join(root, 'src'), (n) => /\.tsx?$/.test(n)).map((abs) => ({ path: norm(relative(root, abs)), text: readFileSync(abs, 'utf8') })),
+  });
+  const assetIds = (): string[] => [...texts.keys()].filter((p) => p.startsWith('config/') && p.endsWith('.json')).map(idOf);
+  const pruneEmpty = (abs: string): void => {
+    try { for (const n of readdirSync(abs)) pruneEmpty(join(abs, n)); } catch { return; }
+    try { rmdirSync(abs); } catch { /* not empty, or gone */ }
+  };
+
+  /** Applies a plan: validates the result (an operation may not add a problem), writes, records, tells the game and the Studio. */
+  const applyPlan = async (plan: Plan, by: Author, opts: { dropFolders?: string[]; moved?: { from: string; to: string }[] } = {}): Promise<AssetResult> => {
+    if (!plan.ok) return { ok: false, problems: plan.problems, refs: plan.refs };
+    const before = new Map<string, string>(configFiles().map((f) => [f.path, f.text]));
+    const after = new Map(before);
+    for (const r of plan.removes) after.delete(r);
+    for (const w of plan.writes) if (w.path.startsWith('config/') || w.path === MANIFEST) after.set(w.path, w.text);
+    const known = new Set(problems.map((p) => p.rule + '|' + p.message));
+    const added = createRegistry().load([...after].map(([path, text]) => ({ path, text }))).problems.filter((p) => !known.has(p.rule + '|' + p.message));
+    if (added.length) return { ok: false, problems: added };
+
+    await hist.settle(by);
+    for (const d of plan.mkdirs) mkdirSync(join(root, d), { recursive: true });
+    for (const w of plan.writes) { mkdirSync(dirname(join(root, w.path)), { recursive: true }); writeWhole(join(root, w.path), w.text); }
+    for (const r of plan.removes) { try { unlinkSync(join(root, r)); } catch { /* already gone */ } texts.delete(r); }
+    for (const d of opts.dropFolders ?? []) pruneEmpty(join(root, 'config', d));
+    hist.touch(by);
+    invalidateBoot();
+    revalidate();
+    const movedTo = new Set(plan.created);
+    for (const id of plan.gone) if (!movedTo.has(id)) push('config.removed', { id, path: `config/${id}.json` });
+    for (const w of plan.writes) if (w.path.startsWith('config/')) push('config.changed', { id: idOf(w.path), path: w.path, text: w.text });
+    const now = new Date().toISOString();
+    const log = (c: Omit<Change, 'at' | 'by'>): void => { appendChange(root, { at: now, by, ...c }); push('journal.added', { at: now, by, ...c }); };
+    if (opts.moved) for (const m of opts.moved) log({ target: m.to, path: '(id)', from: m.from, to: m.to });
+    else {
+      for (const id of plan.created) log({ target: id, path: '(asset)', from: null, to: 'created' });
+      for (const id of plan.gone) log({ target: id, path: '(asset)', from: 'existed', to: null });
+    }
+    return { ok: true, problems: [], refs: plan.refs, created: plan.created, gone: plan.gone };
+  };
+
+  const assetMoves = (entries: string[], to: (e: string) => string): { from: string; to: string }[] | string => {
+    const all = assetIds();
+    const out: { from: string; to: string }[] = [];
+    for (const e of entries) {
+      if (all.includes(e)) out.push({ from: e, to: to(e) });
+      else {
+        const inside = all.filter((a) => a.startsWith(e + '/'));
+        if (inside.length === 0) return e + ' is neither an asset nor a folder with assets';
+        for (const a of inside) out.push({ from: a, to: to(e) + a.slice(e.length) });
+      }
+    }
+    return out;
+  };
+  const isFolder = (e: string): boolean => !assetIds().includes(e);
+  const badAsset = (file: string, message: string): AssetResult => ({ ok: false, problems: [{ file, rule: 'asset', message }] });
+
+  const contentList: Handler<'content.list'> = () => {
+    const folders: string[] = [];
+    const dirs = (rel: string): void => {
+      let names: string[];
+      try { names = readdirSync(join(root, 'config', rel)).sort(); } catch { return; }
+      for (const n of names) {
+        const sub = rel ? rel + '/' + n : n;
+        if (statSync(join(root, 'config', sub)).isDirectory()) { folders.push(sub); dirs(sub); }
+      }
+    };
+    dirs('');
+    const code = walk(join(root, 'src'), (n) => /\.tsx?$/.test(n)).map((abs) => ({ path: norm(relative(root, abs)), bytes: statSync(abs).size }));
+    const parsed = new Map<string, unknown>();
+    const valueOf = (id: string): unknown => {
+      if (!parsed.has(id)) { try { parsed.set(id, JSON.parse(texts.get(`config/${id}.json`) ?? 'null')); } catch { parsed.set(id, null); } }
+      return parsed.get(id);
+    };
+    const thumbs: Record<string, ReturnType<typeof thumbOf> & object> = {};
+    for (const id of assetIds()) { const t = thumbOf(id, valueOf(id), valueOf); if (t) thumbs[id] = t; }
+    return { folders, code, creatable: Object.keys(STARTERS), thumbs };
+  };
+
   // ---- Methods ----------------------------------------------------------------------------------------------------
   const methods: { [M in MethodName]: Handler<M> } = {
     'project.info': (): ProjectInfo => {
@@ -528,6 +611,42 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
       return { id: p.id, path, text, value, schema: schema ? JSON.parse(JSON.stringify(schema)) : null, problems: problems.filter((x) => x.file === path) };
     },
     'config.set': setConfig,
+    'content.list': contentList,
+    'asset.refs': (p) => {
+      if (!ID_RE.test(p.id)) return { ok: false, problems: [{ file: p.id, rule: 'asset', message: p.id + ' is not an asset id' }], referencedBy: [], uses: [] };
+      const src = assetSources();
+      const refs = findRefs(src, new Set([p.id])).get(p.id) ?? [];
+      return { ok: true, problems: [], referencedBy: refs.filter((r) => r.id !== p.id), uses: usesOf(src, p.id) };
+    },
+    'asset.new': (p) => (STARTERS[p.kind] ? applyPlan(planNew(assetSources(), p.kind, p.id), p.author ?? 'you') : badAsset('config/' + p.kind, p.kind + ' cannot be created from nothing (have: ' + Object.keys(STARTERS).join(', ') + ')')),
+    'asset.duplicate': (p) => applyPlan(planDuplicate(assetSources(), p.id, p.to), p.author ?? 'you'),
+    'asset.rename': (p) => {
+      const folder = isFolder(p.id);
+      if (folder && !FOLDER_RE.test(p.to)) return badAsset(p.id, p.to + ' is not a folder path like sound/combat');
+      const moves = assetMoves([p.id], () => p.to);
+      if (typeof moves === 'string') return badAsset(p.id, moves);
+      return applyPlan(planMoves(assetSources(), moves), p.author ?? 'you', { moved: moves, dropFolders: folder ? [p.id] : [] });
+    },
+    'asset.move': (p) => {
+      if (!FOLDER_RE.test(p.folder)) return badAsset(p.folder, p.folder + ' is not a folder path like sound/combat');
+      const moves = assetMoves(p.ids, (e) => p.folder + '/' + e.split('/').at(-1)!);
+      if (typeof moves === 'string') return badAsset(p.ids[0] ?? '', moves);
+      return applyPlan(planMoves(assetSources(), moves), p.author ?? 'you', { moved: moves.filter((m) => m.from !== m.to), dropFolders: p.ids.filter(isFolder) });
+    },
+    'asset.delete': (p) => {
+      const targets: string[] = [];
+      for (const e of p.ids) {
+        const all = assetIds();
+        if (all.includes(e)) targets.push(e);
+        else targets.push(...all.filter((a) => a.startsWith(e + '/')));
+      }
+      return applyPlan(planDelete(assetSources(), targets), p.author ?? 'you', { dropFolders: p.ids.filter(isFolder) });
+    },
+    'folder.new': (p) => {
+      if (!FOLDER_RE.test(p.path) || !kinds[p.path.split('/')[0]!]) return badAsset('config/' + p.path, p.path + ' is not a folder path inside a config kind, like sound/combat');
+      mkdirSync(join(root, 'config', p.path), { recursive: true });
+      return { ok: true, problems: [] };
+    },
     'tunables.list': tunableWires,
     'tunables.set': setTunableValue,
     'journal.list': (p) => readJournal(root, p.limit),
@@ -610,6 +729,8 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
     const rel = norm(relative(root, abs));
     if (rel === MANIFEST || (rel.startsWith('config/') && rel.endsWith('.json'))) {
       if (event === 'unlink') {
+        // A removal this server made itself was announced and recorded by applyPlan.
+        if (!texts.has(rel)) return;
         texts.delete(rel); invalidateBoot(); revalidate();
         push('config.removed', { id: idOf(rel), path: rel });
         hist.touch('disk');

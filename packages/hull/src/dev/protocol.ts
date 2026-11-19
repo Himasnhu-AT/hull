@@ -184,6 +184,33 @@ export interface GameReport {
   checksum?: string;
 }
 
+/** A preview the Content Browser draws: numbers and colours only, read from the asset's text. */
+export type ContentThumb =
+  | { type: 'material'; color: string; roughness: number; metalness: number }
+  | { type: 'look'; sky: [string, string, string]; fog: string }
+  | { type: 'vfx'; colors: string[] }
+  | { type: 'sound'; bars: number[] | null; length: number }
+  | { type: 'character'; colors: string[] };
+
+/** A place that names an asset: another config (by pointer) or a string literal in src/. */
+export interface AssetRef {
+  kind: 'config' | 'code';
+  file: string;
+  id?: string;
+  pointer?: string;
+  line: number;
+  col: number;
+}
+
+export interface AssetResult {
+  ok: boolean;
+  problems: Problem[];
+  /** The places that block (or were rewritten by) the operation. */
+  refs?: AssetRef[];
+  created?: string[];
+  gone?: string[];
+}
+
 /** Methods the server answers. */
 export interface Methods {
   'project.info': { params: Record<string, never>; result: ProjectInfo };
@@ -224,6 +251,20 @@ export interface Methods {
   'review.list': { params: { open?: boolean }; result: ReviewEntry[] };
   'review.set': { params: { key: string; state: ReviewState; note?: string; author?: Author }; result: { ok: boolean; problems: Problem[]; entry?: ReviewEntry } };
   'review.note': { params: { key: string; note: string; author?: Author }; result: { ok: boolean; problems: Problem[]; entry?: ReviewEntry } };
+  /** The Content Browser's tree and previews: every folder under config/, the code files in src/, the kinds that can be created, a preview per asset. */
+  'content.list': { params: Record<string, never>; result: { folders: string[]; code: { path: string; bytes: number }[]; creatable: string[]; thumbs: Record<string, ContentThumb> } };
+  /** Who names an asset ('referencedBy') and what its own file names ('uses'). */
+  'asset.refs': { params: { id: string }; result: { ok: boolean; problems: Problem[]; referencedBy: AssetRef[]; uses: { id: string; pointer?: string }[] } };
+  /** A new asset from the kind's starter document. */
+  'asset.new': { params: { kind: string; id: string; author?: Author }; result: AssetResult };
+  'asset.duplicate': { params: { id: string; to?: string; author?: Author }; result: AssetResult };
+  /** Changes an id (or a folder's path). Every reference in other configs and in src/ is rewritten in the same step. */
+  'asset.rename': { params: { id: string; to: string; author?: Author }; result: AssetResult };
+  /** Moves assets and folders into a folder of the same kind. References are rewritten like a rename. */
+  'asset.move': { params: { ids: string[]; folder: string; author?: Author }; result: AssetResult };
+  /** Deletes assets (or whole folders). Refused, with the places, while anything still names one. */
+  'asset.delete': { params: { ids: string[]; author?: Author }; result: AssetResult };
+  'folder.new': { params: { path: string; author?: Author }; result: AssetResult };
   /** Runs a tool from the registry: 'check', 'test', 'build'. */
   /** The server's problem state: config problems plus authorship problems (what the `problems` push carries). */
   'problems.list': { params: Record<string, never>; result: Problem[] };

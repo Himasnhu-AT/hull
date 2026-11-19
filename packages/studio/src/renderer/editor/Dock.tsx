@@ -4,7 +4,7 @@ import type { Change } from 'hull/dev/protocol';
 import { Icon } from '../ui/Icon.tsx';
 import { idFromPath, problemPlace, type LogLine } from './useProject.ts';
 
-export type DockTab = 'console' | 'changes' | 'history';
+export type DockTab = 'console' | 'changes' | 'history' | 'content';
 
 const clock = (t: number | string): string => new Date(t).toTimeString().slice(0, 8);
 
@@ -23,12 +23,14 @@ interface Props {
   onOpen(id: string): void;
   /** The History panel (history/HistoryPanel) and how many of its changes are flagged. */
   history?: ReactNode;
+  /** The Content Browser (content/ContentBrowser). */
+  content?: ReactNode;
   /** The Changes panel (history/ChangesPanel): the diff since the Studio opened. Without it the tab lists the journal. */
   changes?: ReactNode;
   flagged?: number;
 }
 
-export function Dock({ tab, onTab, logs, problems, journal, onClear, onOpen, history, changes, flagged = 0 }: Props): JSX.Element {
+export function Dock({ tab, onTab, logs, problems, journal, onClear, onOpen, history, changes, content, flagged = 0 }: Props): JSX.Element {
   const body = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
   useEffect(() => { const b = body.current; if (b && stick.current && tab === 'console') b.scrollTop = b.scrollHeight; }, [logs, problems, tab]);
@@ -37,6 +39,9 @@ export function Dock({ tab, onTab, logs, problems, journal, onClear, onOpen, his
     <section className="dock" aria-label="Dock">
       <div className="dock-h">
         <div className="tabs" role="tablist">
+          <button role="tab" aria-selected={tab === 'content'} className={`tab${tab === 'content' ? ' on' : ''}`} onClick={() => onTab('content')}>
+            <Icon name="folder" />Content
+          </button>
           <button role="tab" aria-selected={tab === 'console'} className={`tab${tab === 'console' ? ' on' : ''}`} onClick={() => onTab('console')}>
             <Icon name="console" />Console{problems.length > 0 && <span className="count">{problems.length}</span>}
           </button>
@@ -50,8 +55,9 @@ export function Dock({ tab, onTab, logs, problems, journal, onClear, onOpen, his
         {tab === 'console' && <button className="btn ghost" onClick={onClear} disabled={logs.length === 0}><Icon name="trash" />Clear</button>}
       </div>
       {tab === 'history' && <div className="dock-b" style={{ overflow: 'hidden' }}>{history}</div>}
+      {content && <div className="dock-b" style={{ overflow: 'hidden' }} hidden={tab !== 'content'}>{content}</div>}
       {tab === 'changes' && changes && <div className="dock-b" style={{ overflow: 'hidden' }}>{changes}</div>}
-      <div className="dock-b" hidden={tab === 'history' || (tab === 'changes' && !!changes)} ref={body} onScroll={(e) => { const t = e.currentTarget; stick.current = t.scrollHeight - t.scrollTop - t.clientHeight < 24; }}>
+      <div className="dock-b" hidden={tab === 'history' || tab === 'content' || (tab === 'changes' && !!changes)} ref={body} onScroll={(e) => { const t = e.currentTarget; stick.current = t.scrollHeight - t.scrollTop - t.clientHeight < 24; }}>
         {tab === 'console' && (
           <div role="log" aria-live="polite">
             {problems.map((p, i) => {
