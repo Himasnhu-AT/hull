@@ -6,6 +6,7 @@ import type { Game } from '../core/index.ts';
 import type { Look } from '../schema/look.ts';
 import type { Backend, Capability, Quality, RenderStats } from './backend.ts';
 import { activeCamera } from './behaviours.ts';
+import { PostFxState } from './postfx.ts';
 import { backendOrder, choiceFromQuery, type BackendChoice, type BackendName } from './pick.ts';
 import { WebGL2Backend } from './webgl2.ts';
 
@@ -36,6 +37,14 @@ export interface RenderView {
   setQuality(quality: Quality): void;
   /** Most device pixels per CSS pixel to draw at; the platform's quality presets set it (a 3x phone draws at 1.5x). */
   setPixelRatioCap(cap: number): void;
+  /** 0 to 1: how fast the player is moving. Drives the look's `post.speedBlur` cue; it eases in and out by itself. */
+  setSpeed(amount: number): void;
+  /** Starts the hit pulse (colour drains, a chromatic punch, a vignette) radiating from a world position, for about a fifth of a second of real time. */
+  impact(at?: readonly [number, number, number] | null, strength?: number): void;
+  /** Ends a pulse early. */
+  cancelImpact(): void;
+  /** Freezes the pulse at `k` (0 to 1) until called with null: for screenshots and tests. */
+  holdImpact(k: number | null, at?: readonly [number, number, number] | null): void;
   /** Whether the running backend can do `cap` (for example `can('compute')` is true on WebGPU only). */
   can(cap: Capability): boolean;
   dispose(): void;
@@ -61,6 +70,7 @@ export function mountRender(game: Game, el: HTMLElement, opts: RenderOptions = {
   let unwatch: (() => void) | null = null;
   let lookId: string | null = opts.look ?? null;
   const world = game.world;
+  const fx = new PostFxState();
 
   const freshCanvas = (): HTMLCanvasElement => {
     // A canvas keeps the first kind of context it was given, so every attempt gets its own.
@@ -142,6 +152,7 @@ export function mountRender(game: Game, el: HTMLElement, opts: RenderOptions = {
   const offFrame = game.onFrame((alpha) => {
     const b = be;
     if (!b || lost) return;
+    b.setFx(fx.value);
     b.sync(world, alpha);
     b.draw(activeCamera(world.root));
   });
@@ -153,6 +164,7 @@ export function mountRender(game: Game, el: HTMLElement, opts: RenderOptions = {
     // rAF hands over its own timestamp in ms; the simulation never reads a clock itself.
     const dt = last < 0 ? 0 : (now - last) / 1000;
     last = now;
+    fx.update(dt);
     game.frame(dt);
   };
   raf = requestAnimationFrame(loop);
@@ -166,6 +178,7 @@ export function mountRender(game: Game, el: HTMLElement, opts: RenderOptions = {
       if (!be) throw new Error('render: no backend is running, so there is nothing to capture');
       // Draw the state as it is now, then capture it. A paused game driven by step() (the play tool, the control
       // port) may not have had a frame drawn since its last step, or at all: WebGPU starts asynchronously.
+      be.setFx(fx.value);
       be.sync(world, 1);
       be.draw(activeCamera(world.root));
       return be.shot();
@@ -173,6 +186,10 @@ export function mountRender(game: Game, el: HTMLElement, opts: RenderOptions = {
     setLook,
     setQuality: (q) => be?.setQuality(q),
     setPixelRatioCap: (cap) => { dprCap = cap > 0 ? cap : Infinity; resize(); },
+    setSpeed: (v) => fx.setSpeed(v),
+    impact: (at = null, strength = 1) => fx.impact(at, strength),
+    cancelImpact: () => fx.cancel(),
+    holdImpact: (k, at = null) => { fx.hold(k, at); fx.update(0); },
     can: (cap) => be?.can(cap) ?? false,
     dispose() {
       disposed = true;

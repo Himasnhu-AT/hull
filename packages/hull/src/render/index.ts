@@ -8,6 +8,8 @@ export { debug } from './debug.ts';
 export { teleported } from './interp.ts';
 export { defaultLook, postFor, resolveLook, resolvePost, snapShadowTarget, sunDirection, TIERS } from './look.ts';
 export type { ResolvedLook, ResolvedPost, Tier, ToneMapping } from './look.ts';
+export { IMPACT_SECONDS, PostFxState, impactEnvelope } from './postfx.ts';
+export type { PostFx } from './postfx.ts';
 export { materialKey, materialParams } from './materials.ts';
 export type { Shape } from './materials.ts';
 export type { Backend, Capability, Quality, RenderStats } from './backend.ts';

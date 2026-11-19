@@ -1,8 +1,10 @@
 {
   "kind": "look",
-  "note": "Varn under attack: a smoke-hazed amber afternoon, the far town lost in haze (Seal the Breach).",
+  "note": "Varn under attack: a smoke-hazed amber afternoon, the light thick and warm, the far town lost in haze (Seal the Breach). The look owns the sun and the hemisphere light (the game's scene has none): the sun's direction is SUN_DIR (checked by look.test.ts). Sky light is baked from the gradient below, which reproduces the standalone game's: fog colour at the horizon, the hemisphere's sky colour (x0.7) overhead, its ground colour below. The game's own dome, drawn over it, is what you see.",
   "sky": {
-    "color": "#9c8c7c"
+    "horizon": "#9c8c7c",
+    "mid": "#948474",
+    "zenith": "#8e7e6e"
   },
   "fog": {
     "color": "#9c8c7c",
@@ -10,16 +12,23 @@
     "far": 1900
   },
   "ambient": {
-    "color": "#ffffff",
-    "intensity": 0
+    "color": "#d6bea6",
+    "ground": "#786652",
+    "intensity": 0.95
   },
   "environment": {
     "intensity": 0.4
   },
   "sun": {
-    "color": "#ffffff",
-    "strength": 0,
-    "shadows": false
+    "color": "#ffc893",
+    "strength": 2.9,
+    "elevationDeg": 43.562,
+    "azimuthDeg": 237.529,
+    "shadows": true,
+    "shadowRange": 75,
+    "shadowLead": 0.45,
+    "shadowSoftness": 3,
+    "shadowNormalBias": 0.06
   },
   "exposure": 1,
   "toneMapping": "aces",
@@ -29,6 +38,7 @@
     "contrast": 1.07,
     "saturation": 1.1,
     "vignette": 0.22,
-    "grain": 0.022
+    "grain": 0.022,
+    "speedBlur": 1
   }
 }

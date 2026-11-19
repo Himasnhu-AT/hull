@@ -18,6 +18,7 @@ import {
   Scene,
   SphereGeometry,
   Vector2,
+  Vector3,
   WebGPURenderer,
   type Object3D,
   type ToneMapping as ThreeToneMapping,
@@ -28,7 +29,8 @@ import type { Backend, Capability, Quality, RenderStats } from './backend.ts';
 import { Camera } from './behaviours.ts';
 import { debugLines } from './debug.ts';
 import { stateFor } from './interp.ts';
-import { postFor, resolveLook, TIERS, type ResolvedLook, type ToneMapping } from './look.ts';
+import { NEUTRAL_POST, postFor, resolveLook, TIERS, type ResolvedLook, type ToneMapping } from './look.ts';
+import type { PostFx } from './postfx.ts';
 import { webgpuRefusal } from './pick.ts';
 import { applyRig, flatBackground, placeSun, skyFor } from './rig.ts';
 import { registerWebgpuVfx, setRenderRuntime } from './runtime.ts';
@@ -60,6 +62,8 @@ export class WebGPUBackend implements Backend {
   private readonly ambient = new HemisphereLight();
   private env: WebGPUSkyEnvironment | null = null;
   private post: WebGPUPostChain | null = null;
+  private readonly fx: PostFx = { speed: 0, impact: 0, impactAt: null, time: 0 };
+  private readonly projected = new Vector3();
   private readonly sky = makeSkyNodes();
   private readonly size2 = new Vector2();
   private readonly snapped: [number, number, number] = [0, 0, 0];
@@ -198,15 +202,23 @@ export class WebGPUBackend implements Backend {
         this.dome.position.set(cx, cy, cz);
         const r = Math.max(1, view.far * 0.5);
         this.dome.scale.set(r, r, r);
-        placeSun(this.sun, this.look, cx, cy, cz, this.shadowMapSize, this.snapped);
+        placeSun(this.sun, this.look, cx, cy, cz, this.shadowMapSize, this.snapped, -e[8]!, -e[10]!);
         this.sun.visible = state.suns === 0;
         debugLines.upload();
-        const post = postFor(this.look.post, TIERS[this.quality]);
+        let post = postFor(this.look.post, TIERS[this.quality]);
+        // A pulse needs the chain even when the look asks for no post.
+        if (!post && this.fx.impact > 0 && TIERS[this.quality].post) post = NEUTRAL_POST;
         if (post && this.post) {
+          let cxu = 0.5, cyu = 0.5;
+          const at = this.fx.impactAt;
+          if (at && this.fx.impact > 0) {
+            this.projected.set(at[0], at[1], at[2]).project(view);
+            if (this.projected.z <= 1) { cxu = this.projected.x * 0.5 + 0.5; cyu = this.projected.y * 0.5 + 0.5; }
+          }
           renderer.getDrawingBufferSize(this.size2);
           const t = TIERS[this.quality];
-          this.post.prepare(this.size2.x, this.size2.y, t.samples, t.bloomLevels, post.bloom > 0 && t.bloomLevels > 0, post.fxaa, renderer.toneMapping);
-          this.post.render(this.scene, view, post, renderer.toneMappingExposure);
+          this.post.prepare(this.size2.x, this.size2.y, t.samples, t.bloomLevels, post.bloom > 0 && t.bloomLevels > 0, post.fxaa, renderer.toneMapping, post.speedBlur > 0);
+          this.post.render(this.scene, view, post, renderer.toneMappingExposure, this.fx, cxu, cyu);
         } else {
           renderer.setRenderTarget(null);
           renderer.render(this.scene, view);
@@ -251,6 +263,13 @@ export class WebGPUBackend implements Backend {
       })
       .catch(() => { this.timing = false; })
       .finally(() => { this.resolving = false; });
+  }
+
+  setFx(fx: PostFx): void {
+    this.fx.speed = fx.speed;
+    this.fx.impact = fx.impact;
+    this.fx.impactAt = fx.impactAt;
+    this.fx.time = fx.time;
   }
 
   setLook(look: Look | undefined): void {

@@ -204,6 +204,35 @@
             "unit": "m",
             "help": "Half the width of the shadowed area around the camera."
           }
+        },
+        "shadowLead": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "default": 0,
+          "x-ui": {
+            "widget": "slider",
+            "step": 0.05,
+            "help": "Pushes the shadowed area ahead along the camera view, as a fraction of the range, so more of the map covers what you see."
+          }
+        },
+        "shadowSoftness": {
+          "type": "number",
+          "minimum": 0,
+          "default": 1,
+          "x-ui": {
+            "step": 0.5,
+            "help": "Blur radius of the shadow edge, in shadow-map texels."
+          }
+        },
+        "shadowNormalBias": {
+          "type": "number",
+          "minimum": 0,
+          "default": 0.02,
+          "x-ui": {
+            "step": 0.01,
+            "help": "Pulls the shadow lookup off surfaces along their normal; raise it when you see shadow acne."
+          }
         }
       },
       "additionalProperties": false
@@ -401,7 +430,11 @@
         "speedBlur": {
           "type": "number",
           "minimum": 0,
-          "description": "Not drawn yet."
+          "x-ui": {
+            "widget": "slider",
+            "step": 0.05,
+            "help": "Most the speed cue draws when the game reports full speed: a radial blur, a closing vignette and faint streaks near the border. 0 is off."
+          }
         }
       },
       "additionalProperties": false

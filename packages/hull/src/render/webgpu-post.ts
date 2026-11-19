@@ -13,6 +13,7 @@ import {
   QuadMesh,
   RenderTarget,
   UnsignedByteType,
+  Vector2,
   Vector3,
   type Camera,
   type Scene,
@@ -24,6 +25,7 @@ import {
 import * as TSLModule from 'three/tsl';
 import { fxaa } from 'three/addons/tsl/display/FXAANode.js';
 import type { ResolvedPost } from './look.ts';
+import type { PostFx } from './postfx.ts';
 
 // TSL's own typings cannot follow its operator chaining, so the shader code is typed loosely on purpose.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -54,6 +56,7 @@ export class WebGPUPostChain {
   private tone: ToneMapping = -1 as ToneMapping;
   private bloomOn = false;
   private fxaaOn = false;
+  private speedOn = false;
   private sceneRT: RenderTarget | null = null;
   private ldrRT: RenderTarget | null = null;
   private downs: RenderTarget[] = [];
@@ -77,6 +80,10 @@ export class WebGPUPostChain {
     seed: uniform(0),
     aspect: uniform(1),
     exposure: uniform(1),
+    speed: uniform(0),
+    time: uniform(0),
+    impact: uniform(0),
+    impactC: uniform(new Vector2(0.5, 0.5)),
     lift: uniform(new Vector3(0, 0, 0)),
     gamma: uniform(new Vector3(1, 1, 1)),
     gain: uniform(new Vector3(1, 1, 1)),
@@ -88,8 +95,9 @@ export class WebGPUPostChain {
    * Sizes in device pixels. Cheap to call every frame: it only rebuilds when something changed. `bloom` and `fxaa`
    * say which optional passes this frame needs, `tone` is the three tone-mapping constant.
    */
-  prepare(w: number, h: number, samples: number, levels: number, bloom: boolean, useFxaa: boolean, tone: ToneMapping): void {
-    if (w === this.w && h === this.h && samples === this.samples && levels === this.levels && bloom === this.bloomOn && useFxaa === this.fxaaOn && tone === this.tone) return;
+  prepare(w: number, h: number, samples: number, levels: number, bloom: boolean, useFxaa: boolean, tone: ToneMapping, speedOn = false): void {
+    if (w === this.w && h === this.h && samples === this.samples && levels === this.levels && bloom === this.bloomOn && useFxaa === this.fxaaOn && tone === this.tone && speedOn === this.speedOn) return;
+    this.speedOn = speedOn;
     this.w = w; this.h = h; this.samples = samples; this.levels = levels; this.bloomOn = bloom; this.fxaaOn = useFxaa; this.tone = tone;
     this.disposeAll();
     this.sceneRT = target(w, h, HalfFloatType, samples, true);
@@ -167,6 +175,20 @@ export class WebGPUPostChain {
     this.composite = quad(Fn(() => {
       const p = uv();
       let c = s(sceneTex, p).rgb;
+      if (speedOn) {
+        // Radial blur: samples slide towards the middle, more so near the edge, so the centre stays sharp.
+        const dc = p.sub(0.5);
+        const r0 = dc.mul(vec2(u.aspect, 1));
+        const zoom = u.speed.mul(0.06).mul(smoothstep(0.15, 0.9, r0.x.mul(r0.x).add(r0.y.mul(r0.y)).sqrt()));
+        let acc = vec3(0);
+        for (let i = 0; i < 6; i++) acc = acc.add(s(sceneTex, dc.mul(float(1).sub(zoom.mul(i / 5))).add(0.5)).rgb);
+        c = acc.div(6);
+      }
+      {
+        // Impact: a chromatic split that grows away from the cut (no offset, so no change, while the pulse is idle).
+        const off = p.sub(u.impactC).mul(u.impact.mul(0.007));
+        c = vec3(s(sceneTex, p.add(off)).r, c.g, s(sceneTex, p.sub(off)).b);
+      }
       if (bloomTex) c = c.add(s(bloomTex, p).rgb.mul(u.bloom));
       if (tone !== NoToneMapping) c = toneMapping(tone, u.exposure, c).rgb;
       let d = encode(c);
@@ -177,6 +199,36 @@ export class WebGPUPostChain {
       d = vec3(l).add(d.sub(vec3(l)).mul(u.saturation));
       const dd = p.sub(0.5).mul(vec2(u.aspect, 1));
       d = d.mul(float(1).sub(u.vignette.mul(smoothstep(0.25, 0.95, dd.x.mul(dd.x).add(dd.y.mul(dd.y)).mul(2)))));
+      if (speedOn) {
+        const sc = p.sub(0.5).mul(2);
+        const rn = sc.x.mul(sc.x).add(sc.y.mul(sc.y)).sqrt();
+        const pp = sc.mul(vec2(u.aspect, 1));
+        const vig = smoothstep(0.6, 1.5, rn).mul(0.28).mul(u.speed);
+        const an = TSLModule.atan(pp.y, pp.x).div(6.2831853).add(0.5);
+        const x = an.mul(96);
+        const id = TSLModule.floor(x);
+        const f = fract(x);
+        const hh = fract(TSLModule.sin(id.mul(127.1).add(311.7)).mul(43758.5453));
+        const line = float(1).sub(smoothstep(0.08, 0.3, TSLModule.abs(f.sub(0.5)).mul(2)));
+        const len = pp.x.mul(pp.x).add(pp.y.mul(pp.y)).sqrt();
+        const flow = fract(len.mul(0.5).sub(u.time.mul(hh.mul(0.8).add(0.9))).add(hh.mul(7)));
+        const dash = smoothstep(0, 0.15, flow).mul(float(1).sub(smoothstep(0.35, 0.8, flow)));
+        const streak = line.mul(dash).mul(step(0.6, hh)).mul(smoothstep(0.85, 1.4, rn)).mul(0.12).mul(u.speed);
+        const a = clamp(vig.add(streak), 0, 1);
+        d = mix(d, vec3(streak.div(max(a, 1e-4))), a);
+      }
+      {
+        // The hit moment: colour drains (blood keeps its red), exposure dips, contrast bites, a vignette closes on the cut.
+        const il = d.x.mul(0.2126).add(d.y.mul(0.7152)).add(d.z.mul(0.0722));
+        const red = smoothstep(0.04, 0.18, d.x.sub(max(d.y, d.z)));
+        const k = u.impact;
+        let e = mix(d, vec3(il), k.mul(0.7).mul(float(1).sub(red.mul(0.75))));
+        e = e.mul(float(1).sub(k.mul(0.2)));
+        e = mix(e, e.mul(e).mul(vec3(3).sub(e.mul(2))), k.mul(0.3));
+        const di = p.sub(u.impactC).mul(vec2(u.aspect, 1));
+        const iv = smoothstep(0.3, 1.25, di.x.mul(di.x).add(di.y.mul(di.y)).sqrt());
+        d = e.mul(float(1).sub(iv.mul(0.45).mul(k)));
+      }
       d = d.add(hash(screenCoordinate.xy.add(u.seed)).sub(0.5).mul(u.grain));
       return vec4(clamp(d.rgb, 0, 1), 1);
     })());
@@ -185,7 +237,7 @@ export class WebGPUPostChain {
   }
 
   /** Draws `scene` through `camera` and the whole chain to the canvas. */
-  render(scene: Scene, camera: Camera, p: ResolvedPost, exposure: number): void {
+  render(scene: Scene, camera: Camera, p: ResolvedPost, exposure: number, fx: PostFx, centreX: number, centreY: number): void {
     const r = this.renderer;
     const sceneRT = this.sceneRT!;
     r.setRenderTarget(sceneRT);
@@ -208,6 +260,10 @@ export class WebGPUPostChain {
     u.seed.value = (this.frame = (this.frame + 1) % 1024) * 7.31;
     u.aspect.value = this.w / this.h;
     u.exposure.value = exposure;
+    u.speed.value = fx.speed * p.speedBlur;
+    u.time.value = fx.time;
+    u.impact.value = fx.impact;
+    (u.impactC.value as Vector2).set(centreX, centreY);
     (u.lift.value as Vector3).set(p.lift[0], p.lift[1], p.lift[2]);
     (u.gamma.value as Vector3).set(p.gamma[0], p.gamma[1], p.gamma[2]);
     (u.gain.value as Vector3).set(p.gain[0], p.gain[1], p.gain[2]);

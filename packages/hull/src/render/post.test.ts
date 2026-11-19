@@ -14,8 +14,9 @@ describe('post settings', () => {
     expect(resolvePost({ lift: [0.02, 0, 0] })).not.toBeNull();
   });
 
-  it('resolves through the look, and speedBlur alone draws nothing', () => {
-    expect(resolveLook({ kind: 'look', post: { speedBlur: 0.1 } }).post).toBeNull();
+  it('resolves through the look, and speedBlur alone turns the chain on', () => {
+    expect(resolveLook({ kind: 'look', post: { speedBlur: 0.1 } }).post!.speedBlur).toBe(0.1);
+    expect(resolveLook({ kind: 'look', post: { speedBlur: 0 } }).post).toBeNull();
     expect(resolveLook({ kind: 'look', post: { bloom: 0.5 } }).post!.bloom).toBe(0.5);
   });
 

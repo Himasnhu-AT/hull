@@ -1,8 +1,10 @@
 {
   "kind": "look",
-  "note": "The expedition rides out in the early morning: low golden light, a pale sky, a long soft haze (The Twelfth Sortie).",
+  "note": "The expedition rides out in the early morning: low golden light, a pale sky, a long soft haze (The Twelfth Sortie). The look owns the sun and the hemisphere light (the game's scene has none): the sun's direction is SUN_DIR (checked by look.test.ts). Sky light is baked from the gradient below, which reproduces the standalone game's: fog colour at the horizon, the hemisphere's sky colour (x0.7) overhead, its ground colour below. The game's own dome, drawn over it, is what you see.",
   "sky": {
-    "color": "#d6c1ac"
+    "horizon": "#d6c1ac",
+    "mid": "#ada298",
+    "zenith": "#8d8a88"
   },
   "fog": {
     "color": "#d6c1ac",
@@ -10,16 +12,23 @@
     "far": 1200
   },
   "ambient": {
-    "color": "#ffffff",
-    "intensity": 0
+    "color": "#d4cfcc",
+    "ground": "#7a745e",
+    "intensity": 0.95
   },
   "environment": {
     "intensity": 0.4
   },
   "sun": {
-    "color": "#ffffff",
-    "strength": 0,
-    "shadows": false
+    "color": "#ffc58c",
+    "strength": 3,
+    "elevationDeg": 43.562,
+    "azimuthDeg": 237.529,
+    "shadows": true,
+    "shadowRange": 75,
+    "shadowLead": 0.45,
+    "shadowSoftness": 3,
+    "shadowNormalBias": 0.06
   },
   "exposure": 1,
   "toneMapping": "aces",
@@ -29,6 +38,7 @@
     "contrast": 1.07,
     "saturation": 1.1,
     "vignette": 0.22,
-    "grain": 0.022
+    "grain": 0.022,
+    "speedBlur": 1
   }
 }

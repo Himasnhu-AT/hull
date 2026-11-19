@@ -16,6 +16,7 @@ import {
   BackSide,
   SphereGeometry,
   Vector2,
+  Vector3,
   WebGLRenderer,
   type Object3D,
   type ToneMapping as ThreeToneMapping,
@@ -29,7 +30,8 @@ import { stateFor } from './interp.ts';
 import { SkyEnvironment, SKY_GLSL, setSkyUniforms, skyUniforms } from './environment.ts';
 import { PostChain } from './post.ts';
 import { setRenderRuntime } from './runtime.ts';
-import { postFor, resolveLook, TIERS, type ResolvedLook, type ToneMapping } from './look.ts';
+import { NEUTRAL_POST, postFor, resolveLook, TIERS, type ResolvedLook, type ToneMapping } from './look.ts';
+import type { PostFx } from './postfx.ts';
 import { applyRig, flatBackground, placeSun, skyFor } from './rig.ts';
 
 const TONE: Record<ToneMapping, ThreeToneMapping> = {
@@ -83,6 +85,8 @@ export class WebGL2Backend implements Backend {
   private dpr = 1;
   private rawDpr = 1;
   private look: ResolvedLook = resolveLook(undefined);
+  private readonly fx: PostFx = { speed: 0, impact: 0, impactAt: null, time: 0 };
+  private readonly projected = new Vector3();
   private lastCamera: Node | null = null;
   private lastAlpha = 1;
   private ms = 0;
@@ -164,15 +168,23 @@ export class WebGL2Backend implements Backend {
         const r = Math.max(1, view.far * 0.5);
         this.dome.scale.set(r, r, r);
         // The look's sun rides with the camera so its shadows cover what is on screen.
-        placeSun(this.sun, this.look, cx, cy, cz, this.shadowMapSize, this.snapped);
+        placeSun(this.sun, this.look, cx, cy, cz, this.shadowMapSize, this.snapped, -e[8]!, -e[10]!);
         this.sun.visible = state.suns === 0;
         debugLines.upload();
-        const post = postFor(this.look.post, TIERS[this.quality]);
+        let post = postFor(this.look.post, TIERS[this.quality]);
+        // A pulse needs the chain even when the look asks for no post.
+        if (!post && this.fx.impact > 0 && TIERS[this.quality].post) post = NEUTRAL_POST;
         if (post && this.post) {
+          let cxu = 0.5, cyu = 0.5;
+          const at = this.fx.impactAt;
+          if (at && this.fx.impact > 0) {
+            this.projected.set(at[0], at[1], at[2]).project(view);
+            if (this.projected.z <= 1) { cxu = this.projected.x * 0.5 + 0.5; cyu = this.projected.y * 0.5 + 0.5; }
+          }
           renderer.getDrawingBufferSize(this.size2);
           const t = TIERS[this.quality];
           this.post.resize(this.size2.x, this.size2.y, t.samples, t.bloomLevels);
-          this.post.render(this.scene, view, post, renderer.toneMapping, renderer.toneMappingExposure);
+          this.post.render(this.scene, view, post, renderer.toneMapping, renderer.toneMappingExposure, this.fx, cxu, cyu);
         } else {
           renderer.render(this.scene, view);
         }
@@ -194,6 +206,13 @@ export class WebGL2Backend implements Backend {
       this.fps = this.fps === 0 ? inst : this.fps + (inst - this.fps) * 0.1;
     }
     this.lastDraw = now;
+  }
+
+  setFx(fx: PostFx): void {
+    this.fx.speed = fx.speed;
+    this.fx.impact = fx.impact;
+    this.fx.impactAt = fx.impactAt;
+    this.fx.time = fx.time;
   }
 
   setLook(look: Look | undefined): void {

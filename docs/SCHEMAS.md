@@ -447,13 +447,20 @@ Clip `events` are times (0 to 1 for loops, seconds otherwise) at which a named s
 ```json
 {
   "kind": "look",
-  "sun": { "color": "#ffeddb", "strength": 3.2, "elevationDeg": 48, "azimuthDeg": 210, "shadows": true },
+  "sun": { "color": "#ffeddb", "strength": 3.2, "elevationDeg": 48, "azimuthDeg": 210, "shadows": true, "shadowRange": 75, "shadowLead": 0.45, "shadowSoftness": 3, "shadowNormalBias": 0.06 },
   "sky": { "horizon": "#a9c6dc", "mid": "#8fb2d6", "zenith": "#3d6aa8" },
   "fog": { "color": "#a9c6dc", "near": 140, "far": 1500 },
   "exposure": 1.0,
-  "post": { "bloom": 0.6, "contrast": 1.07, "saturation": 1.1, "vignette": 0.22, "grain": 0.02, "speedBlur": 0.085 }
+  "post": { "bloom": 0.6, "contrast": 1.07, "saturation": 1.1, "vignette": 0.22, "grain": 0.02, "speedBlur": 1 }
 }
 ```
+
+`speedBlur` is the most the speed cue draws: a radial blur, a closing vignette and faint streaks near the border. The
+game reports how fast the player moves with `render.setSpeed(0..1)` and the cue eases in and out by itself. A hit pulse
+(colour drains, a chromatic punch, a vignette on the cut) is started with `render.impact(worldPosition, strength)` and
+lasts about 0.22 s of real time, so a hit-stop does not freeze it; it draws even when the look has no `post`. Both need
+the post chain, so the `low` quality tier shows neither. `sun.shadowLead` pushes the shadowed area ahead along the camera's
+view (a fraction of `shadowRange`), `shadowSoftness` blurs the edge and `shadowNormalBias` fights acne.
 
 ## 10. `vfx`
 

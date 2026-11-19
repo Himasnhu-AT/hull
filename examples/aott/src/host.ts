@@ -19,7 +19,7 @@ import { Player } from './player/player';
 import type { PlayerModel } from './player/model';
 import { Game as Flow } from './game';
 import { litMaterial } from './core/style';
-import { SHADOW, installAerialFog, fitSunShadow, followSunShadow, type ShadowPreset } from './core/look';
+import { installAerialFog } from './core/look';
 import { FS } from './world/terrain';
 import { Digest } from './digest';
 import { R, bindWorld } from './sim';
@@ -41,6 +41,8 @@ export interface BootOptions {
   /** A mode to start at once instead of the title ('expedition', 'gate', 'scout', 'training', 'free'). */
   play?: string;
   noTitans?: boolean;
+  /** Dev check of the look's post: `?fx=speed` holds the speed cue at full, `?fx=impact` holds the hit pulse. */
+  fx?: string;
   noAllies?: boolean;
   noHorses?: boolean;
   noCivilians?: boolean;
@@ -58,6 +60,7 @@ function queryOptions(): BootOptions {
   const p = new URLSearchParams(location.search);
   return {
     ...(p.has('play') ? { play: p.get('play') ?? '' } : {}),
+    ...(p.has('fx') ? { fx: p.get('fx') ?? '' } : {}),
     noTitans: p.has('notitans'), noAllies: p.has('noallies'), noHorses: p.has('nohorses'), noCivilians: p.has('nocivilians'),
     ...(p.has('allies') ? { allies: +(p.get('allies') ?? 5) } : {}),
     sens: +(p.get('sens') || 1),
@@ -68,13 +71,13 @@ function isPlaying(mode: string): mode is Exclude<GameMode, 'menu'> {
   return mode === 'expedition' || mode === 'gate' || mode === 'scout' || mode === 'free' || mode === 'training';
 }
 
-interface HullViews { render?: { setLook(id: string): void; setQuality(q: 'low' | 'medium' | 'high'): void; setPixelRatioCap(c: number): void }; audio?: { context: AudioContext | null; bus(n?: string): AudioNode | undefined } }
+interface HullViews { render?: { setLook(id: string): void; setQuality(q: 'low' | 'medium' | 'high'): void; setPixelRatioCap(c: number): void; setSpeed(v: number): void; impact(at?: readonly [number, number, number] | null, strength?: number): void; cancelImpact(): void; holdImpact(k: number | null, at?: readonly [number, number, number] | null): void }; audio?: { context: AudioContext | null; bus(n?: string): AudioNode | undefined } }
 const views = (): HullViews | undefined => (globalThis as { hull?: HullViews }).hull;
 
 const STEP = 1 / CFG.physicsHz;
 const QUALITY_NAMES = ['LOW', 'MEDIUM', 'HIGH'] as const;
 const QUALITY_TIERS = ['low', 'medium', 'high'] as const;
-const _n = new THREE.Vector3(), _fwd = new THREE.Vector3();
+const _n = new THREE.Vector3();
 const _tp = new THREE.Vector3(), _cf = new THREE.Vector3(), _cr = new THREE.Vector3(), _cu = new THREE.Vector3();
 const _hookTargets: HookTargetMarker[] = [{ x: 0, y: 0, visible: false, valid: false, attached: false }, { x: 0, y: 0, visible: false, valid: false, attached: false }];
 const _threats: ThreatMarker[] = [];
@@ -93,7 +96,6 @@ export class AottHost extends Behaviour {
 
   g!: Game;
   private acc = 0;
-  private shadowLead = 0;
   private fpsT = 0;
   private frames = 0;
   private qualityApplied = false;
@@ -101,7 +103,6 @@ export class AottHost extends Behaviour {
   private audioWanted = false;
   private startAudio: () => boolean = () => false;
   private camera!: Camera;
-  private sunOff: THREE.Vector3 | null = null;
   private readonly sum = new Digest();
   private opts: BootOptions = {};
 
@@ -147,13 +148,9 @@ export class AottHost extends Behaviour {
       const wall = new THREE.Mesh(new THREE.BoxGeometry(2400, 50, 12), litMaterial(0xb8ab92, { roughness: 0.95 }));
       wall.position.set(0, 25, 0); scene.add(wall);
       game.collision.addBox({ center: new THREE.Vector3(0, 25, 0), halfExtents: new THREE.Vector3(1200, 25, 6), material: 'stone' });
-      const sun = new THREE.DirectionalLight(0xfff1dc, 2.2);
-      sun.position.set(-200, 400, 150); sun.castShadow = true;
-      const hemi = new THREE.HemisphereLight(0xcfe6ff, 0x5a6b3a, 1.2);
-      scene.add(sun, sun.target, hemi);
       return {
         playerSpawn: { position: new THREE.Vector3(0, 50.5, 0), yaw: 0 }, supplyDepots: [{ position: new THREE.Vector3(40, 51, 0), radius: 4 }],
-        titanSpawns: [], sun, hemi, fogColor: new THREE.Color(0xa9c6dc), update() {},
+        titanSpawns: [], fogColor: new THREE.Color(0xa9c6dc), update() {},
       };
     };
     const fallbackModel = (): PlayerModel => {
@@ -173,6 +170,12 @@ export class AottHost extends Behaviour {
       // each atmosphere (Seal the Breach's smoke, the Sortie's dawn) is a look of its own: Hull bakes its sky light from it
       const world = game.world;
       const setAtmosphere = world.setAtmosphere?.bind(world);
+      // the nape cut's hit moment is the engine's impact pulse (real time, so hit-stop does not freeze it)
+      game.impactFrame = {
+        get active() { return false; },
+        trigger(position, strength = 1) { views()?.render?.impact(position ? [position.x, position.y, position.z] : null, strength); },
+        cancel() { views()?.render?.cancelImpact(); },
+      };
       if (setAtmosphere) world.setAtmosphere = (kind: string) => { setAtmosphere(kind); views()?.render?.setLook(`look/${kind}`); };
     }
     if (!HEADLESS) {
@@ -293,10 +296,11 @@ export class AottHost extends Behaviour {
 
   /** Quality: 2 high, 1 medium, 0 low. Picked automatically from the frame rate in the first seconds of play (only ever stepping down), and G cycles it. */
   private wireQuality(game: Game): void {
-    const Q: { ratio: number; shadow: ShadowPreset | null; allyRange: number }[] = [
-      { ratio: 0.75, shadow: null, allyRange: 120 },
-      { ratio: 1, shadow: SHADOW.medium, allyRange: 180 },
-      { ratio: HEADLESS ? 1 : Math.min(devicePixelRatio, 1.75), shadow: SHADOW.high, allyRange: 260 },
+    // The engine's tiers own shadows (none on low), the shadow map's size and the post chain; the look owns the shadow range.
+    const Q: { ratio: number; allyRange: number }[] = [
+      { ratio: 0.75, allyRange: 120 },
+      { ratio: 1, allyRange: 180 },
+      { ratio: HEADLESS ? 1 : Math.min(devicePixelRatio, 1.75), allyRange: 260 },
     ];
     game.setQuality = (q, say = true) => {
       q = Math.max(0, Math.min(2, q)); game.quality = q;
@@ -304,9 +308,6 @@ export class AottHost extends Behaviour {
       const r = views()?.render;
       r?.setQuality(QUALITY_TIERS[q]);
       r?.setPixelRatioCap(cfg.ratio);
-      const sun = game.world?.sun;
-      if (sun) fitSunShadow(sun, cfg.shadow);
-      this.shadowLead = (cfg.shadow?.half ?? 0) * 0.45;
       game.allyRange = cfg.allyRange;
       if (say) game.hud?.message?.(`GRAPHICS: ${QUALITY_NAMES[q]}${say === 'auto' ? ` (auto, ${keys.label('quality')} to change)` : ''}`, 2, 'info');
     };
@@ -385,12 +386,7 @@ export class AottHost extends Behaviour {
       game.fx.leaves(_n, 2);
     }
 
-    // keep the shadow frustum on the action: centred a little ahead of the player along the view, texel-snapped
-    const sun = game.world?.sun;
-    if (sun?.castShadow) {
-      if (!this.sunOff) this.sunOff = sun.position.clone().sub(sun.target.position).normalize().multiplyScalar(300);
-      followSunShadow(sun, playing ? player.render : camera.position, camera.getWorldDirection(_fwd), this.shadowLead, this.sunOff);
-    }
+    // (the shadow frustum follows the camera, a little ahead along the view and texel-snapped: the look's sun does that)
     this.finish();
   }
 
@@ -422,6 +418,10 @@ export class AottHost extends Behaviour {
     if (this.fpsT > 1) { game.fps = this.frames / this.fpsT; this.frames = 0; this.fpsT = 0; }
     const playing = isPlaying(game.mode);
     game.autoQuality?.(dt, playing);
+    // the speed cue the look draws (post.speedBlur): nothing under 32 m/s, full at 82, none when the soldier is down
+    const fxHold = this.opts.fx;
+    views()?.render?.setSpeed(fxHold === 'speed' ? 1 : playing && game.player.alive ? Math.min(1, Math.max(0, (game.player.speed - 32) / 50)) : 0);
+    if (fxHold === 'impact') views()?.render?.holdImpact(1, null);
     if (!HEADLESS) game.hud?.update?.(this.hudState(playing));
   }
 

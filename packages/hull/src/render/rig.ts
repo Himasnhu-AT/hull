@@ -22,6 +22,8 @@ export function applyRig(scene: Scene, ambient: HemisphereLight, sun: Directiona
   sun.color.set(r.sun.color);
   sun.intensity = r.sun.intensity;
   sun.castShadow = r.sun.shadows && q.shadows;
+  sun.shadow.radius = r.sun.shadowSoftness;
+  sun.shadow.normalBias = r.sun.shadowNormalBias;
   const c = sun.shadow.camera;
   const range = r.sun.shadowRange;
   const reach = Math.max(60, range * 4);
@@ -44,8 +46,18 @@ export function flatBackground(scene: Scene, hex: string): void {
  * Puts the sun where it lights what the camera sees: its target is snapped to whole shadow-map texels (so edges do not
  * crawl as the camera moves) and it stands `reach` metres towards the sun from there. `snapped` is scratch.
  */
-export function placeSun(sun: DirectionalLight, r: ResolvedLook, cx: number, cy: number, cz: number, shadowMapSize: number, snapped: [number, number, number]): void {
+export function placeSun(
+  sun: DirectionalLight, r: ResolvedLook, cx: number, cy: number, cz: number, shadowMapSize: number, snapped: [number, number, number],
+  forwardX = 0, forwardZ = 0,
+): void {
   const d = r.sun.dir;
+  // The shadowed area leads the camera along its horizontal view, so more of it covers what is on screen.
+  const fl = Math.hypot(forwardX, forwardZ);
+  if (fl > 1e-4 && r.sun.shadowLead > 0) {
+    const lead = r.sun.shadowLead * r.sun.shadowRange / fl;
+    cx += forwardX * lead;
+    cz += forwardZ * lead;
+  }
   snapShadowTarget(cx, cy, cz, d, r.sun.shadowRange, shadowMapSize, snapped);
   sun.target.position.set(snapped[0], snapped[1], snapped[2]);
   const reach = Math.max(60, r.sun.shadowRange * 4);

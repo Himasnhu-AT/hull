@@ -174,6 +174,15 @@ the Holdout test measures (a new checksum) says so in its commit and updates the
 * **Done when**: day, varn and dawn look the same or better than the standalone game in side-by-side screenshots, no
   light of the game's own remains in the scene, and editing a look in the app changes the page at once.
 
+**P4 status (done).** The sun, hemisphere light and shadows are the looks' own (`config/look/*.json`); the game's scene holds no
+light (`look.test.ts` checks it, and that each look's sun points along `SUN_DIR`), and `world.sun`/`hemi`, `fitSunShadow`
+and `followSunShadow` are gone. Sky light is baked from a gradient that reproduces the standalone game's (fog colour at the
+horizon, the hemisphere's sky colour x0.7 overhead, its ground colour below). Engine: `post.speedBlur` is drawn (radial blur,
+vignette, streaks) and `render.impact()` pulses on both backends, `sun.shadowLead|shadowSoftness|shadowNormalBias`. The host
+feeds `render.setSpeed` each frame and `game.impactFrame` maps onto the pulse. Left: the shadow range is one value per look
+(AOTT had 62 m on medium and 75 m on high); the low tier shows no speed cue or pulse (no post); the WebGPU path of the new
+post is typechecked but was not run (AOTT pins WebGL2); `?fx=speed|impact` holds the effects for screenshots.
+
 ### P5. Collision -> `hull/physics` where it fits
 
 * **Owns**: `src/core/collision.ts` and its parity test.

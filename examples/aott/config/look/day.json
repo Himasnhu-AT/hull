@@ -1,8 +1,10 @@
 {
   "kind": "look",
-  "note": "AOTT's clear midday: filmic tone mapping, a pale blue-grey haze on the horizon, bloom, contrast, a soft vignette and grain. The game's own sun and hemisphere light stay in its scene (world.ts), so the look's sun and ambient are off; the look supplies tone mapping, exposure, the sky light the metals reflect, and the post chain.",
+  "note": "AOTT's clear midday: filmic tone mapping, a pale blue-grey haze on the horizon, a warm sun with a cool sky fill, bloom, contrast, a soft vignette and grain. The look owns the sun and the hemisphere light (the game's scene has none): the sun's direction is SUN_DIR (checked by look.test.ts). Sky light is baked from the gradient below, which reproduces the standalone game's: fog colour at the horizon, the hemisphere's sky colour (x0.7) overhead, its ground colour below. The game's own dome, drawn over it, is what you see.",
   "sky": {
-    "color": "#c3cdd3"
+    "horizon": "#c3cdd3",
+    "mid": "#a1adb8",
+    "zenith": "#8693a2"
   },
   "fog": {
     "color": "#c3cdd3",
@@ -10,16 +12,23 @@
     "far": 1500
   },
   "ambient": {
-    "color": "#ffffff",
-    "intensity": 0
+    "color": "#bfd2e8",
+    "ground": "#857c64",
+    "intensity": 1
   },
   "environment": {
     "intensity": 0.4
   },
   "sun": {
-    "color": "#ffffff",
-    "strength": 0,
-    "shadows": false
+    "color": "#ffeddb",
+    "strength": 3.2,
+    "elevationDeg": 43.562,
+    "azimuthDeg": 237.529,
+    "shadows": true,
+    "shadowRange": 75,
+    "shadowLead": 0.45,
+    "shadowSoftness": 3,
+    "shadowNormalBias": 0.06
   },
   "exposure": 1,
   "toneMapping": "aces",
@@ -29,6 +38,7 @@
     "contrast": 1.07,
     "saturation": 1.1,
     "vignette": 0.22,
-    "grain": 0.022
+    "grain": 0.022,
+    "speedBlur": 1
   }
 }

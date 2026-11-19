@@ -6,7 +6,7 @@ const color = (def: string, help?: string) =>
   Type.String({ pattern: colorPattern, default: def, ...ui({ widget: 'color', ...(help ? { help } : {}) }) });
 
 // SCHEMAS.md section 9: sky, fog, ambient (a hemisphere when `ground` is set), an environment map baked from the
-// sky, sun, exposure, tone mapping and the post chain. `speedBlur` is accepted but not drawn yet.
+// sky, sun, exposure, tone mapping and the post chain. `speedBlur` is the most the speed cue draws (see postfx.ts).
 const rgb = (def: [number, number, number], help: string) => triple({ default: def, ...ui({ help }) });
 export const lookSchema = Type.Object(
   {
@@ -66,6 +66,9 @@ export const lookSchema = Type.Object(
           ),
           shadows: Type.Optional(Type.Boolean({ default: false })),
           shadowRange: Type.Optional(Type.Number({ exclusiveMinimum: 0, default: 40, ...ui({ unit: 'm', help: 'Half the width of the shadowed area around the camera.' }) })),
+          shadowLead: Type.Optional(Type.Number({ minimum: 0, maximum: 1, default: 0, ...ui({ widget: 'slider', step: 0.05, help: 'Pushes the shadowed area ahead along the camera view, as a fraction of the range, so more of the map covers what you see.' }) })),
+          shadowSoftness: Type.Optional(Type.Number({ minimum: 0, default: 1, ...ui({ step: 0.5, help: 'Blur radius of the shadow edge, in shadow-map texels.' }) })),
+          shadowNormalBias: Type.Optional(Type.Number({ minimum: 0, default: 0.02, ...ui({ step: 0.01, help: 'Pulls the shadow lookup off surfaces along their normal; raise it when you see shadow acne.' }) })),
         },
         { additionalProperties: false },
       ),
@@ -88,7 +91,7 @@ export const lookSchema = Type.Object(
           vignette: Type.Optional(Type.Number({ minimum: 0, ...ui({ widget: 'slider', step: 0.01 }) })),
           grain: Type.Optional(Type.Number({ minimum: 0, ...ui({ widget: 'slider', step: 0.005 }) })),
           aa: Type.Optional(Type.Union([Type.Literal('none'), Type.Literal('fxaa')], { default: 'none', ...ui({ widget: 'select', help: 'Edge smoothing after the grade. The scene itself is multisampled on medium and high.' }) })),
-          speedBlur: Type.Optional(Type.Number({ minimum: 0, description: 'Not drawn yet.' })),
+          speedBlur: Type.Optional(Type.Number({ minimum: 0, ...ui({ widget: 'slider', step: 0.05, help: 'Most the speed cue draws when the game reports full speed: a radial blur, a closing vignette and faint streaks near the border. 0 is off.' }) })),
         },
         { additionalProperties: false },
       ),
