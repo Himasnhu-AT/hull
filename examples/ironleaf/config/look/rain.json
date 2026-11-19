@@ -3,8 +3,8 @@
   "note": "Grey rain. No sun to speak of, flat cool light, thick haze that swallows the far hills.",
   "sun": {
     "color": "#cfd8de",
-    "strength": 0.9,
-    "elevationDeg": 40,
+    "strength": 1.8,
+    "elevationDeg": 38,
     "azimuthDeg": 200,
     "shadows": true,
     "shadowRange": 60,
@@ -18,23 +18,23 @@
   },
   "fog": {
     "color": "#8f9ba1",
-    "near": 20,
-    "far": 260
+    "near": 30,
+    "far": 300
   },
   "ambient": {
-    "color": "#c6d0d6",
-    "intensity": 0.95,
-    "ground": "#4a4f4d"
+    "color": "#d6dfe4",
+    "intensity": 1.25,
+    "ground": "#7a8280"
   },
   "environment": {
-    "intensity": 0.3
+    "intensity": 0.5
   },
-  "exposure": 0.95,
+  "exposure": 1.08,
   "toneMapping": "aces",
   "post": {
     "bloom": 0.25,
     "contrast": 1.04,
-    "saturation": 0.78,
+    "saturation": 0.85,
     "vignette": 0.35,
     "grain": 0.035,
     "aa": "fxaa"

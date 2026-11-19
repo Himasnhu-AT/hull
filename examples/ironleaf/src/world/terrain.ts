@@ -23,15 +23,18 @@ const lerpHex = (out: THREE.Color, a: string, b: string, t: number): THREE.Color
 /** The ground colour at a point and a height. */
 function paint(out: THREE.Color, x: number, z: number, h: number, slope: number): void {
   const n = fbm(x * 0.09, z * 0.09, 5);
-  const grass = lerpHex(out, '#6c8a3a', '#8d9a44', n);
+  // Two noise scales: broad hue patches (lush, dry, olive) and fine speckle, so the meadow is never one green.
+  const grass = lerpHex(out, '#7a9a40', '#a3ad4e', n);
+  grass.lerp(lerpHex(col, '#5e8a3c', '#b9b256', fbm(x * 0.035 + 40, z * 0.035 - 17, 3)), 0.45);
+  grass.multiplyScalar(0.92 + 0.16 * fbm(x * 0.6, z * 0.6, 21));
   // pampas straw under the grass fields
   lerpHex(col, '#c8a65a', '#e2c47a', fbm(x * 0.2, z * 0.2, 12));
   grass.lerp(col, pampasAmount(x, z) * 0.75);
   // bamboo floor: leaf litter and moss
   grass.lerp(lerpHex(col, '#59623a', '#6f6a3f', n), bambooAmount(x, z) * 0.9);
   // village ground and paths
-  grass.lerp(lerpHex(col, '#9c8660', '#8a7552', n), (1 - smoothstep(VILLAGE.r * 0.55, VILLAGE.r * 0.8, Math.hypot(x - VILLAGE.x, z - VILLAGE.z))) * 0.85);
-  grass.lerp(lerpHex(col, '#8f7452', '#7a6144', n), 1 - smoothstep(0.9, 2.2, pathDistance(x, z)));
+  grass.lerp(lerpHex(col, '#cdb98e', '#b9a474', n), (1 - smoothstep(VILLAGE.r * 0.55, VILLAGE.r * 0.8, Math.hypot(x - VILLAGE.x, z - VILLAGE.z))) * 0.85);
+  grass.lerp(lerpHex(col, '#d0b988', '#bba575', n), 1 - smoothstep(0.9, 2.2, pathDistance(x, z)));
   // sand by the water and rock on the steep
   grass.lerp(lerpHex(col, '#d4c08e', '#c1ad7c', n), 1 - smoothstep(0.6, 1.4, h));
   grass.lerp(lerpHex(col, '#7c786f', '#66625a', n), smoothstep(0.55, 0.95, slope));

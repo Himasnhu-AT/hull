@@ -2,9 +2,9 @@
   "kind": "look",
   "note": "Golden dusk. A low sun the colour of honey, long shadows across the pampas, a peach haze at the horizon.",
   "sun": {
-    "color": "#ffb56b",
-    "strength": 3.4,
-    "elevationDeg": 11,
+    "color": "#ffd49c",
+    "strength": 4.2,
+    "elevationDeg": 28,
     "azimuthDeg": 250,
     "shadows": true,
     "shadowRange": 90,
@@ -19,22 +19,22 @@
   },
   "fog": {
     "color": "#e6a878",
-    "near": 70,
-    "far": 560
+    "near": 90,
+    "far": 640
   },
   "ambient": {
-    "color": "#ffd6ae",
-    "intensity": 0.62,
-    "ground": "#4a3a2e"
+    "color": "#fff1e2",
+    "intensity": 1.2,
+    "ground": "#cdb490"
   },
   "environment": {
-    "intensity": 0.35
+    "intensity": 0.6
   },
-  "exposure": 1,
+  "exposure": 1.05,
   "toneMapping": "aces",
   "post": {
-    "bloom": 0.55,
-    "bloomThreshold": 0.8,
+    "bloom": 0.45,
+    "bloomThreshold": 0.9,
     "contrast": 1.08,
     "saturation": 1.12,
     "vignette": 0.3,
