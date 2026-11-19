@@ -8,6 +8,7 @@ import {
   arcPath, clamp, curveAt, curveMove, dialAngle, dialDrag, dragScale, formatNumber, fromFraction, nearestEnd, rangeMove, sameJson,
   scrubDelta, snap, toFraction, type CurvePoint,
 } from '../lib/math.ts';
+import { leaveBox } from '../lib/keys.ts';
 import { Icon } from './Icon.tsx';
 
 export type Change = (pointer: string, value: unknown, final?: boolean) => void;
@@ -79,14 +80,14 @@ function NumInput({ value, step, label, onCommit, className, blank }: { value: n
       className={className}
       aria-label={label}
       inputMode="decimal"
+      onKeyUp={leaveBox}
       value={draft ?? (blank ? '' : formatNumber(value, step))}
       placeholder={blank ? '\u2014' : undefined}
       onFocus={(e) => { setDraft(blank ? '' : formatNumber(value, step)); e.currentTarget.select(); }}
       onChange={(e) => setDraft(e.target.value)}
       onBlur={finish}
       onKeyDown={(e) => {
-        if (e.key === 'Enter') e.currentTarget.blur();
-        else if (e.key === 'Escape') { setDraft(null); e.currentTarget.blur(); }
+        if (e.key === 'Escape') setDraft(null);
         else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
           e.preventDefault();
           const cur = draft === null ? value : Number.parseFloat(draft);
@@ -479,7 +480,7 @@ function TextField({ className, field, value, send, reset, problems }: { classNa
       <input id={`f${field.pointer}`} className="field-in" value={draft ?? shown} placeholder={list ? 'Comma separated' : undefined}
         onChange={(e) => { setDraft(e.target.value); if (!list) send(out(e.target.value), false); }}
         onBlur={(e) => { if (draft !== null && draft !== shown) send(out(e.target.value), true); setDraft(null); }}
-        onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }} />
+        onKeyUp={leaveBox} />
       {field.help && <div className="help">{field.help}</div>}
       <Problems list={problems} />
     </div>
@@ -584,6 +585,6 @@ function KeyInput({ name, onRename }: { name: string; onRename(from: string, to:
   return (
     <input className="field-in mapname" value={draft ?? name} aria-label={`Name of ${name}`} spellCheck={false}
       onChange={(e) => setDraft(e.target.value)} onBlur={done}
-      onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); else if (e.key === 'Escape') { setDraft(null); e.currentTarget.blur(); } }} />
+      onKeyDown={(e) => { if (e.key === 'Escape') setDraft(null); }} onKeyUp={leaveBox} />
   );
 }
