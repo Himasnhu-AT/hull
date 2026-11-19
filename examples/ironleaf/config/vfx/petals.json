@@ -1,0 +1,86 @@
+{
+  "kind": "vfx",
+  "note": "Cherry petals blowing across the field on the evening wind.",
+  "emit": {
+    "rate": 9,
+    "shape": {
+      "box": [
+        24,
+        5,
+        24
+      ]
+    }
+  },
+  "particle": {
+    "life": [
+      4,
+      8
+    ],
+    "speed": [
+      1.2,
+      3.2
+    ],
+    "direction": {
+      "cone": [
+        0.8,
+        0.1,
+        0.55
+      ],
+      "angleDeg": 35
+    },
+    "gravity": -0.5,
+    "drag": 0.5,
+    "flutter": 2.4,
+    "spin": [
+      -4,
+      4
+    ],
+    "size": [
+      [
+        0,
+        0.1
+      ],
+      [
+        1,
+        0.1
+      ]
+    ],
+    "sizeScale": [
+      0.7,
+      1.2
+    ],
+    "color": [
+      [
+        0,
+        "#f7d1d9"
+      ],
+      [
+        1,
+        "#f2b8c6"
+      ]
+    ],
+    "alpha": [
+      [
+        0,
+        0
+      ],
+      [
+        0.1,
+        1
+      ],
+      [
+        0.85,
+        1
+      ],
+      [
+        1,
+        0
+      ]
+    ],
+    "ground": "die",
+    "sprite": "leaf"
+  },
+  "budget": {
+    "max": 500
+  }
+}

@@ -1,0 +1,96 @@
+{
+  "kind": "sound",
+  "note": "The charged heavy: a rising wind-up and then a deep cut.",
+  "bus": "sfx",
+  "level": 0,
+  "pitch": [
+    0.97,
+    1.03
+  ],
+  "limit": {
+    "minGap": 0.3,
+    "voices": 2
+  },
+  "spatial": {
+    "ref": 6,
+    "max": 60
+  },
+  "source": {
+    "type": "synth",
+    "length": 1,
+    "layers": {
+      "wind": {
+        "from": {
+          "noise": "pink"
+        },
+        "then": [
+          {
+            "filter": "bandpass",
+            "freq": 300,
+            "q": 2,
+            "glideTo": 9,
+            "glideTime": 0.55
+          },
+          {
+            "envelope": {
+              "attack": 0.5,
+              "decay": 0.15,
+              "curve": "linear"
+            }
+          },
+          {
+            "gain": 2
+          }
+        ]
+      },
+      "cut": {
+        "at": 0.55,
+        "from": {
+          "noise": "pink"
+        },
+        "then": [
+          {
+            "filter": "bandpass",
+            "freq": 700,
+            "q": 1.2,
+            "glideTo": 4,
+            "glideTime": 0.3
+          },
+          {
+            "envelope": {
+              "attack": 0.04,
+              "decay": 0.38,
+              "curve": "linear"
+            }
+          },
+          {
+            "gain": 6
+          }
+        ]
+      },
+      "boom": {
+        "at": 0.6,
+        "from": {
+          "osc": "sine",
+          "freq": [
+            90,
+            110
+          ],
+          "glideTo": 0.5,
+          "glideTime": 0.3
+        },
+        "then": [
+          {
+            "envelope": {
+              "attack": 0.01,
+              "decay": 0.4
+            }
+          },
+          {
+            "gain": -6
+          }
+        ]
+      }
+    }
+  }
+}

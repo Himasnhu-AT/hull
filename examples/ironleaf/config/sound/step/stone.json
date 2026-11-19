@@ -1,0 +1,86 @@
+{
+  "kind": "sound",
+  "note": "A step on stone: a hard click and a short ring.",
+  "bus": "sfx",
+  "level": -4,
+  "pitch": [
+    0.88,
+    1.12
+  ],
+  "limit": {
+    "minGap": 0.12,
+    "voices": 4,
+    "over": "skip"
+  },
+  "spatial": {
+    "ref": 3,
+    "max": 28
+  },
+  "source": {
+    "type": "synth",
+    "length": 0.25,
+    "layers": {
+      "click": {
+        "from": {
+          "noise": "white"
+        },
+        "then": [
+          {
+            "filter": "bandpass",
+            "freq": [
+              2200,
+              3200
+            ],
+            "q": 2
+          },
+          {
+            "envelope": {
+              "attack": 0.001,
+              "decay": 0.03
+            }
+          },
+          {
+            "gain": -3
+          }
+        ]
+      },
+      "knock": {
+        "from": {
+          "osc": "sine",
+          "freq": [
+            170,
+            210
+          ],
+          "glideTo": 0.6,
+          "glideTime": 0.05
+        },
+        "then": [
+          {
+            "envelope": {
+              "attack": 0.001,
+              "decay": 0.06
+            }
+          },
+          {
+            "gain": -6
+          }
+        ]
+      },
+      "ring": {
+        "from": {
+          "modes": [
+            1400,
+            2100
+          ],
+          "decay": 0.12,
+          "tilt": 0.4
+        },
+        "then": [
+          {
+            "gain": -16
+          }
+        ]
+      }
+    }
+  }
+}

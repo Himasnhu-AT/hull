@@ -37,6 +37,19 @@ importers:
         specifier: 0.187.0
         version: 0.187.0
 
+  examples/ironleaf:
+    dependencies:
+      hull:
+        specifier: workspace:*
+        version: link:../../packages/hull
+      three:
+        specifier: 0.187.0
+        version: 0.187.0
+    devDependencies:
+      '@types/three':
+        specifier: 0.187.0
+        version: 0.187.0
+
   packages/hull:
     dependencies:
       ajv:

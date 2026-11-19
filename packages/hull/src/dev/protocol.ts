@@ -172,7 +172,11 @@ export type ControlOp =
   | { op: 'screenshot' };
 
 export interface NodeState { found: boolean; x: number; y: number; z: number }
-export interface ControlState { tick: number; time: number; checksum: string; paused: boolean; nodes: Record<string, NodeState> }
+export interface ControlState {
+  tick: number; time: number; checksum: string; paused: boolean; nodes: Record<string, NodeState>;
+  /** Keys and buttons the game's input holds down now, so a script can tell a key that reached the game from one that did not. */
+  held: string[];
+}
 export interface ControlShot { png: string; width: number; height: number }
 
 export interface GameReport {

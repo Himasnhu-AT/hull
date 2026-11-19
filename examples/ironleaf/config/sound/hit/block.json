@@ -1,0 +1,81 @@
+{
+  "kind": "sound",
+  "note": "A blow caught on the blade: a dull knock and a short ring.",
+  "bus": "sfx",
+  "level": -4,
+  "pitch": [
+    0.92,
+    1.08
+  ],
+  "limit": {
+    "minGap": 0.06,
+    "voices": 4
+  },
+  "spatial": {
+    "ref": 5,
+    "max": 50
+  },
+  "source": {
+    "type": "synth",
+    "length": 0.5,
+    "layers": {
+      "knock": {
+        "from": {
+          "osc": "triangle",
+          "freq": [
+            140,
+            180
+          ],
+          "glideTo": 0.5,
+          "glideTime": 0.1
+        },
+        "then": [
+          {
+            "envelope": {
+              "attack": 0.001,
+              "decay": 0.14
+            }
+          },
+          {
+            "gain": -2
+          }
+        ]
+      },
+      "ring": {
+        "from": {
+          "modes": [
+            1500,
+            2300
+          ],
+          "decay": 0.25,
+          "tilt": 0.4
+        },
+        "then": [
+          {
+            "gain": -10
+          }
+        ]
+      },
+      "tick": {
+        "from": {
+          "noise": "white"
+        },
+        "then": [
+          {
+            "filter": "highpass",
+            "freq": 2800
+          },
+          {
+            "envelope": {
+              "attack": 0.001,
+              "decay": 0.03
+            }
+          },
+          {
+            "gain": -9
+          }
+        ]
+      }
+    }
+  }
+}

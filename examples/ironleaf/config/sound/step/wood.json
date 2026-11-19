@@ -1,0 +1,92 @@
+{
+  "kind": "sound",
+  "note": "A step on boards: a hollow knock.",
+  "bus": "sfx",
+  "level": -3,
+  "pitch": [
+    0.88,
+    1.12
+  ],
+  "limit": {
+    "minGap": 0.12,
+    "voices": 4,
+    "over": "skip"
+  },
+  "spatial": {
+    "ref": 3,
+    "max": 28
+  },
+  "source": {
+    "type": "synth",
+    "length": 0.26,
+    "layers": {
+      "knock": {
+        "from": {
+          "osc": "triangle",
+          "freq": [
+            130,
+            170
+          ],
+          "glideTo": 0.55,
+          "glideTime": 0.07
+        },
+        "then": [
+          {
+            "envelope": {
+              "attack": 0.001,
+              "decay": 0.1
+            }
+          },
+          {
+            "gain": -3
+          }
+        ]
+      },
+      "creak": {
+        "from": {
+          "noise": "pink"
+        },
+        "then": [
+          {
+            "filter": "bandpass",
+            "freq": [
+              700,
+              1000
+            ],
+            "q": 3
+          },
+          {
+            "envelope": {
+              "attack": 0.004,
+              "decay": 0.07
+            }
+          },
+          {
+            "gain": -10
+          }
+        ]
+      },
+      "tick": {
+        "from": {
+          "noise": "white"
+        },
+        "then": [
+          {
+            "filter": "bandpass",
+            "freq": 2600,
+            "q": 2
+          },
+          {
+            "envelope": {
+              "attack": 0.001,
+              "decay": 0.025
+            }
+          },
+          {
+            "gain": -9
+          }
+        ]
+      }
+    }
+  }
+}

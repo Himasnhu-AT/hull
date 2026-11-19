@@ -1,0 +1,152 @@
+{
+  "kind": "sound",
+  "note": "Rising notes and a long bell: the fight is won.",
+  "bus": "music",
+  "level": -2,
+  "source": {
+    "type": "synth",
+    "length": 4.5,
+    "layers": {
+      "n0": {
+        "at": 0,
+        "from": {
+          "osc": "triangle",
+          "freq": 293.7
+        },
+        "then": [
+          {
+            "filter": "lowpass",
+            "freq": 1468.5,
+            "q": 1
+          },
+          {
+            "envelope": {
+              "attack": 0.003,
+              "decay": 1
+            }
+          },
+          {
+            "gain": -4
+          }
+        ]
+      },
+      "n1": {
+        "at": 0.3,
+        "from": {
+          "osc": "triangle",
+          "freq": 392
+        },
+        "then": [
+          {
+            "filter": "lowpass",
+            "freq": 1960,
+            "q": 1
+          },
+          {
+            "envelope": {
+              "attack": 0.003,
+              "decay": 1
+            }
+          },
+          {
+            "gain": -4
+          }
+        ]
+      },
+      "n2": {
+        "at": 0.6,
+        "from": {
+          "osc": "triangle",
+          "freq": 440
+        },
+        "then": [
+          {
+            "filter": "lowpass",
+            "freq": 2200,
+            "q": 1
+          },
+          {
+            "envelope": {
+              "attack": 0.003,
+              "decay": 1
+            }
+          },
+          {
+            "gain": -4
+          }
+        ]
+      },
+      "n3": {
+        "at": 0.9,
+        "from": {
+          "osc": "triangle",
+          "freq": 587.3
+        },
+        "then": [
+          {
+            "filter": "lowpass",
+            "freq": 2936.5,
+            "q": 1
+          },
+          {
+            "envelope": {
+              "attack": 0.003,
+              "decay": 1.4
+            }
+          },
+          {
+            "gain": -4
+          }
+        ]
+      },
+      "n4": {
+        "at": 1.4,
+        "from": {
+          "osc": "triangle",
+          "freq": 784
+        },
+        "then": [
+          {
+            "filter": "lowpass",
+            "freq": 3920,
+            "q": 1
+          },
+          {
+            "envelope": {
+              "attack": 0.003,
+              "decay": 2
+            }
+          },
+          {
+            "gain": -6
+          }
+        ]
+      },
+      "bell": {
+        "at": 1.4,
+        "from": {
+          "modes": [
+            587,
+            880,
+            1175,
+            1760
+          ],
+          "decay": 2.5,
+          "tilt": 0.6
+        },
+        "then": [
+          {
+            "envelope": {
+              "attack": 0.002,
+              "decay": 2.5
+            }
+          },
+          {
+            "gain": -12
+          }
+        ]
+      }
+    },
+    "reverb": 0.35
+  }
+}

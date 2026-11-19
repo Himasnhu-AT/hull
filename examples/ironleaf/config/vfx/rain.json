@@ -1,0 +1,71 @@
+{
+  "kind": "vfx",
+  "note": "Rain falling around Aya: thin pale streaks, drawn from above her and dying on the ground.",
+  "emit": {
+    "rate": 380,
+    "shape": {
+      "box": [
+        30,
+        0,
+        30
+      ]
+    }
+  },
+  "particle": {
+    "life": [
+      0.7,
+      0.9
+    ],
+    "speed": [
+      14,
+      18
+    ],
+    "direction": {
+      "cone": [
+        0,
+        -1,
+        0
+      ],
+      "angleDeg": 6
+    },
+    "gravity": -12,
+    "drag": 0,
+    "size": [
+      [
+        0,
+        0.012
+      ],
+      [
+        1,
+        0.012
+      ]
+    ],
+    "color": [
+      [
+        0,
+        "#cfe0ea"
+      ],
+      [
+        1,
+        "#9fb4c0"
+      ]
+    ],
+    "alpha": [
+      [
+        0,
+        0.5
+      ],
+      [
+        1,
+        0.5
+      ]
+    ],
+    "stretch": 0.045,
+    "ground": "die",
+    "sprite": "spark",
+    "blend": "alpha"
+  },
+  "budget": {
+    "max": 1500
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "kind": "look",
+  "note": "Moonlit night. A pale blue moon high over the island, deep blue shadow, a faint haze over the water.",
+  "sun": {
+    "color": "#a9bfff",
+    "strength": 1.5,
+    "elevationDeg": 42,
+    "azimuthDeg": 120,
+    "shadows": true,
+    "shadowRange": 80,
+    "shadowSoftness": 4,
+    "shadowNormalBias": 0.05
+  },
+  "sky": {
+    "horizon": "#2a3a5c",
+    "mid": "#162244",
+    "zenith": "#070c1e"
+  },
+  "fog": {
+    "color": "#1c2845",
+    "near": 40,
+    "far": 420
+  },
+  "ambient": {
+    "color": "#5d74b8",
+    "intensity": 0.7,
+    "ground": "#161c2e"
+  },
+  "environment": {
+    "intensity": 0.2
+  },
+  "exposure": 1.15,
+  "toneMapping": "aces",
+  "post": {
+    "bloom": 0.7,
+    "bloomThreshold": 0.7,
+    "contrast": 1.1,
+    "saturation": 0.95,
+    "vignette": 0.4,
+    "grain": 0.03,
+    "aa": "fxaa"
+  }
+}

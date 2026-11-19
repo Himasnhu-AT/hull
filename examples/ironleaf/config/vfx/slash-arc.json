@@ -1,0 +1,74 @@
+{
+  "kind": "vfx",
+  "note": "A blade stroke seen in the air: a fan of fast bright streaks that stay in the path of the cut.",
+  "emit": {
+    "count": [
+      16,
+      16
+    ],
+    "shape": {
+      "box": [
+        0.1,
+        1.4,
+        0.1
+      ]
+    }
+  },
+  "particle": {
+    "life": [
+      0.1,
+      0.22
+    ],
+    "speed": [
+      1.5,
+      4
+    ],
+    "direction": {
+      "cone": [
+        1,
+        0,
+        0
+      ],
+      "angleDeg": 12
+    },
+    "gravity": 0,
+    "drag": 3,
+    "size": [
+      [
+        0,
+        0.05
+      ],
+      [
+        1,
+        0.01
+      ]
+    ],
+    "color": [
+      [
+        0,
+        "#ffffff"
+      ],
+      [
+        1,
+        "#9fc4ff"
+      ]
+    ],
+    "alpha": [
+      [
+        0,
+        0.9
+      ],
+      [
+        1,
+        0
+      ]
+    ],
+    "glow": 2,
+    "stretch": 0.09,
+    "sprite": "spark",
+    "blend": "additive"
+  },
+  "budget": {
+    "max": 300
+  }
+}

@@ -1,0 +1,91 @@
+{
+  "kind": "sound",
+  "note": "A step in wet ground: a squelch and a slap.",
+  "bus": "sfx",
+  "level": -3,
+  "pitch": [
+    0.88,
+    1.12
+  ],
+  "limit": {
+    "minGap": 0.12,
+    "voices": 4,
+    "over": "skip"
+  },
+  "spatial": {
+    "ref": 3,
+    "max": 28
+  },
+  "source": {
+    "type": "synth",
+    "length": 0.3,
+    "layers": {
+      "slap": {
+        "from": {
+          "noise": "brown"
+        },
+        "then": [
+          {
+            "filter": "lowpass",
+            "freq": [
+              500,
+              650
+            ]
+          },
+          {
+            "envelope": {
+              "attack": 0.002,
+              "decay": 0.12
+            }
+          },
+          {
+            "gain": 2
+          }
+        ]
+      },
+      "squelch": {
+        "from": {
+          "noise": "pink"
+        },
+        "then": [
+          {
+            "filter": "bandpass",
+            "freq": 700,
+            "q": 4,
+            "glideTo": 2.5,
+            "glideTime": 0.12
+          },
+          {
+            "envelope": {
+              "attack": 0.01,
+              "decay": 0.14
+            }
+          },
+          {
+            "gain": -7
+          }
+        ]
+      },
+      "splash": {
+        "from": {
+          "noise": "white"
+        },
+        "then": [
+          {
+            "filter": "highpass",
+            "freq": 3500
+          },
+          {
+            "envelope": {
+              "attack": 0.003,
+              "decay": 0.08
+            }
+          },
+          {
+            "gain": -13
+          }
+        ]
+      }
+    }
+  }
+}

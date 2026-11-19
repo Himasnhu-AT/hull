@@ -1,0 +1,62 @@
+{
+  "kind": "sound",
+  "note": "A hard wind in the rain.",
+  "bus": "sfx",
+  "level": -10,
+  "loop": true,
+  "limit": {
+    "voices": 1,
+    "over": "skip"
+  },
+  "source": {
+    "type": "synth",
+    "length": 6,
+    "layers": {
+      "low": {
+        "from": {
+          "noise": "pink"
+        },
+        "then": [
+          {
+            "filter": "lowpass",
+            "freq": 600
+          },
+          {
+            "envelope": {
+              "attack": 2,
+              "decay": 3.5,
+              "curve": "linear"
+            }
+          },
+          {
+            "gain": 4
+          }
+        ]
+      },
+      "hiss": {
+        "from": {
+          "noise": "white"
+        },
+        "then": [
+          {
+            "filter": "bandpass",
+            "freq": 2200,
+            "q": 0.6,
+            "glideTo": 1.6,
+            "glideTime": 3
+          },
+          {
+            "envelope": {
+              "attack": 2,
+              "decay": 3.8,
+              "curve": "linear"
+            }
+          },
+          {
+            "gain": -8
+          }
+        ]
+      }
+    }
+  }
+}

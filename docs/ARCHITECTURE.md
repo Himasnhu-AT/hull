@@ -411,6 +411,7 @@ for `window.hullShell`, which the Electron preload exposes).
   `invertY`, `sensitivity` and key bindings. `set` clamps, `apply(targets)` pushes them to audio, render and input, `look()`
   turns a mouse or stick delta into a rotation without allocating.
 * **Pointer lock** by policy: `click`, `manual` or `never`; released while a menu is open (`setMenuOpen`) or the page is hidden.
+* **Embedded in an iframe** (the Studio's Game view): a click takes key focus for the game itself, because a bound mouse button cancels the browser's own focus move; losing the pointer lock (Esc) hands the keyboard back to the page around it. A key event with an empty `code` is named from its `key`. `game.run` `state` returns `held`, the keys the game holds down.
 * **Screens**: `openSettingsScreen`, `openBindingsScreen` and `attachPadNav` (gamepad focus navigation).
 
 ### kits
