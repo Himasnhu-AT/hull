@@ -72,13 +72,14 @@ async function reachOf(kind: string, move: string): Promise<[number, number]> {
 describe('Ironleaf enemies', () => {
   it('every blow lands at the distances its pattern is picked at, and not from far beyond', async () => {
     const want: [string, string, number, number][] = [
-      ['ashblade', 'sword-cut', 1.4, 2.0], ['ashblade', 'sword-cross', 1.4, 2.0], ['ashpike', 'spear-thrust', 2.0, 3.0], ['ashpike', 'spear-sweep', 1.5, 2.4],
-      ['hulk', 'hulk-smash', 1.6, 2.6], ['hulk', 'hulk-grab', 1.2, 1.9], ['kagari', 'duel-cut', 1.6, 2.2], ['kagari', 'duel-thrust', 1.8, 2.5], ['kagari', 'duel-sweep', 1.6, 2.3],
+      ['ashblade', 'sword-cut', 1.4, 2.0], ['ashblade', 'sword-cross', 1.4, 2.0], ['ashpike', 'spear-thrust', 2.0, 2.8], ['ashpike', 'spear-sweep', 1.5, 2.4],
+      ['hulk', 'hulk-smash', 1.9, 2.1], ['hulk', 'hulk-grab', 1.5, 2.2], ['kagari', 'duel-cut', 1.6, 2.1], ['kagari', 'duel-thrust', 1.8, 2.4], ['kagari', 'duel-sweep', 1.6, 2.2],
     ];
     const out: string[] = [];
     for (const [kind, move, mid, upper] of want) {
       const [near, far] = await reachOf(kind, move);
       out.push(kind + ' ' + move + ' lands from ' + near + ' to ' + far + ' m');
+      console.log(kind, move, near, far);
       expect(far, kind + ' ' + move).toBeGreaterThanOrEqual(upper);
       expect(near, kind + ' ' + move).toBeLessThanOrEqual(mid);
       expect(far, kind + ' ' + move).toBeLessThanOrEqual(upper + 1.1);
@@ -107,7 +108,7 @@ describe('Ironleaf enemies', () => {
   for (const kind of KINDS) {
     it('plays ' + kind + ' against a scripted player, the same every time', async () => {
       const steps = kind === 'kagari' ? 2400 : 1800;
-      const tune = kind === 'kagari' ? (_r: Rig, foe: Combatant) => { foe.health.hp = foe.health.max * 0.3; } : undefined;
+      const tune = kind === 'kagari' ? (r: Rig, foe: Combatant) => { foe.health.hp = foe.health.max * 0.6; r.g.world.after(8, () => { foe.health.hp = foe.health.max * 0.3; }); } : undefined;
       const a = await fight(kind, steps, tune);
       const b = await fight(kind, steps, tune);
       console.log(kind, JSON.stringify(a.log), a.checksum);

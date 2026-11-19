@@ -30,8 +30,8 @@
     ]
    },
    "lunge": {
-    "distance": 0.5,
-    "from": 0.55,
+    "distance": 1,
+    "from": 0.5,
     "to": 0.8
    },
    "sound": "sound/swing/charged",
@@ -52,8 +52,8 @@
     ]
    },
    "lunge": {
-    "distance": 1.1,
-    "from": 0.5,
+    "distance": 1.5,
+    "from": 0.45,
     "to": 0.8
    },
    "sound": "sound/swing/charged",

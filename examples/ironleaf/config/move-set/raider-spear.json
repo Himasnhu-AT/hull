@@ -67,7 +67,12 @@
     ]
    },
    "sound": "sound/swing/heavy",
-   "note": "A low sweep: jump or dodge."
+   "note": "A low sweep: jump or dodge.",
+   "lunge": {
+    "distance": 0.4,
+    "from": 0.3,
+    "to": 0.5
+   }
   }
  }
 }
