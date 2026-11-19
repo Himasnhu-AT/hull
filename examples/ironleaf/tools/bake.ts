@@ -87,7 +87,7 @@ export function bake(rig: Rig, base: Frame, spec: ClipSpec, dt = 1 / 60): Baked 
     const tr: Record<string, unknown> = { rotation: idx.map((i) => [r3(times[i]!), s[i]!.map(r3)]) };
     if (b === 'hips' && !spec.only) {
       const oi = simplify(times, hipsOff, 0.004);
-      tr.offset = oi.map((i) => [r3(times[i]!), hipsOff[i]!.map(r3)]);
+      tr.offset = oi.map((i) => [r3(times[i]!), hipsOff[i]!.map((v) => r3(v / rig.sk.scale))]);
     }
     tracks[b] = tr;
   }

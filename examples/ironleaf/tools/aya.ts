@@ -58,7 +58,14 @@ const travel = (b: Frame, d: number, t0: number, t1: number, dip = 0.04, ease: E
   K(t0, 'smooth', { hips: add(b.hips, [0, -dip, 0]) }),
   K(t1, ease, { hips: add(b.hips, [0, -dip * 1.5, d]) }),
 ];
-const mk = (b: Frame, length: number, keys: Key[], win: ClipSpec['windows'], extra: Partial<ClipSpec> = {}): Authored => ({ base: b, spec: { length, root: true, keys: sorted(keys), windows: win, ...extra } });
+
+/** A strike that lands at the end of its trace window would only touch its target on the last tick: let it arrive a little earlier and stay out. */
+export function arriveEarly(keys: Key[], win: ClipSpec['windows'], by: number): Key[] {
+  const tr = win?.trace as [number, number] | undefined;
+  if (!tr) return keys;
+  return keys.map((k) => (k.ease === 'in' && Math.abs(k.t - tr[1]) < 1e-6 ? { ...k, t: k.t - by } : k));
+}
+const mk = (b: Frame, length: number, keys: Key[], win: ClipSpec['windows'], extra: Partial<ClipSpec> = {}): Authored => ({ base: b, spec: { length, root: true, keys: sorted(arriveEarly(keys, win, 0.03)), windows: win, ...extra } });
 
 /** A horizontal spin: the blade goes all the way round at radius r, hips and feet turning with it. */
 function spin(b: Frame, t0: number, t1: number, n: number, turns: number, hu: number, bu: number, r = 0.4, f0 = 0.15): Key[] {
