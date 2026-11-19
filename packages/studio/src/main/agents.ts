@@ -12,7 +12,16 @@ import { delimiter, join } from 'node:path';
 import { Readable, Writable } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 import { client, methods, ndJsonStream, PROTOCOL_VERSION, type ClientConnection, type McpServer, type SessionUpdate, type ToolCall, type ToolCallContent, type ToolCallUpdate } from '@agentclientprotocol/sdk';
-import type { AgentEvent, AgentInfo, PermissionOption, ToolContent, ToolView } from '../shared/agentApi.ts';
+import type { ContentBlock } from '@agentclientprotocol/sdk';
+import type { UiBlock } from 'hull/dev/protocol';
+import type { AgentEvent, AgentInfo, EnsureResult, PermissionOption, PromptOptions, ToolContent, ToolView } from '../shared/agentApi.ts';
+import { KEY_ENV, NEEDS_KEY, type SettingsStore } from './agentSettings.ts';
+
+// The keys Hull adds to ACP messages (HULL_META in hull/dev/protocol). Spelled out here because this file runs in Node
+// without the engine package's runtime exports.
+const META_UI = 'hull.ui';
+const META_MODE = 'hull.mode';
+const META_STAGE = 'hull.stage';
 
 /** The open project, as far as an agent needs it. */
 export interface AgentProject { root: string; mcp: { url: string; launcher: string } }
@@ -24,12 +33,18 @@ export interface HubOptions {
   log?: (line: string) => void;
   /** Overrides process.env (tests). */
   env?: NodeJS.ProcessEnv;
+  /** The builder's model and key. Without it the environment alone decides. */
+  settings?: SettingsStore;
 }
 
 export interface Hub {
   list(): Promise<AgentInfo[]>;
   start(agentId: string): Promise<string>;
-  prompt(sid: string, text: string): Promise<void>;
+  prompt(sid: string, text: string, options?: PromptOptions): Promise<void>;
+  /** Hull's own agent for the open project, started if it is not running. HULL_ENSURE_AGENT=<id> starts that catalogue agent instead (tests, screenshots). */
+  ensure(): Promise<EnsureResult>;
+  /** Stops the builder that ensure() started, so the next ensure() starts one with the current settings. */
+  stopEnsured(): Promise<void>;
   cancel(sid: string): Promise<void>;
   stop(sid: string): Promise<void>;
   answer(sid: string, reqId: string, optionId: string | null): Promise<void>;
@@ -93,6 +108,32 @@ function catalog(env: NodeJS.ProcessEnv, geminiAcpFlag: string): Spec[] {
   ];
 }
 
+/** The content blocks of a prompt: the note, then (for a frozen moment) the screenshot and a line on what just played. */
+export function promptBlocks(text: string, opts: PromptOptions = {}): ContentBlock[] {
+  const blocks: ContentBlock[] = [{ type: 'text', text }];
+  const m = opts.moment;
+  const about = opts.about && opts.about.length > 0 ? `About: ${opts.about.join(', ')}` : '';
+  if (m) {
+    blocks.push({ type: 'image', mimeType: 'image/png', data: m.png });
+    const just = m.recent.length > 0 ? m.recent.map((r) => `${r.kind} ${r.id} (${r.label})`).join(', ') : 'nothing';
+    blocks.push({ type: 'text', text: `Moment: time ${m.time.toFixed(1)} s, tick ${m.tick}. Just now: ${just}${about ? `\n${about}` : ''}` });
+  } else if (about) blocks.push({ type: 'text', text: about });
+  return blocks;
+}
+
+/** The _meta of a prompt: what kind of run it is. No mode means the builder treats it as a fix. */
+export function promptMeta(opts: PromptOptions = {}): Record<string, unknown> | undefined {
+  const meta: Record<string, unknown> = {};
+  if (opts.mode) meta[META_MODE] = opts.mode;
+  if (opts.stage) meta[META_STAGE] = opts.stage;
+  return Object.keys(meta).length > 0 ? meta : undefined;
+}
+
+const uiOf = (meta: unknown): UiBlock | null => {
+  const b = (meta as Record<string, unknown> | null | undefined)?.[META_UI] as UiBlock | undefined;
+  return b && typeof b === 'object' && typeof b.id === 'string' && typeof b.kind === 'string' ? b : null;
+};
+
 const cut = (s: string, n = 4000): string => (s.length > n ? `${s.slice(0, n)}\n...` : s);
 
 function contentOf(c: ToolCallContent): ToolContent | null {
@@ -119,6 +160,8 @@ export function createHub(o: HubOptions): Hub {
   const env = o.env ?? process.env;
   const log = o.log ?? (() => {});
   const sessions = new Map<string, SessionState>();
+  let ensured: { root: string; sid: string } | null = null;
+  let ensuring: Promise<EnsureResult> | null = null;
   let nextPerm = 1;
   let geminiFlag: string | null = null;
 
@@ -149,7 +192,8 @@ export function createHub(o: HubOptions): Hub {
       if (path) info.command = [s.kind === 'hull' ? 'hull-agent' : path, ...(s.kind === 'hull' ? [] : s.args)].join(' ');
       if (!path && s.kind === 'hull') info.needs = 'The Hull agent package is not built in this checkout (packages/agent).';
       else if (!path) { info.install = s.install; if (s.after) info.after = s.after; }
-      if (path && s.needsEnv && !s.needsEnv.any.some((k) => env[k])) info.needs = s.needsEnv.hint;
+      if (path && s.kind === 'hull' && o.settings) { const n = await o.settings.needs(env); if (n) info.needs = n; }
+      else if (path && s.needsEnv && !s.needsEnv.any.some((k) => env[k])) info.needs = s.needsEnv.hint;
       out.push(info);
     }
     return out;
@@ -176,9 +220,13 @@ export function createHub(o: HubOptions): Hub {
       case 'agent_message_chunk':
       case 'agent_thought_chunk':
       case 'user_message_chunk': {
-        if (u.content.type !== 'text') return;
+        // A card rides in _meta of a chunk that usually has no text.
+        const ui = u.sessionUpdate === 'agent_message_chunk' ? uiOf((u as { _meta?: unknown })._meta) : null;
+        if (u.content.type === 'text' && u.content.text === '' && ui) { o.emit({ type: 'ui', sid: s.sid, block: ui }); return; }
+        if (u.content.type !== 'text') { if (ui) o.emit({ type: 'ui', sid: s.sid, block: ui }); return; }
         const role = u.sessionUpdate === 'agent_message_chunk' ? 'agent' : u.sessionUpdate === 'agent_thought_chunk' ? 'thought' : 'user';
         o.emit({ type: 'message', sid: s.sid, role, text: u.content.text });
+        if (ui) o.emit({ type: 'ui', sid: s.sid, block: ui });
         return;
       }
       case 'plan':
@@ -200,7 +248,9 @@ export function createHub(o: HubOptions): Hub {
     const exe = spec.kind === 'hull' ? process.execPath : which(spec.bin, env);
     if (!exe || (spec.kind === 'hull' && !existsSync(HULL_AGENT_BIN))) throw new Error(`${spec.name} is not installed. ${spec.install}`);
 
-    const childEnv = { ...env, PATH: searchPath(env).join(delimiter) } as NodeJS.ProcessEnv;
+    // Hull's own agent gets the key from the app's settings; other agents keep their own sign-in and get the plain environment.
+    const base = spec.kind === 'hull' && o.settings ? await o.settings.env(env) : env;
+    const childEnv = { ...base, PATH: searchPath(env).join(delimiter) } as NodeJS.ProcessEnv;
     const args = spec.kind === 'hull' ? [...spec.args, project.root] : spec.args;
     const child = spawn(exe, args, { cwd: project.root, env: childEnv, stdio: ['pipe', 'pipe', 'pipe'] });
     const stderr: string[] = [];
@@ -217,10 +267,12 @@ export function createHub(o: HubOptions): Hub {
       .onRequest(methods.client.session.requestPermission, async ({ params }) => {
         if (!s || params.sessionId !== s.sid) return { outcome: { outcome: 'cancelled' } };
         const reqId = `p${nextPerm++}`;
+        const ui = uiOf((params.toolCall as { _meta?: unknown })._meta);
         const options: PermissionOption[] = params.options.map((x) => ({ id: x.optionId, name: x.name, kind: x.kind }));
-        const tool = view(s, params.toolCall);
         const answer = new Promise<string | null>((res) => s.perms.set(reqId, res));
-        o.emit({ type: 'permission', sid: s.sid, reqId, tool, options });
+        // A card that waits (ask, approve) is drawn as that card; any other request is the plain permission prompt.
+        if (ui) o.emit({ type: 'ui', sid: s.sid, block: ui, reqId });
+        else o.emit({ type: 'permission', sid: s.sid, reqId, tool: view(s, params.toolCall), options });
         const picked = await answer;
         s.perms.delete(reqId);
         o.emit({ type: 'permission-done', sid: s.sid, reqId, optionId: picked });
@@ -257,13 +309,13 @@ export function createHub(o: HubOptions): Hub {
   return {
     list,
     start,
-    async prompt(sid, text) {
+    async prompt(sid, text, opts) {
       const s = get(sid);
       if (s.running) throw new Error('The agent is still working. Cancel it first.');
       s.running = true; s.tools.clear();
       o.emit({ type: 'status', sid, state: 'running' });
       // Streams to the panel as events; the promise here is only the end of the run.
-      void s.conn.agent.request(methods.agent.session.prompt, { sessionId: sid, prompt: [{ type: 'text', text }] }).then(
+      void s.conn.agent.request(methods.agent.session.prompt, { sessionId: sid, prompt: promptBlocks(text, opts), ...(promptMeta(opts) ? { _meta: promptMeta(opts) } : {}) }).then(
         (r) => { s.running = false; o.emit({ type: 'done', sid, stopReason: r.stopReason }); o.emit({ type: 'status', sid, state: 'ready' }); },
         (e: unknown) => { s.running = false; o.emit({ type: 'status', sid, state: 'error', message: e instanceof Error ? e.message : String(e) }); },
       );
@@ -280,6 +332,27 @@ export function createHub(o: HubOptions): Hub {
       s.child.kill();
     },
     async answer(sid, reqId, optionId) { get(sid).perms.get(reqId)?.(optionId); },
+    async ensure() {
+      const project = o.project();
+      if (!project) throw new Error('Open a project first.');
+      if (ensured && ensured.root === project.root && sessions.has(ensured.sid)) return { sid: ensured.sid };
+      if (ensuring) return ensuring;
+      ensuring = (async (): Promise<EnsureResult> => {
+        const id = env['HULL_ENSURE_AGENT'] || 'hull';
+        if (id === 'hull') {
+          const needs = o.settings ? await o.settings.needs(env) : (KEY_ENV.some((k) => env[k]) ? null : NEEDS_KEY);
+          if (needs) return { needs };
+        }
+        const sid = await start(id);
+        ensured = { root: project.root, sid };
+        return { sid };
+      })().finally(() => { ensuring = null; });
+      return ensuring;
+    },
+    async stopEnsured() {
+      const e = ensured; ensured = null;
+      if (e) { const s = sessions.get(e.sid); if (s) { for (const r of s.perms.values()) r(null); s.child.kill(); } }
+    },
     async closeAll() { for (const s of [...sessions.values()]) { for (const r of s.perms.values()) r(null); s.child.kill(); } sessions.clear(); },
   };
 }

@@ -1,6 +1,8 @@
 // What the agent panel and the app's main process say to each other. The main process runs agents (ACP, stdio) and the
 // terminal; the renderer only sees these plain, serialisable shapes. Nothing here depends on the ACP library.
 
+import type { AgentMode, GameMoment, StageId, UiBlock } from 'hull/dev/protocol';
+
 export type AgentKind = 'hull' | 'acp' | 'terminal';
 
 /** One agent the panel can offer. `installed` false means it was not found on this Mac; `install` says how to get it. */
@@ -48,6 +50,8 @@ export type AgentEvent =
   | { type: 'plan'; sid: string; entries: PlanEntry[] }
   | { type: 'tool'; sid: string; tool: ToolView }
   | { type: 'permission'; sid: string; reqId: string; tool: ToolView; options: PermissionOption[] }
+  /** A card from the builder (docs/IDEA-TO-PLAY.md 4.4), sent whole and again with the same id to update it. `reqId` is present when it waits: answer with agentAnswer (the option id, or null to answer in words instead). */
+  | { type: 'ui'; sid: string; block: UiBlock; reqId?: string }
   | { type: 'permission-done'; sid: string; reqId: string; optionId: string | null }
   | { type: 'done'; sid: string; stopReason: string }
   | { type: 'term-data'; tid: string; data: string }
@@ -67,3 +71,28 @@ export interface ClaudeCodeInfo {
   /** The line the person runs once so `claude` can reach this project's tools. */
   mcpAdd: string;
 }
+
+/** What a prompt may carry besides its text (M11). No mode means "fix". */
+export interface PromptOptions {
+  mode?: AgentMode;
+  /** For mode 'build': the one stage to run. */
+  stage?: StageId;
+  /** A frozen moment: its screenshot and what just played go with the note. */
+  moment?: GameMoment;
+  /** Review keys the note is about: config ids, 'tunables:<block>', 'explain:<id>'. */
+  about?: string[];
+}
+
+/** Which model the builder uses. The key is kept by the app and never handed back to the page. */
+export interface AgentSettings {
+  provider: 'anthropic' | 'openai';
+  hasKey: boolean;
+  baseUrl?: string;
+  model?: string;
+  /** 'app' when the app keeps the key; 'environment' in web mode, where the shell's environment decides and nothing here can change it. */
+  source?: 'app' | 'environment';
+}
+export interface AgentSettingsInput { provider: 'anthropic' | 'openai'; apiKey?: string; baseUrl?: string; model?: string }
+
+/** The answer of agentEnsure: a session ready for prompts, or what is missing first (a key). */
+export type EnsureResult = { sid: string } | { needs: string };

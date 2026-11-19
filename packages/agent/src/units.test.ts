@@ -23,8 +23,10 @@ describe('providers', () => {
     const c = await p.complete({ system: 'sys', messages: msgs, tools: [{ name: 'check', description: 'd', schema: { type: 'object' } }], signal });
     expect(seen!.url).toBe('https://api.anthropic.com/v1/messages');
     expect(seen!.headers['x-api-key']).toBe('sk-secret');
-    expect(seen!.body.system).toBe('sys');
+    expect(seen!.body.system).toEqual([{ type: 'text', text: 'sys', cache_control: { type: 'ephemeral' } }]);
+    expect(seen!.body.stream).toBe(true);
     expect(seen!.body.tools[0].input_schema).toEqual({ type: 'object' });
+    expect(seen!.body.tools[0].cache_control).toEqual({ type: 'ephemeral' });
     expect(seen!.body.messages[2].content[0]).toMatchObject({ type: 'tool_result', tool_use_id: 't0' });
     expect(c).toMatchObject({ text: 'ok', stop: 'tool_use', usage: { input: 10, output: 4 }, toolCalls: [{ id: 't1', name: 'config_set', input: { id: 'a' } }] });
   });

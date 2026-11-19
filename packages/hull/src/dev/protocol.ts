@@ -154,6 +154,8 @@ export interface GameControl {
   timeScale?: number;
   /** Start the game again from `ready` with the same seed. */
   restart?: boolean;
+  /** Only this game hears it (the id the app put on its frame, ?hull-client=). Without it, every game does. */
+  client?: string;
 }
 
 // ---- M3: the control port --------------------------------------------------------------------------------------------
@@ -178,6 +180,9 @@ export interface ControlState {
   held: string[];
 }
 export interface ControlShot { png: string; width: number; height: number }
+
+/** Game to server: what the engine's trace hook heard since the last batch (dev/recent.ts), oldest first. */
+export interface GameEvents { items: RecentEvent[] }
 
 export interface GameReport {
   tick: number;
@@ -230,7 +235,7 @@ export interface AssetResult {
 }
 
 /** Methods the server answers. */
-export interface Methods {
+export interface Methods extends CreateMethods {
   'project.info': { params: Record<string, never>; result: ProjectInfo };
   /**
    * The page options the game opens with (`start=camp&look=night`, no leading `?`). Called with no `query` it reads them; with one it
@@ -268,7 +273,7 @@ export interface Methods {
   'exp.discard': { params: { name: string }; result: { ok: boolean } };
   /** Forwarded to every connected game. */
   'game.control': { params: GameControl; result: Record<string, never> };
-  /** Runs one control op on a connected game (the first of the project's games unless `client` is given) and returns its answer. */
+  /** Runs one control op on a connected game and returns its answer. `client` names the game (the app's frame loads the game page with ?hull-client=<id>); without it, the first game in a frame, and a headless page a tool opened only when no other is connected. */
   'game.run': { params: { control: ControlOp; client?: string }; result: ControlState | ControlShot | Record<string, never> };
   /** Review notes (.hull/review.json): what has been checked, what needs a change. */
   'review.list': { params: { open?: boolean }; result: ReviewEntry[] };
@@ -323,7 +328,7 @@ export interface ReviewEntry {
 }
 
 /** Notifications the server pushes (JSON-RPC notifications: method + params, no id). */
-export interface Pushes {
+export interface Pushes extends CreatePushes {
   /** A config file changed (from the app, an agent, or an editor on disk). Games call config.update. */
   'config.changed': { id: string; path: string; text: string };
   'config.removed': { id: string; path: string };
@@ -349,3 +354,115 @@ export interface Pushes {
 
 export type MethodName = keyof Methods;
 export type PushName = keyof Pushes;
+
+// ---- M11: idea to play -------------------------------------------------------------------------------------------------
+// CONTRACT for docs/IDEA-TO-PLAY.md section 4. Types only. `CreateMethods` and `CreatePushes` are part of `Methods` and `Pushes`
+// (they extend them above).
+
+/** Something the running game just did, for the "Just now" strip and for a frozen moment. Game time, never wall time. */
+export interface RecentEvent {
+  /** Game time in seconds when it happened. */
+  at: number;
+  kind: 'sound' | 'anim' | 'vfx' | 'actor';
+  /** The config id when there is one ('sound/sword/hit', 'vfx/clash-sparks', 'character/aya'), else the node's path. */
+  id: string;
+  /** A plain name for a chip: 'Clash', 'Stone cut', 'Ashblade'. */
+  label: string;
+  /** The node it happened on, when known. */
+  node?: string;
+}
+
+/** A frozen moment sent with a note: what the person was looking at. */
+export interface GameMoment { tick: number; time: number; png: string; width: number; height: number; recent: RecentEvent[] }
+
+/** The brief is GAME.md at the project root, split at its "## " headings. A section's id is its title in kebab case. */
+export interface BriefSection { id: string; title: string; text: string }
+export interface BriefDoc { exists: boolean; title: string; text: string; sections: BriefSection[] }
+
+/** The build's stages, in the order they run. */
+export type StageId = 'world' | 'actors' | 'animations' | 'rules' | 'sounds' | 'effects' | 'screens';
+
+/** A drawing for a piece the person cannot judge by looking or listening. */
+export type ExplainBody =
+  | { type: 'flow'; nodes: { id: string; text: string; kind?: 'step' | 'ask' | 'end' }[]; edges: { from: string; to: string; label?: string }[] }
+  /** A picture of a place (a PNG data URL) with numbered marks; x and y are 0..1 of the picture. */
+  | { type: 'map'; image: string; width: number; height: number; marks: { x: number; y: number; label: string }[] }
+  | { type: 'table'; columns: string[]; rows: (string | number)[][] }
+  | { type: 'image'; image: string; width: number; height: number };
+
+/** One explained piece, kept in .hull/explain/<id>.json. Reviewed under the key 'explain:<id>'. */
+export interface ExplainDoc {
+  /** Lower-case letters, digits and dashes. */
+  id: string;
+  title: string;
+  stage: StageId;
+  /** One or two plain sentences: what was decided and why it is drawn this way. */
+  why: string;
+  body: ExplainBody;
+  /** Config ids and src/ files this explains. */
+  covers?: string[];
+  by?: Author;
+  at?: string;
+}
+
+export interface StageState {
+  id: StageId;
+  status: 'waiting' | 'building' | 'ready' | 'failed';
+  /** What the stage made, in a sentence, for the next stage's prompt and for the person. */
+  summary?: string;
+  /** The history checkpoint saved when it passed. */
+  checkpoint?: string;
+  /** Review keys of the pieces it made: config ids, 'tunables:<block>', 'explain:<id>'. */
+  pieces: string[];
+}
+
+/** Where a project is in the flow, kept in .hull/create.json. A project without the file is at step 'play' with no stages. */
+export interface CreateState { idea: string; step: 'idea' | 'brief' | 'build' | 'play'; briefApproved: boolean; stages: StageState[] }
+
+/** A document an agent can read to learn Hull: a kit's README, a guide, or the summary of the public API. */
+export interface DocItem { id: string; title: string; kind: 'kit' | 'guide' | 'api'; bytes: number }
+
+export interface CreateMethods {
+  'brief.read': { params: Record<string, never>; result: BriefDoc };
+  /** Writes GAME.md whole (`text`) or one section (`section`, added in the standard order when new). Recorded with its author. */
+  'brief.write': { params: { text?: string; section?: { id: string; title?: string; text: string }; author?: Author }; result: WriteResult & { doc?: BriefDoc } };
+  'docs.list': { params: Record<string, never>; result: { items: DocItem[] } };
+  'docs.read': { params: { id: string }; result: { ok: boolean; problems: Problem[]; id?: string; title?: string; text?: string } };
+  'explain.list': { params: Record<string, never>; result: { items: ExplainDoc[] } };
+  /** Validated against the explain schema before it is kept; an id that exists is replaced. */
+  'explain.write': { params: { doc: ExplainDoc; author?: Author }; result: WriteResult };
+  'create.get': { params: Record<string, never>; result: CreateState };
+  /** Merges `patch` into the state; `stage` updates the stage with that id (the seven stages always exist, in order). */
+  'create.set': { params: { patch?: Partial<Omit<CreateState, 'stages'>>; stage?: Partial<StageState> & { id: StageId }; author?: Author }; result: CreateState };
+  /** What the game did in the last `seconds` of game time (default 4), newest first. */
+  'game.recent': { params: { seconds?: number; client?: string }; result: { items: RecentEvent[] } };
+  /** Pauses the game and returns the drawn frame with the tick, the time and the recent events. */
+  'game.moment': { params: { client?: string }; result: GameMoment };
+}
+
+/** Pushed to every studio. `game.recent` carries only the new events, at most ten times a second. */
+export interface CreatePushes {
+  /** `client` is the game that did it, so a studio keeps only its own frame's events. */
+  'game.recent': { items: RecentEvent[]; client?: string };
+  'brief.changed': BriefDoc;
+  'explain.changed': { id: string };
+  'create.changed': CreateState;
+}
+
+/**
+ * A piece of interface the builder sends into the conversation (docs/IDEA-TO-PLAY.md section 4.4). It is sent whole, and
+ * sent again with the same id to update it. `ask` and `approve` wait for the person; the others do not.
+ */
+export type UiBlock =
+  | { id: string; kind: 'ask'; question: string; options: string[]; answer?: string }
+  | { id: string; kind: 'approve'; question: string; detail?: string; yes: string; no: string; answer?: 'yes' | 'no' }
+  | { id: string; kind: 'brief'; title: string; sections: (BriefSection & { status: 'writing' | 'done' | 'changed' })[] }
+  | { id: string; kind: 'stages'; stages: StageState[] }
+  | { id: string; kind: 'pieces'; stage: StageId; keys: string[] }
+  | { id: string; kind: 'explain'; doc: ExplainDoc }
+  /** A fix: what changed on which piece. `change` is the history change id, for Keep and Put back. */
+  | { id: string; kind: 'change'; title: string; piece: string; lines: { label: string; from: string; to: string }[]; change?: string };
+
+/** The `_meta` keys Hull adds to ACP messages. */
+export const HULL_META = { ui: 'hull.ui', mode: 'hull.mode', stage: 'hull.stage' } as const;
+export type AgentMode = 'brief' | 'build' | 'fix';

@@ -1,6 +1,7 @@
 // The state graph. Layers hold states (a clip, a 1D blend, or nothing); transitions move between them on
 // conditions over named parameters and cross-fade by weight. `step` runs on the fixed step and fires clip events;
 // `evaluate` runs per frame and only reads, blending the poses at a time between the last two steps.
+import { isTracing, trace } from '../core/trace.ts';
 import type { AnimGraph } from '../schema/anim-graph.ts';
 import type { Clip, ClipWindow } from './clip.ts';
 import { clamp } from './math.ts';
@@ -176,6 +177,10 @@ export class Graph {
   speed = 0;
   /** Settings for IK, from the file. */
   readonly ik: NonNullable<AnimGraph['ik']>;
+
+  /** What the "Just now" feed calls this graph and the node it moves; the animator sets them after building it. */
+  traceId = '';
+  traceNode: string | undefined;
 
   constructor(readonly def: AnimGraph, clips: ReadonlyMap<string, Clip>, readonly skeleton: Skeleton, where: string, problem: (m: string) => void) {
     this.ik = def.ik ?? {};
@@ -445,11 +450,18 @@ export class Graph {
       if (t.from < 0 && t.to === cur.state) continue;
       if (t.after > 0 && cur.age < t.after - EPS) continue;
       if (t.cond !== null && t.cond(this.params) === 0) continue;
+      this.note(l, t.to);
       this.begin(l, t.to, t.blend, t.sync);
       return;
     }
     const st = l.states[cur.state]!;
-    if (st.exit >= 0 && st.clips.length === 1 && !st.clips[0]!.loop && cur.t >= st.clips[0]!.length - EPS) this.begin(l, st.exit, st.exitBlend);
+    if (st.exit >= 0 && st.clips.length === 1 && !st.clips[0]!.loop && cur.t >= st.clips[0]!.length - EPS) { this.note(l, st.exit); this.begin(l, st.exit, st.exitBlend); }
+  }
+
+  /** The hook for the "Just now" feed: a state change decided by the graph (not a live rebuild putting a state back), once per change. */
+  private note(l: LayerRT, to: number): void {
+    // A state with nothing to play (an upper-body layer at rest) is not something a person sees, so it is not a chip.
+    if (isTracing() && l.states[to]!.clips.length > 0) trace('anim', `${this.traceId}#${l.states[to]!.name}`, this.traceNode);
   }
 
   /** Where in its cycle a state is, 0 to 1 (a clip that plays once reports how far through it is). */

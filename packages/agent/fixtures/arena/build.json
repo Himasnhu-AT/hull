@@ -1,0 +1,369 @@
+{
+ "world": [
+  {
+   "text": "I will lay out the arena.",
+   "tools": [
+    {
+     "name": "config.read",
+     "input": {
+      "id": "tuning/arena"
+     }
+    }
+   ]
+  },
+  {
+   "tools": [
+    {
+     "name": "config.set",
+     "input": {
+      "id": "tuning/arena",
+      "pointer": "/crateCount",
+      "value": 16
+     }
+    }
+   ]
+  },
+  {
+   "tools": [
+    {
+     "name": "game.run",
+     "input": {
+      "control": {
+       "op": "step",
+       "n": 30
+      }
+     }
+    },
+    {
+     "name": "game.run",
+     "input": {
+      "control": {
+       "op": "screenshot"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "tools": [
+    {
+     "name": "explain.write",
+     "input": {
+      "doc": {
+       "id": "arena-map",
+       "title": "The arena",
+       "stage": "world",
+       "why": "The scout starts in the open centre so the first gems are a short run away, with crates around the edge for cover.",
+       "body": {
+        "type": "map",
+        "image": "$screenshot",
+        "width": "$screenshot.width",
+        "height": "$screenshot.height",
+        "marks": [
+         {
+          "x": 0.5,
+          "y": 0.72,
+          "label": "Scout starts here"
+         },
+         {
+          "x": 0.25,
+          "y": 0.5,
+          "label": "Crates"
+         },
+         {
+          "x": 0.8,
+          "y": 0.45,
+          "label": "Gems"
+         }
+        ]
+       },
+       "covers": [
+        "tuning/arena"
+       ]
+      }
+     }
+    }
+   ]
+  },
+  {
+   "tools": [
+    {
+     "name": "check"
+    }
+   ]
+  },
+  {
+   "text": "The arena now has 16 crates (tuning/arena crateCount), laid out from the seed."
+  },
+  {
+   "text": "I see the walled arena from above with the crates spread around the floor."
+  }
+ ],
+ "actors": [
+  {
+   "text": "Now the scout.",
+   "tools": [
+    {
+     "name": "config.read",
+     "input": {
+      "id": "character/soldier"
+     }
+    }
+   ]
+  },
+  {
+   "tools": [
+    {
+     "name": "config.set",
+     "input": {
+      "id": "character/soldier",
+      "pointer": "/collider/radius",
+      "value": 0.38
+     }
+    }
+   ]
+  },
+  {
+   "text": "The scout (character/soldier) has a slightly wider body, 0.38 m, so it fits the crates better."
+  },
+  {
+   "text": "The scout stands in the arena."
+  }
+ ],
+ "animations": [
+  {
+   "text": "Checking the scout's locomotion.",
+   "tools": [
+    {
+     "name": "config.read",
+     "input": {
+      "id": "anim-graph/locomotion"
+     }
+    }
+   ]
+  },
+  {
+   "tools": [
+    {
+     "name": "config.set",
+     "input": {
+      "id": "anim-graph/locomotion",
+      "pointer": "/params/speed/max",
+      "value": 14
+     }
+    }
+   ]
+  },
+  {
+   "text": "The locomotion graph (anim-graph/locomotion) now accepts speeds up to 14 m/s so a fast run still blends."
+  },
+  {
+   "text": "The scout is in its idle pose."
+  }
+ ],
+ "rules": [
+  {
+   "text": "Now the round rules.",
+   "tools": [
+    {
+     "name": "tunables.list"
+    }
+   ]
+  },
+  {
+   "tools": [
+    {
+     "name": "tunables.set",
+     "input": {
+      "block": "player",
+      "key": "runSpeed",
+      "value": 7.5
+     }
+    }
+   ]
+  },
+  {
+   "tools": [
+    {
+     "name": "explain.write",
+     "input": {
+      "doc": {
+       "id": "round-loop",
+       "title": "How a round goes",
+       "stage": "rules",
+       "why": "A round is a race: all twelve gems before the clock, so winning needs both speed and a route.",
+       "body": {
+        "type": "flow",
+        "nodes": [
+         {
+          "id": "start",
+          "text": "Round starts, 45 seconds on the clock",
+          "kind": "step"
+         },
+         {
+          "id": "run",
+          "text": "The scout runs and collects gems",
+          "kind": "step"
+         },
+         {
+          "id": "all",
+          "text": "All 12 gems collected?",
+          "kind": "ask"
+         },
+         {
+          "id": "time",
+          "text": "Clock at zero?",
+          "kind": "ask"
+         },
+         {
+          "id": "win",
+          "text": "You win",
+          "kind": "end"
+         },
+         {
+          "id": "lose",
+          "text": "You lose",
+          "kind": "end"
+         }
+        ],
+        "edges": [
+         {
+          "from": "start",
+          "to": "run"
+         },
+         {
+          "from": "run",
+          "to": "all"
+         },
+         {
+          "from": "all",
+          "to": "win",
+          "label": "yes"
+         },
+         {
+          "from": "all",
+          "to": "time",
+          "label": "no"
+         },
+         {
+          "from": "time",
+          "to": "lose",
+          "label": "yes"
+         },
+         {
+          "from": "time",
+          "to": "run",
+          "label": "no"
+         }
+        ]
+       },
+       "covers": [
+        "tuning/arena",
+        "tunables:player"
+       ]
+      }
+     }
+    }
+   ]
+  },
+  {
+   "text": "The scout now runs at 7.5 m/s (player.runSpeed), and the round loop is drawn in \"How a round goes\"."
+  },
+  {
+   "text": "The game is running and the scout is in the arena."
+  }
+ ],
+ "sounds": [
+  {
+   "text": "Tuning the landing sound.",
+   "tools": [
+    {
+     "name": "config.read",
+     "input": {
+      "id": "sound/thud"
+     }
+    }
+   ]
+  },
+  {
+   "tools": [
+    {
+     "name": "config.set",
+     "input": {
+      "id": "sound/thud",
+      "pointer": "/level",
+      "value": -6
+     }
+    }
+   ]
+  },
+  {
+   "text": "The landing thud (sound/thud) is 1 dB quieter at -6 dB so it sits under the footsteps."
+  },
+  {
+   "text": "Nothing to see changed; this stage only changes sound."
+  }
+ ],
+ "effects": [
+  {
+   "text": "Trimming the dust.",
+   "tools": [
+    {
+     "name": "config.read",
+     "input": {
+      "id": "vfx/dust"
+     }
+    }
+   ]
+  },
+  {
+   "tools": [
+    {
+     "name": "config.set",
+     "input": {
+      "id": "vfx/dust",
+      "pointer": "/budget/max",
+      "value": 300
+     }
+    }
+   ]
+  },
+  {
+   "text": "The landing dust (vfx/dust) now caps at 300 particles so it stays light."
+  },
+  {
+   "text": "The arena looks as before; the dust shows only on landing."
+  }
+ ],
+ "screens": [
+  {
+   "text": "Last, the heads-up display colours.",
+   "tools": [
+    {
+     "name": "config.read",
+     "input": {
+      "id": "ui-theme/hud"
+     }
+    }
+   ]
+  },
+  {
+   "tools": [
+    {
+     "name": "config.set",
+     "input": {
+      "id": "ui-theme/hud",
+      "pointer": "/color/accent",
+      "value": "#3be8c8"
+     }
+    }
+   ]
+  },
+  {
+   "text": "The heads-up display accent (ui-theme/hud) is a slightly brighter teal, #3be8c8."
+  },
+  {
+   "text": "The heads-up display is visible over the arena."
+  }
+ ]
+}

@@ -8,6 +8,7 @@
 import { config } from '../config/index.ts';
 import { hashString, RandomStream } from '../core/random.ts';
 import type { Game } from '../core/types.ts';
+import { isTracing, trace } from '../core/trace.ts';
 import type { Mixer } from '../schema/mixer.ts';
 import type { Sound } from '../schema/sound.ts';
 import { makeImpulse } from './dsp.ts';
@@ -247,6 +248,8 @@ export function mountAudio(game: Game, opts: MountOptions = {}): AudioView {
     const e = entryFor(id);
     const s = e.sound;
     if (!s) { report(`unknown:${e.id}`, `sound/${e.id} does not exist (expected config/sound/${e.id}.json)`); return undefined; }
+    // The hook for the "Just now" feed: here, once per play the game asked for (a pick's chosen child is the same play, so depth 0 only).
+    if (depth === 0 && isTracing()) trace('sound', `sound/${e.id}`);
     const level = dbToLinear(s.level ?? 0) * (o.volume ?? 1);
 
     if (s.source.type === 'pick') {

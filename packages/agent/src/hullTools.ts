@@ -5,7 +5,9 @@ import { createMcpServer, type McpServer } from '@hull/tools/mcp';
 import type { ToolSpec } from './types.ts';
 
 /** Tools that change the project. Everything else only reads or runs the game. */
-const WRITES = new Set(['config.set', 'tunables.set', 'asset.new', 'asset.duplicate', 'asset.rename', 'asset.move', 'asset.delete', 'folder.new', 'code.edit', 'code.write', 'code.delete', 'history.restore', 'history.revert', 'exp.adopt']);
+const WRITES = new Set(['config.set', 'tunables.set', 'asset.new', 'asset.duplicate', 'asset.rename', 'asset.move', 'asset.delete', 'folder.new', 'code.edit', 'code.write', 'code.delete', 'history.restore', 'history.revert', 'exp.adopt', 'brief.write', 'explain.write', 'create.set']);
+/** Writes about the flow, not the game: they never ask, and they do not make the run "dirty" (no check gate, no change card). */
+const FLOW_WRITES = new Set(['brief.write', 'explain.write', 'create.set']);
 /** Writes that are hard to see through or to undo by hand: they ask the person first. */
 const RISKY = new Set(['code.delete', 'asset.rename', 'asset.move', 'asset.delete', 'history.restore', 'history.revert', 'exp.adopt']);
 /** The tools the model is told about: no new/dev (hidden by the MCP server already) and nothing that only the person should do. */
@@ -52,6 +54,8 @@ export class HullTools {
   /** The Hull name for a wire name, or undefined for a tool the model invented. */
   hullName(wire: string): string | undefined { return this.names.get(wire); }
   isWrite(name: string): boolean { return WRITES.has(name); }
+  /** A write that changes the game (config, tunables, code, assets), as opposed to the brief, an explain document or the flow state. */
+  changesGame(name: string): boolean { return WRITES.has(name) && !FLOW_WRITES.has(name); }
   isRisky(name: string): boolean { return RISKY.has(name); }
   kind(name: string): ToolKind {
     if (name === 'asset.delete' || name === 'code.delete') return 'delete';

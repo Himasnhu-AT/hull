@@ -16,7 +16,7 @@ export interface OpenedProject {
   mcp: { url: string; launcher: string };
 }
 
-import type { AgentEvent, AgentInfo, ClaudeCodeInfo, TermInfo } from './agentApi.ts';
+import type { AgentEvent, AgentInfo, AgentSettings, AgentSettingsInput, ClaudeCodeInfo, EnsureResult, PromptOptions, TermInfo } from './agentApi.ts';
 
 export interface HullApp extends HullAppAgents {
   /** 'darwin' | 'win32' | 'linux' | 'web'. The title bar leaves room for traffic lights on darwin only. */
@@ -25,6 +25,8 @@ export interface HullApp extends HullAppAgents {
   /** Asks where to put a new project, or which existing one to open. Null when cancelled. */
   pickFolder(purpose: 'open' | 'location'): Promise<string | null>;
   createProject(opts: { template: string; title: string; parentDir: string }): Promise<OpenedProject>;
+  /** The idea box: the main process picks the closest template, makes the project in the app's own projects folder (never asks for one) and opens it. */
+  createFromIdea(opts: { idea: string }): Promise<OpenedProject & { idea: string }>;
   openProject(root: string): Promise<OpenedProject>;
   closeProject(): Promise<void>;
   /** The community games. Opening one copies it into the person's projects folder the first time; `reset` replaces that copy with the original. */
@@ -43,8 +45,14 @@ export interface HullAppAgents {
   agentList(): Promise<AgentInfo[]>;
   /** Starts a session in the open project: the agent is handed Hull's MCP server in session/new. Resolves with the session id. */
   agentStart(agentId: string): Promise<string>;
-  /** Sends one prompt. Resolves at once; the run streams as events and ends with a 'done' event. */
-  agentPrompt(sid: string, text: string): Promise<void>;
+  /** Sends one prompt. Resolves at once; the run streams as events and ends with a 'done' event. `options` set the kind of run and carry a frozen moment (M11). */
+  agentPrompt(sid: string, text: string, options?: PromptOptions): Promise<void>;
+  /** Hull's own agent for the open project: starts it if it is not running and resolves with its session, or says what is missing (a key). */
+  agentEnsure(): Promise<EnsureResult>;
+  /** Which model the builder uses. Never contains the key. */
+  agentSettings(): Promise<AgentSettings>;
+  /** Saves the model choice and, when given, the key (kept with safeStorage in Electron). A running builder is restarted with it on the next agentEnsure. */
+  setAgentSettings(s: AgentSettingsInput): Promise<AgentSettings>;
   agentCancel(sid: string): Promise<void>;
   agentStop(sid: string): Promise<void>;
   /** Answers a permission card. `null` denies by cancelling. */

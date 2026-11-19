@@ -205,7 +205,7 @@ describe('build', () => {
     expect(r.problems).toEqual([]);
     expect(r.ok).toBe(true);
     const js = readFileSync(join(dir, 'dist/web/game.js'), 'utf8');
-    expect(js).not.toMatch(/connectDev|\[hull dev\]|dev\/runtime/);
+    expect(js).not.toMatch(/connectDev|\[hull dev\]|dev\/runtime|hull-client|hull-headless/);
     // Config is inside (the validated cube-look file), and the tunable is a constant: no file reads at run time.
     expect(js).toContain('cube-look');
     expect(js).not.toContain('ajv');

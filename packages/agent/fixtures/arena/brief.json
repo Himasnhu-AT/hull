@@ -1,0 +1,750 @@
+[
+ {
+  "text": "Let me see what the arena kit can already do.",
+  "tools": [
+   {
+    "name": "project.info"
+   },
+   {
+    "name": "create.get"
+   },
+   {
+    "name": "docs.read",
+    "input": {
+     "id": "kit/index"
+    }
+   }
+  ]
+ },
+ {
+  "text": "Two quick questions.",
+  "tools": [
+   {
+    "name": "ui_ask",
+    "input": {
+     "question": "What should you be doing most of the time?",
+     "options": [
+      "Collecting things",
+      "Fighting enemies",
+      "Racing the clock"
+     ]
+    }
+   }
+  ]
+ },
+ {
+  "tools": [
+   {
+    "name": "ui_ask",
+    "input": {
+     "question": "How should a round end?",
+     "options": [
+      "The clock runs out",
+      "Everything is collected",
+      "Whenever I choose"
+     ]
+    }
+   }
+  ]
+ },
+ {
+  "tools": [
+   {
+    "name": "brief.write",
+    "input": {
+     "section": {
+      "id": "premise",
+      "text": "You are a scout in a walled arena full of crates, racing the clock to gather glowing gems."
+     }
+    }
+   },
+   {
+    "name": "ui_show",
+    "input": {
+     "block": {
+      "id": "brief",
+      "kind": "brief",
+      "title": "Gem Run",
+      "sections": [
+       {
+        "id": "premise",
+        "title": "Premise",
+        "text": "You are a scout in a walled arena full of crates, racing the clock to gather glowing gems.",
+        "status": "writing"
+       }
+      ]
+     }
+    }
+   }
+  ],
+  "text": "Thanks. I will write the brief now, one part at a time."
+ },
+ {
+  "tools": [
+   {
+    "name": "brief.write",
+    "input": {
+     "section": {
+      "id": "what-you-do",
+      "text": "Run, jump and weave between crates to pick up every gem before the round ends. Each gem adds to your score."
+     }
+    }
+   },
+   {
+    "name": "ui_show",
+    "input": {
+     "block": {
+      "id": "brief",
+      "kind": "brief",
+      "title": "Gem Run",
+      "sections": [
+       {
+        "id": "premise",
+        "title": "Premise",
+        "text": "You are a scout in a walled arena full of crates, racing the clock to gather glowing gems.",
+        "status": "done"
+       },
+       {
+        "id": "what-you-do",
+        "title": "What you do",
+        "text": "Run, jump and weave between crates to pick up every gem before the round ends. Each gem adds to your score.",
+        "status": "writing"
+       }
+      ]
+     }
+    }
+   }
+  ]
+ },
+ {
+  "tools": [
+   {
+    "name": "brief.write",
+    "input": {
+     "section": {
+      "id": "controls",
+      "text": "Move with W, A, S and D, jump with Space, and look around with the mouse."
+     }
+    }
+   },
+   {
+    "name": "ui_show",
+    "input": {
+     "block": {
+      "id": "brief",
+      "kind": "brief",
+      "title": "Gem Run",
+      "sections": [
+       {
+        "id": "premise",
+        "title": "Premise",
+        "text": "You are a scout in a walled arena full of crates, racing the clock to gather glowing gems.",
+        "status": "done"
+       },
+       {
+        "id": "what-you-do",
+        "title": "What you do",
+        "text": "Run, jump and weave between crates to pick up every gem before the round ends. Each gem adds to your score.",
+        "status": "done"
+       },
+       {
+        "id": "controls",
+        "title": "Controls",
+        "text": "Move with W, A, S and D, jump with Space, and look around with the mouse.",
+        "status": "writing"
+       }
+      ]
+     }
+    }
+   }
+  ]
+ },
+ {
+  "tools": [
+   {
+    "name": "brief.write",
+    "input": {
+     "section": {
+      "id": "cast",
+      "text": "The scout (you), a green-cloaked runner with a blade. Gems are the only other things that matter."
+     }
+    }
+   },
+   {
+    "name": "ui_show",
+    "input": {
+     "block": {
+      "id": "brief",
+      "kind": "brief",
+      "title": "Gem Run",
+      "sections": [
+       {
+        "id": "premise",
+        "title": "Premise",
+        "text": "You are a scout in a walled arena full of crates, racing the clock to gather glowing gems.",
+        "status": "done"
+       },
+       {
+        "id": "what-you-do",
+        "title": "What you do",
+        "text": "Run, jump and weave between crates to pick up every gem before the round ends. Each gem adds to your score.",
+        "status": "done"
+       },
+       {
+        "id": "controls",
+        "title": "Controls",
+        "text": "Move with W, A, S and D, jump with Space, and look around with the mouse.",
+        "status": "done"
+       },
+       {
+        "id": "cast",
+        "title": "Cast",
+        "text": "The scout (you), a green-cloaked runner with a blade. Gems are the only other things that matter.",
+        "status": "writing"
+       }
+      ]
+     }
+    }
+   }
+  ]
+ },
+ {
+  "tools": [
+   {
+    "name": "brief.write",
+    "input": {
+     "section": {
+      "id": "world",
+      "text": "One square arena, forty metres across, with low walls and about fourteen crates scattered from a fixed seed so every round is the same."
+     }
+    }
+   },
+   {
+    "name": "ui_show",
+    "input": {
+     "block": {
+      "id": "brief",
+      "kind": "brief",
+      "title": "Gem Run",
+      "sections": [
+       {
+        "id": "premise",
+        "title": "Premise",
+        "text": "You are a scout in a walled arena full of crates, racing the clock to gather glowing gems.",
+        "status": "done"
+       },
+       {
+        "id": "what-you-do",
+        "title": "What you do",
+        "text": "Run, jump and weave between crates to pick up every gem before the round ends. Each gem adds to your score.",
+        "status": "done"
+       },
+       {
+        "id": "controls",
+        "title": "Controls",
+        "text": "Move with W, A, S and D, jump with Space, and look around with the mouse.",
+        "status": "done"
+       },
+       {
+        "id": "cast",
+        "title": "Cast",
+        "text": "The scout (you), a green-cloaked runner with a blade. Gems are the only other things that matter.",
+        "status": "done"
+       },
+       {
+        "id": "world",
+        "title": "World",
+        "text": "One square arena, forty metres across, with low walls and about fourteen crates scattered from a fixed seed so every round is the same.",
+        "status": "writing"
+       }
+      ]
+     }
+    }
+   }
+  ]
+ },
+ {
+  "tools": [
+   {
+    "name": "brief.write",
+    "input": {
+     "section": {
+      "id": "rules",
+      "text": "A round lasts forty-five seconds. Collect all twelve gems to win; if the clock runs out first, you lose."
+     }
+    }
+   },
+   {
+    "name": "ui_show",
+    "input": {
+     "block": {
+      "id": "brief",
+      "kind": "brief",
+      "title": "Gem Run",
+      "sections": [
+       {
+        "id": "premise",
+        "title": "Premise",
+        "text": "You are a scout in a walled arena full of crates, racing the clock to gather glowing gems.",
+        "status": "done"
+       },
+       {
+        "id": "what-you-do",
+        "title": "What you do",
+        "text": "Run, jump and weave between crates to pick up every gem before the round ends. Each gem adds to your score.",
+        "status": "done"
+       },
+       {
+        "id": "controls",
+        "title": "Controls",
+        "text": "Move with W, A, S and D, jump with Space, and look around with the mouse.",
+        "status": "done"
+       },
+       {
+        "id": "cast",
+        "title": "Cast",
+        "text": "The scout (you), a green-cloaked runner with a blade. Gems are the only other things that matter.",
+        "status": "done"
+       },
+       {
+        "id": "world",
+        "title": "World",
+        "text": "One square arena, forty metres across, with low walls and about fourteen crates scattered from a fixed seed so every round is the same.",
+        "status": "done"
+       },
+       {
+        "id": "rules",
+        "title": "Rules",
+        "text": "A round lasts forty-five seconds. Collect all twelve gems to win; if the clock runs out first, you lose.",
+        "status": "writing"
+       }
+      ]
+     }
+    }
+   }
+  ]
+ },
+ {
+  "tools": [
+   {
+    "name": "brief.write",
+    "input": {
+     "section": {
+      "id": "look-and-sound",
+      "text": "Clear afternoon light with a soft sky. A thud on landing, footsteps while running and a bright chime for each gem."
+     }
+    }
+   },
+   {
+    "name": "ui_show",
+    "input": {
+     "block": {
+      "id": "brief",
+      "kind": "brief",
+      "title": "Gem Run",
+      "sections": [
+       {
+        "id": "premise",
+        "title": "Premise",
+        "text": "You are a scout in a walled arena full of crates, racing the clock to gather glowing gems.",
+        "status": "done"
+       },
+       {
+        "id": "what-you-do",
+        "title": "What you do",
+        "text": "Run, jump and weave between crates to pick up every gem before the round ends. Each gem adds to your score.",
+        "status": "done"
+       },
+       {
+        "id": "controls",
+        "title": "Controls",
+        "text": "Move with W, A, S and D, jump with Space, and look around with the mouse.",
+        "status": "done"
+       },
+       {
+        "id": "cast",
+        "title": "Cast",
+        "text": "The scout (you), a green-cloaked runner with a blade. Gems are the only other things that matter.",
+        "status": "done"
+       },
+       {
+        "id": "world",
+        "title": "World",
+        "text": "One square arena, forty metres across, with low walls and about fourteen crates scattered from a fixed seed so every round is the same.",
+        "status": "done"
+       },
+       {
+        "id": "rules",
+        "title": "Rules",
+        "text": "A round lasts forty-five seconds. Collect all twelve gems to win; if the clock runs out first, you lose.",
+        "status": "done"
+       },
+       {
+        "id": "look-and-sound",
+        "title": "Look and sound",
+        "text": "Clear afternoon light with a soft sky. A thud on landing, footsteps while running and a bright chime for each gem.",
+        "status": "writing"
+       }
+      ]
+     }
+    }
+   }
+  ]
+ },
+ {
+  "tools": [
+   {
+    "name": "brief.write",
+    "input": {
+     "section": {
+      "id": "first-playable",
+      "text": "You can run and jump around the arena, pick up gems, and see the round end in a win or a loss."
+     }
+    }
+   },
+   {
+    "name": "ui_show",
+    "input": {
+     "block": {
+      "id": "brief",
+      "kind": "brief",
+      "title": "Gem Run",
+      "sections": [
+       {
+        "id": "premise",
+        "title": "Premise",
+        "text": "You are a scout in a walled arena full of crates, racing the clock to gather glowing gems.",
+        "status": "done"
+       },
+       {
+        "id": "what-you-do",
+        "title": "What you do",
+        "text": "Run, jump and weave between crates to pick up every gem before the round ends. Each gem adds to your score.",
+        "status": "done"
+       },
+       {
+        "id": "controls",
+        "title": "Controls",
+        "text": "Move with W, A, S and D, jump with Space, and look around with the mouse.",
+        "status": "done"
+       },
+       {
+        "id": "cast",
+        "title": "Cast",
+        "text": "The scout (you), a green-cloaked runner with a blade. Gems are the only other things that matter.",
+        "status": "done"
+       },
+       {
+        "id": "world",
+        "title": "World",
+        "text": "One square arena, forty metres across, with low walls and about fourteen crates scattered from a fixed seed so every round is the same.",
+        "status": "done"
+       },
+       {
+        "id": "rules",
+        "title": "Rules",
+        "text": "A round lasts forty-five seconds. Collect all twelve gems to win; if the clock runs out first, you lose.",
+        "status": "done"
+       },
+       {
+        "id": "look-and-sound",
+        "title": "Look and sound",
+        "text": "Clear afternoon light with a soft sky. A thud on landing, footsteps while running and a bright chime for each gem.",
+        "status": "done"
+       },
+       {
+        "id": "first-playable",
+        "title": "First playable",
+        "text": "You can run and jump around the arena, pick up gems, and see the round end in a win or a loss.",
+        "status": "writing"
+       }
+      ]
+     }
+    }
+   }
+  ]
+ },
+ {
+  "tools": [
+   {
+    "name": "brief.write",
+    "input": {
+     "section": {
+      "id": "not-in-the-first-version",
+      "text": "Enemies, power-ups and more than one arena."
+     }
+    }
+   },
+   {
+    "name": "ui_show",
+    "input": {
+     "block": {
+      "id": "brief",
+      "kind": "brief",
+      "title": "Gem Run",
+      "sections": [
+       {
+        "id": "premise",
+        "title": "Premise",
+        "text": "You are a scout in a walled arena full of crates, racing the clock to gather glowing gems.",
+        "status": "done"
+       },
+       {
+        "id": "what-you-do",
+        "title": "What you do",
+        "text": "Run, jump and weave between crates to pick up every gem before the round ends. Each gem adds to your score.",
+        "status": "done"
+       },
+       {
+        "id": "controls",
+        "title": "Controls",
+        "text": "Move with W, A, S and D, jump with Space, and look around with the mouse.",
+        "status": "done"
+       },
+       {
+        "id": "cast",
+        "title": "Cast",
+        "text": "The scout (you), a green-cloaked runner with a blade. Gems are the only other things that matter.",
+        "status": "done"
+       },
+       {
+        "id": "world",
+        "title": "World",
+        "text": "One square arena, forty metres across, with low walls and about fourteen crates scattered from a fixed seed so every round is the same.",
+        "status": "done"
+       },
+       {
+        "id": "rules",
+        "title": "Rules",
+        "text": "A round lasts forty-five seconds. Collect all twelve gems to win; if the clock runs out first, you lose.",
+        "status": "done"
+       },
+       {
+        "id": "look-and-sound",
+        "title": "Look and sound",
+        "text": "Clear afternoon light with a soft sky. A thud on landing, footsteps while running and a bright chime for each gem.",
+        "status": "done"
+       },
+       {
+        "id": "first-playable",
+        "title": "First playable",
+        "text": "You can run and jump around the arena, pick up gems, and see the round end in a win or a loss.",
+        "status": "done"
+       },
+       {
+        "id": "not-in-the-first-version",
+        "title": "Not in the first version",
+        "text": "Enemies, power-ups and more than one arena.",
+        "status": "writing"
+       }
+      ]
+     }
+    }
+   }
+  ]
+ },
+ {
+  "tools": [
+   {
+    "name": "ui_show",
+    "input": {
+     "block": {
+      "id": "brief",
+      "kind": "brief",
+      "title": "Gem Run",
+      "sections": [
+       {
+        "id": "premise",
+        "title": "Premise",
+        "text": "You are a scout in a walled arena full of crates, racing the clock to gather glowing gems.",
+        "status": "done"
+       },
+       {
+        "id": "what-you-do",
+        "title": "What you do",
+        "text": "Run, jump and weave between crates to pick up every gem before the round ends. Each gem adds to your score.",
+        "status": "done"
+       },
+       {
+        "id": "controls",
+        "title": "Controls",
+        "text": "Move with W, A, S and D, jump with Space, and look around with the mouse.",
+        "status": "done"
+       },
+       {
+        "id": "cast",
+        "title": "Cast",
+        "text": "The scout (you), a green-cloaked runner with a blade. Gems are the only other things that matter.",
+        "status": "done"
+       },
+       {
+        "id": "world",
+        "title": "World",
+        "text": "One square arena, forty metres across, with low walls and about fourteen crates scattered from a fixed seed so every round is the same.",
+        "status": "done"
+       },
+       {
+        "id": "rules",
+        "title": "Rules",
+        "text": "A round lasts forty-five seconds. Collect all twelve gems to win; if the clock runs out first, you lose.",
+        "status": "done"
+       },
+       {
+        "id": "look-and-sound",
+        "title": "Look and sound",
+        "text": "Clear afternoon light with a soft sky. A thud on landing, footsteps while running and a bright chime for each gem.",
+        "status": "done"
+       },
+       {
+        "id": "first-playable",
+        "title": "First playable",
+        "text": "You can run and jump around the arena, pick up gems, and see the round end in a win or a loss.",
+        "status": "done"
+       },
+       {
+        "id": "not-in-the-first-version",
+        "title": "Not in the first version",
+        "text": "Enemies, power-ups and more than one arena.",
+        "status": "done"
+       }
+      ]
+     }
+    }
+   },
+   {
+    "name": "ui_approve",
+    "input": {
+     "question": "Build from this brief?",
+     "detail": "The build makes the arena, the scout, its moves, the rules, the sounds, the effects and the screens, one stage at a time.",
+     "yes": "Build it",
+     "no": "Not yet"
+    }
+   }
+  ]
+ },
+ {
+  "when": "build it",
+  "tools": [
+   {
+    "name": "create.set",
+    "input": {
+     "patch": {
+      "briefApproved": true,
+      "step": "build"
+     }
+    }
+   }
+  ]
+ },
+ {
+  "when": "briefapproved",
+  "text": "The brief is approved. Starting the build."
+ },
+ {
+  "when": "own words",
+  "text": "I will shorten the premise.",
+  "tools": [
+   {
+    "name": "brief.write",
+    "input": {
+     "section": {
+      "id": "premise",
+      "text": "A scout races the clock to gather gems in a walled arena."
+     }
+    }
+   },
+   {
+    "name": "ui_show",
+    "input": {
+     "block": {
+      "id": "brief",
+      "kind": "brief",
+      "title": "Gem Run",
+      "sections": [
+       {
+        "id": "premise",
+        "title": "Premise",
+        "text": "A scout races the clock to gather gems in a walled arena.",
+        "status": "changed"
+       },
+       {
+        "id": "what-you-do",
+        "title": "What you do",
+        "text": "Run, jump and weave between crates to pick up every gem before the round ends. Each gem adds to your score.",
+        "status": "done"
+       },
+       {
+        "id": "controls",
+        "title": "Controls",
+        "text": "Move with W, A, S and D, jump with Space, and look around with the mouse.",
+        "status": "done"
+       },
+       {
+        "id": "cast",
+        "title": "Cast",
+        "text": "The scout (you), a green-cloaked runner with a blade. Gems are the only other things that matter.",
+        "status": "done"
+       },
+       {
+        "id": "world",
+        "title": "World",
+        "text": "One square arena, forty metres across, with low walls and about fourteen crates scattered from a fixed seed so every round is the same.",
+        "status": "done"
+       },
+       {
+        "id": "rules",
+        "title": "Rules",
+        "text": "A round lasts forty-five seconds. Collect all twelve gems to win; if the clock runs out first, you lose.",
+        "status": "done"
+       },
+       {
+        "id": "look-and-sound",
+        "title": "Look and sound",
+        "text": "Clear afternoon light with a soft sky. A thud on landing, footsteps while running and a bright chime for each gem.",
+        "status": "done"
+       },
+       {
+        "id": "first-playable",
+        "title": "First playable",
+        "text": "You can run and jump around the arena, pick up gems, and see the round end in a win or a loss.",
+        "status": "done"
+       },
+       {
+        "id": "not-in-the-first-version",
+        "title": "Not in the first version",
+        "text": "Enemies, power-ups and more than one arena.",
+        "status": "done"
+       }
+      ]
+     }
+    }
+   },
+   {
+    "name": "ui_approve",
+    "input": {
+     "question": "Build from this brief?",
+     "yes": "Build it",
+     "no": "Not yet"
+    }
+   }
+  ]
+ },
+ {
+  "when": "build it",
+  "tools": [
+   {
+    "name": "create.set",
+    "input": {
+     "patch": {
+      "briefApproved": true,
+      "step": "build"
+     }
+    }
+   }
+  ]
+ },
+ {
+  "when": "briefapproved",
+  "text": "The brief is approved. Starting the build."
+ }
+]

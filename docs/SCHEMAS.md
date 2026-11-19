@@ -618,10 +618,89 @@ Not config: the record of what you have checked. It lives with Hull's own data, 
 }
 ```
 
-* A key is a config id or a tunables block name, optionally with `#part` (one clip of a set, one state of a
+* A key is a config id, a tunables block name, or `explain:<id>` (an explain document, section 14), optionally with `#part` (one clip of a set, one state of a
   screen).
 * `hash` is the content hash at review time. When the piece changes, the state falls back to `unreviewed` and the
   old note is kept beside it until you clear it.
 * `by` is who wrote the entry (`you`, `ai:<agent>`). A key must name a piece that exists; the write is refused otherwise.
 * The `review.list`, `review.set` and `review.note` tools (and project methods of the same names) read and write the notes; `review.list` with `open: true` gives the open ones to the AI.
-* `hash` is six hex digits of a SHA-1 of the file text (config) or of the block's keys and values (tunables). A `#part` key hashes the whole piece.
+* `hash` is six hex digits of a SHA-1 of the file text (config), of the block's keys and values (tunables), or of the explain document without its `by` and `at`, so saving the same drawing again keeps its approval. A `#part` key hashes the whole piece.
+
+## 14. The idea-to-play files (`GAME.md`, `.hull/explain/`, `.hull/create.json`)
+
+Written by the builder through tools (`brief.write`, `explain.write`, `create.set`), never by hand. Types are in
+`packages/hull/src/dev/protocol.ts`, section "M11"; the plan is `docs/IDEA-TO-PLAY.md`.
+
+### The brief: `GAME.md` (project root)
+
+```markdown
+# Ashblade
+
+## Premise
+A monk and a talking blade settle a debt in a burning shrine.
+
+## What you do
+Duel one rival at a time ...
+```
+
+* `# Title` first, then these `## ` sections in this order: Premise, What you do, Controls, Cast, World, Rules,
+  Look and sound, First playable, Not in the first version. A section's id is its title in kebab case
+  (`what-you-do`). A section the file does not have yet is added in that order; a section Hull does not know (the
+  owner's own) is kept where it is.
+* `brief.read` returns the file split into sections. `brief.write` takes the whole `text` or one `section`
+  (`{ id, text }`, without the heading). The write is atomic, recorded in the history under its author (GAME.md is a
+  tracked file, with `src/`, `config/`, `assets/` and `hull.json`), and pushed to the app as `brief.changed`. An edit made on
+  disk is recorded as `disk` and pushed the same way.
+
+### An explain document: `.hull/explain/<id>.json` (schema `explain.schema.json`)
+
+The drawing for a piece the person cannot judge by looking or listening: rules, enemy behaviour, the layout of the
+world, balance. Not a config kind (it is not under `config/` and is not in the registry), but validated the same way
+before it is kept.
+
+```json
+{
+  "id": "enemy-guard-behaviour",
+  "title": "How a guard fights",
+  "stage": "rules",
+  "why": "The guard waits, closes in when it sees you, and backs off to heal when hurt.",
+  "body": {
+    "type": "flow",
+    "nodes": [{ "id": "idle", "text": "Stands watch" }, { "id": "see", "text": "Sees the player?", "kind": "ask" }],
+    "edges": [{ "from": "idle", "to": "see" }]
+  },
+  "covers": ["enemy/guard"]
+}
+```
+
+* `id`: lower-case letters, digits and dashes. `stage`: `world`, `actors`, `animations`, `rules`, `sounds`,
+  `effects` or `screens`. `why`: one or two plain sentences. `covers`: config ids and `src/` files it explains.
+  `by` and `at` are filled in by the server on write.
+* `body.type` is one of `flow` (nodes with an id, text and an optional `kind` of `step`, `ask` or `end`; edges
+  `from` and `to` node ids with an optional `label`), `map` (a PNG, JPEG or WebP data URL with its `width` and
+  `height`, and `marks` of `x`, `y` in 0 to 1 and a `label`), `table` (`columns` and `rows` of text or numbers) or
+  `image` (a data URL with `width` and `height`).
+* A write is refused, with the pointer, when the schema is not met, when two nodes share an id, or when an edge names a node the flow
+  does not have (`.hull/explain/enemy-guard-behaviour.json#/body/edges/2/to`).
+* Examples, one per body type, are in `packages/hull/src/schema/examples/explain/`; each is checked by
+  `packages/hull/test/explain.test.ts`.
+* Reviewed under the review key `explain:<id>` (section 13).
+
+### Flow state: `.hull/create.json`
+
+```json
+{ "idea": "a duel in a burning shrine", "step": "build", "briefApproved": true,
+  "stages": [{ "id": "world", "status": "ready", "summary": "A shrine yard.", "checkpoint": "world-ready", "pieces": ["look/dusk", "explain:world-layout"] }] }
+```
+
+* `step` is `idea`, `brief`, `build` or `play`. The seven stages always exist, in order; `status` is `waiting`,
+  `building`, `ready` or `failed`; `pieces` are review keys.
+* A project without the file is at step `play` with seven `waiting` stages. `create.set` merges a `patch` (idea, step,
+  briefApproved) and one `stage`, and pushes `create.changed`.
+
+### Docs and the "Just now" feed
+
+`docs.list` / `docs.read` serve every kit README (`kit/<name>`, `kit/index`), `guide/schemas`, `guide/workflow` and a
+generated `api/<module>` per public entry of the hull package (`api/core` is `hull`: core and config). They are found from
+the hull package's own folder, so a project made anywhere gets them. `game.recent` and `game.moment` are described in
+ARCHITECTURE section 8.

@@ -544,6 +544,24 @@ Hull Studio (Electron window)          project server (inside the app)          
   field sends one `set` to the project server, which writes the file and pushes the new value to the running game.
 * **Review** state per id (`unreviewed`, `approved`, `needs-change`, a note, the content hash) lives in
   `.hull/review.json`. When a piece changes, its state returns to `unreviewed`.
+* The **brief and the build's state** are three more project files, read and written only through tools: `GAME.md` at the
+  root (the history tracks it), `.hull/explain/<id>.json` (the drawings for what a person cannot judge by looking or
+  listening) and `.hull/create.json` (the flow's step and the seven stages). Formats are in SCHEMAS section 14.
+* **The "Just now" feed.** The engine calls `trace(kind, id, node?)` (`core/trace.ts`) where a sound starts
+  (`audio/engine.ts` `play`), a vfx burst or trail is spawned (`vfx/system.ts`), an animation graph changes state
+  (`anim/graph.ts`, decided by the graph, once per change) and a character's animator first builds its body (`actor`, in
+  `anim/animator.ts` `build`; chosen because it runs once per character, so nothing is added per frame; a state with no clip is not reported, and the same event at the same game time is kept once). With no listener
+  the call returns at once and allocates nothing; call sites that build an id with a template check `isTracing()` first. Only
+  `dev/runtime.ts` installs a listener: a ring of 64 slots (`dev/recent.ts`, reused, no allocation per event) stamped with
+  game time, flushed to the server in one `game.events` message at most ten times a second and not at all when empty. The
+  server keeps the last 256 per game and answers `game.recent` (the last N game-seconds, newest first); each batch is also
+  pushed to studios as `game.recent`. Characters built before a studio connected are announced again on every socket open (one walk of the
+  tree that asks each `Animator` to `announceActor()`; never per frame), and a restart reloads the page, which builds them anew. `game.moment` pauses its own game (not others), reads its state and a screenshot through the control
+  port, and returns them with the recent events; the runtime flushes the ring before answering `state`, `screenshot` and `step`, and
+  reports `paused` at once after any `game.control`, so a later `game.control { paused: false }` resumes it and the studio sees both. A game that reconnects starts a fresh feed.
+  **Which game.** Every game connection has a client id: the page's `?hull-client=<id>` (the app puts one on its Play frame), else a random one. `game.run`, `game.recent`, `game.moment` and `game.control` take an optional `client`; without one the server picks the first game of the project's own that is not headless, and a headless page (one a tool opened with `?hull-headless` because no app was around; the runtime adds `headless=1` to its socket) only when nothing else is connected. A headless page opens once per link, is reused by later calls and closed with the link; it is never preferred to a game in a frame. The `game.recent` push carries the `client` that did it, so a studio keeps only its own frame's events. **Keys from the frame.** The frame is another origin and keeps the keys while the person plays, so when embedded the runtime posts `{ hull: 'note' }` (N, no modifier, not in a text field) and `{ hull: 'resume' }` (Escape) to `window.parent`; the Play screen accepts them only from its own frame. This is dev code and never reaches a build (the build checks for `hull-client`). Labels are made by one pure function (`dev/labels.ts`): a config `title` when it has one (no schema has one yet),
+  else the id in words ('vfx/clash-sparks' is 'Clash sparks', 'sound/sword/hit' is 'Sword hit', an anim state 'light-attack' is
+  'Light attack', a character is its id's last part, or its node's name when inline).
 * **Measurements** come from the same tool code the MCP server calls, so the Studio and the AI see the same numbers.
 * **Hosted** (PLAN section 8): the project server runs on Marl's machines and holds the code; the Studio's front
   end is served to the customer's browser; `GameView` switches to a remote source (a video stream, or a
@@ -583,7 +601,8 @@ The registry (`tools`) holds files-and-processes tools. Each takes a project roo
 The **project methods** (`projectTools`) go through the project's server, so an open app hears them: `project.info`,
 `library.list`, `config.read`, `config.set`, `tunables.list`, `tunables.set`, `journal.list`, `history.list`, `history.diff`,
 `history.restore`, `history.checkpoint`, `exp.start`, `exp.list`, `exp.compare`, `exp.adopt`, `exp.discard`, `game.control`,
-`game.run`, `problems.list`, the review methods, and the code methods below. `openProject` attaches to the server the app started (it writes
+`game.run`, `problems.list`, the review methods, the idea-to-play methods (`brief.read`, `brief.write`, `docs.list`, `docs.read`,
+`explain.list`, `explain.write`, `create.get`, `create.set`, `game.recent`, `game.moment`), and the code methods below. `openProject` attaches to the server the app started (it writes
 `.hull/server.json`) or starts one in process, so two servers never fight over one project. `allTools` is the union;
 where a name is in both lists the method wins.
 
@@ -625,7 +644,7 @@ values. Their rules, in `server/code.ts` (pure, unit-tested) and the project ser
 * **Control port.** In a dev build the game connects to the project server (`connectDev`, `dev/protocol.ts`). The server sends
   `game.rpc` and the game answers `game.result`; the `game.run` method is the way in. Ops: `step`, `press`, `release`,
   `state`, `screenshot`. A page opened with `?hull-paused&hull-client=<id>` starts frozen at tick 0 and can be aimed at by
-  id, so a script starts from the same state every time. Time moves only by `step`. Not built: `set`, `spawn`, `teleport`,
+  id (the tool's page also says `hull-headless`), so a script starts from the same state every time. Time moves only by `step`. Not built: `set`, `spawn`, `teleport`,
   `errors`, `perf`, `waitUntil`.
 * **Step scripts** (`play`): a JSON list of `step`, `press`, `release`, `hold`, `read`, `check` and `screenshot` steps, run in a
   headless browser (agent-browser). Each screenshot is compared with `tests/golden/<name>.png` per channel and per pixel
@@ -639,26 +658,44 @@ values. Their rules, in `server/code.ts` (pure, unit-tested) and the project ser
 ### Hull's own agent (`packages/agent`, `@hull/agent`)
 
 An ACP agent (D14, D16) that runs on the user's key: `startHullAgent({ projectRoot, provider })` speaks ACP over a pair of streams, and
-`bin/hull-agent.js [dir] [--fake script.json]` does the same on stdio for the app to start as a child process. It handles
-`initialize`, `session/new`, `session/prompt`, `session/cancel` and `session/close`, and streams `agent_message_chunk`, `plan`, `tool_call` and
+`bin/hull-agent.js [dir] [--fake script.json | folder]` does the same on stdio for the app to start as a child process. It handles
+`initialize`, `session/new`, `session/prompt`, `session/cancel` and `session/close`, and streams `agent_message_chunk` (one per text delta), `plan`, `tool_call` and
 `tool_call_update` (with `diff` content for config and tunable edits), `usage_update` and `compaction_update`, and asks with
-`session/request_permission`.
+`session/request_permission`. The conversation additions of M11 (docs/IDEA-TO-PLAY.md 4.4) ride in `_meta`:
+
+| What | Wire |
+|---|---|
+| Kind of run | `session/prompt` `_meta["hull.mode"]` = `brief` \| `build` \| `fix` (default `fix`); `build` may carry `_meta["hull.stage"]` and then the prompt text is the person's note on that stage |
+| A card that does not wait | `agent_message_chunk` with empty text and `_meta["hull.ui"]` = a `UiBlock`; sent again with the same `id` it replaces itself |
+| A card that waits | `session/request_permission` with `toolCall` `{ toolCallId: block.id, title: question, kind: "other", _meta["hull.ui"] }`; `ask`: one `allow_once` option per choice (id = index); `approve`: `yes` (`allow_once`) and `no` (`reject_once`). Outcome `cancelled` = the person answers in their own words: the turn ends and their next prompt is the answer |
+| A frozen moment | The prompt's blocks: the note, an image block (PNG), a text block with the time, tick and what just played. Image blocks reach the model as images |
 
 * **Tools**: called in-process through `createMcpServer` from `@hull/tools`, opened as client "Hull agent", so the history author is
   `ai:Hull agent`. The agent has no file or shell tools: every write is a validated Hull edit. `session/new`'s `mcpServers` is not used.
   Code in `src/` is changed with the code tools above (`code_edit`, `code_write`; `code_delete` is risky); the system prompt tells the model to prefer config and tunables for a value and code for behaviour.
+  `brief_write`, `explain_write` and `create_set` are writes that never ask and do not count as a change to the game (no check gate, no change card).
+* **Conversation tools** (`src/modes.ts`, answered by the loop, not project tools): `update_plan { entries }`; `ui_show { block }` shows a card at once (kinds `brief`, `stages`, `pieces`, `explain`, `change`);
+  `ui_ask { question, options[2..4] }` and `ui_approve { question, detail?, yes, no }` wait and return the chosen text, or "(the person will answer in their own words)", after which the loop ends the turn.
 * **Models**: Anthropic's Messages API (`ANTHROPIC_API_KEY`, default `claude-opus-5-5`, override with `HULL_AGENT_MODEL`) or any
   OpenAI-compatible chat endpoint (`HULL_AGENT_BASE_URL` + `HULL_AGENT_API_KEY`, which is how `ai.marlstudio.com` plugs in). Plain fetch,
-  no vendor SDK, no streaming of model tokens yet (text arrives per model call). Keys are never logged or put in an error.
+  no vendor SDK. Both **stream** (`stream: true`): the server-sent events are parsed by pure classes in `src/stream.ts` (tested on recorded streams) and each text delta goes to the app as it arrives
+  (`CompleteRequest.onDelta`); a gateway that ignores `stream` and answers in JSON still works. Anthropic requests mark the system prompt, the last tool and the last message block for prompt caching
+  (the tool list is fixed per mode, so the prefix repeats on every step of a run). Keys are never logged or put in an error.
+* **Modes** (`src/prompt.ts`, `src/modes.ts`): each has its own system prompt and tool list, and a conversation does not carry from one mode into another.
+  * `brief`: an interview of at most three `ui_ask` questions, then `GAME.md` written section by section with `brief_write` and the `brief` card after each; ends with `ui_approve` "Build from this brief?", and yes sets `briefApproved`/`step: build`. Tools: reads, `brief_*`, `docs_*`, `create_*`, `ui_*`. No code or config writes. A later prompt edits only the sections it names and marks them `changed`.
+  * `build`: a runner (`src/stages.ts`), not one run. For each stage not yet `ready` (or only `hull.stage`): `create_set` building, then a fresh history seeded with the brief, the docs index and the earlier stages' summaries, run with a per-stage step limit (80, `HULL_AGENT_STAGE_STEPS`), then the gates: `check` (the loop's own gate), the explain documents the stage owes (world: a `map`; rules: a `flow`), `test` (a project whose tests cannot load here is not failed for it), one screenshot read by the model, and `history_checkpoint` `stage-<id>`. Pieces are the config ids and `tunables:<block>` read back from the history's details, new library ids, and `explain:<id>` for each document written. A stage that fails a gate after the fix rounds is set `failed` with the reason and the runner stops; the next build prompt starts at the first stage that is not ready. When all seven are ready the step becomes `play`. No `ui_ask` here: the person reviews the pieces afterwards.
+  * `fix`: the loop below. A run that changed the game ends with a `change` card (plain title, the piece, a line per value or "+N -M lines" for code, and the newest history change id for Keep and Put back).
 * **Prompt**: teaches the loop (look, plan, small edit, check, test, step, read state or screenshot, report what could not be judged) and
-  appends the project's `GAME.md` and `AGENTS.md`.
+  appends the project's `AGENTS.md` (and `GAME.md` for a fix; the brief and the build read it through `brief_read` and the task).
 * **Gates**: destructive tools (rename, move, delete, `code_delete`, restore, revert, adopt) ask first (`HULL_AGENT_PERMISSIONS`: `risky` default,
   `writes`, `none`); after edits the loop runs `check` itself and the run cannot end while it fails, for at most three fix rounds,
   then stops and says so (`_meta.checkFailed`); an edited run ends with a history checkpoint `hull-agent-run-N`.
 * **Compaction**: past 70% of the model's window old tool results are cut, then everything but the recent tail becomes OpenCode's
   structured summary (MIT, see `packages/agent/NOTICES`). `HULL_AGENT_CONTEXT` sets the window size.
-* **Tests**: `fakeProvider` plays a script with no network; `agent.e2e.test.ts` runs prompt, tool calls, edit, check, done, a failing-check
-  gate, a permission denial, cancel and compaction over ACP against the arena project.
+* **No key needed to check the flow**: `fakeProvider` plays a script (streaming its text in pieces). `HULL_AGENT_FAKE` / `--fake` names one JSON file (every mode) or a folder with `brief.json`, `build.json` (one list per stage id) and `fix.json`;
+  `packages/agent/fixtures/arena/` is such a folder for a project made from `templates/arena`. A step may carry `when` (play only if that text is in the last two user messages), and a tool input may use `"$screenshot"`, `"$screenshot.width"` and `"$screenshot.height"`.
+* **Tests**: `stream.test.ts` (parsers and providers on recorded streams), `modes.test.ts` (tool lists, card checks, reading changes back), `agent.e2e.test.ts` (prompt, tool calls, edit, check, done, a failing-check
+  gate, a permission denial, cancel and compaction over ACP against the arena project; the wire shapes of cards and asks; the change card), `stages.e2e.test.ts` (brief, change, approval and the whole build on a copy of the arena template with the fixtures, a failed stage and its resume).
 
 ### The agent panel (ACP client, `packages/studio`)
 

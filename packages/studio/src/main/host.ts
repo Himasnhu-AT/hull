@@ -2,12 +2,15 @@
 // remember recent projects. Shared by Electron's main process and the web dev mode, so both behave the same.
 // Nothing here imports electron.
 
+import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHub, type Hub } from './agents.ts';
+import { createSettingsStore, type KeyCrypto } from './agentSettings.ts';
 import { createTerminals, type Terminals } from './terminal.ts';
-import type { AgentEvent } from '../shared/agentApi.ts';
+import { pickTemplate, titleFromIdea } from './idea.ts';
+import type { AgentEvent, AgentSettings, AgentSettingsInput } from '../shared/agentApi.ts';
 import type { CommunityGame, OpenedProject, RecentProject, TemplateInfo } from '../shared/appApi.ts';
 
 interface ProjectServer { url: string; gameUrl: string; close(): Promise<void> }
@@ -29,6 +32,8 @@ export interface HostOptions {
   log?: (line: string) => void;
   /** Env the agents and the terminal start with (tests); defaults to the process's. */
   env?: NodeJS.ProcessEnv;
+  /** Where the builder's key can be kept safely (Electron's safeStorage). Without it the environment decides. */
+  crypto?: KeyCrypto;
 }
 
 export interface Host {
@@ -36,6 +41,8 @@ export interface Host {
   listCommunity(): Promise<CommunityGame[]>;
   openCommunity(id: string, reset?: boolean): Promise<OpenedProject>;
   createProject(opts: { template: string; title: string; parentDir: string }): Promise<OpenedProject>;
+  /** The idea box: picks the closest template, makes the project in the app's own projects folder and opens it. */
+  createFromIdea(idea: string): Promise<OpenedProject & { idea: string }>;
   openProject(root: string): Promise<OpenedProject>;
   closeProject(): Promise<void>;
   recents(): Promise<RecentProject[]>;
@@ -43,6 +50,9 @@ export interface Host {
   /** Agents (ACP) and the Claude Code terminal, working on the open project. */
   agents: Hub;
   terminals: Terminals;
+  /** The builder's model and key (the key itself never leaves the main process). */
+  agentSettings(): Promise<AgentSettings>;
+  setAgentSettings(s: AgentSettingsInput): Promise<AgentSettings>;
   /** Subscribes to agent and terminal events; returns the unsubscribe. */
   onAgentEvent(cb: (e: AgentEvent) => void): () => void;
   /** The server module in use, for tests and the banner. */
@@ -68,7 +78,8 @@ export function createHost(opts: HostOptions): Host {
   const emit = (e: AgentEvent): void => { for (const l of listeners) { try { l(e); } catch { /* a dead window must not stop the others */ } } };
   const current = (): { root: string; mcp: { url: string; launcher: string } } | null =>
     running ? { root: running.root, mcp: { url: running.mcp.url, launcher: fileURLToPath(new URL('../../../tools/bin/hull-mcp.js', import.meta.url)) } } : null;
-  const hub = createHub({ project: current, emit, log, ...(opts.env ? { env: opts.env } : {}) });
+  const settings = createSettingsStore({ dataDir: opts.dataDir, crypto: opts.crypto, env: opts.env });
+  const hub = createHub({ project: current, emit, log, settings, ...(opts.env ? { env: opts.env } : {}) });
   const terminals = createTerminals({ project: current, emit, ...(opts.env ? { env: opts.env } : {}) });
 
   async function load(): Promise<{ mod: ServerModule; mcp: McpModule; kind: 'real' }> {
@@ -101,6 +112,8 @@ export function createHost(opts: HostOptions): Host {
   const host: Host = {
     agents: hub,
     terminals,
+    agentSettings: () => settings.get(),
+    async setAgentSettings(s) { const r = await settings.set(s); await hub.stopEnsured(); return r; },
     onAgentEvent(cb) { listeners.add(cb); return () => { listeners.delete(cb); }; },
 
     async listTemplates() { return (await load()).mod.listTemplates(); },
@@ -119,6 +132,18 @@ export function createHost(opts: HostOptions): Host {
       const { mod } = await load();
       const { root } = await mod.createProject({ template, title, dir: join(parentDir, slug(title)) });
       return host.openProject(root);
+    },
+
+    async createFromIdea(idea) {
+      const text = idea.trim();
+      if (!text) throw new Error('Say what game you want to make first.');
+      const { mod } = await load();
+      const title = titleFromIdea(text);
+      // A second game with the same name gets its own folder; the person never chooses one.
+      let dir = join(projectsDir, slug(title)), n = 2;
+      while (existsSync(dir)) dir = join(projectsDir, `${slug(title)}-${n++}`);
+      const { root } = await mod.createProject({ template: pickTemplate(text), title, dir });
+      return { ...(await host.openProject(root)), idea: text };
     },
 
     async openProject(root) {

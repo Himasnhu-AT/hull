@@ -4,6 +4,7 @@ import { animGraphSchema, type AnimGraph } from './anim-graph.ts';
 import { animSetSchema, type AnimSet } from './anim-set.ts';
 import { characterSchema, type Character, type CharacterHit } from './character.ts';
 import { enemySchema, type Enemy, type EnemyPattern } from './enemy.ts';
+import { explainSchema } from './explain.ts';
 import { lookSchema, type Look } from './look.ts';
 import { inputMapSchema, type InputMap } from './input-map.ts';
 import { materialSchema, type Material } from './material.ts';
@@ -16,7 +17,7 @@ import { uiScreenSchema, type UiScreenDef } from './ui-screen.ts';
 import { uiThemeSchema, type UiTheme } from './ui-theme.ts';
 import { vfxSchema, type Vfx } from './vfx.ts';
 
-export { animGraphSchema, animSetSchema, characterSchema, enemySchema, inputMapSchema, lookSchema, manifestSchema, materialSchema, mixerSchema, moveSetSchema, soundSchema, tuningSchema, uiScreenSchema, uiThemeSchema, vfxSchema };
+export { animGraphSchema, animSetSchema, characterSchema, enemySchema, explainSchema, inputMapSchema, lookSchema, manifestSchema, materialSchema, mixerSchema, moveSetSchema, soundSchema, tuningSchema, uiScreenSchema, uiThemeSchema, vfxSchema };
 export type { AnimGraph, AnimSet, Character, CharacterHit, Enemy, EnemyPattern, InputMap, Look, Manifest, Material, Mixer, Move, MoveSet, Sound, Tuning, UiScreenDef, UiTheme, Vfx };
 export * from './ui.ts';
 
@@ -61,7 +62,8 @@ declare module '../config/types.ts' {
 /** Filename to JSON text, one per kind plus the manifest, draft 2020-12. */
 export function emitSchemas(): Record<string, string> {
   const out: Record<string, string> = {};
-  const all: Record<string, object> = { game: manifestSchema, ...kinds };
+  // The explain document is not a config kind (it lives in .hull/explain), but its schema is published the same way.
+  const all: Record<string, object> = { game: manifestSchema, ...kinds, explain: explainSchema };
   for (const [name, schema] of Object.entries(all)) {
     const doc = { $schema: 'https://json-schema.org/draft/2020-12/schema', $id: `urn:hull:schema:${name}`, ...schema };
     out[`${name}.schema.json`] = `${JSON.stringify(doc, null, 2)}\n`;

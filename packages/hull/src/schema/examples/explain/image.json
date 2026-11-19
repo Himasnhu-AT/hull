@@ -1,0 +1,12 @@
+{
+  "id": "world-sketch",
+  "title": "A first sketch",
+  "stage": "world",
+  "why": "A quick drawing of the first room so you can say what is wrong with it.",
+  "body": {
+    "type": "image",
+    "image": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==",
+    "width": 1,
+    "height": 1
+  }
+}

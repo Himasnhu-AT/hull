@@ -1,0 +1,26 @@
+{
+  "id": "balance-damage",
+  "title": "Who hurts whom",
+  "stage": "rules",
+  "why": "Hits take a third of your health at the start, so a mistake costs you but does not end the run.",
+  "body": {
+    "type": "table",
+    "columns": [
+      "Attacker",
+      "Hit",
+      "Damage"
+    ],
+    "rows": [
+      [
+        "Guard",
+        "Slash",
+        12
+      ],
+      [
+        "Guard",
+        "Overhead",
+        20
+      ]
+    ]
+  }
+}

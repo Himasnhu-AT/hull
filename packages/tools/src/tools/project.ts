@@ -3,6 +3,7 @@
 // A method tool does no work itself: it calls the project server through `ctx.project`, so an edit made here is
 // validated, journaled and pushed to the open app exactly like one made in the Inspector.
 import type { Problem } from 'hull';
+import { explainSchema } from 'hull/schema';
 import type { Methods } from 'hull/dev/protocol';
 import { defineTool, type ToolDef } from '../tool.ts';
 
@@ -35,6 +36,12 @@ const controlOp: Schema = {
     obj({ op: { const: 'screenshot' } }, ['op']),
   ],
 };
+
+const explainInput: Schema = JSON.parse(JSON.stringify(explainSchema)) as Schema;
+const recentEvent: Schema = obj({ at: num('Game time in seconds.'), kind: { enum: ['sound', 'anim', 'vfx', 'actor'] }, id: str(), label: str(), node: str() }, ['at', 'kind', 'id', 'label']);
+const briefDoc: Schema = obj({ exists: { type: 'boolean' }, title: str(), text: str(), sections: arr(obj({ id: str(), title: str(), text: str() }, ['id', 'title', 'text'])) }, ['exists', 'title', 'text', 'sections']);
+const stageState: Schema = obj({ id: { enum: ['world', 'actors', 'animations', 'rules', 'sounds', 'effects', 'screens'] }, status: { enum: ['waiting', 'building', 'ready', 'failed'] }, summary: str(), checkpoint: str(), pieces: arr(str("Review keys: config ids, 'tunables:<block>', 'explain:<id>'.")) }, ['id', 'status', 'pieces']);
+const createState: Schema = obj({ idea: str(), step: { enum: ['idea', 'brief', 'build', 'play'] }, briefApproved: { type: 'boolean' }, stages: arr(stageState) }, ['idea', 'step', 'briefApproved', 'stages']);
 
 type MethodName = keyof Methods;
 interface Spec {
@@ -115,6 +122,20 @@ const SPECS: Spec[] = [
   { method: 'review.list', summary: 'Review notes: what has been checked and what needs a change.', input: obj({ open: { type: 'boolean' } }), key: 'entries', output: list({ type: 'object', properties: { key: str(), state: str(), note: str() }, required: ['key', 'state'], additionalProperties: true }, 'entries'), },
   { method: 'review.set', summary: 'Set the review state of a config id or tunables block; the app updates live.', input: obj({ key: str(), state: { enum: ['unreviewed', 'approved', 'needs-change'] }, note: str(), author }, ['key', 'state']), output: obj({ ok: { type: 'boolean' }, problems, entry: { type: 'object', additionalProperties: true } }, ['ok', 'problems']), },
   { method: 'review.note', summary: 'Write a note on a piece without changing its review state (empty text clears it); the app updates live.', input: obj({ key: str(), note: str(), author }, ['key', 'note']), output: obj({ ok: { type: 'boolean' }, problems, entry: { type: 'object', additionalProperties: true } }, ['ok', 'problems']), },
+  // ---- M11: idea to play (docs/IDEA-TO-PLAY.md section 4) --------------------------------------------------------------
+  { method: 'brief.read', summary: 'The game brief: GAME.md at the project root, split into its "## " sections (premise, what-you-do, controls, cast, world, rules, look-and-sound, first-playable, not-in-the-first-version). exists is false before the first write.', input: empty, output: briefDoc, format: (o) => [(o as { text: string }).text || '(no brief yet)'] },
+  { method: 'brief.write', summary: 'Write the brief. Pass "section" ({id, text}; id is the title in kebab case like "what-you-do"; a new section goes in the standard order, other sections stay as they are) or "text" for the whole file. Written atomically, recorded in the history under your name, and shown live in the app. Write one section at a time so the person can read the brief fill in.', input: obj({ text: str('The whole GAME.md. Starts with "# Title".'), section: obj({ id: str(), title: str('Only for a new section whose title is not the standard one.'), text: str('The section body, without its "## " heading.') }, ['id', 'text']), author }), output: obj({ ok: { type: 'boolean' }, problems, doc: briefDoc }, ['ok', 'problems']) },
+  { method: 'docs.list', summary: 'The documents that teach Hull: one per kit ("kit/combat"), the kit catalogue ("kit/index"), the config formats ("guide/schemas"), the workflow ("guide/workflow"), and a generated list of each module\'s exports ("api/core", "api/audio", ...). Read one with docs.read.', input: empty, output: list(obj({ id: str(), title: str(), kind: { enum: ['kit', 'guide', 'api'] }, bytes: num() }, ['id', 'title', 'kind', 'bytes'])),
+    format: (o) => (o as { items: { id: string; title: string; bytes: number }[] }).items.map((i) => i.id + '  ' + i.title + '  (' + i.bytes + ' bytes)') },
+  { method: 'docs.read', summary: 'Read one document from docs.list, as markdown text: a kit README, a guide, or the generated list of a module\'s exports.', input: obj({ id: str('An id from docs.list, like kit/combat or api/audio.') }, ['id']), output: obj({ ok: { type: 'boolean' }, problems, id: str(), title: str(), text: str() }, ['ok', 'problems']), format: (o) => [(o as { text?: string }).text ?? ''] },
+  { method: 'explain.list', summary: 'The explain documents: drawings (flowchart, map with marks, table, picture) of pieces the person cannot judge by looking or listening, each with a plain sentence on what was decided.', input: empty, output: list(explainInput),
+    format: (o) => (o as { items: { id: string; stage: string; title: string }[] }).items.map((d) => d.id + '  ' + d.stage + '  ' + d.title) },
+  { method: 'explain.write', summary: 'Keep an explain document (a flow of nodes and edges, a map with marks, a table or a picture) for a rule, enemy behaviour, world layout or balance the person cannot see. Validated first: an edge must name nodes the flow has. An existing id is replaced and its review resets (review key "explain:<id>"). Stored in .hull/explain/<id>.json with your name.', input: obj({ doc: explainInput, author }, ['doc']), output: writeResult },
+  { method: 'create.get', summary: 'Where the project is in the idea-to-play flow: the idea, the step (idea, brief, build, play), whether the brief is approved, and the seven build stages (world, actors, animations, rules, sounds, effects, screens) with their status and the pieces each made.', input: empty, output: createState },
+  { method: 'create.set', summary: 'Record progress in the flow. "patch" sets idea, step or briefApproved; "stage" ({id, status, summary, checkpoint, pieces}) updates one stage. Returns the whole state; the app updates live.', input: obj({ patch: obj({ idea: str(), step: { enum: ['idea', 'brief', 'build', 'play'] }, briefApproved: { type: 'boolean' } }), stage: { ...stageState, required: ['id'] }, author }), output: createState },
+  { method: 'game.recent', summary: 'What the running game just did, newest first: sounds started, animation states entered, effects spawned, characters that came alive, each with its game time and a plain label. Use it to answer what just played when the person says something felt off.', input: obj({ seconds: num('How far back, in game seconds (default 4).'), client: str('A specific game client.') }), output: list(recentEvent),
+    format: (o) => (o as { items: { at: number; kind: string; id: string; label: string }[] }).items.map((e) => e.at.toFixed(2) + 's  ' + e.kind + '  ' + e.label + '  (' + e.id + ')') },
+  { method: 'game.moment', summary: 'Freeze the game now: pauses it and returns a screenshot (PNG, base64), the tick, the game time and the recent events. Resume with game.control {paused:false}.', input: obj({ client: str('A specific game client.') }), output: obj({ tick: num(), time: num(), png: str(), width: num(), height: num(), recent: arr(recentEvent) }, ['tick', 'time', 'png', 'width', 'height', 'recent']) },
 ];
 
 /** Methods that are already registry tools under another front (`check`, `build`) or are the registry's own entry point. */

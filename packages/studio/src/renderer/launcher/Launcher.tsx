@@ -1,10 +1,16 @@
-// The launcher: start a project from a template, open a folder, or pick a recent one.
+// The launcher: one box for the idea first. Under it, quieter choices: start from a template, Community, Recent, Open folder.
 
 import { useEffect, useState, type JSX } from 'react';
 import type { CommunityGame, HullApp, OpenedProject, RecentProject, TemplateInfo } from '../../shared/appApi.ts';
 import { Icon } from '../ui/Icon.tsx';
 
-type Pane = 'recent' | 'new' | 'community';
+type Pane = 'idea' | 'recent' | 'new' | 'community';
+
+const EXAMPLES: { label: string; idea: string }[] = [
+  { label: 'Wave shooter', idea: 'A first-person arena where waves of drones come at me and I pick up ammo between rounds.' },
+  { label: 'Gem run', idea: 'A small arena where I run and jump to collect gems before the clock runs out.' },
+  { label: 'Samurai island', idea: 'A third-person samurai game on a windy island. One swordswoman against raiders. Every enemy shows what it is about to do and I answer with my blade.' },
+];
 
 const ago = (iso: string): string => {
   const s = (Date.now() - new Date(iso).getTime()) / 1000;
@@ -23,10 +29,11 @@ function Mark(): JSX.Element {
   );
 }
 
-export function Launcher({ app, onOpen, startError }: { app: HullApp; onOpen(p: OpenedProject): void; startError?: string | null }): JSX.Element {
+export function Launcher({ app, onOpen, startError }: { app: HullApp; onOpen(p: OpenedProject, idea?: string): void; startError?: string | null }): JSX.Element {
   const [recents, setRecents] = useState<RecentProject[] | null>(null);
   const [templates, setTemplates] = useState<TemplateInfo[] | null>(null);
-  const [pane, setPane] = useState<Pane>('recent');
+  const [pane, setPane] = useState<Pane>('idea');
+  const [idea, setIdea] = useState('');
   const [tpl, setTpl] = useState<string>('');
   const [title, setTitle] = useState('My Game');
   const [parent, setParent] = useState<string | null>(null);
@@ -39,7 +46,7 @@ export function Launcher({ app, onOpen, startError }: { app: HullApp; onOpen(p: 
   const [confirming, setConfirming] = useState<string | null>(null);
 
   useEffect(() => {
-    void app.recents().then((r) => { setRecents(r); if (r.length === 0) setPane('new'); }, () => setRecents([]));
+    void app.recents().then((r) => { setRecents(r); }, () => setRecents([]));
     void app.listTemplates().then((t) => { setTemplates(t); setTpl((cur) => cur || t[0]?.name || ''); }, (e) => { setTemplates([]); setError(msg(e)); });
   }, [app]);
 
@@ -56,10 +63,11 @@ export function Launcher({ app, onOpen, startError }: { app: HullApp; onOpen(p: 
 
   const run = async (label: string, job: () => Promise<OpenedProject | null>): Promise<void> => {
     setBusy(label); setError(null);
-    try { const p = await job(); if (p) onOpen(p); } catch (e) { setError(msg(e)); } finally { setBusy(null); }
+    try { const p = await job(); if (p) onOpen(p, (p as { idea?: string }).idea); } catch (e) { setError(msg(e)); } finally { setBusy(null); }
   };
 
   const openFolder = (): Promise<void> => run('Opening', async () => { const dir = await app.pickFolder('open'); return dir ? app.openProject(dir) : null; });
+  const makeFromIdea = (): Promise<void> => run('Creating', () => app.createFromIdea({ idea: idea.trim() }));
   const chooseWhere = async (): Promise<void> => { const d = await app.pickFolder('location'); if (d) setParent(d); };
   const create = (): Promise<void> => run('Creating', async () => {
     let dir = parent;
@@ -71,10 +79,13 @@ export function Launcher({ app, onOpen, startError }: { app: HullApp; onOpen(p: 
     <div className="launcher">
       <div className="l-side drag">
         <div className="mark"><Mark /><h1>Hull</h1></div>
-        <p className="tag">Build games with an AI. Check and tune them here.</p>
+        <p className="tag">Describe a game. The builder makes it. You play it and say what is off.</p>
         <div className="acts">
+          <button className={`act${pane === 'idea' ? ' on' : ''}`} onClick={() => setPane('idea')}>
+            <span className="ic"><Icon name="plus" /></span><span><b>New game</b><small>Start from an idea</small></span>
+          </button>
           <button className={`act${pane === 'new' ? ' on' : ''}`} onClick={() => setPane('new')}>
-            <span className="ic"><Icon name="plus" /></span><span><b>New project</b><small>Start from a template</small></span>
+            <span className="ic"><Icon name="gameplay" /></span><span><b>Start from a template</b><small>Pick a ready base</small></span>
           </button>
           <button className="act" onClick={() => void openFolder()} disabled={busy !== null}>
             <span className="ic"><Icon name="folder" /></span><span><b>Open folder</b><small>A project you already have</small></span>
@@ -86,12 +97,27 @@ export function Launcher({ app, onOpen, startError }: { app: HullApp; onOpen(p: 
             <span className="ic"><Icon name="history" /></span><span><b>Recent projects</b><small>{recents ? `${recents.length} saved` : 'Loading'}</small></span>
           </button>
         </div>
-        <div className="l-foot">Library on the left, Inspector on the right, Build in the title bar.</div>
+        <div className="l-foot">Your games are kept by the app. You never need to pick a folder.</div>
       </div>
 
       <div className="l-main drag">
         <div className="l-in nodrag">
           {error && <div className="note-err" role="alert">{error}</div>}
+
+          {pane === 'idea' && (
+            <>
+              <div><h2>What game do you want to make?</h2><p className="sub2">Say it in a sentence or two. The app picks a starting point for you.</p></div>
+              <form className="form cr-ideaform" onSubmit={(e) => { e.preventDefault(); if (idea.trim()) void makeFromIdea(); }}>
+                <textarea className="field-in cr-idea-in" rows={4} value={idea} onChange={(e) => setIdea(e.target.value)} aria-label="Your game idea" autoFocus
+                  placeholder="A third-person samurai game on a windy island. One swordswoman against raiders."
+                  onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && idea.trim()) { e.preventDefault(); void makeFromIdea(); } }} />
+                <div className="cr-examples" role="group" aria-label="Examples">
+                  {EXAMPLES.map((x) => <button type="button" key={x.label} className="chip" onClick={() => setIdea(x.idea)}>{x.label}</button>)}
+                </div>
+                <div><button type="submit" className="btn primary lg" disabled={busy !== null || !idea.trim()}>{busy === 'Creating' ? 'Making your game...' : 'Make my game'}</button></div>
+              </form>
+            </>
+          )}
 
           {pane === 'recent' && (
             <>

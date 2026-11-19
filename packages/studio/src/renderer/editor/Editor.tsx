@@ -23,6 +23,7 @@ import { ExpSwitch } from '../history/ExpSwitch.tsx';
 import { Compare } from '../history/Compare.tsx';
 import { AdoptDialog } from '../history/AdoptDialog.tsx';
 import { useSplit } from './useSplit.ts';
+import { fmtBytes, placeOf, useBuild } from '../create/useBuild.ts';
 
 type View = 'game' | 'sound' | 'compare' | BenchKind; // w3-app-benches: character, vfx, look; w3-app-history: compare
 
@@ -30,8 +31,6 @@ interface Toast { text: string; error?: boolean; action?: { label: string; run()
 
 /** The page URL with the launch options applied (the project server keeps and cleans them). */
 const withLaunch = (url: string, query: string): string => (query ? url + (url.includes('?') ? '&' : '?') + query : url);
-
-const fmtBytes = (n: number): string => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.round(n / 1024)} kB`);
 
 export function Editor(props: { project: OpenedProject; platform: string; onClose(): void }): JSX.Element | null {
   // Created in an effect, not during render, so React's double-mount in development closes only the first client.
@@ -55,7 +54,6 @@ function EditorBody({ rpc, project, platform, onClose }: { rpc: RpcClient; proje
   // The Content Browser can pop out to the full window width, over the Library and the Inspector columns.
   const [dockWide, setDockWide] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
-  const [build, setBuild] = useState<BuildState>('idle');
   const [toast, setToast] = useState<Toast | null>(null);
   const [gameKey, setGameKey] = useState(0);
   // Page options the game opens with (start=camp&look=night). The project server keeps them per project; the frame applies them.
@@ -98,32 +96,28 @@ function EditorBody({ rpc, project, platform, onClose }: { rpc: RpcClient; proje
     void window.hullApp?.reveal(abs);
   }, [project.root]);
 
+  const builder = useBuild(rpc, project.root);
+  const build: BuildState = builder.state;
   const runBuild = useCallback(async () => {
     if (build === 'running') return;
-    setBuild('running');
     setPanels((s) => ({ ...s, dock: true }));
     setDockTab('console');
     p.log('info', 'Build started', 'build');
-    try {
-      const r = await rpc.call('tool.call', { name: 'build' }, { timeoutMs: 600_000 });
-      const out = (r.output ?? {}) as { outDir?: string; files?: { path: string; bytes: number; gzip?: number }[] };
-      if (r.ok) {
-        const dir = out.outDir ?? `${project.root}/dist`;
-        const files = out.files ?? [];
-        const total = files.reduce((n, f) => n + f.bytes, 0);
-        for (const f of files) p.log('info', `${f.path}  ${fmtBytes(f.bytes)}${f.gzip ? ` (${fmtBytes(f.gzip)} gzip)` : ''}`, 'build');
-        p.log('ok', `Build finished${total ? `: ${files.length} file${files.length === 1 ? '' : 's'}, ${fmtBytes(total)}` : ''} in ${dir}`, 'build');
-        setToast({ text: 'Build finished', action: { label: 'Open folder', run: () => { void window.hullApp?.reveal(dir); } } });
-      } else {
-        for (const pr of r.problems) p.log('error', `${pr.file}${pr.line ? `:${pr.line}${pr.col ? `:${pr.col}` : ''}` : pr.pointer ? `#${pr.pointer}` : ''}  ${pr.message}`, 'build', idFromPath(pr.file) ?? undefined);
-        if (r.problems.length === 0) p.log('error', 'Build failed with no details. Check the server output.', 'build');
-        setToast({ text: `Build failed: ${r.problems.length} problem${r.problems.length === 1 ? '' : 's'}`, error: true });
-      }
-    } catch (e) {
-      p.log('error', `Build failed: ${e instanceof Error ? e.message : String(e)}`, 'build');
+    const r = await builder.run();
+    if (!r) return;
+    if (r.ok) {
+      for (const f of r.files) p.log('info', `${f.path}  ${fmtBytes(f.bytes)}${f.gzip ? ` (${fmtBytes(f.gzip)} gzip)` : ''}`, 'build');
+      p.log('ok', `Build finished${r.total ? `: ${r.files.length} file${r.files.length === 1 ? '' : 's'}, ${fmtBytes(r.total)}` : ''} in ${r.dir}`, 'build');
+      setToast({ text: 'Build finished', action: { label: 'Open folder', run: () => { void window.hullApp?.reveal(r.dir); } } });
+    } else if (r.error) {
+      p.log('error', `Build failed: ${r.error}`, 'build');
       setToast({ text: 'Build failed', error: true });
-    } finally { setBuild('idle'); }
-  }, [build, rpc, p, project.root]);
+    } else {
+      for (const pr of r.problems) p.log('error', `${placeOf(pr)}  ${pr.message}`, 'build', idFromPath(pr.file) ?? undefined);
+      if (r.problems.length === 0) p.log('error', 'Build failed with no details. Check the server output.', 'build');
+      setToast({ text: `Build failed: ${r.problems.length} problem${r.problems.length === 1 ? '' : 's'}`, error: true });
+    }
+  }, [build, builder, p]);
 
   useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(null), 8000); return () => clearTimeout(t); }, [toast]);
 

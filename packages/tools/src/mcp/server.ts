@@ -98,7 +98,7 @@ export function createMcpServer(projectRoot: string, o: McpOptions = {}): McpSer
               protocolVersion: (MCP_VERSIONS as readonly string[]).includes(asked) ? asked : MCP_VERSIONS[0],
               capabilities: { tools: { listChanged: false } },
               serverInfo: { name: 'hull', version: '0.0.0' },
-              instructions: 'Hull game project tools. `check` before and after every change; `tunables.list` / `tunables.set` and `config.read` / `config.set` to tune values (recorded under your name, and live in the open app); `game.run` {control:{op:"step",n:60}} then {op:"state",nodes:[...]} to run the game and read it; `history.list` for who changed what; `review.list` for what the person flagged; `play` to run a step script and compare screenshots.',
+              instructions: 'Hull game project tools. `check` before and after every change; `tunables.list` / `tunables.set` and `config.read` / `config.set` to tune values (recorded under your name, and live in the open app); `game.run` {control:{op:"step",n:60}} then {op:"state",nodes:[...]} to run the game and read it; `history.list` for who changed what; `review.list` for what the person flagged; `brief.read` / `brief.write` for the game brief (GAME.md); `docs.list` / `docs.read` to learn the kits, config formats and engine API; `explain.write` to draw a flowchart, map or table for a rule or layout the person cannot see; `create.get` / `create.set` for the build stages; `game.recent` / `game.moment` for what the game just did; `play` to run a step script and compare screenshots.',
             } };
           }
           case 'ping': return { jsonrpc: '2.0', id: id ?? null, result: {} };

@@ -24,6 +24,8 @@ export interface CompleteRequest {
   messages: Msg[];
   tools: ToolSpec[];
   signal: AbortSignal;
+  /** Called with each piece of reply text as it arrives. A provider that cannot stream may ignore it; the loop then shows the whole text at the end. */
+  onDelta?: (text: string) => void;
 }
 
 /** A model. Providers do no retries of their own beyond one for a rate limit; the loop owns the run. */

@@ -5,6 +5,7 @@
 import { Matrix4, Object3D, Quaternion, Vector3 } from 'three';
 import { config } from '../config/index.ts';
 import { Behaviour, signal, type Node, type Signal } from '../core/index.ts';
+import { trace } from '../core/trace.ts';
 import { stateFor } from '../render/interp.ts';
 import type { AnimGraph } from '../schema/anim-graph.ts';
 import type { AnimSet } from '../schema/anim-set.ts';
@@ -102,6 +103,8 @@ export class Animator extends Behaviour {
   private pelvisDy = 0;
   private liftS = new Float64Array(2);
   private lastDt = 1 / 60;
+  /** The id the "Just now" feed names this character by; empty until the first build found a character. */
+  private actorId = '';
 
   override ready(): void {
     stateFor(this.world).interp.track(this.node);
@@ -164,6 +167,10 @@ export class Animator extends Behaviour {
     const def = this.resolve<'character', Character>('character', this.character, true);
     if (!def) { this.report(`the animator on "${this.node.name}" has no character, so it draws nothing.`); return; }
     const where = typeof this.character === 'string' ? `character/${bare('character', this.character)}` : 'character';
+    // The "Just now" feed's `actor`: a character is active when its animator first builds a body. build() runs once per animator
+    // (and again on a live edit, which must not announce it twice), so this costs nothing per frame. A studio that connects later
+    // asks again through announceActor().
+    if (this.actorId === '') { this.actorId = where; trace('actor', where, this.node.name); }
     let built;
     try {
       if (def.body.type === 'gltf') throw new Error(`${where}#/body/type: glTF bodies are not supported yet`);
@@ -204,6 +211,8 @@ export class Animator extends Behaviour {
     if (gdef) {
       const gWhere = typeof gRef === 'string' ? `anim-graph/${bare('anim-graph', gRef)}` : 'anim-graph';
       this.graphRt = new Graph(gdef, this.clips, sk, `${gWhere}#`, (m) => this.report(m));
+      this.graphRt.traceId = gWhere;
+      this.graphRt.traceNode = this.node.name;
       for (const [n, v] of oldParams) { const i = this.graphRt.paramIndexOf(n); if (i >= 0) this.graphRt.setParam(i, v); }
       for (const [l, s] of oldStates) this.graphRt.setState(l, s);
     }
@@ -253,6 +262,11 @@ export class Animator extends Behaviour {
   }
 
   // ---- parameters ----
+
+  /** Says again that this character is in the game, for a studio that connected after it was built. Does nothing before the first build. */
+  announceActor(): void {
+    if (this.actorId !== '') trace('actor', this.actorId, this.node.name);
+  }
 
   /** Sets a graph parameter. A trigger is set by any true value and lasts until the next fixed step has seen it. */
   set(name: string, value: number | boolean): void {

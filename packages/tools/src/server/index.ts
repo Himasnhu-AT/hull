@@ -7,7 +7,7 @@ import type { IncomingMessage } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { dirname, join, relative, resolve } from 'node:path';
 import type { ConfigSource, Problem } from 'hull';
-import type { AssetResult, Author, Change, GameControl, LibraryItem, MethodName, Methods, ProjectInfo, PushName, Pushes, TunableWire, WriteResult } from 'hull/dev/protocol';
+import type { AssetResult, Author, BriefDoc, Change, GameControl, GameEvents, GameMoment, RecentEvent, LibraryItem, MethodName, Methods, ProjectInfo, PushName, Pushes, TunableWire, WriteResult } from 'hull/dev/protocol';
 import { createServer, type ViteDevServer } from 'vite';
 import { WebSocket, WebSocketServer } from 'ws';
 import { loadManifest, readConfigFiles, readManifest, writeIds } from '../tools/config.ts';
@@ -27,6 +27,10 @@ import { findRefs, FOLDER_RE, ID_RE, planDelete, planDuplicate, planMoves, planN
 import { thumbOf } from './thumbs.ts';
 import { applyEdit, importersOf, listCode, MAX_BYTES, resolveCodePath, searchCode } from './code.ts';
 import { runTsc } from '../tools/types.ts';
+import { readBrief, writeSection } from '../create/brief.ts';
+import { listDocs, readDoc } from '../create/docs.ts';
+import { listExplain, writeExplain } from '../create/explain.ts';
+import { readCreate, setCreate } from '../create/state.ts';
 
 export { createProject, listTemplates } from './templates.ts';
 export { listCommunity, openCommunity } from './community.ts';
@@ -42,7 +46,7 @@ export interface ProjectServer {
 }
 
 /** `exp` is set for a game page that belongs to an experiment: it hears only that experiment's edits. */
-interface Client { ws: WebSocket; role: 'studio' | 'game'; id: string; exp?: string }
+interface Client { ws: WebSocket; role: 'studio' | 'game'; id: string; exp?: string; /** A page a tool opened because no app was around; never preferred to a game in a frame. */ headless?: boolean }
 type Handler<M extends MethodName> = (params: Methods[M]['params']) => Promise<Methods[M]['result']> | Methods[M]['result'];
 
 class RpcError extends Error {
@@ -549,9 +553,20 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
   let rpcN = 0;
   const rpcWait = new Map<number, { ok(v: never): void; fail(e: Error): void }>();
 
+  /**
+   * The game a method aims at: the named one, else the first connected game of the project's own (not an experiment's), a game in
+   * a frame before a headless page a tool opened. Without the preference "Something is off" froze the headless game, not the
+   * one the person was looking at.
+   */
+  const pickGame = (client?: string): Client | undefined => {
+    const open = [...clients].filter((c) => c.role === 'game' && c.ws.readyState === WebSocket.OPEN);
+    if (client) return open.find((c) => c.id === client);
+    const own = open.filter((c) => c.exp === undefined);
+    return own.find((c) => !c.headless) ?? own[0];
+  };
+
   const runOnGame: Handler<'game.run'> = (p) => new Promise((ok, fail) => {
-    const candidates = [...clients].filter((c) => c.role === 'game' && c.ws.readyState === WebSocket.OPEN && (p.client ? c.id === p.client : c.exp === undefined));
-    const target = candidates[0];
+    const target = pickGame(p.client);
     if (!target) { fail(new RpcError(-32002, p.client ? `no game "${p.client}" is connected` : 'no game is connected; open the dev page first')); return; }
     const id = ++rpcN;
     const timer = setTimeout(() => { rpcWait.delete(id); fail(new RpcError(-32003, `the game did not answer ${p.control.op} within 30 s`)); }, 30_000);
@@ -643,6 +658,59 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
     const thumbs: Record<string, ReturnType<typeof thumbOf> & object> = {};
     for (const id of assetIds()) { const t = thumbOf(id, valueOf(id), valueOf); if (t) thumbs[id] = t; }
     return { folders, code, creatable: Object.keys(STARTERS), thumbs };
+  };
+
+  // ---- The "Just now" feed ----------------------------------------------------------------------------------------
+  // Each game sends its newest events in batches (dev/runtime.ts); the server keeps the last few hundred per game, in game time,
+  // and forwards each batch to the studios. A game that connects again starts a new run, so its old events go.
+  const RECENT_KEEP = 256;
+  const feeds = new Map<string, { events: RecentEvent[]; time: number }>();
+  const feedOf = (id: string): { events: RecentEvent[]; time: number } => {
+    let f = feeds.get(id);
+    if (!f) { f = { events: [], time: 0 }; feeds.set(id, f); }
+    return f;
+  };
+  const recentOf = (client: string | undefined, seconds: number): RecentEvent[] => {
+    const g = pickGame(client);
+    if (!g) return [];
+    const f = feedOf(g.id);
+    const latest = Math.max(f.time, f.events.at(-1)?.at ?? 0);
+    const out: RecentEvent[] = [];
+    for (let i = f.events.length - 1; i >= 0; i--) {
+      const e = f.events[i]!;
+      if (e.at < latest - seconds) break;
+      out.push(e);
+    }
+    return out;
+  };
+  const isRecent = (items: unknown): items is RecentEvent[] => Array.isArray(items) && items.every((e) => e && typeof e === 'object' && typeof (e as RecentEvent).at === 'number' && typeof (e as RecentEvent).id === 'string');
+
+  // ---- The brief (GAME.md) ----------------------------------------------------------------------------------------
+  const BRIEF = 'GAME.md';
+  const briefText = (): string | null => { try { return readFileSync(join(root, BRIEF), 'utf8'); } catch { return null; } };
+  let briefSeen = briefText();
+  const writeBrief: Handler<'brief.write'> = async (p) => {
+    const by = p.author ?? 'you';
+    const file = (message: string): { ok: false; problems: Problem[] } => ({ ok: false, problems: [{ file: BRIEF, rule: 'brief', message }] });
+    let text: string;
+    if (p.text !== undefined) {
+      if (typeof p.text !== 'string' || p.text.trim() === '') return file('text is empty: write the whole brief, or pass one section');
+      text = p.text.endsWith('\n') ? p.text : p.text + '\n';
+    } else if (p.section) {
+      let title = 'Untitled';
+      try { title = (JSON.parse(readText(MANIFEST)) as { title?: string }).title ?? title; } catch { /* the manifest's problems are reported elsewhere */ }
+      const r = writeSection(briefText(), p.section, title);
+      if (!r.ok) return file(r.message);
+      text = r.text;
+    } else return file('pass text (the whole brief) or section ({ id, text })');
+    // Edits still waiting from another author are recorded first, so the brief's change has one author.
+    await hist.settle(by, 'main');
+    writeWhole(join(root, BRIEF), text);
+    briefSeen = text;
+    hist.touch(by);
+    const doc = readBrief(text);
+    push('brief.changed', doc, 'studio');
+    return { ok: true, problems: [], doc };
   };
 
   // ---- Methods ----------------------------------------------------------------------------------------------------
@@ -753,10 +821,46 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
     'exp.adopt': (p) => hist.expAdopt(p.name, p.author ?? 'you', p.resolve),
     'exp.discard': (p) => hist.expDiscard(p.name),
     'game.run': runOnGame,
+    'game.recent': (p) => ({ items: recentOf(p.client, typeof p.seconds === 'number' && p.seconds > 0 ? p.seconds : 4) }),
+    'game.moment': async (p): Promise<GameMoment> => {
+      const g = pickGame(p.client);
+      if (!g) throw new RpcError(-32002, p.client ? `no game "${p.client}" is connected` : 'no game is connected; open the dev page first');
+      // Pause first (the control message and the ops below travel the same socket, in order), then read the frozen frame.
+      g.ws.send(JSON.stringify({ jsonrpc: '2.0', method: 'game.control', params: { paused: true } satisfies GameControl }));
+      const state = (await runOnGame({ client: g.id, control: { op: 'state' } })) as { tick: number; time: number };
+      const shot = (await runOnGame({ client: g.id, control: { op: 'screenshot' } })) as { png: string; width: number; height: number };
+      return { tick: state.tick, time: state.time, png: shot.png, width: shot.width, height: shot.height, recent: recentOf(g.id, 4) };
+    },
+    'brief.read': (): BriefDoc => readBrief(briefText()),
+    'brief.write': writeBrief,
+    'docs.list': () => ({ items: listDocs() }),
+    'docs.read': (p) => {
+      const d = typeof p.id === 'string' ? readDoc(p.id) : null;
+      if (!d) return { ok: false, problems: [{ file: String(p.id), rule: 'docs', message: `there is no document "${String(p.id)}" (docs.list shows the ids)` }] };
+      return { ok: true, problems: [], id: d.id, title: d.title, text: d.text };
+    },
+    'explain.list': () => ({ items: listExplain(root) }),
+    'explain.write': async (p) => {
+      const r = writeExplain(root, p.doc, p.author ?? 'you');
+      if (r.ok) push('explain.changed', { id: p.doc.id }, 'studio');
+      return r;
+    },
+    'create.get': () => readCreate(root),
+    'create.set': (p) => {
+      const s = setCreate(root, p);
+      push('create.changed', s, 'studio');
+      return s;
+    },
     'review.list': (p) => listReview(root, p.open === true),
     'review.set': (p) => reviewed(setReview(root, { ...p, author: p.author ?? 'you' })),
     'review.note': (p) => reviewed(noteReview(root, { ...p, author: p.author ?? 'you' })),
-    'game.control': (p: GameControl) => { push('game.control', p, 'game', '*'); return {}; },
+    'game.control': (p: GameControl) => {
+      if (!p.client) { push('game.control', p, 'game', '*'); return {}; }
+      const { client: id, ...op } = p;
+      const g = pickGame(id);
+      if (g) g.ws.send(JSON.stringify({ jsonrpc: '2.0', method: 'game.control', params: op }));
+      return {};
+    },
     'problems.list': () => allProblems(),
     'tool.call': async (p) => {
       // Checks read the history's authorship record, so what is waiting is recorded first.
@@ -784,9 +888,10 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
     wss.handleUpgrade(req, socket, head, (ws) => {
       const exp = role === 'game' ? url.searchParams.get('exp') ?? undefined : undefined;
       const id = url.searchParams.get('client') ?? Math.random().toString(36).slice(2, 8);
-      const client: Client = { ws, role, id: exp ? `${exp}/${id}` : id, ...(exp ? { exp } : {}) };
+      const client: Client = { ws, role, id: exp ? `${exp}/${id}` : id, ...(exp ? { exp } : {}), ...(role === 'game' && url.searchParams.has('headless') ? { headless: true } : {}) };
       clients.add(client);
-      ws.on('close', () => clients.delete(client));
+      if (role === 'game') feeds.delete(client.id);
+      ws.on('close', () => { clients.delete(client); feeds.delete(client.id); });
       ws.on('message', (data) => void onMessage(client, String(data)));
     });
   });
@@ -796,7 +901,18 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
     try { msg = JSON.parse(raw) as typeof msg; } catch { client.ws.send(JSON.stringify({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'parse error' } })); return; }
     if (client.role === 'game') {
       // Games only talk; their reports and logs go to the studios.
-      if (msg.method === 'game.report') push('game.report', { ...(msg.params as Pushes['game.report']), client: client.id }, 'studio');
+      if (msg.method === 'game.report') {
+        const r = msg.params as Pushes['game.report'];
+        feedOf(client.id).time = r.time;
+        push('game.report', { ...r, client: client.id }, 'studio');
+      } else if (msg.method === 'game.events') {
+        const items = (msg.params as GameEvents | undefined)?.items;
+        if (!isRecent(items) || items.length === 0) return;
+        const f = feedOf(client.id);
+        f.events.push(...items);
+        if (f.events.length > RECENT_KEEP) f.events.splice(0, f.events.length - RECENT_KEEP);
+        push('game.recent', { items, client: client.id }, 'studio');
+      }
       else if (msg.method === 'game.result') {
         const r = msg.params as { id: number; ok: boolean; result?: never; error?: string };
         const w = rpcWait.get(r.id);
@@ -818,6 +934,14 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
   // ---- Files changing on disk (an editor, an agent, git) ------------------------------------------------------------
   const onDisk = (event: 'change' | 'add' | 'unlink', abs: string): void => {
     const rel = norm(relative(root, abs));
+    if (rel === BRIEF) {
+      const text = briefText();
+      if (text === briefSeen) return;
+      briefSeen = text;
+      hist.touch('disk');
+      push('brief.changed', readBrief(text), 'studio');
+      return;
+    }
     if (rel === MANIFEST || (rel.startsWith('config/') && rel.endsWith('.json'))) {
       if (event === 'unlink') {
         // A removal this server made itself was announced and recorded by applyPlan.
@@ -853,7 +977,7 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
   };
   vite.watcher.on('change', (f) => onDisk('change', f)).on('add', (f) => onDisk('add', f)).on('unlink', (f) => onDisk('unlink', f));
   // Directories that did not exist at start (a new project's first config/ folder) are picked up too.
-  vite.watcher.add([join(root, 'config'), join(root, 'src'), join(root, 'assets'), join(root, MANIFEST)]);
+  vite.watcher.add([join(root, BRIEF), join(root, 'config'), join(root, 'src'), join(root, 'assets'), join(root, MANIFEST)]);
   mkdirSync(join(root, '.hull'), { recursive: true });
   log(`project server for ${root}: ${urls.http}`);
   // Anything else that wants this project (mcp, the command line, a second app window) attaches to this server
