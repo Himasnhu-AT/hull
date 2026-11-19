@@ -1,0 +1,16 @@
+{
+ "kind": "tuning",
+ "note": "Aya's fight feel (GAME.md section 5). Enemies share these.",
+ "dodgeTime": 0.5,
+ "dodgeIframeStart": 0.05,
+ "dodgeIframe": 0.25,
+ "blockPosture": 0.25,
+ "deflectPosture": 0.1,
+ "perfectWindow": 0.12,
+ "deflectWindow": 0.3,
+ "inputBuffer": 0.2,
+ "hitStopLight": 0.04,
+ "hitStopHeavy": 0.07,
+ "dodgeDistance": 2.8,
+ "modelYaw": 0
+}

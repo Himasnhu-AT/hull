@@ -124,7 +124,12 @@
      0.46
     ]
    },
-   "sound": "sound/swing/heavy"
+   "sound": "sound/swing/heavy",
+   "lunge": {
+    "distance": 0.6,
+    "from": 0.22,
+    "to": 0.4
+   }
   },
   "duel-sweep-t": {
    "clip": "duel-sweep",
@@ -138,7 +143,12 @@
      0.46
     ]
    },
-   "sound": "sound/swing/heavy"
+   "sound": "sound/swing/heavy",
+   "lunge": {
+    "distance": 0.6,
+    "from": 0.22,
+    "to": 0.4
+   }
   }
  }
 }

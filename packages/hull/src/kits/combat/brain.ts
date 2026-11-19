@@ -283,6 +283,7 @@ export class EnemyBrain extends Behaviour {
       this.travelTo = tr.to ?? Math.max(0.5, dist - (tr.by ?? 0));
       this.travelT = 0;
       this.mode = 'travel';
+      if (this.travelTo > dist + 0.5) c.animator?.trigger('backstep');
       return;
     }
     this.startStepMove(d, c);

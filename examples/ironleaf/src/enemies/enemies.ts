@@ -6,10 +6,8 @@ import { Animator } from 'hull/anim';
 import { vfx } from 'hull/vfx';
 import { Mesh } from 'hull/render';
 import { Combatant, combatHub, EnemyBrain, GROUP, kitIO, spawnEnemy, Standoff } from 'hull/kits';
+import { dressFighter, type Kind } from '../models';
 import { CAST, groundHeight } from '../world/map';
-
-/** Hooks other parts of the game fill in: the modelled bodies (src/models) dress a fighter after it is spawned. */
-export const enemyHooks: { dress: ((node: Node, kind: string) => void) | null } = { dress: null };
 
 /** Which cast ids stand together, how far away the player starts it, and whether it opens with a standoff. */
 export interface EncounterDef { name: string; match: (id: string) => boolean; wake: number; standoff?: boolean; sting?: string }
@@ -80,7 +78,7 @@ export class EncounterDirector extends Behaviour {
     const model = n.children.find((c) => c.name === 'model');
     const an = model?.get(Animator);
     if (an) an.ground = groundHeight;
-    enemyHooks.dress?.(n, kind);
+    dressFighter(n, kind as Kind);
     const brain = n.get(EnemyBrain)!;
     brain.dormant = true;
     const combatant = n.get(Combatant)!;
@@ -90,6 +88,7 @@ export class EncounterDirector extends Behaviour {
     }, n);
     if (kind === 'kagari') brain.phaseChanged.connect((p) => {
       this.phase.emit(kind, p);
+      combatant.animator?.trigger('duel-phase');
       kitIO.play('sound/music/sting-duel');
       const q = n.position;
       vfx.burst('embers', { x: q.x, y: q.y + 1, z: q.z });

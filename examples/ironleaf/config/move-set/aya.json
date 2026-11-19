@@ -1,0 +1,556 @@
+{
+ "kind": "move-set",
+ "note": "Aya's three stances (GAME.md section 4 and 5). Trigger and clip are the move name. Stone breaks swords, Water spears, Wind brutes. riposte follows a perfect deflect; finisher-<stance> needs a broken enemy within 2 m. Changing stance and the deflect, dodge, guard are the Combatant's own (see src/player).",
+ "weapon": {
+  "socket": "handR",
+  "base": [
+   0,
+   -0.14,
+   0
+  ],
+  "tip": [
+   0,
+   -0.91,
+   0
+  ],
+  "radius": 0.05
+ },
+ "stances": [
+  "stone",
+  "water",
+  "wind"
+ ],
+ "moves": {
+  "stone-1": {
+   "clip": "stone-1",
+   "trigger": "stone-1",
+   "input": "light",
+   "stance": "stone",
+   "length": 0.46,
+   "damage": 18,
+   "posture": 14,
+   "reach": 1.1,
+   "windows": {
+    "trace": [
+     0.09,
+     0.2
+    ],
+    "cancel": [
+     0.3,
+     0.46
+    ]
+   },
+   "sound": "sound/swing/light",
+   "hitStop": 0.04,
+   "cancelsInto": [
+    "stone-2"
+   ],
+   "lunge": {
+    "distance": 0.3,
+    "from": 0.07,
+    "to": 0.2
+   }
+  },
+  "stone-2": {
+   "clip": "stone-2",
+   "trigger": "stone-2",
+   "input": "light",
+   "stance": "stone",
+   "length": 0.44,
+   "damage": 18,
+   "posture": 14,
+   "reach": 1.1,
+   "windows": {
+    "trace": [
+     0.09,
+     0.19
+    ],
+    "cancel": [
+     0.3,
+     0.44
+    ]
+   },
+   "sound": "sound/swing/light",
+   "hitStop": 0.04,
+   "start": false,
+   "cancelsInto": [
+    "stone-3"
+   ],
+   "lunge": {
+    "distance": 0.25,
+    "from": 0.07,
+    "to": 0.19
+   }
+  },
+  "stone-3": {
+   "clip": "stone-3",
+   "trigger": "stone-3",
+   "input": "light",
+   "stance": "stone",
+   "length": 0.8,
+   "damage": 30,
+   "posture": 24,
+   "reach": 1.2,
+   "windows": {
+    "trace": [
+     0.3,
+     0.42
+    ],
+    "cancel": [
+     0.58,
+     0.8
+    ]
+   },
+   "sound": "sound/swing/heavy",
+   "hitStop": 0.07,
+   "start": false,
+   "cancelsInto": [],
+   "lunge": {
+    "distance": 0.4,
+    "from": 0.2,
+    "to": 0.42
+   },
+   "stagger": 0.45
+  },
+  "stone-heavy": {
+   "clip": "stone-heavy",
+   "trigger": "stone-heavy",
+   "input": "heavy",
+   "stance": "stone",
+   "length": 0.85,
+   "damage": 34,
+   "posture": 30,
+   "reach": 1.2,
+   "windows": {
+    "trace": [
+     0.32,
+     0.46
+    ],
+    "cancel": [
+     0.64,
+     0.85
+    ]
+   },
+   "sound": "sound/swing/heavy",
+   "hitStop": 0.07,
+   "cancelsInto": [],
+   "lunge": {
+    "distance": 0.4,
+    "from": 0.22,
+    "to": 0.46
+   },
+   "stagger": 0.5
+  },
+  "stone-charge": {
+   "clip": "stone-charge",
+   "trigger": "stone-charge",
+   "input": "charged",
+   "stance": "stone",
+   "length": 1.1,
+   "damage": 40,
+   "posture": 48,
+   "reach": 1.3,
+   "windows": {
+    "trace": [
+     0.62,
+     0.78
+    ]
+   },
+   "sound": "sound/swing/charged",
+   "hitStop": 0.09,
+   "lunge": {
+    "distance": 0.7,
+    "from": 0.5,
+    "to": 0.78
+   },
+   "guardBreak": 3,
+   "knockback": 0.6,
+   "stagger": 0.7
+  },
+  "water-1": {
+   "clip": "water-1",
+   "trigger": "water-1",
+   "input": "light",
+   "stance": "water",
+   "length": 0.4,
+   "damage": 12,
+   "posture": 10,
+   "reach": 1.1,
+   "windows": {
+    "trace": [
+     0.08,
+     0.17
+    ],
+    "cancel": [
+     0.26,
+     0.4
+    ]
+   },
+   "sound": "sound/swing/light",
+   "hitStop": 0.04,
+   "cancelsInto": [
+    "water-2"
+   ],
+   "lunge": {
+    "distance": 0.14,
+    "from": 0.06,
+    "to": 0.17
+   }
+  },
+  "water-2": {
+   "clip": "water-2",
+   "trigger": "water-2",
+   "input": "light",
+   "stance": "water",
+   "length": 0.4,
+   "damage": 12,
+   "posture": 10,
+   "reach": 1.1,
+   "windows": {
+    "trace": [
+     0.08,
+     0.17
+    ],
+    "cancel": [
+     0.26,
+     0.4
+    ]
+   },
+   "sound": "sound/swing/light",
+   "hitStop": 0.04,
+   "start": false,
+   "cancelsInto": [
+    "water-3"
+   ],
+   "lunge": {
+    "distance": 0.14,
+    "from": 0.06,
+    "to": 0.17
+   }
+  },
+  "water-3": {
+   "clip": "water-3",
+   "trigger": "water-3",
+   "input": "light",
+   "stance": "water",
+   "length": 0.4,
+   "damage": 12,
+   "posture": 10,
+   "reach": 1.1,
+   "windows": {
+    "trace": [
+     0.08,
+     0.17
+    ],
+    "cancel": [
+     0.26,
+     0.4
+    ]
+   },
+   "sound": "sound/swing/light",
+   "hitStop": 0.04,
+   "start": false,
+   "cancelsInto": [
+    "water-4"
+   ],
+   "lunge": {
+    "distance": 0.14,
+    "from": 0.06,
+    "to": 0.17
+   }
+  },
+  "water-4": {
+   "clip": "water-4",
+   "trigger": "water-4",
+   "input": "light",
+   "stance": "water",
+   "length": 0.4,
+   "damage": 12,
+   "posture": 10,
+   "reach": 1.1,
+   "windows": {
+    "trace": [
+     0.08,
+     0.17
+    ],
+    "cancel": [
+     0.26,
+     0.4
+    ]
+   },
+   "sound": "sound/swing/light",
+   "hitStop": 0.04,
+   "start": false,
+   "cancelsInto": [],
+   "lunge": {
+    "distance": 0.2,
+    "from": 0.06,
+    "to": 0.17
+   }
+  },
+  "water-heavy": {
+   "clip": "water-heavy",
+   "trigger": "water-heavy",
+   "input": "heavy",
+   "stance": "water",
+   "length": 0.7,
+   "damage": 26,
+   "posture": 22,
+   "reach": 1.1,
+   "windows": {
+    "trace": [
+     0.22,
+     0.34
+    ],
+    "cancel": [
+     0.5,
+     0.7
+    ]
+   },
+   "sound": "sound/swing/heavy",
+   "hitStop": 0.07,
+   "cancelsInto": [],
+   "lunge": {
+    "distance": 0.35,
+    "from": 0.15,
+    "to": 0.34
+   },
+   "stagger": 0.45
+  },
+  "water-charge": {
+   "clip": "water-charge",
+   "trigger": "water-charge",
+   "input": "charged",
+   "stance": "water",
+   "length": 1,
+   "damage": 30,
+   "posture": 44,
+   "reach": 1.4,
+   "windows": {
+    "trace": [
+     0.55,
+     0.8
+    ]
+   },
+   "sound": "sound/swing/charged",
+   "hitStop": 0.09,
+   "guardBreak": 3,
+   "knockback": 0.5,
+   "stagger": 0.6
+  },
+  "wind-1": {
+   "clip": "wind-1",
+   "trigger": "wind-1",
+   "input": "light",
+   "stance": "wind",
+   "length": 0.36,
+   "damage": 11,
+   "posture": 9,
+   "reach": 1,
+   "windows": {
+    "trace": [
+     0.07,
+     0.16
+    ],
+    "cancel": [
+     0.24,
+     0.36
+    ]
+   },
+   "sound": "sound/swing/light",
+   "hitStop": 0.04,
+   "cancelsInto": [
+    "wind-2"
+   ],
+   "lunge": {
+    "distance": 0.25,
+    "from": 0.05,
+    "to": 0.16
+   }
+  },
+  "wind-2": {
+   "clip": "wind-2",
+   "trigger": "wind-2",
+   "input": "light",
+   "stance": "wind",
+   "length": 0.36,
+   "damage": 11,
+   "posture": 9,
+   "reach": 1,
+   "windows": {
+    "trace": [
+     0.07,
+     0.16
+    ],
+    "cancel": [
+     0.24,
+     0.36
+    ]
+   },
+   "sound": "sound/swing/light",
+   "hitStop": 0.04,
+   "start": false,
+   "cancelsInto": [],
+   "lunge": {
+    "distance": 0.25,
+    "from": 0.05,
+    "to": 0.16
+   }
+  },
+  "wind-heavy": {
+   "clip": "wind-heavy",
+   "trigger": "wind-heavy",
+   "input": "heavy",
+   "stance": "wind",
+   "length": 0.6,
+   "damage": 24,
+   "posture": 20,
+   "reach": 1.4,
+   "windows": {
+    "trace": [
+     0.18,
+     0.3
+    ],
+    "cancel": [
+     0.44,
+     0.6
+    ]
+   },
+   "sound": "sound/swing/heavy",
+   "hitStop": 0.07,
+   "cancelsInto": [],
+   "lunge": {
+    "distance": 0.8,
+    "from": 0.1,
+    "to": 0.3
+   },
+   "stagger": 0.45
+  },
+  "wind-charge": {
+   "clip": "wind-charge",
+   "trigger": "wind-charge",
+   "input": "charged",
+   "stance": "wind",
+   "length": 1,
+   "damage": 30,
+   "posture": 44,
+   "reach": 1.3,
+   "windows": {
+    "trace": [
+     0.52,
+     0.7
+    ]
+   },
+   "sound": "sound/swing/charged",
+   "hitStop": 0.09,
+   "lunge": {
+    "distance": 1.3,
+    "from": 0.3,
+    "to": 0.6
+   },
+   "guardBreak": 3,
+   "knockback": 0.5,
+   "stagger": 0.6
+  },
+  "finisher-stone": {
+   "clip": "finisher-stone",
+   "trigger": "finisher-stone",
+   "input": "finisher",
+   "stance": "stone",
+   "length": 1.1,
+   "damage": 0,
+   "posture": 0,
+   "reach": 2,
+   "windows": {
+    "trace": [
+     0.32,
+     0.46
+    ]
+   },
+   "sound": "sound/swing/charged",
+   "hitStop": 0.09,
+   "lunge": {
+    "distance": 1,
+    "from": 0.2,
+    "to": 0.4
+   },
+   "finisher": true
+  },
+  "finisher-water": {
+   "clip": "finisher-water",
+   "trigger": "finisher-water",
+   "input": "finisher",
+   "stance": "water",
+   "length": 1.1,
+   "damage": 0,
+   "posture": 0,
+   "reach": 2,
+   "windows": {
+    "trace": [
+     0.32,
+     0.46
+    ]
+   },
+   "sound": "sound/swing/charged",
+   "hitStop": 0.09,
+   "lunge": {
+    "distance": 1,
+    "from": 0.2,
+    "to": 0.4
+   },
+   "finisher": true
+  },
+  "finisher-wind": {
+   "clip": "finisher-wind",
+   "trigger": "finisher-wind",
+   "input": "finisher",
+   "stance": "wind",
+   "length": 1.1,
+   "damage": 0,
+   "posture": 0,
+   "reach": 2,
+   "windows": {
+    "trace": [
+     0.32,
+     0.46
+    ]
+   },
+   "sound": "sound/swing/charged",
+   "hitStop": 0.09,
+   "lunge": {
+    "distance": 1,
+    "from": 0.2,
+    "to": 0.4
+   },
+   "finisher": true
+  },
+  "riposte": {
+   "clip": "riposte",
+   "trigger": "riposte",
+   "input": "riposte",
+   "length": 0.6,
+   "damage": 22,
+   "posture": 16,
+   "reach": 1.3,
+   "windows": {
+    "trace": [
+     0.12,
+     0.24
+    ],
+    "cancel": [
+     0.4,
+     0.6
+    ]
+   },
+   "sound": "sound/swing/heavy",
+   "hitStop": 0.06,
+   "cancelsInto": [],
+   "lunge": {
+    "distance": 0.5,
+    "from": 0.04,
+    "to": 0.24
+   },
+   "stagger": 0.4
+  }
+ }
+}
