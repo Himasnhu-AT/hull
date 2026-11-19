@@ -43,6 +43,31 @@ export function lineStats(a: string, b: string): { added: number; removed: numbe
   return { added: y.length - kept, removed: x.length - kept };
 }
 
+export interface PatchLine { op: 'ctx' | 'add' | 'del' | 'gap'; /** 1-based line in the new text ('add', 'ctx') or the old one ('del'). */ n: number; text: string }
+
+/** A compact line diff of a to b: changed lines with `context` lines around them, and a 'gap' row where lines were skipped. */
+export function patchLines(a: string, b: string, context = 2): PatchLine[] {
+  const x = splitLines(a);
+  const y = splitLines(b);
+  const m = lcs(x, y);
+  const all: PatchLine[] = [];
+  let i = 0;
+  let j = 0;
+  while (i < x.length || j < y.length) {
+    if (i < x.length && m.get(i) === j) { all.push({ op: 'ctx', n: j + 1, text: y[j]! }); i++; j++; }
+    else if (i < x.length && !m.has(i)) { all.push({ op: 'del', n: i + 1, text: x[i]! }); i++; }
+    else { all.push({ op: 'add', n: j + 1, text: y[j]! }); j++; }
+  }
+  const keep = new Array<boolean>(all.length).fill(false);
+  all.forEach((l, k) => { if (l.op !== 'ctx') for (let c = Math.max(0, k - context); c <= Math.min(all.length - 1, k + context); c++) keep[c] = true; });
+  const out: PatchLine[] = [];
+  let skipped = false;
+  all.forEach((l, k) => {
+    if (keep[k]) { skipped = false; out.push(l); } else if (!skipped) { skipped = true; out.push({ op: 'gap', n: l.n, text: '' }); }
+  });
+  return out.length > 400 ? out.slice(0, 400) : out;
+}
+
 export interface LineConflict {
   /** 1-based first line of the region in the merged output. */
   line: number;
