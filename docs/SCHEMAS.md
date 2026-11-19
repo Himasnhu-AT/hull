@@ -329,6 +329,12 @@ A character is a body, what it is made of, where things attach, and which animat
 `body.type` is `generated` (a recipe registered in code plus proportions) or `gltf` (`file`, and a `joints` map
 from the engine's joint names to the model's).
 
+`hits` (optional) lists hit and collider shapes that follow bones, in the bone's own space and the body's unscaled
+units: `{ "bone": "head", "shape": "sphere", "part": "head", "group": "body", "c": [0, 1.2, 0.1], "r": 0.9 }`. A `capsule`
+has `a`, `b`, `r`; a `sphere` has `c`, `r`; a `box` has `c` and `h` (half extents). `part` and `group` are the game's own
+words for what it hit; `collide: false` marks a shape used for hit tests only. `characterHits(def)` (`hull/anim`)
+checks them against the body and returns each with its bone index.
+
 ```json
 {
   "kind": "anim-set",

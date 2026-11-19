@@ -49,6 +49,25 @@ const part = Type.Object(
   { additionalProperties: false },
 );
 
+// A hit or collider shape that follows a bone, in the bone's own space and the body's unscaled units. A game reads
+// these for its hit zones and body colliders (the titans of AOTT keep theirs here). `group` and `part` are the game's
+// own words; `collide` false marks a shape that is for hit tests only.
+const hit = Type.Object(
+  {
+    bone: Type.String({ minLength: 1 }),
+    shape: Type.Union([Type.Literal('capsule'), Type.Literal('sphere'), Type.Literal('box')], ui({ widget: 'segments' })),
+    part: Type.String({ minLength: 1 }),
+    group: Type.String({ minLength: 1 }),
+    collide: Type.Optional(Type.Boolean({ default: true })),
+    a: Type.Optional(vec3),
+    b: Type.Optional(vec3),
+    c: Type.Optional(vec3),
+    r: Type.Optional(Type.Number({ exclusiveMinimum: 0 })),
+    h: Type.Optional(vec3),
+  },
+  { additionalProperties: false },
+);
+
 export const characterSchema = Type.Object(
   {
     kind: Type.Literal('character'),
@@ -82,6 +101,7 @@ export const characterSchema = Type.Object(
         { additionalProperties: false },
       ),
     ),
+    hits: Type.Optional(Type.Array(hit, ui({ help: 'Hit and collider shapes that follow bones: capsule (a, b, r), sphere (c, r) or box (c, h half-extents).' }))),
     animSet: Type.Optional(Type.String({ ...ref('anim-set') })),
     animGraph: Type.Optional(Type.String({ ...ref('anim-graph') })),
   },
@@ -90,3 +110,4 @@ export const characterSchema = Type.Object(
 
 export type Character = Static<typeof characterSchema>;
 export type CharacterPart = Static<typeof part>;
+export type CharacterHit = Static<typeof hit>;

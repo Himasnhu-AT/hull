@@ -128,6 +128,15 @@ the Holdout test measures (a new checksum) says so in its commit and updates the
 * **Done when**: the soldier and one titan archetype load from config, show on the character bench with the anim graph
   driven, play in Holdout with no visible difference in pose or hit zones (screenshots compared), and a rebuilt model
   changes live when its config is edited.
+* **Status (P2 done, core)**: the *skeleton and hit shapes* are config, the modelled meshes are still code. Titans:
+  `config/character/titan-<build>-<size>.json` (28 files, written from `rigDataOf`, kept equal by `rig.test.ts`) hold joint
+  offsets and hit/collider shapes (new optional character field `hits`, `characterHits()` in `hull/anim`); `rig.ts` builds
+  from them and rigs follow edits live. Eye radius and the small-titan nape widening stay rules in code. Soldier:
+  `config/character/soldier.json` (joint offsets, launcher and blade-box mounts) and `config/material/soldier-*.json`;
+  `PlayerModel` rebuilds on change and its gait leg numbers follow the leg lengths. Both show on the Character bench
+  with `anim-graph/soldier` / `titan` driven. Left: the baked skinned meshes, face, cloak sim and the titan builders'
+  geometry (`builder.ts` dims) are code, so editing a joint offset moves the joint but not the mesh fitted to it; the bench
+  shows rigid stand-in parts, and its camera does not frame a 20 m titan; `ik.ts` is unchanged.
 
 ### P3. Effects -> `vfx` configs (done)
 

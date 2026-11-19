@@ -422,6 +422,143 @@
       },
       "additionalProperties": false
     },
+    "hits": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "bone",
+          "shape",
+          "part",
+          "group"
+        ],
+        "properties": {
+          "bone": {
+            "type": "string",
+            "minLength": 1
+          },
+          "shape": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "capsule"
+              },
+              {
+                "type": "string",
+                "const": "sphere"
+              },
+              {
+                "type": "string",
+                "const": "box"
+              }
+            ],
+            "x-ui": {
+              "widget": "segments"
+            }
+          },
+          "part": {
+            "type": "string",
+            "minLength": 1
+          },
+          "group": {
+            "type": "string",
+            "minLength": 1
+          },
+          "collide": {
+            "type": "boolean",
+            "default": true
+          },
+          "a": {
+            "type": "array",
+            "prefixItems": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "minItems": 3,
+            "maxItems": 3,
+            "items": false,
+            "x-ui": {
+              "widget": "vec3"
+            }
+          },
+          "b": {
+            "type": "array",
+            "prefixItems": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "minItems": 3,
+            "maxItems": 3,
+            "items": false,
+            "x-ui": {
+              "widget": "vec3"
+            }
+          },
+          "c": {
+            "type": "array",
+            "prefixItems": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "minItems": 3,
+            "maxItems": 3,
+            "items": false,
+            "x-ui": {
+              "widget": "vec3"
+            }
+          },
+          "r": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "h": {
+            "type": "array",
+            "prefixItems": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "minItems": 3,
+            "maxItems": 3,
+            "items": false,
+            "x-ui": {
+              "widget": "vec3"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "x-ui": {
+        "help": "Hit and collider shapes that follow bones: capsule (a, b, r), sphere (c, r) or box (c, h half-extents)."
+      }
+    },
     "animSet": {
       "type": "string",
       "x-ref": "anim-set",

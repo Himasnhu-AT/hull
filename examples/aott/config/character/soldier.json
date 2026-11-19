@@ -1,0 +1,537 @@
+{
+  "kind": "character",
+  "note": "AOTT's soldier: the joint offsets the modelled body hangs on (shoulder, elbow, wrist, hip, knee, ankle, spine, head) and the launcher and blade-box mounts, in the engine's frame (facing -Z, the soldier's left on -X). PlayerModel builds from these numbers and again when this file changes; the leg numbers of its gait follow the thigh and shin lengths. The parts are a rigid stand-in for the bench; the game draws its own modelled body.",
+  "body": {
+    "type": "generated",
+    "recipe": "custom",
+    "bones": [
+      {
+        "name": "hips",
+        "offset": [
+          0,
+          0.9,
+          0
+        ]
+      },
+      {
+        "name": "spine",
+        "parent": "hips",
+        "offset": [
+          0,
+          0.08,
+          0
+        ]
+      },
+      {
+        "name": "chest",
+        "parent": "spine",
+        "offset": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "name": "head",
+        "parent": "chest",
+        "offset": [
+          0,
+          0.455,
+          0
+        ]
+      },
+      {
+        "name": "armL",
+        "parent": "chest",
+        "offset": [
+          -0.215,
+          0.405,
+          0
+        ]
+      },
+      {
+        "name": "forearmL",
+        "parent": "armL",
+        "offset": [
+          0,
+          -0.28,
+          0
+        ]
+      },
+      {
+        "name": "handL",
+        "parent": "forearmL",
+        "offset": [
+          0,
+          -0.26,
+          0
+        ]
+      },
+      {
+        "name": "armR",
+        "parent": "chest",
+        "offset": [
+          0.215,
+          0.405,
+          0
+        ]
+      },
+      {
+        "name": "forearmR",
+        "parent": "armR",
+        "offset": [
+          0,
+          -0.28,
+          0
+        ]
+      },
+      {
+        "name": "handR",
+        "parent": "forearmR",
+        "offset": [
+          0,
+          -0.26,
+          0
+        ]
+      },
+      {
+        "name": "legL",
+        "parent": "hips",
+        "offset": [
+          -0.09,
+          -0.02,
+          0
+        ]
+      },
+      {
+        "name": "shinL",
+        "parent": "legL",
+        "offset": [
+          0,
+          -0.43,
+          0
+        ]
+      },
+      {
+        "name": "footL",
+        "parent": "shinL",
+        "offset": [
+          0,
+          -0.4,
+          0
+        ]
+      },
+      {
+        "name": "legR",
+        "parent": "hips",
+        "offset": [
+          0.09,
+          -0.02,
+          0
+        ]
+      },
+      {
+        "name": "shinR",
+        "parent": "legR",
+        "offset": [
+          0,
+          -0.43,
+          0
+        ]
+      },
+      {
+        "name": "footR",
+        "parent": "shinR",
+        "offset": [
+          0,
+          -0.4,
+          0
+        ]
+      }
+    ],
+    "parts": [
+      {
+        "bone": "hips",
+        "shape": "box",
+        "material": "trousers",
+        "center": [
+          0,
+          -0.025,
+          0
+        ],
+        "size": [
+          0.31,
+          0.17,
+          0.2
+        ]
+      },
+      {
+        "bone": "chest",
+        "shape": "box",
+        "material": "jacket",
+        "center": [
+          0,
+          0.21,
+          0
+        ],
+        "size": [
+          0.4,
+          0.42,
+          0.27
+        ]
+      },
+      {
+        "bone": "chest",
+        "shape": "box",
+        "material": "cape",
+        "center": [
+          0,
+          0.3,
+          0.12
+        ],
+        "size": [
+          0.42,
+          0.5,
+          0.06
+        ]
+      },
+      {
+        "bone": "chest",
+        "shape": "box",
+        "material": "steelDark",
+        "center": [
+          0,
+          0,
+          0.14
+        ],
+        "size": [
+          0.25,
+          0.12,
+          0.05
+        ]
+      },
+      {
+        "bone": "head",
+        "shape": "limb",
+        "material": "skin",
+        "from": [
+          0,
+          0,
+          0
+        ],
+        "to": [
+          0,
+          0.06,
+          0
+        ],
+        "radius": 0.045
+      },
+      {
+        "bone": "head",
+        "shape": "sphere",
+        "material": "skin",
+        "center": [
+          0,
+          0.145,
+          -0.008
+        ],
+        "size": [
+          0.19,
+          0.22,
+          0.2
+        ]
+      },
+      {
+        "bone": "head",
+        "shape": "sphere",
+        "material": "hair",
+        "center": [
+          0,
+          0.17,
+          0.006
+        ],
+        "size": [
+          0.2,
+          0.18,
+          0.21
+        ]
+      },
+      {
+        "bone": "armL",
+        "shape": "sphere",
+        "material": "jacket",
+        "center": [
+          0,
+          0,
+          0
+        ],
+        "size": [
+          0.104,
+          0.104,
+          0.104
+        ]
+      },
+      {
+        "bone": "armL",
+        "shape": "limb",
+        "material": "jacket",
+        "from": [
+          0,
+          0,
+          0
+        ],
+        "to": [
+          0,
+          -0.28,
+          0
+        ],
+        "radius": 0.042,
+        "radiusEnd": 0.036
+      },
+      {
+        "bone": "forearmL",
+        "shape": "limb",
+        "material": "jacket",
+        "from": [
+          0,
+          0,
+          0
+        ],
+        "to": [
+          0,
+          -0.26,
+          0
+        ],
+        "radius": 0.036,
+        "radiusEnd": 0.03
+      },
+      {
+        "bone": "handL",
+        "shape": "sphere",
+        "material": "skin",
+        "center": [
+          0,
+          -0.04,
+          0
+        ],
+        "size": [
+          0.07,
+          0.09,
+          0.06
+        ]
+      },
+      {
+        "bone": "legL",
+        "shape": "limb",
+        "material": "trousers",
+        "from": [
+          0,
+          0,
+          0
+        ],
+        "to": [
+          0,
+          -0.43,
+          0
+        ],
+        "radius": 0.075,
+        "radiusEnd": 0.058
+      },
+      {
+        "bone": "shinL",
+        "shape": "limb",
+        "material": "boot",
+        "from": [
+          0,
+          0,
+          0
+        ],
+        "to": [
+          0,
+          -0.4,
+          0
+        ],
+        "radius": 0.06,
+        "radiusEnd": 0.045
+      },
+      {
+        "bone": "footL",
+        "shape": "box",
+        "material": "boot",
+        "center": [
+          0,
+          -0.02,
+          -0.06
+        ],
+        "size": [
+          0.088,
+          0.065,
+          0.25
+        ]
+      },
+      {
+        "bone": "armR",
+        "shape": "sphere",
+        "material": "jacket",
+        "center": [
+          0,
+          0,
+          0
+        ],
+        "size": [
+          0.104,
+          0.104,
+          0.104
+        ]
+      },
+      {
+        "bone": "armR",
+        "shape": "limb",
+        "material": "jacket",
+        "from": [
+          0,
+          0,
+          0
+        ],
+        "to": [
+          0,
+          -0.28,
+          0
+        ],
+        "radius": 0.042,
+        "radiusEnd": 0.036
+      },
+      {
+        "bone": "forearmR",
+        "shape": "limb",
+        "material": "jacket",
+        "from": [
+          0,
+          0,
+          0
+        ],
+        "to": [
+          0,
+          -0.26,
+          0
+        ],
+        "radius": 0.036,
+        "radiusEnd": 0.03
+      },
+      {
+        "bone": "handR",
+        "shape": "sphere",
+        "material": "skin",
+        "center": [
+          0,
+          -0.04,
+          0
+        ],
+        "size": [
+          0.07,
+          0.09,
+          0.06
+        ]
+      },
+      {
+        "bone": "legR",
+        "shape": "limb",
+        "material": "trousers",
+        "from": [
+          0,
+          0,
+          0
+        ],
+        "to": [
+          0,
+          -0.43,
+          0
+        ],
+        "radius": 0.075,
+        "radiusEnd": 0.058
+      },
+      {
+        "bone": "shinR",
+        "shape": "limb",
+        "material": "boot",
+        "from": [
+          0,
+          0,
+          0
+        ],
+        "to": [
+          0,
+          -0.4,
+          0
+        ],
+        "radius": 0.06,
+        "radiusEnd": 0.045
+      },
+      {
+        "bone": "footR",
+        "shape": "box",
+        "material": "boot",
+        "center": [
+          0,
+          -0.02,
+          -0.06
+        ],
+        "size": [
+          0.088,
+          0.065,
+          0.25
+        ]
+      }
+    ]
+  },
+  "materials": {
+    "jacket": "material/soldier-jacket",
+    "trousers": "material/soldier-trousers",
+    "boot": "material/soldier-boot",
+    "skin": "material/soldier-skin",
+    "hair": "material/soldier-hair",
+    "cape": "material/soldier-cape",
+    "steelDark": "material/soldier-steelDark"
+  },
+  "sockets": {
+    "launcherL": {
+      "joint": "hips",
+      "offset": [
+        -0.205,
+        0.035,
+        0
+      ]
+    },
+    "bladeBoxL": {
+      "joint": "hips",
+      "offset": [
+        -0.215,
+        -0.21,
+        0.09
+      ]
+    },
+    "handR": {
+      "joint": "handR",
+      "offset": [
+        0,
+        -0.06,
+        0
+      ]
+    },
+    "back": {
+      "joint": "chest",
+      "offset": [
+        0,
+        0.2,
+        0.12
+      ]
+    }
+  },
+  "collider": {
+    "shape": "capsule",
+    "radius": 0.35,
+    "height": 1.7
+  },
+  "animSet": "anim-set/humanoid",
+  "animGraph": "anim-graph/soldier"
+}
