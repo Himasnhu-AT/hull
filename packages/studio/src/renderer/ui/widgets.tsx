@@ -3,11 +3,12 @@
 // Dragging is 1:1 from the value at pointer-down (math.ts); nothing here waits for the server to answer.
 
 import { memo, useCallback, useRef, useState, type JSX, type KeyboardEvent, type PointerEvent as RPointerEvent } from 'react';
-import { defaultFor, mapEntryFields, type Field } from '../lib/schemaForm.ts';
+import { defaultFor, itemTitle, listItemFields, mapEntryFields, type Field } from '../lib/schemaForm.ts';
 import {
   arcPath, clamp, curveAt, curveMove, dialAngle, dialDrag, dragScale, formatNumber, fromFraction, nearestEnd, rangeMove, sameJson,
   scrubDelta, snap, toFraction, type CurvePoint,
 } from '../lib/math.ts';
+import { leaveBox } from '../lib/keys.ts';
 import { Icon } from './Icon.tsx';
 
 export type Change = (pointer: string, value: unknown, final?: boolean) => void;
@@ -79,14 +80,14 @@ function NumInput({ value, step, label, onCommit, className, blank }: { value: n
       className={className}
       aria-label={label}
       inputMode="decimal"
+      onKeyUp={leaveBox}
       value={draft ?? (blank ? '' : formatNumber(value, step))}
       placeholder={blank ? '\u2014' : undefined}
       onFocus={(e) => { setDraft(blank ? '' : formatNumber(value, step)); e.currentTarget.select(); }}
       onChange={(e) => setDraft(e.target.value)}
       onBlur={finish}
       onKeyDown={(e) => {
-        if (e.key === 'Enter') e.currentTarget.blur();
-        else if (e.key === 'Escape') { setDraft(null); e.currentTarget.blur(); }
+        if (e.key === 'Escape') setDraft(null);
         else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
           e.preventDefault();
           const cur = draft === null ? value : Number.parseFloat(draft);
@@ -450,6 +451,14 @@ export const FieldView = memo(function FieldView({ field, value, baseline, probl
     );
   }
 
+  if (w === 'checks') {
+    return <ChecksField className={cls} field={field} value={value} send={send} reset={reset} problems={problems} />;
+  }
+
+  if (w === 'list') {
+    return <ListField className={cls} field={field} value={value} problems={problems} refs={refs} send={send} reset={reset} onChange={onChange} />;
+  }
+
   if (w === 'map') {
     return <MapField className={cls} field={field} value={value} problems={problems} refs={refs} send={send} reset={reset} onChange={onChange} />;
   }
@@ -479,7 +488,7 @@ function TextField({ className, field, value, send, reset, problems }: { classNa
       <input id={`f${field.pointer}`} className="field-in" value={draft ?? shown} placeholder={list ? 'Comma separated' : undefined}
         onChange={(e) => { setDraft(e.target.value); if (!list) send(out(e.target.value), false); }}
         onBlur={(e) => { if (draft !== null && draft !== shown) send(out(e.target.value), true); setDraft(null); }}
-        onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }} />
+        onKeyUp={leaveBox} />
       {field.help && <div className="help">{field.help}</div>}
       <Problems list={problems} />
     </div>
@@ -503,6 +512,92 @@ function JsonField({ className, field, value, send, reset, problems }: { classNa
         onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) commit(); else if (e.key === 'Escape') { setDraft(null); setBad(null); } }} />
       {field.help ? <div className="help">{field.help}</div> : field.fallback && field.label !== '' && <div className="help">No form for this shape yet, so this is the raw JSON. It is checked before it is saved.</div>}
       {bad && <div className="err" role="alert"><Icon name="warn" /><span>{bad}</span></div>}
+      <Problems list={problems} />
+    </div>
+  );
+}
+
+/** An array of choices (the features a game uses): every option is a button that is on or off, kept in the schema's order. */
+function ChecksField({ className, field, value, send, reset, problems }: { className: string; field: Field; value: unknown; send(v: unknown, final?: boolean): void; reset(): void; problems: readonly string[] }): JSX.Element {
+  const on: unknown[] = Array.isArray(value) ? value : [];
+  const toggle = (opt: unknown): void => {
+    const next = field.optionValues.filter((o) => (o === opt ? !on.includes(o) : on.includes(o)));
+    // A value the file has that the schema does not list stays: the server's check says what is wrong with it.
+    send([...next, ...on.filter((v) => !field.optionValues.includes(v))], true);
+  };
+  return (
+    <div className={className}>
+      <div className="fh"><span className="fl" title={field.help}>{field.label}</span><span className="fv"><span style={{ color: 'var(--muted)' }}>{on.length}</span></span><ResetButton onClick={reset} /></div>
+      <div className="checks" role="group" aria-label={field.label}>
+        {field.optionValues.map((o, i) => {
+          const sel = on.includes(o);
+          return <button key={field.options[i]} className={sel ? 'on' : ''} aria-pressed={sel} onClick={() => toggle(o)}>{sel && <Icon name="check" size={12} />}{field.options[i]}</button>;
+        })}
+      </div>
+      {field.help && <div className="help">{field.help}</div>}
+      <Problems list={problems} />
+    </div>
+  );
+}
+
+/** An array of objects (anim-graph transitions, bones, parts): one collapsible row each, with add, remove and move; every row's values in their own widgets. */
+function ListField({ className, field, value, problems, refs, send, reset, onChange }: {
+  className: string; field: Field; value: unknown; problems: readonly string[]; refs?: (kind: string) => string[];
+  send(v: unknown, final?: boolean): void; reset(): void; onChange: Change;
+}): JSX.Element {
+  const arr: unknown[] = Array.isArray(value) ? value : [];
+  const root = field.schemaRoot ?? {};
+  const [closed, setClosed] = useState<Set<number>>(() => new Set(arr.length > 4 ? arr.map((_, i) => i) : []));
+  const toggle = (i: number): void => setClosed((c) => { const n = new Set(c); if (n.has(i)) n.delete(i); else n.add(i); return n; });
+  // Rows keep their open or closed state when others come and go.
+  const remap = (f: (i: number) => number | null): void => setClosed((c) => new Set([...c].map(f).filter((i): i is number => i !== null)));
+
+  const add = (): void => {
+    send([...arr, defaultFor(root, field.valueSchema, refs ? refs(refKindOf(field.valueSchema)) : [])], true);
+    remap((i) => i);
+  };
+  const remove = (i: number): void => { send(arr.filter((_, j) => j !== i), true); remap((j) => (j === i ? null : j > i ? j - 1 : j)); };
+  const move = (i: number, by: -1 | 1): void => {
+    const j = i + by;
+    if (j < 0 || j >= arr.length) return;
+    const next = [...arr];
+    [next[i], next[j]] = [next[j]!, next[i]!];
+    send(next, true);
+    remap((k) => (k === i ? j : k === j ? i : k));
+  };
+
+  return (
+    <div className={`${className} map list`}>
+      <div className="fh"><span className="fl" title={field.help}>{field.label === field.group ? `${arr.length} ${arr.length === 1 ? 'row' : 'rows'}` : field.label}</span>{field.label !== field.group && <span className="fv"><span style={{ color: 'var(--muted)' }}>{arr.length}</span></span>}<ResetButton onClick={reset} /></div>
+      {field.help && <div className="help">{field.help}</div>}
+      {arr.length === 0 && <div className="help">Nothing here yet.</div>}
+      {arr.map((item, i) => {
+        const open = !closed.has(i);
+        const row = listItemFields(field, i, item);
+        const plain = row.length === 1 && row[0]!.label === '';
+        const title = itemTitle(item, i);
+        return (
+          // Rows have no identity of their own, so the index is the key; the open state follows it (remap).
+          <div className="mapent" key={i}>
+            <div className="mapk">
+              {!plain && <button className={`mapc${open ? ' open' : ''}`} onClick={() => toggle(i)} aria-expanded={open} aria-label={`${open ? 'Collapse' : 'Expand'} row ${i + 1}, ${title}`}><Icon name="chevron" size={12} /></button>}
+              <span className="listn">{i + 1}</span>
+              {plain
+                ? <div className="mapv">{row.map((f) => <FieldView key={f.pointer} field={f} value={f.value} baseline={undefined} problems={[]} refOptions={f.refKind && refs ? refs(f.refKind) : []} refs={refs} onChange={onChange} />)}</div>
+                : <span className="listt" title={title}>{title}</span>}
+              <button className="rs show lup" onClick={() => move(i, -1)} disabled={i === 0} aria-label={`Move row ${i + 1} up`} title="Move up"><Icon name="chevron" /></button>
+              <button className="rs show ldn" onClick={() => move(i, 1)} disabled={i === arr.length - 1} aria-label={`Move row ${i + 1} down`} title="Move down"><Icon name="chevron" /></button>
+              <button className="rs show" onClick={() => remove(i)} aria-label={`Remove row ${i + 1}`} title="Remove"><Icon name="trash" /></button>
+            </div>
+            {!plain && open && (
+              <div className="mapb">
+                {row.map((f) => <FieldView key={f.pointer} field={f} value={f.value} baseline={undefined} problems={[]} refOptions={f.refKind && refs ? refs(f.refKind) : []} refs={refs} onChange={onChange} />)}
+              </div>
+            )}
+          </div>
+        );
+      })}
+      <div className="mapadd"><button className="btn" onClick={add}><Icon name="plus" />Add row</button></div>
       <Problems list={problems} />
     </div>
   );
@@ -584,6 +679,6 @@ function KeyInput({ name, onRename }: { name: string; onRename(from: string, to:
   return (
     <input className="field-in mapname" value={draft ?? name} aria-label={`Name of ${name}`} spellCheck={false}
       onChange={(e) => setDraft(e.target.value)} onBlur={done}
-      onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); else if (e.key === 'Escape') { setDraft(null); e.currentTarget.blur(); } }} />
+      onKeyDown={(e) => { if (e.key === 'Escape') setDraft(null); }} onKeyUp={leaveBox} />
   );
 }

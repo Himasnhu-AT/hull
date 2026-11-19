@@ -5,10 +5,10 @@
 import { useCallback, useEffect, useRef, useState, type JSX } from 'react';
 import type { LibraryItem } from 'hull/dev/protocol';
 import type { RpcClient } from '../lib/rpc.ts';
-import { loadAudio, spectralCentroid, type AudioApi, type Measure } from '../lib/audioApi.ts';
+import { loadAudio, loadProjectAudio, spectralCentroid, type AudioApi, type Measure } from '../lib/audioApi.ts';
 import { Icon } from '../ui/Icon.tsx';
 
-interface Props { rpc: RpcClient; sounds: LibraryItem[]; selected: string | null; onSelect(id: string): void }
+interface Props { rpc: RpcClient; /** The project's game page: it serves the engine bundled with the game's code generators. */ gameUrl: string; sounds: LibraryItem[]; selected: string | null; onSelect(id: string): void }
 
 const css = (name: string): string => getComputedStyle(document.documentElement).getPropertyValue(name).trim() || '#888';
 
@@ -87,7 +87,7 @@ function drawSpectrum(g: CanvasRenderingContext2D, w: number, h: number, m: Meas
   }
 }
 
-export function SoundBench({ rpc, sounds, selected, onSelect }: Props): JSX.Element {
+export function SoundBench({ rpc, gameUrl, sounds, selected, onSelect }: Props): JSX.Element {
   const [audio, setAudio] = useState<AudioApi | null>(null);
   const id = sounds.some((s) => s.id === selected) ? selected : (sounds[0]?.id ?? null);
   const [buf, setBuf] = useState<AudioBuffer | null>(null);
@@ -99,7 +99,18 @@ export function SoundBench({ rpc, sounds, selected, onSelect }: Props): JSX.Elem
   const [ghost, setGhost] = useState<{ buf: AudioBuffer; m: Measure } | null>(null);
   const renderSeq = useRef(0);
 
-  useEffect(() => { void loadAudio().then(setAudio).catch((e) => setError(`The audio engine did not load: ${String(e)}`)); }, []);
+  // The project's own engine when it registers code generators; the Studio's otherwise. Loaded again when the game's code changes.
+  useEffect(() => {
+    let live = true;
+    const load = (): void => {
+      void loadProjectAudio(gameUrl).then((a) => a ?? loadAudio()).then((a) => { if (live) { setAudio(a); setError(null); } })
+        .catch((e) => { if (live) setError(`The audio engine did not load: ${e instanceof Error ? e.message : String(e)}`); });
+    };
+    load();
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const off = rpc.on('source.changed', () => { if (timer) clearTimeout(timer); timer = setTimeout(load, 300); });
+    return () => { live = false; off(); if (timer) clearTimeout(timer); };
+  }, [rpc, gameUrl]);
 
   const render = useCallback(async (): Promise<void> => {
     if (!audio || !id) return;
@@ -107,6 +118,12 @@ export function SoundBench({ rpc, sounds, selected, onSelect }: Props): JSX.Elem
     setRendering(true);
     try {
       const doc = await rpc.call('config.read', { id });
+      // A `pick` source looks other sounds up in the engine's registry; the project's bundle has its own, so fill it.
+      if (audio.config && (doc.value as { source?: { type?: string } } | null)?.source?.type === 'pick') {
+        const all = (await rpc.call('library.list', {})).filter((i) => i.kind === 'sound');
+        const docs = await Promise.all(all.map((i) => rpc.call('config.read', { id: i.id }).catch(() => null)));
+        audio.config.load(docs.filter((d) => d !== null).map((d) => ({ path: d.path, text: d.text })));
+      }
       const b = await audio.renderSound(doc.value);
       if (seq !== renderSeq.current) return;
       const meas = audio.measureSound(b);

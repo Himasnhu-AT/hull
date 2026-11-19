@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { TunableWire } from 'hull/dev/protocol';
-import { advancedCount, buildForm, defaultFor, groupFields, humanize, mapEntryFields, tunableFields, type Field } from './schemaForm.ts';
+import { advancedCount, buildForm, defaultFor, groupFields, humanize, itemTitle, listItemFields, mapEntryFields, tunableFields, type Field } from './schemaForm.ts';
 
 const flat = (g: ReturnType<typeof buildForm>): Field[] => g.flatMap((x) => [...x.dials, ...x.fields]);
 const find = (g: ReturnType<typeof buildForm>, ptr: string): Field => {
@@ -225,5 +225,58 @@ describe('lists and big optional objects', () => {
     expect(flat(buildForm(schema, {})).map((f) => f.pointer)).toEqual(['/small/a']);
     expect(flat(buildForm(schema, {}, { showAdvanced: true }))).toHaveLength(11);
     expect(flat(buildForm(schema, { node: { f0: 'x' } })).length).toBe(11);
+  });
+});
+
+describe('arrays of objects and arrays of choices', () => {
+  const transitions = {
+    type: 'array',
+    items: { type: 'object', required: ['from', 'to'], properties: {
+      from: { type: 'string' }, to: { type: 'string' }, when: { type: 'string' },
+      blend: { type: 'number', minimum: 0, maximum: 1, default: 0.15, 'x-ui': { unit: 's' } },
+    }, additionalProperties: false },
+  };
+  const graph = { type: 'object', properties: { layers: { type: 'object', patternProperties: { '^.*$': { type: 'object', properties: { transitions } } } } } };
+  const rows = [{ from: 'idle', to: 'walk', when: 'speed > 0.1', blend: 0.2 }, { from: '*', to: 'fall' }];
+
+  it('draws an array of objects as a list, not as JSON', () => {
+    const g = buildForm({ type: 'object', properties: { transitions } }, { transitions: rows });
+    expect(find(g, '/transitions')).toMatchObject({ widget: 'list', fallback: false });
+  });
+  it('gives each row its own fields, with pointers below the row', () => {
+    const f = find(buildForm({ type: 'object', properties: { transitions } }, { transitions: rows }), '/transitions');
+    const row = listItemFields(f, 1, rows[1]);
+    expect(row.map((x) => x.pointer)).toEqual(['/transitions/1/from', '/transitions/1/to', '/transitions/1/when', '/transitions/1/blend']);
+    expect(row.find((x) => x.key === 'blend')).toMatchObject({ widget: 'slider', unit: 's', unset: true, value: 0.15 });
+    expect(row.find((x) => x.key === 'to')).toMatchObject({ widget: 'text', value: 'fall' });
+  });
+  it('finds the list inside a map entry too (the transitions of an anim-graph layer)', () => {
+    const layers = find(buildForm(graph, { layers: { base: { transitions: rows } } }), '/layers');
+    const layer = mapEntryFields(layers, 'base', { transitions: rows });
+    expect(layer.find((x) => x.pointer === '/layers/base/transitions')).toMatchObject({ widget: 'list' });
+  });
+  it('titles a closed row by what it says', () => {
+    expect(itemTitle(rows[0], 0)).toBe('idle → walk · speed > 0.1');
+    expect(itemTitle(rows[1], 1)).toBe('* → fall');
+    expect(itemTitle({ name: 'hips', parent: 'x' }, 0)).toBe('hips');
+    expect(itemTitle({}, 2)).toBe('3');
+  });
+  it('starts a new row from the schema (required fields filled)', () => {
+    const f = find(buildForm({ type: 'object', properties: { transitions } }, { transitions: rows }), '/transitions');
+    expect(defaultFor(f.schemaRoot ?? {}, f.valueSchema)).toEqual({ from: '', to: '' });
+  });
+  it('draws an array of choices as checks, with the real values behind each', () => {
+    const schema = { type: 'object', properties: {
+      features: { type: 'array', items: { enum: ['audio', 'anim', 'ui'] } },
+      systems: { type: 'array', items: { anyOf: [{ const: 'mac' }, { const: 'win' }] } },
+    } };
+    const g = buildForm(schema, { features: ['anim'] });
+    expect(find(g, '/features')).toMatchObject({ widget: 'checks', options: ['audio', 'anim', 'ui'], optionValues: ['audio', 'anim', 'ui'], value: ['anim'] });
+    expect(find(g, '/systems')).toMatchObject({ widget: 'checks', options: ['mac', 'win'] });
+  });
+  it('keeps an array of plain strings a comma list, and an array of numbers a vector', () => {
+    const g = buildForm({ type: 'object', properties: { tags: { type: 'array', items: { type: 'string' } }, p: { type: 'array', items: { type: 'number' } } } }, { tags: ['a'], p: [1, 2, 3] });
+    expect(find(g, '/tags').widget).toBe('keys');
+    expect(find(g, '/p').widget).toBe('vec3');
   });
 });

@@ -26,16 +26,40 @@ export function buildCharacterScene(eng: Engine, game: Game): CharacterScene {
     rate = 0.6;
     override fixedUpdate(dt: number): void { this.node.rotation.y += this.rate * dt; }
   }
-  // The character's height is read from its config every frame, so a height edit reframes the shot as it lands.
+  // The shot is framed by the character's bounds, read from its skeleton every frame, so a 1.8 m soldier and a 60 m
+  // titan both fill the picture and an edit to the body reframes it as it lands.
   class Frame extends Behaviour {
     id: string | null = null;
+    anim: Animator | null = null;
+    /** Bone positions at rest, model space (3 numbers a bone). Reused between frames. */
+    private pos = new Float64Array(0);
     override update(): void {
-      let h = 1.78;
-      if (this.id) {
-        try { h = config.lookup('character', this.id.replace(/^character\//, '')).body.proportions?.height ?? 1.78; } catch { /* the file is being edited */ }
+      const sk = this.anim?.skeleton as { n: number; parent: Int16Array; rest: Float64Array } | undefined;
+      let top = 1.78, half = 0.5;
+      if (this.id && sk && sk.n > 0) {
+        if (this.pos.length < sk.n * 3) this.pos = new Float64Array(sk.n * 3);
+        const p = this.pos;
+        let maxY = 0, reach = 0;
+        for (let i = 0; i < sk.n; i++) {
+          const q = sk.parent[i]!;
+          const o = q < 0 ? 0 : q * 3;
+          p[i * 3] = (q < 0 ? 0 : p[o]!) + sk.rest[i * 3]!;
+          p[i * 3 + 1] = (q < 0 ? 0 : p[o + 1]!) + sk.rest[i * 3 + 1]!;
+          p[i * 3 + 2] = (q < 0 ? 0 : p[o + 2]!) + sk.rest[i * 3 + 2]!;
+          maxY = Math.max(maxY, p[i * 3 + 1]!);
+          reach = Math.max(reach, Math.abs(p[i * 3]!), Math.abs(p[i * 3 + 2]!));
+        }
+        // Bones are joints: the head and the hands reach a little past the last one.
+        top = maxY * 1.12;
+        half = Math.max(reach * 1.15, top * 0.2);
+      } else if (this.id) {
+        try { top = config.lookup('character', this.id.replace(/^character\//, '')).body.proportions?.height ?? 1.78; } catch { /* the file is being edited */ }
+        half = top * 0.3;
       }
-      this.node.position.set(0, h * 0.58, h * 2.35 + 0.8);
-      this.node.rotation.set(-0.06, 0, 0);
+      // Distance at which the height (and, on a wide picture, the width) fits in a 40 degree view, with a margin.
+      const fit = Math.max(top * 0.5, half * 0.8) / Math.tan(0.349) * 1.18;
+      this.node.position.set(0, top * 0.5, fit + half);
+      this.node.rotation.set(0, 0, 0);
     }
   }
 
@@ -64,9 +88,11 @@ export function buildCharacterScene(eng: Engine, game: Game): CharacterScene {
       node = null;
       anim = null;
       frame.id = id;
+      frame.anim = null;
       if (!id) return null;
       node = w.spawn('character');
       anim = node.add(A, { character: id });
+      frame.anim = anim;
       anim.ground = () => 0;
       node.add(Turn, { rate });
       return anim;

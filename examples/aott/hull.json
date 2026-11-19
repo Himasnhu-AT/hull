@@ -5,6 +5,7 @@
   "note": "AOTT ported onto Hull: a tether-gear action game against titans. The sim runs on the Hull loop at 120 Hz; the picture is the game's own three.js scene drawn through the render bridge.",
   "version": "0.1.0",
   "entry": "src/main.ts",
+  "generators": "src/audio/generators.ts",
   "step": 120,
   "features": [
     "audio"

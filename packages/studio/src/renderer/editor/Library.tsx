@@ -1,5 +1,6 @@
 import { forwardRef, useMemo, useState, type JSX } from 'react';
 import type { LibraryItem } from 'hull/dev/protocol';
+import { leaveBox } from '../lib/keys.ts';
 import { DOMAINS, groupLibrary, type Domain, type LibraryFilter } from '../lib/library.ts';
 import { Icon, type IconName } from '../ui/Icon.tsx';
 
@@ -30,7 +31,7 @@ export const Library = forwardRef<HTMLInputElement, Props>(function Library({ it
         <label className="search">
           <Icon name="search" />
           <input ref={searchRef} value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Find anything" aria-label="Find in the Library"
-            onKeyDown={(e) => { if (e.key === 'Escape') { setQuery(''); e.currentTarget.blur(); } }} />
+            onKeyDown={(e) => { if (e.key === 'Escape') setQuery(''); }} onKeyUp={leaveBox} />
           {query ? <button className="rs" style={{ opacity: 1, pointerEvents: 'auto' }} onClick={() => setQuery('')} aria-label="Clear search"><Icon name="close" /></button> : <span className="kbd">{mac ? '⌘K' : 'Ctrl K'}</span>}
         </label>
         <div className="seg full" role="group" aria-label="Filter">
