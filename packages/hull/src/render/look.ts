@@ -14,6 +14,8 @@ export interface ResolvedPost {
   vignette: number;
   grain: number;
   fxaa: boolean;
+  /** Most the speed cue draws at full speed; 0 is off. */
+  speedBlur: number;
 }
 
 export interface ResolvedLook {
@@ -37,6 +39,10 @@ export interface ResolvedLook {
     dir: readonly [number, number, number];
     shadows: boolean;
     shadowRange: number;
+    /** Fraction of the range the shadowed area leads the camera by. */
+    shadowLead: number;
+    shadowSoftness: number;
+    shadowNormalBias: number;
   };
   exposure: number;
   toneMapping: ToneMapping;
@@ -88,6 +94,9 @@ export function resolveLook(look: Look | undefined): ResolvedLook {
       dir: sunDirection(sun?.elevationDeg ?? d.sun!.elevationDeg!, sun?.azimuthDeg ?? d.sun!.azimuthDeg!),
       shadows: sun?.shadows ?? false,
       shadowRange: sun?.shadowRange ?? 40,
+      shadowLead: sun?.shadowLead ?? 0,
+      shadowSoftness: sun?.shadowSoftness ?? 1,
+      shadowNormalBias: sun?.shadowNormalBias ?? 0.02,
     },
     exposure: look?.exposure ?? 1,
     toneMapping: look?.toneMapping ?? 'none',
@@ -111,11 +120,17 @@ export function resolvePost(p: NonNullable<Look['post']> | undefined): ResolvedP
     vignette: p.vignette ?? 0,
     grain: p.grain ?? 0,
     fxaa: p.aa === 'fxaa',
+    speedBlur: p.speedBlur ?? 0,
   };
   const flat = (v: readonly number[], x: number): boolean => v.every((n) => n === x);
-  const idle = r.bloom === 0 && r.contrast === 1 && r.saturation === 1 && flat(r.lift, 0) && flat(r.gamma, 1) && flat(r.gain, 1) && r.vignette === 0 && r.grain === 0 && !r.fxaa;
+  const idle = r.bloom === 0 && r.contrast === 1 && r.saturation === 1 && flat(r.lift, 0) && flat(r.gamma, 1) && flat(r.gain, 1) && r.vignette === 0 && r.grain === 0 && !r.fxaa && r.speedBlur === 0;
   return idle ? null : r;
 }
+
+/** A post that changes nothing, for an impact pulse over a look with no post of its own. */
+export const NEUTRAL_POST: ResolvedPost = {
+  bloom: 0, bloomThreshold: 1, contrast: 1, saturation: 1, lift: ZERO, gamma: ONE, gain: ONE, vignette: 0, grain: 0, fxaa: false, speedBlur: 0,
+};
 
 /** What each quality tier keeps. Low draws straight to the screen with no shadows. */
 export interface Tier {

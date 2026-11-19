@@ -2,6 +2,7 @@
 // Light behaviours and `mountRender` drives the backend. WebGL2 and WebGPU both sit behind it.
 import type { Node, World } from '../core/index.ts';
 import type { Look } from '../schema/look.ts';
+import type { PostFx } from './postfx.ts';
 
 export type Quality = 'low' | 'medium' | 'high';
 
@@ -35,6 +36,8 @@ export interface Backend {
   draw(cameraNode: Node | null): void;
   /** Applies a `look` config value (sky, fog, ambient, sun, exposure, tone mapping). Undefined restores the default. */
   setLook(look: Look | undefined): void;
+  /** The per-frame post state (speed cue, impact pulse); called by `mountRender` before each draw. */
+  setFx(fx: PostFx): void;
   /** Switches the quality tier while running: low drops post and shadows. */
   setQuality(quality: Quality): void;
   resize(width: number, height: number, dpr: number): void;

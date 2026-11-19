@@ -29,6 +29,7 @@ import {
   type WebGLRenderer,
 } from 'three';
 import type { ResolvedPost } from './look.ts';
+import type { PostFx } from './postfx.ts';
 
 const VERT = /* glsl */ `
 precision highp float;
@@ -86,6 +87,8 @@ varying vec2 vUv;
 uniform sampler2D tScene;
 uniform sampler2D tBloom;
 uniform float uBloom, uContrast, uSaturation, uVignette, uGrain, uSeed, uAspect;
+uniform float uSpeed, uTime, uImpact;
+uniform vec2 uImpactC;
 uniform vec3 uLift, uGamma, uGain;
 #include <tonemapping_pars_fragment>
 vec3 encode(vec3 c) {
@@ -94,7 +97,23 @@ vec3 encode(vec3 c) {
 }
 float hash(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
 void main() {
-  vec3 c = texture2D(tScene, vUv).rgb;
+  vec3 c;
+  #ifdef SPEED
+    // Radial blur: samples slide towards the middle, more so near the edge, so the centre stays sharp.
+    vec2 dc = vUv - 0.5;
+    float rn0 = length(dc * vec2(uAspect, 1.0));
+    float zoom = uSpeed * 0.06 * smoothstep(0.15, 0.9, rn0);
+    c = vec3(0.0);
+    for (int i = 0; i < 6; i++) c += texture2D(tScene, 0.5 + dc * (1.0 - zoom * float(i) / 5.0)).rgb;
+    c /= 6.0;
+  #else
+    c = texture2D(tScene, vUv).rgb;
+  #endif
+  if (uImpact > 0.0) {
+    // A chromatic split that grows away from the cut.
+    vec2 off = (vUv - uImpactC) * 0.007 * uImpact;
+    c = vec3(texture2D(tScene, vUv + off).r, c.g, texture2D(tScene, vUv - off).b);
+  }
   #ifdef BLOOM
     c += texture2D(tBloom, vUv).rgb * uBloom;
   #endif
@@ -119,6 +138,33 @@ void main() {
   c = mix(vec3(l), c, uSaturation);
   vec2 d = (vUv - 0.5) * vec2(uAspect, 1.0);
   c *= 1.0 - uVignette * smoothstep(0.25, 0.95, dot(d, d) * 2.0);
+  #ifdef SPEED
+    {
+      vec2 sc = (vUv - 0.5) * 2.0;
+      float rn = length(sc);
+      vec2 p = sc * vec2(uAspect, 1.0);
+      float vig = smoothstep(0.6, 1.5, rn) * 0.28 * uSpeed;
+      float an = atan(p.y, p.x) / 6.2831853 + 0.5;
+      float x = an * 96.0, id = floor(x), f = fract(x);
+      float h = fract(sin(id * 127.1 + 311.7) * 43758.5453);
+      float line = 1.0 - smoothstep(0.08, 0.3, abs(f - 0.5) * 2.0);
+      float flow = fract(length(p) * 0.5 - uTime * (0.9 + h * 0.8) + h * 7.0);
+      float dash = smoothstep(0.0, 0.15, flow) * (1.0 - smoothstep(0.35, 0.8, flow));
+      float streak = line * dash * step(0.6, h) * smoothstep(0.85, 1.4, rn) * 0.12 * uSpeed;
+      float a = clamp(vig + streak, 0.0, 1.0);
+      c = mix(c, vec3(streak / max(a, 1e-4)), a);
+    }
+  #endif
+  if (uImpact > 0.0) {
+    // The hit moment: most colour drains (blood keeps its red), exposure dips, contrast bites, a vignette closes on the cut.
+    float il = dot(c, vec3(0.2126, 0.7152, 0.0722));
+    float red = smoothstep(0.04, 0.18, c.r - max(c.g, c.b));
+    c = mix(c, vec3(il), 0.7 * uImpact * (1.0 - red * 0.75));
+    c *= 1.0 - 0.2 * uImpact;
+    c = mix(c, c * c * (3.0 - 2.0 * c), 0.3 * uImpact);
+    float iv = smoothstep(0.3, 1.25, length((vUv - uImpactC) * vec2(uAspect, 1.0)));
+    c *= 1.0 - iv * 0.45 * uImpact;
+  }
   c += (hash(gl_FragCoord.xy + uSeed) - 0.5) * uGrain;
   gl_FragColor = vec4(clamp(c, 0.0, 1.0), 1.0);
 }`;
@@ -227,6 +273,7 @@ export class PostChain {
   private seed = 0;
   private toneKey: ToneMapping = -1 as ToneMapping;
   private bloomOn = false;
+  private speedOn = false;
 
   constructor(private readonly renderer: WebGLRenderer) {
     const g = new BufferGeometry();
@@ -238,6 +285,7 @@ export class PostChain {
     this.fxaa = pass(FXAA, u());
     this.composite = pass(COMPOSITE, {
       tScene: { value: null }, tBloom: { value: null },
+      uSpeed: { value: 0 }, uTime: { value: 0 }, uImpact: { value: 0 }, uImpactC: { value: new Vector2(0.5, 0.5) },
       uBloom: { value: 0 }, uContrast: { value: 1 }, uSaturation: { value: 1 }, uVignette: { value: 0 }, uGrain: { value: 0 }, uSeed: { value: 0 }, uAspect: { value: 1 },
       uLift: { value: [0, 0, 0] }, uGamma: { value: [1, 1, 1] }, uGain: { value: [1, 1, 1] },
       toneMappingExposure: { value: 1 },
@@ -271,7 +319,7 @@ export class PostChain {
   }
 
   /** Draws `scene` through `camera` and the whole chain to the screen. Returns nothing; the canvas holds the result. */
-  render(scene: Scene, camera: Camera, p: ResolvedPost, toneMapping: ToneMapping, exposure: number): void {
+  render(scene: Scene, camera: Camera, p: ResolvedPost, toneMapping: ToneMapping, exposure: number, fx: PostFx, centreX: number, centreY: number): void {
     const r = this.renderer;
     const sceneRT = this.sceneRT!;
     r.setRenderTarget(sceneRT);
@@ -298,11 +346,14 @@ export class PostChain {
     }
 
     const m = this.composite;
-    if (bloom !== this.bloomOn || toneMapping !== this.toneKey) {
+    const speedOn = p.speedBlur > 0;
+    if (bloom !== this.bloomOn || toneMapping !== this.toneKey || speedOn !== this.speedOn) {
       this.bloomOn = bloom;
+      this.speedOn = speedOn;
       this.toneKey = toneMapping;
       const defs: Record<string, string> = {};
       if (bloom) defs['BLOOM'] = '';
+      if (speedOn) defs['SPEED'] = '';
       for (const [mode, name] of TONE_DEFINE) if (mode === toneMapping) defs[name] = '';
       m.defines = defs;
       m.needsUpdate = true;
@@ -317,6 +368,10 @@ export class PostChain {
     // The grain moves from frame to frame; it never touches the game's random streams.
     u['uSeed']!.value = (this.seed = (this.seed + 1) % 1024) * 7.31;
     u['uAspect']!.value = this.w / this.h;
+    u['uSpeed']!.value = fx.speed * p.speedBlur;
+    u['uTime']!.value = fx.time;
+    u['uImpact']!.value = fx.impact;
+    (u['uImpactC']!.value as Vector2).set(centreX, centreY);
     u['toneMappingExposure']!.value = exposure;
     copy3(u['uLift']!.value as number[], p.lift);
     copy3(u['uGamma']!.value as number[], p.gamma);
