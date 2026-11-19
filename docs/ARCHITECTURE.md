@@ -367,7 +367,7 @@ sound (recipe, code or sample) ─► voice ─► bus (sfx / ui / voice / music
   its weight from a parameter (`weightFrom`). `animator.timeScale` and `hitStop(seconds)` slow or hold one character on game
   time (a trigger set meanwhile waits). Presentation-only extras on frame time (`secondary.ts`): `springs` (chains of bones that
   trail the body's acceleration: hair, sash), `hitReact` and `animator.hitReact(dir, strength)` (additive flinch), and
-  `ik.grips` (the off-hand two-bone IK to a socket, last in the IK order). A humanoid body may list extra `bones`.
+  `ik.grips` (the off-hand two-bone IK to a socket, last in the IK order). A `when` may name a parameter with dashes (`stone-1 && !broken`), so a trigger can carry its clip's name. A humanoid body may list extra `bones`.
   Everything on the fixed step allocates nothing (a test measures the heap).
 * `previewClip`, `previewGraph` and `stopPreview` are for benches. Everything advances on game time.
 
