@@ -88,7 +88,7 @@ export async function runScript(o: RunOptions): Promise<PlayReport> {
   const steps: StepReport[] = [];
   const problems: Problem[] = [];
   let client: ProjectClient | undefined;
-  let last: ControlState = { tick: 0, time: 0, checksum: '', paused: true, nodes: {} };
+  let last: ControlState = { tick: 0, time: 0, checksum: '', paused: true, nodes: {}, held: [] };
   try {
     client = await connectProject(o.server.url);
     // Viewport first, then the page: the canvas sizes itself once, at its final size.
