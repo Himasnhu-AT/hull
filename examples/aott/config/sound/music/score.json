@@ -2,7 +2,7 @@
  "kind": "sound",
  "note": "The battle score: D minor, 150 bpm, layers come in with intensity. Live: intensity 0..1, action 0..1.",
  "bus": "music",
- "level": 0,
+ "level": -6,
  "limit": {
   "voices": 1
  },

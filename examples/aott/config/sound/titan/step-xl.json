@@ -2,7 +2,7 @@
  "kind": "sound",
  "note": "A xl titan footfall.",
  "bus": "sfx",
- "level": 6.84845,
+ "level": -5.15,
  "limit": {
   "voices": 7
  },

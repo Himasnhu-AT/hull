@@ -262,6 +262,11 @@ What AOTT's sounds needed and the first draft above could not say:
 | `pick.mode` | How a variation is chosen: `random` or `cycle`. |
 | `bus` | A bus name inside the mixer file, so it is not an `x-ref`. |
 
+For a game that drives sound from state (AOTT): `play(id, { params, spatial })` hands numbers to a `code` generator (`call.params`) and
+overrides the recipe's distance range for one play; `registerLiveGenerator` makes a sound that is built once and fed by `handle.set({...})`
+and a per-frame `tick` (a winch, a score); `view.duck(bus, db, hold, release)` and `view.setBusLowpass(bus, hz)` are the mixer moves
+a game makes at runtime.
+
 `sample` sources are accepted by the schema and reported as not supported yet. `code` sources call a generator the
 game registers with `registerGenerator`. The mixer has buses and a master compressor and limiter; ducking and
 snapshots come later.

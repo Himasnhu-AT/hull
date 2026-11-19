@@ -28,6 +28,24 @@ function nearest(values: readonly number[], x: number): number {
   return best;
 }
 
+/**
+ * Recipes whose own peak would clip the bench's offline render are stored this many dB lower, so each reads clean on the
+ * bench; the game plays them back at the level the old mix had (the master compressor and limiter catch the peaks).
+ * Keeping the titans' recipes in step this way keeps the sizes in proportion to each other.
+ */
+const BENCH_TRIM_DB: Record<string, number> = {
+  'combat/impact-heavy': 3.5,
+  'combat/nape-kill': 3.5,
+  'titan/behemoth': 9.5,
+  'titan/fall-large': 10,
+  'titan/fall-medium': 8,
+  'titan/fall-small': 5.5,
+  'titan/step-large': 6,
+  'titan/step-medium': 4.5,
+  'titan/step-xl': 12,
+};
+const trim = (id: string): number => { const d = BENCH_TRIM_DB[id]; return d === undefined ? 1 : Math.pow(10, d / 20); };
+
 export class Audio {
   ready = false;
   muted = false;
@@ -91,8 +109,9 @@ export class Audio {
   private play(id: string, o: { volume?: number; at?: Pos; ref?: number; params?: Record<string, number> } = {}): void {
     const v = this.view;
     if (!v) return;
+    const volume = (o.volume ?? 1) * trim(id);
     v.play('sound/' + id, {
-      ...(o.volume !== undefined && o.volume !== 1 ? { volume: o.volume } : {}),
+      ...(volume !== 1 ? { volume } : {}),
       ...(o.params ? { params: o.params } : {}),
       ...(o.at && Number.isFinite(o.at.x + o.at.y + o.at.z) ? { at: [o.at.x, o.at.y, o.at.z] as [number, number, number], spatial: { ref: o.ref ?? 8, max: FAR } } : {}),
     });

@@ -2,7 +2,7 @@
  "kind": "sound",
  "note": "A small titan falling.",
  "bus": "sfx",
- "level": -1.04479,
+ "level": -6.54,
  "limit": {
   "voices": 3
  },

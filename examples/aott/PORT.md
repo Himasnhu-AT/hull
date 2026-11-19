@@ -115,6 +115,27 @@ the Holdout test measures (a new checksum) says so in its commit and updates the
   length), the game plays only through `hull/audio`, `src/audio/dsp.ts` and the old engine are gone, and a recorded
   Holdout reproduces the same sound-id counts twice.
 
+**Status (p1-sound): done.** The game plays only through `hull/audio`; `src/audio/dsp.ts`, `sfx.ts`, `moves.ts`, `cues.ts`,
+`loops.ts`, `music.ts` and the old engine are gone. `src/audio/audio.ts` is the thin map (every `Game.audio` method kept).
+
+* 82 `sound` recipes in `config/sound/**` (`gear`, `combat`, `titan`, `traversal`, `stinger`, `voice`, `ui`, `loop`, `music`) and
+  `config/mixer/main.json` (buses `sfx`, `top`, `music`; master compressor -16 dB, 8:1, limiter -1 dB).
+* 62 are real `synth` recipes (converted mechanically from the old functions; ranges kept where the old code drew random numbers;
+  one recipe per surface, side, strength band or titan size, the adapter picks the nearest and scales the volume by the old curve).
+* 20 are `code` recipes whose generators are in `src/audio/gens.ts` (formant growl and shouts, amplitude-modulated creak, fly-by,
+  stingers that read the score's chord) and `src/audio/live.ts` (winch, gas jet, wind, scrape, heartbeat, the score: live voices
+  that take one number a frame). A recipe cannot say these. The Studio bench can only render a `code` recipe once the game's
+  generators are registered (the game page does it; the Studio window does not), so the 20 show as "no generator" there.
+* Engine, additive and tested (`hull/audio`): `play(id, { params, spatial })`, `GeneratorCall.params/reverbIn`, live generators
+  (`registerLiveGenerator`, `SoundHandle.set`, `tick` every frame, stepped over the render by the bench), `duck()`, `setBusLowpass()`.
+* Not carried over: the old soft-clip stage before the output (the mixer's limiter does the job); the old 90-voice global cap and the
+  per-category caps shared by several sounds (now a voice limit per recipe); HRTF panning of the nearest 8 sounds (now the engine's
+  distance, pan and air low-pass); the in-game level of the ten loudest recipes is kept by a trim table in `audio.ts`.
+* Checked: `audio.test.ts` (recipes valid, every recipe reachable, every generator registered, a 40 s Holdout asks for the same
+  sound ids and the same params twice); bench render of all 82 in a browser: no errors, peaks -23.4 to -0.8 dBFS (none clips),
+  lengths 0.02 to 5.1 s. Not judged: how it sounds. A person must listen, above all to the converted one-shots (the random draws are
+  independent ranges now, where the old code reused one draw for several layers) and to the ten trimmed ones.
+
 ### P2. People and titans -> `character` and anim configs on the character bench
 
 * **Owns**: `src/player/model.ts`, `src/player/materials.ts`, `src/titans/builder.ts`, `rig.ts`, `ik.ts`, `config/character/**`,

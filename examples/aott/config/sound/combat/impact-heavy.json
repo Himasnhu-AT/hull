@@ -2,7 +2,7 @@
  "kind": "sound",
  "note": "A body impact, heavy.",
  "bus": "sfx",
- "level": 0.21448,
+ "level": -3.29,
  "limit": {
   "minGap": 0.07,
   "voices": 4
