@@ -60,6 +60,9 @@ CREATE TABLE IF NOT EXISTS usage(
   id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, token_id INTEGER,
   model TEXT NOT NULL, input_tokens INTEGER NOT NULL, output_tokens INTEGER NOT NULL, created_at INTEGER NOT NULL);
 CREATE INDEX IF NOT EXISTS usage_user_time ON usage(user_id, created_at);
+CREATE TABLE IF NOT EXISTS community_versions(
+  game_id TEXT NOT NULL, version TEXT NOT NULL, title TEXT NOT NULL, note TEXT NOT NULL, size INTEGER NOT NULL,
+  sha256 TEXT NOT NULL, cover_mime TEXT NOT NULL, published_at INTEGER NOT NULL, PRIMARY KEY(game_id, version));
 `
 
 // Open opens (and migrates) the database at path; ":memory:" gives a throwaway one for tests.

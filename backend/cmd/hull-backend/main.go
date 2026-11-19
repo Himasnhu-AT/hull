@@ -4,6 +4,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -18,6 +19,14 @@ import (
 )
 
 func main() {
+	// "community ..." runs a publishing command and exits; with no subcommand the binary serves as before.
+	if len(os.Args) > 1 && os.Args[1] == "community" {
+		if err := runCommunity(os.Args[2:], os.Getenv, os.Stdout); err != nil {
+			fmt.Fprintln(os.Stderr, "hull-backend:", err)
+			os.Exit(1)
+		}
+		return
+	}
 	log := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	if err := run(log); err != nil {
 		log.Error("hull-backend stopped", "err", err)

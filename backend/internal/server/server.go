@@ -41,6 +41,8 @@ type Server struct {
 	client *http.Client       // to Anthropic; no overall timeout because replies stream
 	google *http.Client       // to Google's token endpoint; a short timeout because a person is waiting
 
+	communityLimit *ratelimit.Limiter // public catalog reads, per IP
+
 	dummyOnce sync.Once
 	dummyHash string
 }
@@ -51,7 +53,7 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger) *Server {
 	tr.ResponseHeaderTimeout = 10 * time.Minute
 	return &Server{cfg: cfg, st: st, log: log, now: time.Now, params: passwords.Default,
 		limit: ratelimit.New(10), client: &http.Client{Transport: tr},
-		google: &http.Client{Timeout: 10 * time.Second}}
+		google: &http.Client{Timeout: 10 * time.Second}, communityLimit: ratelimit.New(communityRate)}
 }
 
 func (s *Server) Handler() http.Handler {
@@ -75,6 +77,11 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /oauth/token", s.oauthToken)
 	mux.HandleFunc("GET /api/me", s.apiMe)
 	mux.HandleFunc("POST /api/logout", s.apiLogout)
+
+	mux.HandleFunc("GET /api/community", s.communityLimited(s.communityList))
+	mux.HandleFunc("GET /api/community/{id}/cover", s.communityLimited(s.communityLatestCover))
+	mux.HandleFunc("GET /api/community/{id}/{version}/cover", s.communityLimited(s.communityVersionCover))
+	mux.HandleFunc("GET /api/community/{id}/{version}/game.tar.gz", s.communityLimited(s.communityArchive))
 
 	mux.HandleFunc("POST /v1/messages", s.handleMessages)
 	mux.HandleFunc("POST /v1/messages/count_tokens", s.handleCountTokens)

@@ -54,6 +54,38 @@ Which account signs in:
 
 A Google-only account cannot log in with a password. An existing database is migrated on start (a nullable, unique `google_sub` column).
 
+## Community games
+
+A public, versioned catalog of games the app can list and download. Files live in `DATA_DIR/community/<id>/<version>/`
+(`game.tar.gz`, and `cover.webp|jpg|png` when there is one) and rows in the `community_versions` table
+(added to an existing database on start). `id` is 1 to 40 of `a-z0-9-`; `version` is `MAJOR.MINOR.PATCH`, compared as
+numbers (1.10.0 is newer than 1.9.0). A version is never overwritten.
+
+Publish on the server's machine, with the same `DATA_DIR` the server uses (the same binary; with no subcommand it serves):
+
+```sh
+hull-backend community publish --dir <game folder> [--id <id>] [--version <x.y.z>] [--note <text>]
+hull-backend community list
+hull-backend community remove --id <id> --version <x.y.z>
+```
+
+`publish` reads `id`, `title`, `note` and `version` from `hull.json` in the folder when the flags are absent. It refuses a
+version that already exists or is not greater than the latest. The folder is packed as `tar.gz` with relative paths and
+file modes kept; `node_modules/` and `.git/` (anywhere), `.hull/` and `dist/` (at the top), every `.env*` file, the
+cover files and symlinks are left out. A top-level `cover.webp`, `cover.jpg` or `cover.png` (in that order) is stored beside
+the archive. It prints the id, version, size and sha256.
+
+HTTP, public, GET only, 120 requests a minute per IP:
+
+- `GET /api/community`: `{"games":[{"id","title","note","version","published_at","size","sha256","cover_url","download_url","versions"}]}`.
+  The fields are the newest version's; `versions` lists all, newest first; games are sorted by title. `cover_url` is
+  `null` without a cover. URLs are absolute, built from `PUBLIC_URL`.
+- `GET /api/community/{id}/cover`: the newest version's cover, 404 when it has none (`Cache-Control: public, max-age=3600`).
+- `GET /api/community/{id}/{version}/cover`: that version's cover.
+- `GET /api/community/{id}/{version}/game.tar.gz`: the archive. `Content-Type: application/gzip`, `Content-Length`,
+  `ETag` (the sha256, quoted), `X-Hull-Sha256`, immutable cache, Range supported. 404 for an unknown id or version; path
+  segments are checked against the id and version rules before any file is touched.
+
 ## Protocol
 
 Web pages (cookie session, HttpOnly, SameSite=Lax, CSRF token on every form): `/signup`, `/login`, `POST /logout`,
