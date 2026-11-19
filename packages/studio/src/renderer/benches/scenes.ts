@@ -17,6 +17,13 @@ export interface CharacterScene {
   setTurn(rate: number): void;
   /** Where the look-at target sits (world); null hides it. */
   setTarget(p: { x: number; y: number; z: number } | null): void;
+  /**
+   * Shows the character where root motion has carried it (metres and radians, in its own frame). The turntable stops and
+   * the camera follows; null puts everything back.
+   */
+  setRoot(o: { x: number; y: number; z: number; yaw: number } | null): void;
+  /** Moves the character back to the middle (after root motion has walked it off). */
+  recentre(): void;
 }
 
 /** A turntable: the character in the middle of a dark floor, a sun, and a camera that keeps its height in frame. */
@@ -24,7 +31,8 @@ export function buildCharacterScene(eng: Engine, game: Game): CharacterScene {
   const { Behaviour, config } = eng.hull;
   const { Camera, Light, Mesh, SceneObject } = eng.render;
   const { Animator: A } = eng.anim;
-  const { Box3, Vector3 } = eng.three;
+  const { Box3, Vector3, GridHelper } = eng.three;
+  const { SceneObject: SO } = eng.render;
   const w = game.world;
 
   /** Puts a project's body on the character: its own update, then the skeleton's pose copied onto its joints. */
@@ -111,11 +119,22 @@ export function buildCharacterScene(eng: Engine, game: Game): CharacterScene {
       }
       // Distance at which the height (and, on a wide picture, the width) fits in a 40 degree view, with a margin.
       const fit = Math.max(top * 0.5, half * 0.8) / Math.tan(0.349) * 1.18;
-      this.node.position.set(0, top * 0.5, fit + half);
+      // The shot follows the character when root motion has moved it.
+      const n = this.anim?.node;
+      this.node.position.set(n ? n.position.x : 0, top * 0.5, (n ? n.position.z : 0) + fit + half);
       this.node.rotation.set(0, 0, 0);
     }
   }
 
+  // A grid on the floor and a line along the way the character faces, so travel can be read off the ground.
+  const grid = w.spawn('grid');
+  const gh = new GridHelper(80, 80, 0x59616f, 0x39404b);
+  gh.position.y = 0.002;
+  grid.add(SO, { object: gh });
+  const way = w.spawn('way');
+  way.add(Mesh, { shape: 'box', color: '#ffb340', castShadow: false });
+  way.scale.set(0.03, 0.01, 40);
+  way.position.set(0, 0.006, 0);
   const floor = w.spawn('floor');
   floor.scale.set(400, 1, 400);
   floor.add(Mesh, { shape: 'plane', color: '#2b2f37', castShadow: false });
@@ -176,6 +195,22 @@ export function buildCharacterScene(eng: Engine, game: Game): CharacterScene {
       const t = node?.get(Turn);
       if (t) t.rate = r;
     },
+    setRoot(o) {
+      if (!node) return;
+      const t = node.get(Turn);
+      if (!o) {
+        if (t) t.rate = rate;
+        node.position.set(0, 0, 0);
+        return;
+      }
+      if (t) t.rate = 0;
+      // A three-quarter view from the front, held while root motion is shown.
+      node.rotation.y = 2.6;
+      const cs = Math.cos(node.rotation.y), sn = Math.sin(node.rotation.y);
+      node.position.set(o.x * cs + o.z * sn, o.y, -o.x * sn + o.z * cs);
+      node.rotation.y += o.yaw;
+    },
+    recentre() { node?.position.set(0, 0, 0); },
     setTarget(p) {
       if (p) marker.position.set(p.x, p.y, p.z);
       else marker.position.set(0, -50, 0);

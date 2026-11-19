@@ -242,6 +242,8 @@ export function buildBody(body: Character['body'], at = 'body'): BuiltBody {
       add(`foot${side}`, `shin${side}`, 0, -d.shin, 0);
     }
     parts.push(...humanoidParts(d));
+    // Extra bones on a humanoid (a ponytail, a sash): their offsets are for the reference body and scale with its height.
+    for (const b of body.bones ?? []) add(b.name, b.parent ?? null, b.offset[0] * refScale, b.offset[1] * refScale, b.offset[2] * refScale);
   } else {
     if (!body.bones?.length) throw new Error(`${at}/bones: a custom body needs at least one bone`);
     for (const b of body.bones) add(b.name, b.parent ?? null, b.offset[0] * scale, b.offset[1] * scale, b.offset[2] * scale);

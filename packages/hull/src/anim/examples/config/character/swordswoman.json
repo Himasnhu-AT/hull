@@ -1,0 +1,272 @@
+{
+  "kind": "character",
+  "note": "A swordswoman for the sword clip set: katana in the right hand (blade along the hand's -y), an empty scabbard on the left hip, a ponytail and sash tails on spring chains.",
+  "body": {
+    "type": "generated",
+    "recipe": "humanoid",
+    "proportions": {
+      "height": 1.78,
+      "shoulders": 0.4,
+      "legs": 0.52,
+      "head": 0.23,
+      "build": 0.85
+    },
+    "bones": [
+      {
+        "name": "pony1",
+        "parent": "head",
+        "offset": [
+          0,
+          0.17,
+          0.1
+        ]
+      },
+      {
+        "name": "pony2",
+        "parent": "pony1",
+        "offset": [
+          0,
+          -0.14,
+          0.03
+        ]
+      },
+      {
+        "name": "pony3",
+        "parent": "pony2",
+        "offset": [
+          0,
+          -0.14,
+          0.01
+        ]
+      },
+      {
+        "name": "sash1",
+        "parent": "hips",
+        "offset": [
+          0.05,
+          0.06,
+          0.1
+        ]
+      },
+      {
+        "name": "sash2",
+        "parent": "sash1",
+        "offset": [
+          0,
+          -0.16,
+          0.02
+        ]
+      }
+    ],
+    "parts": [
+      {
+        "bone": "handR",
+        "shape": "box",
+        "color": "#3a2a24",
+        "center": [
+          0,
+          0,
+          0
+        ],
+        "size": [
+          0.03,
+          0.3,
+          0.034
+        ]
+      },
+      {
+        "bone": "handR",
+        "shape": "box",
+        "color": "#c9a24a",
+        "center": [
+          0,
+          -0.16,
+          0
+        ],
+        "size": [
+          0.085,
+          0.012,
+          0.075
+        ]
+      },
+      {
+        "bone": "handR",
+        "shape": "box",
+        "color": "#d9dfe6",
+        "center": [
+          0,
+          -0.56,
+          0
+        ],
+        "size": [
+          0.008,
+          0.78,
+          0.042
+        ]
+      },
+      {
+        "bone": "hips",
+        "shape": "limb",
+        "color": "#2a2024",
+        "from": [
+          -0.17,
+          0.04,
+          0
+        ],
+        "to": [
+          -0.3,
+          -0.1,
+          0.55
+        ],
+        "radius": 0.024,
+        "radiusEnd": 0.02
+      },
+      {
+        "bone": "hips",
+        "shape": "box",
+        "color": "#8c2f2a",
+        "center": [
+          0,
+          0.075,
+          0
+        ],
+        "size": [
+          0.28,
+          0.05,
+          0.2
+        ]
+      },
+      {
+        "bone": "pony1",
+        "shape": "limb",
+        "color": "#17120f",
+        "from": [
+          0,
+          0,
+          0
+        ],
+        "to": [
+          0,
+          -0.14,
+          0.03
+        ],
+        "radius": 0.03,
+        "radiusEnd": 0.026
+      },
+      {
+        "bone": "pony2",
+        "shape": "limb",
+        "color": "#17120f",
+        "from": [
+          0,
+          0,
+          0
+        ],
+        "to": [
+          0,
+          -0.14,
+          0.01
+        ],
+        "radius": 0.026,
+        "radiusEnd": 0.02
+      },
+      {
+        "bone": "pony3",
+        "shape": "limb",
+        "color": "#17120f",
+        "from": [
+          0,
+          0,
+          0
+        ],
+        "to": [
+          0,
+          -0.16,
+          0
+        ],
+        "radius": 0.02,
+        "radiusEnd": 0.008
+      },
+      {
+        "bone": "sash1",
+        "shape": "limb",
+        "color": "#8c2f2a",
+        "from": [
+          0,
+          0,
+          0
+        ],
+        "to": [
+          0,
+          -0.16,
+          0.02
+        ],
+        "radius": 0.022,
+        "radiusEnd": 0.02
+      },
+      {
+        "bone": "sash2",
+        "shape": "limb",
+        "color": "#8c2f2a",
+        "from": [
+          0,
+          0,
+          0
+        ],
+        "to": [
+          0,
+          -0.18,
+          0
+        ],
+        "radius": 0.02,
+        "radiusEnd": 0.012
+      }
+    ]
+  },
+  "materials": {
+    "skin": "material/skin",
+    "cloth": "material/cloth-green",
+    "metal": "material/steel"
+  },
+  "sockets": {
+    "handR": {
+      "joint": "handR",
+      "offset": [
+        0,
+        -0.04,
+        0
+      ]
+    },
+    "hiltL": {
+      "joint": "handR",
+      "offset": [
+        0,
+        0.1,
+        0.02
+      ]
+    },
+    "blade": {
+      "joint": "handR",
+      "offset": [
+        0,
+        -0.56,
+        0
+      ]
+    },
+    "tip": {
+      "joint": "handR",
+      "offset": [
+        0,
+        -0.95,
+        0
+      ]
+    }
+  },
+  "collider": {
+    "shape": "capsule",
+    "radius": 0.35,
+    "height": 1.7
+  },
+  "animSet": "anim-set/sword",
+  "animGraph": "anim-graph/sword"
+}

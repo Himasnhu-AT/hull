@@ -92,6 +92,12 @@
               "maximum": 1,
               "default": 1
             },
+            "weightFrom": {
+              "type": "string",
+              "x-ui": {
+                "help": "A number parameter (0 to 1) that scales the layer's weight: turn a layer on and off from the game."
+              }
+            },
             "start": {
               "type": "string"
             },
@@ -129,6 +135,60 @@
                           },
                           "x-ui": {
                             "help": "Parameter value to clip."
+                          }
+                        }
+                      },
+                      "additionalProperties": false
+                    },
+                    "blend2d": {
+                      "type": "object",
+                      "required": [
+                        "x",
+                        "y",
+                        "points"
+                      ],
+                      "properties": {
+                        "x": {
+                          "type": "string",
+                          "x-ui": {
+                            "help": "A number parameter for the sideways axis."
+                          }
+                        },
+                        "y": {
+                          "type": "string",
+                          "x-ui": {
+                            "help": "A number parameter for the forward axis."
+                          }
+                        },
+                        "points": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "required": [
+                              "x",
+                              "y",
+                              "clip"
+                            ],
+                            "properties": {
+                              "x": {
+                                "type": "number"
+                              },
+                              "y": {
+                                "type": "number"
+                              },
+                              "clip": {
+                                "type": "string",
+                                "x-ui": {
+                                  "help": "Name of a clip in the anim-set."
+                                }
+                              }
+                            },
+                            "additionalProperties": false
+                          },
+                          "minItems": 1,
+                          "maxItems": 24,
+                          "x-ui": {
+                            "help": "Clips placed on the plane (a strafe space: idle at 0,0 and a walk in each direction). The clips are weighted by inverse distance to the parameters."
                           }
                         }
                       },
@@ -200,6 +260,13 @@
                       "unit": "s",
                       "help": "Not before this long in the state."
                     }
+                  },
+                  "sync": {
+                    "type": "boolean",
+                    "default": false,
+                    "x-ui": {
+                      "help": "Start the new state at the same point of its cycle as the one it leaves (walk into run without the feet crossing wrongly)."
+                    }
                   }
                 },
                 "additionalProperties": false
@@ -210,9 +277,161 @@
         }
       }
     },
+    "springs": {
+      "type": "object",
+      "patternProperties": {
+        "^.*$": {
+          "type": "object",
+          "required": [
+            "chain"
+          ],
+          "properties": {
+            "chain": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1,
+              "x-ui": {
+                "help": "Bones from the root of the chain to its tip (hair, sash, tassel). They swing from the body's own movement."
+              }
+            },
+            "stiffness": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "default": 120,
+              "x-ui": {
+                "unit": "1/s²",
+                "help": "How hard the chain pulls back to its pose. The tip is softer."
+              }
+            },
+            "damping": {
+              "type": "number",
+              "minimum": 0,
+              "default": 7,
+              "x-ui": {
+                "unit": "1/s",
+                "help": "How fast the swing dies away."
+              }
+            },
+            "drive": {
+              "type": "number",
+              "minimum": 0,
+              "default": 0.05,
+              "x-ui": {
+                "help": "Radians of swing per m/s² of acceleration of the chain's root."
+              }
+            },
+            "falloff": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "maximum": 1.5,
+              "default": 0.8,
+              "x-ui": {
+                "help": "Stiffness of each bone along the chain, relative to the one before it."
+              }
+            },
+            "limitDeg": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "maximum": 180,
+              "default": 70,
+              "x-ui": {
+                "unit": "deg"
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "x-ui": {
+        "help": "Spring-driven secondary motion. Springs run on frame time and only move the picture."
+      }
+    },
+    "hitReact": {
+      "type": "object",
+      "properties": {
+        "bones": {
+          "type": "object",
+          "patternProperties": {
+            "^.*$": {
+              "type": "number",
+              "minimum": 0
+            }
+          },
+          "x-ui": {
+            "help": "Bone to its share of the flinch. Default: hips, spine, chest, neck, head."
+          }
+        },
+        "angle": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "default": 0.35,
+          "x-ui": {
+            "unit": "rad",
+            "help": "Lean of a full-strength hit, summed over the bones."
+          }
+        },
+        "shift": {
+          "type": "number",
+          "minimum": 0,
+          "default": 0.05,
+          "x-ui": {
+            "unit": "m",
+            "help": "How far the hips are pushed along the hit."
+          }
+        },
+        "stiffness": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "default": 220
+        },
+        "damping": {
+          "type": "number",
+          "minimum": 0,
+          "default": 16
+        }
+      },
+      "additionalProperties": false
+    },
     "ik": {
       "type": "object",
       "properties": {
+        "grips": {
+          "type": "object",
+          "patternProperties": {
+            "^.*$": {
+              "type": "object",
+              "required": [
+                "socket"
+              ],
+              "properties": {
+                "socket": {
+                  "type": "string",
+                  "x-ui": {
+                    "help": "A socket of the character the hand holds, such as the hilt."
+                  }
+                },
+                "weight": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1,
+                  "default": 1
+                },
+                "weightFrom": {
+                  "type": "string",
+                  "x-ui": {
+                    "help": "A number parameter (0 to 1) that scales the weight."
+                  }
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "x-ui": {
+            "help": "Hand bone to the socket it grips: two-bone IK puts the off-hand on the hilt whatever the clip does."
+          }
+        },
         "feet": {
           "type": "object",
           "required": [
