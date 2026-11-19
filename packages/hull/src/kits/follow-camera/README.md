@@ -16,4 +16,4 @@ An orbiting chase camera that copes with speed and walls.
 - Spawn it after the target and after the target's controller, so it follows where the target ended up this step.
 - **Maths for a game's own camera** (`glide.ts`): `followDistance`, `followFov`, `damp`, `smoothstep`, and `Reach` (glides in off a wall,
   back out when clear). AOTT's soldier camera uses them over its `cam` tunables. Test: `glide.test.ts`.
-- **Lock-on and shake**: `lockTarget` (a node; while set the view swings round behind the player to keep it in front, look input is ignored; tunables `lockFollow`, `lockPitch`) and `shake(amount, seconds)` (a decaying wobble from game time; `shakeSize`). The combat kit's `LockOn` drives both.
+- **Lock-on and shake**: `lockTarget` (a node; while set the view swings round behind the player to keep it in front, look input is ignored; tunables `lockFollow`, `lockPitch`, and `lockSlope`, which lowers the height angle by the climb to a target uphill so stairs do not fill the view) and `shake(amount, seconds)` (a decaying wobble from game time; `shakeSize`). The combat kit's `LockOn` drives both.

@@ -149,6 +149,9 @@ Kagari reads the player's stance and answers it: after a Stone string she opens 
 ### Group rules
 
 - One attack token per group; a second at 5 or more enemies. A token is held from the start of the telegraph to the end of the recovery.
+- At most two raiders attack at once (`enemyBrain.maxAttackers`), with a breather between attackers: after one finishes no other raider starts for 0.7 s (`breather`), and two attacks never start within 0.5 s of each other (`attackGap`); the raider that just attacked is held back by its own recovery instead. Raiders without a token wait at 3 to 5 m.
+- The camp fight is balanced against two scripted players (`src/enemies/balance.ts`, run by `balance.test.ts` over 20 seeds): a competent one (reads the swing 0.12 s in, guards 85% of blockable blows, dodges 90% of red flashes, cuts in openings, picks the weak stance) wins at least 70% of the seeds; a careless one that only attacks wins at most 15%.
+- Damage is the move's listed number everywhere: hit zones (head, limb) do not multiply it (`swordfight.zoneDamage` 0).
 - Archers never take a token for a shot while another enemy is within 4 m of Aya.
 - Non-attackers circle at 3 to 5 m, clockwise or counter-clockwise by a per-enemy coin flip from `world.random('ai')`.
 

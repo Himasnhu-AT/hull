@@ -25,6 +25,7 @@ export const followTuning = tunables('followCamera', {
   recover: num(5, { min: 0.5, max: 30, step: 0.5, unit: '1/s', help: 'How quickly the camera returns after a wall let it go.' }),
   lockFollow: num(7, { min: 1, max: 30, step: 0.5, unit: '1/s', help: 'How quickly the view swings round to keep a locked-on target in front.' }),
   lockPitch: num(0.28, { min: -0.3, max: 1, step: 0.02, unit: 'rad', help: 'Camera height angle while locked on.' }),
+  lockSlope: num(0, { min: 0, max: 1.5, step: 0.05, help: 'While locked on, how much of the climb to the target (on stairs and hills) the camera takes off its height angle, so a target uphill is not hidden behind the slope. 0 keeps lockPitch.' }),
   shakeSize: num(0.22, { min: 0, max: 1, step: 0.01, unit: 'm', help: 'Sideways and vertical travel of a full-strength shake.' }),
 });
 
@@ -89,7 +90,13 @@ export class FollowCamera extends Behaviour {
       if (d > Math.PI) d -= Math.PI * 2;
       else if (d < -Math.PI) d += Math.PI * 2;
       this.yaw += d * k;
-      this.pitch += (followTuning.lockPitch - this.pitch) * k;
+      let goal = followTuning.lockPitch;
+      if (followTuning.lockSlope > 0) {
+        const dx = lock.position.x - this.target.position.x, dz = lock.position.z - this.target.position.z;
+        // Only a climb lowers the camera; a target downhill leaves the angle where it is.
+        goal -= followTuning.lockSlope * Math.max(0, Math.atan2(lock.position.y - this.target.position.y, Math.max(1, Math.hypot(dx, dz))));
+      }
+      this.pitch += (goal - this.pitch) * k;
     } else {
       input.vec2('look', lk);
       this.yaw -= lk.x * followTuning.mouseSensitivity;

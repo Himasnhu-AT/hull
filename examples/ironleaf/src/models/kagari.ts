@@ -31,14 +31,14 @@ export function kagari(c: Ctx): Built {
     b.add('forearm' + s, 'bone', tube([0, -d.foreArm * 0.9, 0], [0, -d.foreArm * 1.0, 0], 0.062, 0.05, 8));
   });
   // A white lacquer mask with red marks and eye slits, a hood of black hair under a tall cap.
-  b.add('head', 'mask-white', ell([0, h * 0.03, -hr[2] * 0.25], [0, h * 0.97, -hr[2] * 0.25], hr[0] * 0.9, hr[2] * 1.12, hr[0] * 0.98, hr[2] * 1.08, 10, false));
-  b.add('head', 'lacquer-red', slab([-h * 0.2, h * 0.64, -hr[2] * 1.05], [h * 0.24, h * 0.05, h * 0.02], [0, 0, 0.35]), slab([h * 0.2, h * 0.64, -hr[2] * 1.05], [h * 0.24, h * 0.05, h * 0.02], [0, 0, -0.35]),
+  b.add('head', 'mask-white', ell([0, h * 0.03, -hr[2] * 0.05], [0, h * 0.97, -hr[2] * 0.05], hr[0] * 0.9, hr[2] * 1.12, hr[0] * 0.98, hr[2] * 1.08, 10, false));
+  b.add('head', 'lacquer-red', slab([-h * 0.2, h * 0.64, -hr[2] * 1.16], [h * 0.24, h * 0.05, h * 0.03], [0, 0, 0.35]), slab([h * 0.2, h * 0.64, -hr[2] * 1.16], [h * 0.24, h * 0.05, h * 0.02], [0, 0, -0.35]),
     // A thin mouth line, so the mask has a lower face as well as eyes.
-    slab([0, h * 0.14, -hr[2] * 1.07], [h * 0.2, h * 0.025, h * 0.02]),
-    slab([0, h * 0.86, -hr[2] * 1.03], [h * 0.05, h * 0.2, h * 0.02]), slab([-h * 0.12, h * 0.3, -hr[2] * 1.07], [h * 0.04, h * 0.16, h * 0.02]), slab([h * 0.12, h * 0.3, -hr[2] * 1.07], [h * 0.04, h * 0.16, h * 0.02]));
+    slab([0, h * 0.14, -hr[2] * 1.14], [h * 0.2, h * 0.03, h * 0.03]),
+    slab([0, h * 0.86, -hr[2] * 1.1], [h * 0.05, h * 0.2, h * 0.03]), slab([-h * 0.12, h * 0.3, -hr[2] * 1.14], [h * 0.04, h * 0.16, h * 0.03]), slab([h * 0.12, h * 0.3, -hr[2] * 1.14], [h * 0.04, h * 0.16, h * 0.03]));
   // The mask's nose ridge and brow ridge catch the light and give it relief; the slits are deep black and wide enough to read.
-  b.add('head', 'mask-white', slab([0, h * 0.4, -hr[2] * 1.12], [h * 0.07, h * 0.24, h * 0.07]), slab([-h * 0.16, h * 0.58, -hr[2] * 1.1], [h * 0.24, h * 0.04, h * 0.05], [0, 0, 0.2]), slab([h * 0.16, h * 0.58, -hr[2] * 1.1], [h * 0.24, h * 0.04, h * 0.05], [0, 0, -0.2]));
-  b.add('head', 'eye', slab([-h * 0.15, h * 0.5, -hr[2] * 1.09], [h * 0.17, h * 0.05, h * 0.02], [0, 0, 0.2]), slab([h * 0.15, h * 0.5, -hr[2] * 1.09], [h * 0.17, h * 0.05, h * 0.02], [0, 0, -0.2]));
+  b.add('head', 'mask-white', slab([0, h * 0.4, -hr[2] * 1.2], [h * 0.07, h * 0.24, h * 0.08]), slab([-h * 0.16, h * 0.58, -hr[2] * 1.19], [h * 0.26, h * 0.045, h * 0.07], [0, 0, 0.2]), slab([h * 0.16, h * 0.58, -hr[2] * 1.19], [h * 0.26, h * 0.045, h * 0.07], [0, 0, -0.2]));
+  b.add('head', 'eye', slab([-h * 0.15, h * 0.5, -hr[2] * 1.17], [h * 0.18, h * 0.055, h * 0.03], [0, 0, 0.2]), slab([h * 0.15, h * 0.5, -hr[2] * 1.17], [h * 0.18, h * 0.055, h * 0.03], [0, 0, -0.2]));
   b.add('head', 'hair-black', ball([0, h * 0.58, hr[2] * 0.35], [hr[0] * 1.18, hr[1] * 1.1, hr[2] * 1.05], 9, 7));
   b.add('head', 'lacquer-black', ell([0, h * 0.92, hr[2] * 0.1], [0, h * 1.6, hr[2] * 0.7], hr[0] * 0.92, hr[2] * 0.92, hr[0] * 0.5, hr[2] * 0.5, 8), tube([0, h * 0.86, 0], [0, h * 0.95, 0], hr[0] * 1.16, hr[0] * 1.16, 10));
   b.add('head', 'crimson', tube([0, h * 0.9, 0], [0, h * 0.93, 0], hr[0] * 1.19, hr[0] * 1.19, 10));

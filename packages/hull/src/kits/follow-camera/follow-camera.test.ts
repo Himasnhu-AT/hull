@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { setTunable } from '../../config/index.ts';
 import { ALL_KITS, kitSources, startRig } from '../testing.ts';
 import { Camera } from '../../render/index.ts';
 import { ThirdPerson } from '../third-person/third-person.ts';
@@ -36,6 +37,28 @@ describe('follow camera kit', () => {
     expect(cn.get(Camera)!.fov).toBeGreaterThan(followTuning.fov + 5);
     r.step(150);
     expect(cn.get(Camera)!.fov).toBeLessThan(followTuning.fov + 1);
+  });
+
+  it('lowers the locked-on angle by the climb to a target uphill (lockSlope), and not at all for one on the level', async () => {
+    const { r, w, me, cam } = await start();
+    const foe = w.spawn('foe');
+    cam.lockTarget = foe;
+    const settle = (y: number, slope: number): number => {
+      setTunable('followCamera.lockSlope', slope);
+      foe.position.set(me.position.x, me.position.y + y, me.position.z - 8);
+      r.step(240);
+      return cam.pitch;
+    };
+    const flat = settle(0, 0);
+    expect(flat).toBeCloseTo(followTuning.lockPitch, 2);
+    expect(settle(8, 0)).toBeCloseTo(followTuning.lockPitch, 2);
+    const up = settle(3, 1);
+    expect(up).toBeCloseTo(followTuning.lockPitch - Math.atan2(3, 8), 2);
+    // A steep climb stops at the camera's lowest angle.
+    expect(settle(8, 1)).toBeCloseTo(followTuning.pitchMin, 2);
+    expect(settle(0, 1)).toBeCloseTo(followTuning.lockPitch, 2);
+    expect(settle(-8, 1)).toBeCloseTo(followTuning.lockPitch, 2);
+    setTunable('followCamera.lockSlope', 0);
   });
 
   it('does not go through a wall behind the target, and eases out again', async () => {

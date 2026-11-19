@@ -58,7 +58,16 @@ describe('mixer schema and plan', () => {
     const plan = planMixer(undefined);
     expect(plan.problems).toEqual([]);
     expect(plan.buses[plan.buses.length - 1]!.name).toBe('master');
-    expect(plan.buses.find((b) => b.name === 'ui')).toEqual({ name: 'ui', to: 'master', levelDb: -4 });
+    expect(plan.buses.find((b) => b.name === 'ui')).toEqual({ name: 'ui', to: 'master', levelDb: -4, compressor: null });
+  });
+  it('plans a compressor on one bus with its defaults, and rejects a ratio below 1', () => {
+    const m = { kind: 'mixer' as const, buses: { master: {}, sfx: { to: 'master', compressor: { threshold: -9, ratio: 8 } }, ui: { to: 'master', compressor: { threshold: -20, ratio: 3, attack: 0.01, release: 0.3 } } } };
+    expect(validateAgainst(mixerSchema, m)).toEqual([]);
+    const plan = planMixer(m);
+    expect(plan.buses.find((b) => b.name === 'sfx')!.compressor).toEqual({ threshold: -9, ratio: 8, attack: 0.003, release: 0.12 });
+    expect(plan.buses.find((b) => b.name === 'ui')!.compressor).toEqual({ threshold: -20, ratio: 3, attack: 0.01, release: 0.3 });
+    expect(plan.buses.find((b) => b.name === 'master')!.compressor).toBeNull();
+    expect(validateAgainst(mixerSchema, { ...m, buses: { sfx: { compressor: { threshold: -9, ratio: 0.5 } } } }).length).toBeGreaterThan(0);
   });
   it('orders nested buses and reports a loop and an unknown target', () => {
     const plan = planMixer({ kind: 'mixer', buses: { a: { to: 'b' }, b: { to: 'a' }, c: { to: 'nowhere' }, d: { to: 'e', level: -3 }, e: {} } }, 'mixer/main');

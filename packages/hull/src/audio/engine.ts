@@ -120,14 +120,20 @@ export function mountAudio(game: Game, opts: MountOptions = {}): AudioView {
   const busTo = new Map<string, string | null>();
   const baseDb = new Map<string, number>();
   const lowpasses = new Map<string, BiquadFilterNode>();
+  const busComps = new Map<string, DynamicsCompressorNode>();
   /** Connect a bus to what it feeds, through its low-pass if it has one. */
   const wire = (name: string): void => {
     const node = buses.get(name)!;
     const to = busTo.get(name) ?? null;
     const target: AudioNode = to ? buses.get(to)! : compressor;
     node.disconnect();
+    // bus gain -> [low-pass] -> [bus compressor] -> the bus it feeds
+    const bc = busComps.get(name);
+    bc?.disconnect();
+    const out: AudioNode = bc ?? target;
+    if (bc) bc.connect(target);
     const lp = lowpasses.get(name);
-    if (lp) { lp.disconnect(); node.connect(lp); lp.connect(target); } else node.connect(target);
+    if (lp) { lp.disconnect(); node.connect(lp); lp.connect(out); } else node.connect(out);
   };
   let disposed = false;
 
@@ -160,6 +166,15 @@ export function mountAudio(game: Game, opts: MountOptions = {}): AudioView {
       node.gain.setTargetAtTime(dbToLinear(b.levelDb), ctx.currentTime, 0.02);
       baseDb.set(b.name, b.levelDb);
       busTo.set(b.name, b.to);
+      if (b.compressor) {
+        let bc = busComps.get(b.name);
+        if (!bc) { bc = ctx.createDynamicsCompressor(); busComps.set(b.name, bc); }
+        bc.threshold.value = b.compressor.threshold;
+        bc.ratio.value = b.compressor.ratio;
+        bc.attack.value = b.compressor.attack;
+        bc.release.value = b.compressor.release;
+        bc.knee.value = 6;
+      } else if (busComps.has(b.name)) { busComps.get(b.name)!.disconnect(); busComps.delete(b.name); }
     }
     for (const b of plan.buses) wire(b.name);
     // A bus that left the file: keep its node (voices may still be playing into it) but send it to master.

@@ -1,21 +1,23 @@
 {
  "kind": "vfx",
- "note": "The red flash of an attack that cannot be blocked: a pulse of red light around the body.",
+ "note": "The red flash of an attack that cannot be blocked: soft red blooms around the body, bright enough to read against the dusk sky (alpha blended; additive vanished on the pale ground).",
  "emit": {
   "count": [
-   22,
-   22
+   10,
+   10
   ],
-  "shape": {"sphere": 0.5}
+  "shape": {
+   "sphere": 0.45
+  }
  },
  "particle": {
   "life": [
-   0.3,
-   0.45
+   0.35,
+   0.5
   ],
   "speed": [
-   0.2,
-   1.2
+   0,
+   0.5
   ],
   "direction": {
    "outward": true
@@ -25,41 +27,45 @@
   "size": [
    [
     0,
-    0.5
+    1.1
    ],
    [
     0.5,
-    0.7
+    1.6
    ],
    [
     1,
-    0
+    2.2
    ]
   ],
   "color": [
    [
     0,
-    "#ff2a1a"
+    "#ff1408"
    ],
    [
     1,
-    "#7a0a05"
+    "#d40a04"
    ]
   ],
   "alpha": [
    [
     0,
-    0.9
+    0
+   ],
+   [
+    0.12,
+    0.85
    ],
    [
     1,
     0
    ]
   ],
-  "glow": 3.5,
+  "glow": 2.6,
   "stretch": 0,
-  "sprite": "spark",
-  "blend": "additive"
+  "sprite": "soft",
+  "blend": "alpha"
  },
  "budget": {
   "max": 200
