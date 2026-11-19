@@ -10,7 +10,7 @@ import { throttle } from '../lib/math.ts';
 import { Icon } from '../ui/Icon.tsx';
 import { createStage, loadEngine, syncConfig, type Engine, type Stage } from './engine.ts';
 import { GraphView, type GraphDef, type Live } from './GraphView.tsx';
-import { buildCharacterScene, buildYard, type CharacterScene, type YardScene } from './scenes.ts';
+import { buildCharacterScene, buildFxScene, buildYard, type CharacterScene, type FxScene, type YardScene } from './scenes.ts';
 import './benches.css';
 
 export type BenchKind = 'character' | 'vfx' | 'look';
@@ -336,12 +336,21 @@ function useYard(eng: Engine, items: LibraryItem[], lookId: string | null): { ho
   return r;
 }
 
-function VfxBench({ eng, items, selected, onSelect }: Omit<Props, 'kind' | 'rpc'> & { eng: Engine }): JSX.Element {
+function VfxBench({ eng, items, selected }: Omit<Props, 'kind' | 'rpc' | 'onSelect'> & { eng: Engine }): JSX.Element {
   const ids = useMemo(() => items.filter((i) => i.kind === 'vfx').map((i) => i.id), [items]);
-  const id = ids.includes(selected ?? '') ? selected : (ids[0] ?? null);
-  useEffect(() => { if (id && id !== selected) onSelect(id); }, [id, selected, onSelect]);
+  // The bench shows the effect selected in the Library, and keeps the last one while the selection is something else.
+  const lastRef = useRef<string | null>(null);
+  if (selected && ids.includes(selected)) lastRef.current = selected;
+  else if (!lastRef.current || !ids.includes(lastRef.current)) lastRef.current = ids[0] ?? null;
+  const id = lastRef.current;
   const lookId = useMemo(() => (eng.hull.config.has('look/dusk') ? 'look/dusk' : eng.hull.config.ids('look')[0] ? `look/${eng.hull.config.ids('look')[0]}` : null), [eng]);
-  const { host, stage, error } = useYard(eng, items, lookId);
+  const { host, stage, error } = useStage<FxScene>(eng, (e, g) => buildFxScene(e, g), { look: lookId ?? undefined, vfx: true });
+  useEffect(() => { if (stage && lookId) stage.view.setLook(lookId); }, [stage, lookId]);
+  useEffect(() => { stage?.scene.setEffect(id); }, [stage, id]);
+  const [floor, setFloor] = useState(true);
+  useEffect(() => { stage?.scene.setOnFloor(floor); }, [stage, floor]);
+  const [trailShown, setTrailShown] = useState(false);
+  useEffect(() => { stage?.scene.setMoverShown(trailShown); }, [stage, trailShown]);
 
   const [loop, setLoop] = useState(false);
   const [every, setEvery] = useState(1.5);
@@ -385,6 +394,7 @@ function VfxBench({ eng, items, selected, onSelect }: Omit<Props, 'kind' | 'rpc'
     return () => clearInterval(timer);
   }, [stage, id, vfx, rebase]);
 
+  useEffect(() => { setTrailShown(trail); }, [trail]);
   const trailRef = useRef<{ stop(): void } | null>(null);
   useEffect(() => {
     if (!stage || !id || !trail) return;
@@ -395,7 +405,7 @@ function VfxBench({ eng, items, selected, onSelect }: Omit<Props, 'kind' | 'rpc'
   if (ids.length === 0) return <Empty title="No effects in this project yet" text="Effects live in config/vfx. Ask the AI for one, or add a file, and it shows up in the Library." />;
   return (
     <div className="bench bb">
-      <div className="bb-row"><Picker label="Effect" ids={ids} id={id} onSelect={onSelect} /></div>
+      <div className="bb-dim" style={{ fontSize: 12 }}>Showing <b className="mono">{id}</b>. Pick another effect in the Library to see it here.</div>
       <div className="bb-view" ref={host}>
         {!stage && !error && <div className="bb-load">Starting the engine...</div>}
         {error && <div className="note-err" role="alert" style={{ margin: 12 }}>{error}</div>}
@@ -410,6 +420,10 @@ function VfxBench({ eng, items, selected, onSelect }: Omit<Props, 'kind' | 'rpc'
           <input type="range" min={0.3} max={4} step={0.1} value={every} onChange={(e) => setEvery(Number(e.target.value))} aria-label="Seconds between bursts" />
           <b className="mono">{every.toFixed(1)} s</b>
         </label>
+        <div className="seg" role="group" aria-label="Where it goes off">
+          <button className={floor ? 'on' : ''} onClick={() => setFloor(true)} title="On the floor, like an impact">Floor</button>
+          <button className={!floor ? 'on' : ''} onClick={() => setFloor(false)} title="In the air">Air</button>
+        </div>
         <button className={`chip${trail ? ' on' : ''}`} aria-pressed={trail} onClick={() => setTrail((v) => !v)} title="Stream the effect from a node that circles">Trail on a mover</button>
         <button className="btn ghost" disabled={!stage} onClick={() => { vfx.clear(); rebase(); }}><Icon name="reset" />Clear</button>
       </div>
@@ -460,7 +474,7 @@ export function BenchView({ kind, rpc, items, selected, onSelect }: Props): JSX.
   return (
     <>
       {kind === 'character' && <CharacterBench rpc={rpc} eng={eng} items={items} selected={selected} onSelect={onSelect} />}
-      {kind === 'vfx' && <VfxBench eng={eng} items={items} selected={selected} onSelect={onSelect} />}
+      {kind === 'vfx' && <VfxBench eng={eng} items={items} selected={selected} />}
       {kind === 'look' && <LookBench eng={eng} items={items} selected={selected} onSelect={onSelect} />}
       {problems.length > 0 && <div className="bb-probs" title={problems.join('\n')}>{problems.length} config problem{problems.length === 1 ? '' : 's'} on load</div>}
     </>

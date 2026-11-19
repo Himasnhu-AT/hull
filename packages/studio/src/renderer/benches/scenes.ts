@@ -169,3 +169,120 @@ export function buildYard(eng: Engine, game: Game, characterId: string | null): 
   cam.add(Camera, { fov: 48, far: 400 });
   return { at: { x: 0, y: 0.4, z: -2 }, mover };
 }
+
+export interface FxScene {
+  /** Where effects go off. The bench moves it between the floor and the air. */
+  at: { x: number; y: number; z: number };
+  /** A node that circles, for trails to follow. */
+  mover: Node;
+  /** Which effect the camera frames (a config id such as vfx/chip-dirt), null for none. */
+  setEffect(id: string | null): void;
+  /** true: the effect goes off on the floor, as an impact does; false: in the air at a third of its reach. */
+  setOnFloor(on: boolean): void;
+  /** Shows the node that circles, for a trail to follow. */
+  setMoverShown(on: boolean): void;
+  /** Metres the effect reaches, as the camera last framed it. */
+  reach(): number;
+}
+
+/** What the camera needs to know about an effect: how far its particles travel, in metres. A rough bound, not a simulation. */
+export function effectReach(eng: Engine, id: string | null): number {
+  if (!id) return 3;
+  try {
+    const v = eng.hull.config.lookup('vfx', id.replace(/^vfx\//, '')) as { emit?: { shape?: Record<string, unknown> }; particle: { life: [number, number]; speed: [number, number]; gravity?: number; drag?: number; size?: [number, number][]; sizeScale?: [number, number] } };
+    const p = v.particle;
+    const life = p.life[1], speed = p.speed[1];
+    const drag = p.drag ?? 0;
+    // With drag the particle stops after speed/drag metres; without, it runs for the whole life. Gravity bends it down, so it never goes far above the bound.
+    let run = drag > 0.01 ? Math.min(speed * life, speed / drag) : speed * life;
+    // A heavy particle falls back after v^2/g metres, so grit that is thrown at 5 m/s lands within two metres.
+    const g = p.gravity ?? 0;
+    if (g < -1) run = Math.min(run, (speed * speed) / -g * 1.2);
+    const sh = v.emit?.shape ?? {};
+    const spread = Math.max(0, ...Object.values(sh).flatMap((x) => (typeof x === 'number' ? [x] : Array.isArray(x) ? x.filter((n): n is number => typeof n === 'number') : [])));
+    const size = Math.max(0, ...(p.size ?? []).map((k) => k[1])) * (p.sizeScale?.[1] ?? 1);
+    // Small particles need the camera close: a 7 cm chip is a speck beyond four metres, whatever the burst's reach.
+    return Math.min(40, Math.max(1.2, Math.min(run * 0.8 + spread + size * 0.5, size * 14)));
+  } catch { return 3; }
+}
+
+/**
+ * A stage for effects of any size: a floor with a one-metre grid and a person-high post for scale, and a camera that
+ * stands back far enough to see the effect's reach, so a speck of grit and a plume of steam both fill the picture.
+ */
+export function buildFxScene(eng: Engine, game: Game): FxScene {
+  const { Behaviour, config } = eng.hull;
+  const { Camera, Light, Mesh } = eng.render;
+  const w = game.world;
+  let reach = 3;
+  let effect: string | null = null;
+  const at = { x: 0, y: 0.02, z: 0 };
+  let onFloor = true;
+  let showMover = false;
+
+  class Orbit extends Behaviour {
+    static override state = ['angle'];
+    angle = 0;
+    override fixedUpdate(dt: number): void {
+      this.angle += dt * 0.9;
+      // Out of sight until a trail follows it.
+      if (!showMover) { this.node.position.set(0, -50, 0); return; }
+      const r = Math.max(1.5, reach * 0.8);
+      this.node.position.set(Math.cos(this.angle) * r, 0.5 + reach * 0.15 + Math.sin(this.angle * 2) * reach * 0.05, Math.sin(this.angle) * r * 0.5);
+    }
+  }
+  // Eased, and read every frame, so an edit to the effect's speed or life reframes the shot as it lands.
+  class Frame extends Behaviour {
+    private dist = 0;
+    override update(dt: number): void {
+      reach = effectReach(eng, effect);
+      at.y = onFloor ? 0.02 : Math.max(1, reach * 0.35);
+      const want = reach * 1.8 + 1;
+      this.dist = this.dist === 0 ? want : this.dist + (want - this.dist) * Math.min(1, dt * 4);
+      const look = Math.max(0.3, reach * 0.3) + (onFloor ? 0 : at.y * 0.6);
+      const h = Math.max(0.8, reach * 0.55);
+      this.node.position.set(0, h, this.dist);
+      this.node.rotation.set(-Math.atan2(h - look, this.dist), 0, 0);
+    }
+  }
+
+  const floor = w.spawn('floor');
+  floor.scale.set(400, 1, 400);
+  floor.add(Mesh, { shape: 'plane', color: '#555b66', castShadow: false });
+  // Grid every metre out to 24 m: thin boxes, laid just above the floor.
+  for (let i = -24; i <= 24; i++) {
+    const heavy = i % 5 === 0;
+    const a = w.spawn('grid');
+    a.scale.set(48, 0.004, heavy ? 0.05 : 0.02);
+    a.position.set(0, 0.003, i);
+    a.add(Mesh, { shape: 'box', color: heavy ? '#8a93a3' : '#6b7280', castShadow: false });
+    const b = w.spawn('grid');
+    b.scale.set(heavy ? 0.05 : 0.02, 0.004, 48);
+    b.position.set(i, 0.003, 0);
+    b.add(Mesh, { shape: 'box', color: heavy ? '#8a93a3' : '#6b7280', castShadow: false });
+  }
+  const post = w.spawn('post');
+  post.scale.set(0.12, 1.8, 0.12);
+  post.position.set(-1.6, 0.9, -0.6);
+  post.add(Mesh, { shape: 'box', color: '#d9a441' });
+  const sun = w.spawn('sun');
+  sun.rotation.set(-0.9, 0.5, 0);
+  sun.position.set(0, 30, 0);
+  sun.add(Light, { type: 'sun', intensity: 2.2, castShadow: true, shadowSize: 30 });
+  sun.add(Light, { type: 'ambient', intensity: 0.6, color: '#b4c2dc' });
+  const mover = w.spawn('mover');
+  mover.scale.set(0.35, 0.2, 0.55);
+  mover.add(Mesh, { shape: 'box', color: '#9fb4d6' });
+  mover.add(Orbit);
+  const cam = w.spawn('camera');
+  cam.add(Camera, { fov: 45, far: 600 });
+  cam.add(Frame);
+  void config;
+  return {
+    at, mover,
+    setEffect(id) { effect = id; },
+    setOnFloor(on) { onFloor = on; },
+    setMoverShown(on) { showMover = on; },
+    reach: () => reach,
+  };
+}

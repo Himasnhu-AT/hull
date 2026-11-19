@@ -330,3 +330,16 @@ describe('vfx on a real project (AOTT)', () => {
     g.dispose();
   });
 });
+
+describe('render runtime', () => {
+  it('a backend that shuts down late does not clear the one that replaced it (React mounts, unmounts, mounts a bench)', async () => {
+    const { renderRuntime, setRenderRuntime } = await import('../render/runtime.ts');
+    const first = {}, second = {};
+    setRenderRuntime({ backend: 'webgl2', compute: false, renderer: first });
+    setRenderRuntime({ backend: 'webgl2', compute: false, renderer: second });
+    setRenderRuntime(null, first);
+    expect(renderRuntime()?.renderer).toBe(second);
+    setRenderRuntime(null, second);
+    expect(renderRuntime()).toBeNull();
+  });
+});
