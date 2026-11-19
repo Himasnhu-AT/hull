@@ -4,6 +4,9 @@
 
 export interface TemplateInfo { name: string; title: string; description: string }
 
+/** A community game: what the launcher shows, and whether this person already has their own copy. */
+export interface CommunityGame { id: string; title: string; note: string; cover: string | null; copy: { root: string; exists: boolean } }
+
 export interface RecentProject { root: string; title: string; openedAt: string }
 
 /** A project the main process has started a server for. The renderer talks only to `url` (protocol) and shows `gameUrl`. */
@@ -22,6 +25,9 @@ export interface HullApp {
   createProject(opts: { template: string; title: string; parentDir: string }): Promise<OpenedProject>;
   openProject(root: string): Promise<OpenedProject>;
   closeProject(): Promise<void>;
+  /** The community games. Opening one copies it into the person's projects folder the first time; `reset` replaces that copy with the original. */
+  listCommunity(): Promise<CommunityGame[]>;
+  openCommunity(id: string, reset?: boolean): Promise<OpenedProject>;
   recents(): Promise<RecentProject[]>;
   forgetRecent(root: string): Promise<void>;
   /** Shows a file or folder in Finder / Explorer. */

@@ -8,6 +8,8 @@ contextBridge.exposeInMainWorld('hullApp', {
   platform: process.platform,
   listTemplates: call('listTemplates'),
   pickFolder: call('pickFolder'),
+  listCommunity: call('listCommunity'),
+  openCommunity: call('openCommunity'),
   createProject: call('createProject'),
   openProject: call('openProject'),
   closeProject: call('closeProject'),
