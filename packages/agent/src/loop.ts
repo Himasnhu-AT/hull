@@ -2,8 +2,11 @@
 //  - writes happen only through Hull's validated edit tools; the destructive ones ask the person first;
 //  - after edits the loop runs `check` itself, and the run cannot end while it fails, up to a bounded number of fixes;
 //  - an edited run is recorded in the history as a checkpoint, under the author the tools were opened with.
+import { changeCard } from './changeCard.ts';
+import { configKinds, historyHead } from './changes.ts';
 import { compactIfNeeded } from './compaction.ts';
 import type { HullTools } from './hullTools.ts';
+import { checkUiBlock, OWN_WORDS, PLAN_TOOL, toolsFor, UI_APPROVE, UI_ASK, UI_SHOW, type AgentMode, type UiBlock } from './modes.ts';
 import type { Msg, Part, Provider, ToolSpec, Usage } from './types.ts';
 
 export interface PlanItem { content: string; status: 'pending' | 'in_progress' | 'completed'; priority: 'high' | 'medium' | 'low' }
@@ -19,6 +22,10 @@ export interface RunIo {
   permission(c: { id: string; title: string; kind: string; input: unknown; content: ToolContent[] }): Promise<Decision>;
   usage(u: { used: number; size: number; total: Usage }): void;
   compaction(status: 'in_progress' | 'completed' | 'failed', summary?: string, error?: string): void;
+  /** A card that does not wait (brief, stages, pieces, explain, change); sent again with the same id it replaces itself. */
+  ui(block: UiBlock): void;
+  /** A card that waits (ask, approve). Resolves to the text of the chosen option, or undefined when the person answers in their own words. */
+  ask(block: Extract<UiBlock, { kind: 'ask' | 'approve' }>): Promise<string | undefined>;
 }
 
 export type PermissionMode = 'risky' | 'writes' | 'none';
@@ -36,15 +43,24 @@ export interface SessionState {
   maxFixRounds: number;
   maxSteps: number;
   runs: number;
+  /** What kind of run this is: it picks the tool list. Default 'fix'. */
+  mode: AgentMode;
+  /** Counts the cards that wait, for their ids. */
+  uiCount: number;
 }
 
-export interface RunResult { stop: 'end_turn' | 'cancelled' | 'max_turn_requests'; checkFailed: boolean; wrote: boolean; usage: Usage; steps: number }
-
-const PLAN_TOOL: ToolSpec = {
-  name: 'update_plan',
-  description: 'Show the person your plan as a checklist. Send the whole list each time; mark items in_progress and completed as you go.',
-  schema: { type: 'object', properties: { entries: { type: 'array', items: { type: 'object', properties: { content: { type: 'string' }, status: { enum: ['pending', 'in_progress', 'completed'] }, priority: { enum: ['high', 'medium', 'low'] } }, required: ['content', 'status'] } } }, required: ['entries'] },
-};
+export interface RunResult {
+  stop: 'end_turn' | 'cancelled' | 'max_turn_requests';
+  checkFailed: boolean;
+  /** The game changed (config, tunables, code, assets). The brief, explain documents and the flow state do not count. */
+  wrote: boolean;
+  usage: Usage;
+  steps: number;
+  /** The person chose to answer in their own words: the turn ended early and their next message is the answer. */
+  ownWords: boolean;
+  /** What the model said last. */
+  text: string;
+}
 
 const CHECK_PROBLEM = (text: string): string => `The check failed. Fix these before you finish (the run cannot end while check fails):\n${text}`;
 
@@ -87,8 +103,12 @@ async function diffOf(tools: HullTools, name: string, input: unknown, before: Sn
 
 export async function run(s: SessionState, prompt: Msg['parts'], io: RunIo, signal: AbortSignal): Promise<RunResult> {
   const total: Usage = { input: 0, output: 0 };
-  const result: RunResult = { stop: 'end_turn', checkFailed: false, wrote: false, usage: total, steps: 0 };
-  const specs: ToolSpec[] = [...s.tools.specs, PLAN_TOOL];
+  const result: RunResult = { stop: 'end_turn', checkFailed: false, wrote: false, usage: total, steps: 0, ownWords: false, text: '' };
+  const specs: ToolSpec[] = toolsFor(s.mode, s.tools.specs);
+  const allowed = new Set(specs.map((t) => t.name));
+  const kinds = s.mode === 'fix' ? await configKinds(s.tools).catch(() => new Set<string>()) : new Set<string>();
+  const base = s.mode === 'fix' ? await historyHead(s.tools).catch(() => undefined) : undefined;
+  let spoke = false;
   let dirty = false;
   let fixes = 0;
   let ids = 0;
@@ -119,8 +139,13 @@ export async function run(s: SessionState, prompt: Msg['parts'], io: RunIo, sign
     }
 
     let c;
+    let streamed = false;
     try {
-      c = await s.provider.complete({ system: s.system, messages: s.history, tools: specs, signal });
+      // Text goes out as it arrives; a model call after the first starts a new paragraph.
+      c = await s.provider.complete({
+        system: s.system, messages: s.history, tools: specs, signal,
+        onDelta: (t) => { io.text(!streamed && spoke ? '\n\n' + t : t); streamed = true; spoke = true; },
+      });
     } catch (e) {
       if (signal.aborted) return finish('cancelled');
       throw e;
@@ -129,7 +154,10 @@ export async function run(s: SessionState, prompt: Msg['parts'], io: RunIo, sign
     total.input += c.usage.input;
     total.output += c.usage.output;
     io.usage({ used: c.usage.input + c.usage.output, size: s.provider.contextWindow, total });
-    if (c.text) io.text(c.text);
+    if (c.text) {
+      if (!streamed) { io.text(spoke ? '\n\n' + c.text : c.text); spoke = true; }
+      result.text = c.text;
+    }
 
     const parts: Part[] = [];
     if (c.text) parts.push({ type: 'text', text: c.text });
@@ -157,16 +185,53 @@ export async function run(s: SessionState, prompt: Msg['parts'], io: RunIo, sign
     }
     s.history.push({ role: 'user', parts: results });
     if (signal.aborted) return finish('cancelled');
+    // The person would rather type: stop here and let their next message be the answer.
+    if (result.ownWords) break;
   }
 
   // Recorded: a named checkpoint marks where this run ended; the changes themselves carry the author already.
   if (result.wrote) {
     try { await s.tools.call('history.checkpoint', { name: `hull-agent-run-${s.runs}` }); } catch { /* the history keeps the changes either way */ }
+    // A fix ends with a card saying what changed, with the id of the newest change so the person can keep it or put it back.
+    if (s.mode === 'fix') {
+      try { const card = await changeCard(s.tools, base, kinds, result.text, s.runs); if (card) io.ui(card); } catch { /* the card is a courtesy */ }
+    }
   }
   return result;
 
   async function execute(call: { id: string; name: string; input: unknown }): Promise<Part> {
     const fail = (text: string): Part => ({ type: 'tool_result', id: call.id, text, isError: true });
+    if (!allowed.has(call.name)) return fail(`${call.name} is not available in ${s.mode} mode (have: ${[...allowed].join(', ')})`);
+    if (call.name === UI_SHOW) {
+      const c = checkUiBlock(asRecord(call.input)['block']);
+      if (!c.ok) return fail(`ui_show: ${c.reason}`);
+      io.ui(c.block);
+      return { type: 'tool_result', id: call.id, text: 'Shown.' };
+    }
+    if (call.name === UI_ASK || call.name === UI_APPROVE) {
+      const i = asRecord(call.input);
+      const question = String(i['question'] ?? '').trim();
+      if (!question) return fail(`${call.name}: question is required`);
+      const id = 'ask-' + ++s.uiCount;
+      let block: Extract<UiBlock, { kind: 'ask' | 'approve' }>;
+      if (call.name === UI_ASK) {
+        const options = (Array.isArray(i['options']) ? i['options'] : []).map(String).filter(Boolean);
+        if (options.length < 2) return fail('ui_ask: give at least two options');
+        block = { id, kind: 'ask', question, options };
+      } else {
+        const yes = String(i['yes'] ?? '').trim();
+        const no = String(i['no'] ?? '').trim();
+        if (!yes || !no) return fail('ui_approve: yes and no are required');
+        block = { id, kind: 'approve', question, yes, no, ...(i['detail'] ? { detail: String(i['detail']) } : {}) };
+      }
+      const answer = await io.ask(block);
+      if (answer === undefined) {
+        if (!signal.aborted) result.ownWords = true;
+        return { type: 'tool_result', id: call.id, text: OWN_WORDS };
+      }
+      io.ui(block.kind === 'ask' ? { ...block, answer } : { ...block, answer: answer === block.yes ? 'yes' : 'no' });
+      return { type: 'tool_result', id: call.id, text: answer };
+    }
     if (call.name === PLAN_TOOL.name) {
       const raw = asRecord(call.input)['entries'];
       const items: PlanItem[] = (Array.isArray(raw) ? raw : []).map((e) => { const r = asRecord(e); return { content: String(r['content'] ?? ''), status: (['pending', 'in_progress', 'completed'].includes(String(r['status'])) ? r['status'] : 'pending') as PlanItem['status'], priority: (['high', 'medium', 'low'].includes(String(r['priority'])) ? r['priority'] : 'medium') as PlanItem['priority'] }; }).filter((e) => e.content);
@@ -181,6 +246,7 @@ export async function run(s: SessionState, prompt: Msg['parts'], io: RunIo, sign
     io.toolStart({ id: call.id, title, kind, input: call.input });
 
     const write = s.tools.isWrite(name);
+    const game = s.tools.changesGame(name);
     const ask = write && !s.allowed.has(name) && (s.permissions === 'writes' || (s.permissions === 'risky' && s.tools.isRisky(name)));
     if (ask) {
       const d = await io.permission({ id: call.id, title, kind, input: call.input, content: [{ type: 'text', text: JSON.stringify(call.input, null, 2) }] });
@@ -201,7 +267,7 @@ export async function run(s: SessionState, prompt: Msg['parts'], io: RunIo, sign
     }
     // A code write with type problems is kept (ok is false), so the check gate must still run.
     const kept = r.ok || asRecord(r.value)['written'] === true;
-    if (write && kept) { result.wrote = true; dirty = true; }
+    if (game && kept) { result.wrote = true; dirty = true; }
     if (name === 'check' && r.ok) dirty = false;
     const content: ToolContent[] = write && kept ? await diffOf(s.tools, name, call.input, before) : [];
     content.push({ type: 'text', text: r.text.length > 4000 ? `${r.text.slice(0, 4000)}\n... (${r.text.length} characters)` : r.text });

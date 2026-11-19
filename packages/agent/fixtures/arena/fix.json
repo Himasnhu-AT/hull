@@ -1,0 +1,25 @@
+[
+ {
+  "text": "Let me look at the jump.",
+  "tools": [
+   {
+    "name": "tunables.list"
+   }
+  ]
+ },
+ {
+  "tools": [
+   {
+    "name": "tunables.set",
+    "input": {
+     "block": "player",
+     "key": "jumpHeight",
+     "value": 2
+    }
+   }
+  ]
+ },
+ {
+  "text": "I raised the jump height from 1.6 m to 2 m so the jump feels higher."
+ }
+]

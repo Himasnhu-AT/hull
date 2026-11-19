@@ -1,6 +1,8 @@
 // Two providers: Anthropic's Messages API with an API key, and any OpenAI-compatible chat endpoint (base URL + key; this
 // is how Marl's gateway ai.marlstudio.com plugs in). Both are plain fetch calls: no SDK, so there is nothing to pin or
-// to keep in step with a vendor. Keys are read from the environment by name and never logged or put in an error.
+// to keep in step with a vendor. Both ask for a stream (server-sent events, parsed in stream.ts) and fall back to a plain
+// JSON answer when a gateway ignores that. Keys are read from the environment by name and never logged or put in an error.
+import { AnthropicStream, OpenAIStream, readSse } from './stream.ts';
 import type { Completion, CompleteRequest, Msg, Provider, ToolSpec } from './types.ts';
 
 export const DEFAULT_ANTHROPIC_MODEL = 'claude-opus-5-5';
@@ -33,17 +35,29 @@ export function createProvider(c: ProviderConfig): Provider {
   return c.kind === 'anthropic' ? anthropicProvider(c) : openaiProvider(c);
 }
 
-async function post(f: typeof fetch, url: string, headers: Record<string, string>, body: unknown, signal: AbortSignal, secret: string): Promise<any> {
+/** Sends the request. A failure becomes an error with the key taken out; the caller reads the body of a good answer. */
+async function send(f: typeof fetch, url: string, headers: Record<string, string>, body: unknown, signal: AbortSignal, secret: string): Promise<Response> {
   for (let attempt = 0; ; attempt++) {
     const res = await f(url, { method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body: JSON.stringify(body), signal });
     if (res.status === 429 && attempt === 0) { await new Promise((r) => setTimeout(r, 2000)); continue; }
-    const text = await res.text();
     if (!res.ok) {
+      const text = await res.text();
       const clean = secret ? text.split(secret).join('***') : text;
       throw new Error(`model request failed: HTTP ${res.status} ${clean.slice(0, 500)}`);
     }
-    return JSON.parse(text);
+    return res;
   }
+}
+
+const isStream = (res: Response): boolean => (res.headers.get('content-type') ?? '').includes('text/event-stream');
+
+/** Streams the answer into `parser`, or reads it whole when a gateway ignored stream:true and answered with plain JSON. */
+async function read<P extends { push(e: import('./stream.ts').SseEvent): void; result(): Completion }>(res: Response, parser: P, signal: AbortSignal, whole: (json: any) => Completion): Promise<Completion> {
+  if (isStream(res) && res.body) {
+    await readSse(res.body, (e) => parser.push(e), signal);
+    return parser.result();
+  }
+  return whole(JSON.parse(await res.text()));
 }
 
 const anthropicMsg = (m: Msg): unknown => ({
@@ -65,19 +79,30 @@ export function anthropicProvider(c: ProviderConfig): Provider {
   return {
     name: 'anthropic', model, contextWindow: c.contextWindow ?? 200_000,
     async complete(req: CompleteRequest): Promise<Completion> {
+      // Prompt caching is a prefix match over tools, then system, then messages. The tool list and the system prompt are the same on
+      // every call of a run, so a breakpoint on the last tool and one on the system prompt let each step read them back at a tenth
+      // of the price; a third on the last message block lets the growing conversation be read back too (3 of the 4 allowed).
+      const cache = { type: 'ephemeral' };
+      const tools = req.tools.map((t: ToolSpec, i: number) => ({ name: t.name, description: t.description, input_schema: t.schema, ...(i === req.tools.length - 1 ? { cache_control: cache } : {}) }));
+      const messages = req.messages.map(anthropicMsg) as { content: Record<string, unknown>[] }[];
+      const lastBlock = messages.at(-1)?.content.at(-1);
+      if (lastBlock) lastBlock['cache_control'] = cache;
       const body = {
-        model, max_tokens: c.maxTokens ?? 8192, system: req.system, messages: req.messages.map(anthropicMsg),
-        ...(req.tools.length ? { tools: req.tools.map((t: ToolSpec) => ({ name: t.name, description: t.description, input_schema: t.schema })) } : {}),
+        model, max_tokens: c.maxTokens ?? 8192, stream: true, system: [{ type: 'text', text: req.system, cache_control: cache }], messages,
+        ...(tools.length ? { tools } : {}),
       };
-      const r = await post(f, `${base}/v1/messages`, { 'x-api-key': c.apiKey, 'anthropic-version': '2023-06-01' }, body, req.signal, c.apiKey);
-      const blocks: any[] = r.content ?? [];
-      const toolCalls = blocks.filter((b) => b.type === 'tool_use').map((b) => ({ id: String(b.id), name: String(b.name), input: b.input ?? {} }));
-      return {
-        text: blocks.filter((b) => b.type === 'text').map((b) => b.text).join(''),
-        toolCalls,
-        stop: toolCalls.length ? 'tool_use' : r.stop_reason === 'max_tokens' ? 'max_tokens' : 'end',
-        usage: { input: (r.usage?.input_tokens ?? 0) + (r.usage?.cache_read_input_tokens ?? 0) + (r.usage?.cache_creation_input_tokens ?? 0), output: r.usage?.output_tokens ?? 0 },
-      };
+      const res = await send(f, `${base}/v1/messages`, { 'x-api-key': c.apiKey, 'anthropic-version': '2023-06-01' }, body, req.signal, c.apiKey);
+      return read(res, new AnthropicStream(req.onDelta, c.apiKey), req.signal, (r) => {
+        const blocks: any[] = r.content ?? [];
+        const toolCalls = blocks.filter((b) => b.type === 'tool_use').map((b) => ({ id: String(b.id), name: String(b.name), input: b.input ?? {} }));
+        const text = blocks.filter((b) => b.type === 'text').map((b) => b.text).join('');
+        if (text) req.onDelta?.(text);
+        return {
+          text, toolCalls,
+          stop: toolCalls.length ? 'tool_use' : r.stop_reason === 'max_tokens' ? 'max_tokens' : 'end',
+          usage: { input: (r.usage?.input_tokens ?? 0) + (r.usage?.cache_read_input_tokens ?? 0) + (r.usage?.cache_creation_input_tokens ?? 0), output: r.usage?.output_tokens ?? 0 },
+        };
+      });
     },
   };
 }
@@ -117,23 +142,26 @@ export function openaiProvider(c: ProviderConfig): Provider {
     name: host, model, contextWindow: c.contextWindow ?? 128_000,
     async complete(req: CompleteRequest): Promise<Completion> {
       const body = {
-        model, max_tokens: c.maxTokens ?? 8192, messages: openaiMessages(req.system, req.messages),
+        model, max_tokens: c.maxTokens ?? 8192, stream: true, stream_options: { include_usage: true }, messages: openaiMessages(req.system, req.messages),
         ...(req.tools.length ? { tools: req.tools.map((t: ToolSpec) => ({ type: 'function', function: { name: t.name, description: t.description, parameters: t.schema } })) } : {}),
       };
-      const r = await post(f, `${base}/chat/completions`, c.apiKey ? { authorization: `Bearer ${c.apiKey}` } : {}, body, req.signal, c.apiKey);
-      const choice = r.choices?.[0];
-      const msg = choice?.message ?? {};
-      const toolCalls = ((msg.tool_calls ?? []) as any[]).map((t) => {
-        let input: unknown = {};
-        try { input = JSON.parse(t.function?.arguments || '{}'); } catch { input = {}; }
-        return { id: String(t.id), name: String(t.function?.name), input };
+      const res = await send(f, `${base}/chat/completions`, c.apiKey ? { authorization: `Bearer ${c.apiKey}` } : {}, body, req.signal, c.apiKey);
+      return read(res, new OpenAIStream(req.onDelta, c.apiKey), req.signal, (r) => {
+        const choice = r.choices?.[0];
+        const msg = choice?.message ?? {};
+        const toolCalls = ((msg.tool_calls ?? []) as any[]).map((t) => {
+          let input: unknown = {};
+          try { input = JSON.parse(t.function?.arguments || '{}'); } catch { input = {}; }
+          return { id: String(t.id), name: String(t.function?.name), input };
+        });
+        const text = typeof msg.content === 'string' ? msg.content : '';
+        if (text) req.onDelta?.(text);
+        return {
+          text, toolCalls,
+          stop: toolCalls.length ? 'tool_use' : choice?.finish_reason === 'length' ? 'max_tokens' : 'end',
+          usage: { input: r.usage?.prompt_tokens ?? 0, output: r.usage?.completion_tokens ?? 0 },
+        };
       });
-      return {
-        text: typeof msg.content === 'string' ? msg.content : '',
-        toolCalls,
-        stop: toolCalls.length ? 'tool_use' : choice?.finish_reason === 'length' ? 'max_tokens' : 'end',
-        usage: { input: r.usage?.prompt_tokens ?? 0, output: r.usage?.completion_tokens ?? 0 },
-      };
     },
   };
 }
