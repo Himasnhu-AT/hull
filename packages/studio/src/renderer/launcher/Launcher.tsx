@@ -172,7 +172,7 @@ export function Launcher({ app, onOpen, startError, home, onNew }: { app: HullAp
                       <article key={g.id} className="game ccard">
                         <button className="cover" onClick={() => void openGame(g, false)} disabled={busy !== null} aria-label={`Play ${g.title}`}>{g.cover ? <img src={g.cover} alt="" draggable={false} /> : <Icon name="game" size={28} />}<span className="cplay" aria-hidden="true"><Icon name="play" size={16} /></span></button>
                         <div className="g-body">
-                          <div className="g-title"><b>{g.title}</b>{g.copy.exists && <span className="tagchip" title={g.copy.root}>Your copy</span>}</div>
+                          <div className="g-title"><b>{g.title}</b></div>
                           <p className="g-note">{g.note}</p>
                           {confirming === g.id ? (
                             <div className="g-confirm" role="alertdialog" aria-label={`Reset ${g.title}`}>
@@ -183,7 +183,7 @@ export function Launcher({ app, onOpen, startError, home, onNew }: { app: HullAp
                           ) : (
                             <div className="g-acts">
                               <button className="btn primary" onClick={() => void openGame(g, false)} disabled={busy !== null}>
-                                <Icon name="play" size={12} />{mine ? (working?.reset ? 'Resetting...' : g.copy.exists ? 'Opening...' : 'Copying...') : 'Play'}
+                                <Icon name={g.copy.exists ? 'back' : 'play'} size={12} style={g.copy.exists ? { transform: 'rotate(180deg)' } : undefined} />{mine ? (working?.reset ? 'Resetting...' : g.copy.exists ? 'Opening...' : 'Copying...') : g.copy.exists ? 'Visit your copy' : 'Play'}
                               </button>
                               {g.copy.exists && (
                                 <button className="btn ghost" onClick={() => setConfirming(g.id)} disabled={busy !== null} aria-label={`Reset ${g.title} to the original`} title="Reset to original"><Icon name="reset" size={14} />Reset to original</button>
