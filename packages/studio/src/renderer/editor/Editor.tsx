@@ -28,6 +28,9 @@ type View = 'game' | 'sound' | 'compare' | BenchKind; // w3-app-benches: charact
 
 interface Toast { text: string; error?: boolean; action?: { label: string; run(): void } }
 
+/** The page URL with the launch options applied (the project server keeps and cleans them). */
+const withLaunch = (url: string, query: string): string => (query ? url + (url.includes('?') ? '&' : '?') + query : url);
+
 const fmtBytes = (n: number): string => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.round(n / 1024)} kB`);
 
 export function Editor(props: { project: OpenedProject; platform: string; onClose(): void }): JSX.Element | null {
@@ -55,6 +58,12 @@ function EditorBody({ rpc, project, platform, onClose }: { rpc: RpcClient; proje
   const [build, setBuild] = useState<BuildState>('idle');
   const [toast, setToast] = useState<Toast | null>(null);
   const [gameKey, setGameKey] = useState(0);
+  // Page options the game opens with (start=camp&look=night). The project server keeps them per project; the frame applies them.
+  const [launch, setLaunch] = useState('');
+  useEffect(() => { let live = true; rpc.call('project.launch', {}).then((r) => { if (live) setLaunch(r.query); }, () => { /* an older server keeps none */ }); return () => { live = false; }; }, [rpc]);
+  const applyLaunch = useCallback((q: string) => {
+    rpc.call('project.launch', { query: q }).then((r) => { setLaunch(r.query); setGameKey((k) => k + 1); }, () => setToast({ text: 'Could not keep the launch options', error: true }));
+  }, [rpc]);
   const [ctl, setCtl] = useState({ paused: false, timeScale: 1 });
   const baselines = useRef(new Map<string, unknown>());
   const search = useRef<HTMLInputElement>(null);
@@ -186,6 +195,7 @@ function EditorBody({ rpc, project, platform, onClose }: { rpc: RpcClient; proje
         view={view} onView={(v) => setView(v as View)} compareCount={h.exps.filter((e) => e.status === 'active').length}
         note={view === 'game' ? (openInfo ? `Experiment ${openInfo.name}: edits go to it, not to main` : gameNote) : view === 'compare' ? 'Two lines running side by side' : view === 'sound' ? 'Rendered offline from the file' : 'Runs the real engine; edits show live'}
         branch={view === 'game' ? <ExpSwitch h={h} openExp={openInfo ? openInfo.name : null} onOpenExp={setOpenExp} /> : undefined}
+        launch={view === 'game' ? launch : undefined} onLaunch={applyLaunch}
         onReload={view === 'game' ? () => setGameKey((k) => k + 1) : undefined}
       />
       <AgentPanel project={project} open={agentsOpen} onClose={() => setAgentsOpen(false)} />
@@ -196,7 +206,7 @@ function EditorBody({ rpc, project, platform, onClose }: { rpc: RpcClient; proje
         <div className="stage">
           {view === 'game' && (
             <>
-              <iframe key={`${gameKey}${openInfo?.name ?? ''}`} title="Game" src={openInfo?.gameUrl ?? project.gameUrl} allow="autoplay; gamepad; fullscreen" sandbox="allow-scripts allow-same-origin allow-pointer-lock allow-forms" />
+              <iframe key={`${gameKey}${openInfo?.name ?? ''}`} title="Game" src={withLaunch(openInfo?.gameUrl ?? project.gameUrl, launch)} allow="autoplay; gamepad; fullscreen" sandbox="allow-scripts allow-same-origin allow-pointer-lock allow-forms" />
               {openInfo && <div className="hx-stagebadge glass"><Icon name="branch" size={13} />experiment {openInfo.name}</div>}
               {p.report && !openInfo && (
                 <div className="hud glass" aria-label="Game status">

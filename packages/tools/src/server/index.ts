@@ -1,6 +1,7 @@
 // The project server: one HTTP port that serves the game's dev page (Vite) and, on the same port, the JSON-RPC
 // WebSocket of dev/protocol.ts. The app's front end and every running game connect here; nothing outside this process
 // touches the project's files (CLAUDE.md: the Studio never touches the disk).
+import { cleanLaunchQuery } from './launch.ts';
 import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmdirSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import type { IncomingMessage } from 'node:http';
 import type { AddressInfo } from 'node:net';
@@ -651,6 +652,18 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
       let manifest: unknown;
       try { manifest = JSON.parse(m.text); } catch { /* shown as a problem */ }
       return { root, title: (manifest as { title?: string } | undefined)?.title ?? 'Untitled', gameUrl: urls.http, manifest };
+    },
+    'project.launch': (p): { query: string; url: string } => {
+      const file = join(root, '.hull', 'launch.json');
+      let query = '';
+      if (p.query !== undefined) {
+        query = cleanLaunchQuery(p.query);
+        mkdirSync(join(root, '.hull'), { recursive: true });
+        writeFileSync(file, JSON.stringify({ query }, null, 2) + '\n');
+      } else {
+        try { query = cleanLaunchQuery((JSON.parse(readFileSync(file, 'utf8')) as { query?: string }).query ?? ''); } catch { /* none kept yet */ }
+      }
+      return { query, url: query ? `${urls.http}?${query}` : urls.http };
     },
     'library.list': (): LibraryItem[] => {
       const items: LibraryItem[] = [];
