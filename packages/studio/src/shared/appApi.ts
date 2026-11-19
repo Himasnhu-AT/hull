@@ -25,6 +25,8 @@ export interface HullApp extends HullAppAgents {
   /** Asks where to put a new project, or which existing one to open. Null when cancelled. */
   pickFolder(purpose: 'open' | 'location'): Promise<string | null>;
   createProject(opts: { template: string; title: string; parentDir: string }): Promise<OpenedProject>;
+  /** The idea box: the main process picks the closest template, makes the project in the app's own projects folder (never asks for one) and opens it. */
+  createFromIdea(opts: { idea: string }): Promise<OpenedProject & { idea: string }>;
   openProject(root: string): Promise<OpenedProject>;
   closeProject(): Promise<void>;
   /** The community games. Opening one copies it into the person's projects folder the first time; `reset` replaces that copy with the original. */

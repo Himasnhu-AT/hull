@@ -21,6 +21,7 @@ export function webShim(): HullApp {
     listCommunity: () => call('listCommunity'),
     openCommunity: (id, reset) => call('openCommunity', { id, reset }),
     createProject: (o) => call('createProject', o),
+    createFromIdea: (o) => call('createFromIdea', o),
     openProject: (root) => call('openProject', root),
     closeProject: () => call('closeProject'),
     recents: () => call('recents'),

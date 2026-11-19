@@ -2,11 +2,13 @@
 // remember recent projects. Shared by Electron's main process and the web dev mode, so both behave the same.
 // Nothing here imports electron.
 
+import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHub, type Hub } from './agents.ts';
 import { createTerminals, type Terminals } from './terminal.ts';
+import { pickTemplate, titleFromIdea } from './idea.ts';
 import type { AgentEvent } from '../shared/agentApi.ts';
 import type { CommunityGame, OpenedProject, RecentProject, TemplateInfo } from '../shared/appApi.ts';
 
@@ -36,6 +38,8 @@ export interface Host {
   listCommunity(): Promise<CommunityGame[]>;
   openCommunity(id: string, reset?: boolean): Promise<OpenedProject>;
   createProject(opts: { template: string; title: string; parentDir: string }): Promise<OpenedProject>;
+  /** The idea box: picks the closest template, makes the project in the app's own projects folder and opens it. */
+  createFromIdea(idea: string): Promise<OpenedProject & { idea: string }>;
   openProject(root: string): Promise<OpenedProject>;
   closeProject(): Promise<void>;
   recents(): Promise<RecentProject[]>;
@@ -119,6 +123,18 @@ export function createHost(opts: HostOptions): Host {
       const { mod } = await load();
       const { root } = await mod.createProject({ template, title, dir: join(parentDir, slug(title)) });
       return host.openProject(root);
+    },
+
+    async createFromIdea(idea) {
+      const text = idea.trim();
+      if (!text) throw new Error('Say what game you want to make first.');
+      const { mod } = await load();
+      const title = titleFromIdea(text);
+      // A second game with the same name gets its own folder; the person never chooses one.
+      let dir = join(projectsDir, slug(title)), n = 2;
+      while (existsSync(dir)) dir = join(projectsDir, `${slug(title)}-${n++}`);
+      const { root } = await mod.createProject({ template: pickTemplate(text), title, dir });
+      return { ...(await host.openProject(root)), idea: text };
     },
 
     async openProject(root) {
