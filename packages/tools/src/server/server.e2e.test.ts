@@ -78,6 +78,15 @@ describe('project server', () => {
     expect(lib.map((i) => i.id)).toEqual(expect.arrayContaining(['hull.json', 'tuning/cube-look', 'tunables:cube']));
   });
 
+  it('keeps the launch options and still serves the page with them', async () => {
+    expect(await studio.call('project.launch')).toEqual({ query: '', url: server.gameUrl });
+    const set = await studio.call<{ query: string; url: string }>('project.launch', { query: '?start=camp&look=night#x' });
+    expect(set).toEqual({ query: 'start=camp&look=night', url: `${server.gameUrl}?start=camp&look=night` });
+    expect((await studio.call<{ query: string }>('project.launch')).query).toBe('start=camp&look=night');
+    expect(await (await fetch(set.url)).text()).toContain('virtual:hull-boot');
+    await studio.call('project.launch', { query: '' });
+  });
+
   it('serves the dev page', async () => {
     const html = await (await fetch(server.gameUrl)).text();
     expect(html).toContain('virtual:hull-boot');

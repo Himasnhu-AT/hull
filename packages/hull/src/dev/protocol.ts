@@ -232,6 +232,11 @@ export interface AssetResult {
 /** Methods the server answers. */
 export interface Methods {
   'project.info': { params: Record<string, never>; result: ProjectInfo };
+  /**
+   * The page options the game opens with (`start=camp&look=night`, no leading `?`). Called with no `query` it reads them; with one it
+   * keeps them (in .hull/launch.json, per project) and returns the cleaned query. `url` is the game page with them applied.
+   */
+  'project.launch': { params: { query?: string }; result: { query: string; url: string } };
   'library.list': { params: Record<string, never>; result: LibraryItem[] };
   /** A config file: its text, parsed value, JSON Schema (with x-ui / x-ref) and current problems. */
   'config.read': { params: { id: string }; result: { id: string; path: string; text: string; value: unknown; schema: unknown; problems: Problem[] } };

@@ -1,4 +1,4 @@
-import type { JSX, ReactNode } from 'react';
+import { useEffect, useState, type JSX, type ReactNode } from 'react';
 import { Icon, type IconName } from '../ui/Icon.tsx';
 
 export interface Panels { lib: boolean; dock: boolean; insp: boolean }
@@ -31,6 +31,24 @@ interface Props {
   /** The branch picker, only when the Game view is showing. */
   branch?: ReactNode;
   onReload?(): void;
+  /** The page options the game opens with, shown only in the Game view (undefined hides the field). */
+  launch?: string;
+  onLaunch?(query: string): void;
+}
+
+/** A small field for page options (start=camp&look=night). Enter or leaving the field keeps them and reloads the game. */
+function LaunchField({ value, onCommit }: { value: string; onCommit(q: string): void }): JSX.Element {
+  const [draft, setDraft] = useState(value);
+  useEffect(() => setDraft(value), [value]);
+  const commit = (): void => { if (draft.trim().replace(/^\?/, '') !== value) onCommit(draft); };
+  return (
+    <input
+      className="launch" value={draft} spellCheck={false} placeholder="Launch options: start=camp&look=night"
+      aria-label="Launch options for the game page" title="Page options the game opens with, like start=camp or look=night. Enter applies them and reloads; kept for this project."
+      onChange={(e) => setDraft(e.target.value)} onBlur={commit}
+      onKeyUp={(e) => { if (e.key === 'Enter') commit(); else if (e.key === 'Escape') setDraft(value); }}
+    />
+  );
 }
 
 const VIEWS: { id: string; icon: IconName; label: string }[] = [
@@ -79,6 +97,7 @@ export function TitleBar(p: Props): JSX.Element {
       <div className="r">
         <span className={`live${p.connected ? ' on' : ''}`} role="status" aria-label={p.note} title={p.note} />
         {p.branch}
+        {p.launch !== undefined && p.onLaunch && <LaunchField value={p.launch} onCommit={p.onLaunch} />}
         {p.onReload && <button className="btn ghost" onClick={p.onReload} title="Reload the game page" aria-label="Reload the game page" style={{ padding: '0 6px' }}><Icon name="reload" /></button>}
         <button className={`chip${p.agents ? ' on' : ''}`} data-agents-toggle onClick={p.onAgents} aria-expanded={p.agents} title="Connect Claude Code, Codex or another MCP client to this project"><Icon name="plug" /><span className="vl">Agents</span></button>
         {p.problems > 0 && <button className="chip" onClick={p.onProblems} title="Show problems in the Console"><Icon name="warn" />Problems <span className="count">{p.problems}</span></button>}
