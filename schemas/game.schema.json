@@ -55,6 +55,12 @@
         ]
       }
     },
+    "generators": {
+      "type": "string",
+      "x-ui": {
+        "help": "A module that registers the game's code sound generators (registerGenerator, registerLiveGenerator): its default export is called once. The Studio's sound bench loads it, so sounds with a code source render there too."
+      }
+    },
     "render": {
       "type": "object",
       "properties": {

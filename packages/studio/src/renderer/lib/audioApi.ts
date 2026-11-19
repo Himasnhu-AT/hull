@@ -13,7 +13,10 @@ export interface Measure {
 }
 
 export interface AudioApi {
-  source: 'hull' | 'preview';
+  /** 'project': the engine bundled with the game's own code generators (hull.json "generators"). */
+  source: 'hull' | 'preview' | 'project';
+  /** The project bundle's own config registry, which a `pick` source looks sounds up in. */
+  config?: { load(sources: { path: string; text: string }[]): unknown; update(src: { path: string; text: string }): unknown; remove(path: string): unknown };
   renderSound(recipe: unknown, opts?: { seed?: number; sampleRate?: number }): Promise<AudioBuffer>;
   measureSound(buf: AudioBuffer): Measure;
   playBuffer(buf: AudioBuffer): void;
@@ -34,6 +37,27 @@ export function loadAudio(): Promise<AudioApi> {
     return preview;
   })();
   return cached;
+}
+
+/**
+ * The engine as the project's own code sees it: the project server bundles hull/audio together with the module named by
+ * hull.json "generators", so a sound with a `code` source renders here as it does in the game. Resolves to null when the
+ * project has no such module (the Studio's own hull/audio then does), and throws the server's message when it does not bundle.
+ */
+export async function loadProjectAudio(gameUrl: string): Promise<AudioApi | null> {
+  const r = await fetch(new URL('__hull/bench/audio.js', gameUrl));
+  if (r.status === 404) return null;
+  const text = await r.text();
+  if (!r.ok) throw new Error(text);
+  // A blob, not an import of the server's URL: the bundle is self-contained, and this works from any page origin.
+  const url = URL.createObjectURL(new Blob([text], { type: 'text/javascript' }));
+  try {
+    const m = (await import(/* @vite-ignore */ url)) as Partial<AudioApi>;
+    if (!m.renderSound || !m.measureSound || !m.playBuffer) throw new Error('the project bundle has no renderSound, measureSound and playBuffer');
+    return { source: 'project', renderSound: m.renderSound, measureSound: m.measureSound, playBuffer: m.playBuffer, ...(m.config ? { config: m.config } : {}) };
+  } finally {
+    URL.revokeObjectURL(url);
+  }
 }
 
 /* ---------- preview renderer (only until hull/audio lands) ---------- */

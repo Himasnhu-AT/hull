@@ -21,6 +21,7 @@ import { listReview, noteReview, setReview } from '../review/store.ts';
 import { findTunables, rewriteTunable, type FoundTunable } from './tsTunables.ts';
 import { kitImports, kitTunables } from './kitTunables.ts';
 import { engineAliases, hullResolve, virtualModule } from './vitePlugins.ts';
+import { buildBenchAudio } from './bench.ts';
 
 export { createProject, listTemplates } from './templates.ts';
 export { buildProject } from './build.ts';
@@ -142,6 +143,27 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
   };
   revalidate();
 
+  // ---- The sound bench's engine: the game's code generators, bundled (bench.ts). Rebuilt after the next change to src/ or hull.json.
+  const BENCH_AUDIO = '/__hull/bench/audio.js';
+  let benchAudio: Promise<string> | null = null;
+  const serveBenchAudio = async (res: import('node:http').ServerResponse): Promise<void> => {
+    // The Studio's page is another origin and may be a file:// page, so any origin may read this one file.
+    res.setHeader('access-control-allow-origin', '*');
+    res.setHeader('cache-control', 'no-store');
+    const generators = (JSON.parse(readManifest(root)!.text) as { generators?: string }).generators;
+    if (!generators) { res.statusCode = 404; res.end('hull.json has no "generators"'); return; }
+    try {
+      benchAudio ??= buildBenchAudio(root, generators);
+      const code = await benchAudio;
+      res.setHeader('content-type', 'text/javascript');
+      res.end(code);
+    } catch (e) {
+      benchAudio = null;
+      res.statusCode = 500;
+      res.end(`The generators module ${generators} did not bundle: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  };
+
   // ---- Vite: the game's dev page --------------------------------------------------------------------------------
   const vite: ViteDevServer = await createServer({
     root,
@@ -167,6 +189,7 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
           server.middlewares.use(async (req, res, next) => {
             // The path only: a query like ?hull-paused (the play tool's) still gets the page.
             const path = req.url?.split('?')[0];
+            if (path === BENCH_AUDIO) return void (await serveBenchAudio(res));
             if (path !== '/' && path !== '/index.html') return next();
             res.setHeader('content-type', 'text/html');
             res.setHeader('cache-control', 'no-store');
@@ -571,6 +594,7 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
       try { text = readFileSync(abs, 'utf8'); } catch { return; }
       if (texts.get(rel) === text) return;
       hist.touch('disk');
+      if (rel === MANIFEST) benchAudio = null;
       invalidateBoot();
       revalidate();
       // A file with problems is reported, not pushed: the running game keeps its last good value. A tuning value a kit
@@ -583,6 +607,7 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
       if (text !== undefined && wroteTs.get(abs) === text) return;
       wroteTs.delete(abs);
       hist.touch('disk');
+      benchAudio = null;
       push('source.changed', { path: rel });
     } else if (rel.startsWith('src/') || rel.startsWith('assets/')) {
       hist.touch('disk');

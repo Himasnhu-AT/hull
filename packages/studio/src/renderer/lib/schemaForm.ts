@@ -9,7 +9,7 @@ import { autoStep } from './math.ts';
 
 export type Widget =
   | 'slider' | 'dial' | 'number' | 'toggle' | 'select' | 'segments' | 'color' | 'curve' | 'vec3' | 'range'
-  | 'ref' | 'text' | 'keys' | 'json' | 'map';
+  | 'ref' | 'text' | 'keys' | 'json' | 'map' | 'list' | 'checks';
 
 export interface Field {
   /** JSON pointer into the config value; for a tunable, the key. */
@@ -39,7 +39,7 @@ export interface Field {
   fallback: boolean;
   /** For `select`/`segments`: the real value behind each option label (numbers and booleans stay what they are). */
   optionValues: unknown[];
-  /** For `map`: the schema of each value, and the whole schema it must be resolved against. */
+  /** For `map`: the schema of each value; for `list`: the schema of each item. `schemaRoot` is the whole schema they resolve against. */
   valueSchema: Schema | null;
   schemaRoot: Schema | null;
 }
@@ -121,6 +121,11 @@ function leaf(ctx: Ctx, schema: Schema, key: string, pointer: string, value: unk
   const finite = Number.isFinite(min) && Number.isFinite(max);
   const explicit = str(ui['widget']) as Widget | '';
   const refKind = str(schema['x-ref']);
+  // An array's items: a fixed set of choices (several can be on), or objects (rows to add, remove and reorder).
+  const items = type === 'array' && isObj(schema['items']) ? resolve(ctx.root, schema['items']) : null;
+  const itemUnion = items ? ((items['anyOf'] ?? items['oneOf']) as unknown[] | undefined) : undefined;
+  const itemEnum: unknown[] | null = !items ? null : Array.isArray(items['enum']) ? (items['enum'] as unknown[]) : Array.isArray(itemUnion) ? constUnion(ctx.root, itemUnion) : null;
+  const objectItems = !!items && !itemEnum && (typeOf(items) === 'object' || isObj(items['properties']) || isObj(items['patternProperties']) || isObj(items['additionalProperties']) || Array.isArray(itemUnion));
 
   let widget: Widget;
   // Few options are segments, many a select, whatever the schema asked: a bar of ten labels is unreadable.
@@ -128,6 +133,8 @@ function leaf(ctx: Ctx, schema: Schema, key: string, pointer: string, value: unk
   else if (mapValue) widget = 'map';
   else if (explicit && !(explicit === 'segments' && !enumVals)) widget = explicit;
   else if (refKind) widget = 'ref';
+  else if (itemEnum) widget = 'checks';
+  else if (objectItems) widget = 'list';
   else if (enumVals) widget = 'select';
   else if (type === 'boolean') widget = 'toggle';
   else if (type === 'number' || type === 'integer') widget = finite ? 'slider' : 'number';
@@ -152,13 +159,13 @@ function leaf(ctx: Ctx, schema: Schema, key: string, pointer: string, value: unk
     min, max, step,
     unit: str(ui['unit']),
     help: str(ui['help']) || str(schema['description']),
-    options: enumVals ? enumVals.map(String) : [],
-    optionValues: enumVals ?? [],
+    options: (enumVals ?? itemEnum ?? []).map(String),
+    optionValues: enumVals ?? itemEnum ?? [],
     refKind,
     value: shown,
     live: ui['live'] !== false,
     def, unset, fallback,
-    valueSchema: mapValue, schemaRoot: mapValue ? ctx.root : null,
+    valueSchema: mapValue ?? (widget === 'list' ? items : null), schemaRoot: mapValue || widget === 'list' ? ctx.root : null,
   });
 }
 
@@ -298,6 +305,26 @@ export function mapEntryFields(field: Field, key: string, value: unknown): Field
   // A plain value has nothing to label: the entry's own name above it says what it is.
   if (out.length === 1 && out[0]!.pointer === pointer) out[0] = { ...out[0]!, label: '' };
   return out;
+}
+
+/** The fields of one row of a `list` field, with pointers below the row (`/transitions/0/to`). A row that is a plain value is one unlabeled field. */
+export function listItemFields(field: Field, index: number, value: unknown): Field[] {
+  const ctx: Ctx = { root: field.schemaRoot ?? {}, fields: [], groups: [] };
+  const pointer = `${field.pointer}/${index}`;
+  walk(ctx, field.valueSchema, value, pointer, 'item', String(index + 1), 0);
+  const out = toGroups(ctx.fields, true).flatMap((g) => [...g.dials, ...g.fields]);
+  if (out.length === 1 && out[0]!.pointer === pointer) out[0] = { ...out[0]!, label: '' };
+  return out;
+}
+
+/** What a row of a list says about itself when it is closed: "idle → walk · speed > 0.1" for a transition, a name otherwise. */
+export function itemTitle(item: unknown, index: number): string {
+  if (!isObj(item)) return String(item ?? index + 1);
+  const s = (k: string): string => (typeof item[k] === 'string' ? (item[k] as string) : '');
+  if (s('from') && s('to')) return `${s('from')} → ${s('to')}${s('when') ? ` · ${s('when')}` : ''}`;
+  for (const k of ['name', 'bone', 'id', 'clip', 'type', 'to', 'from']) if (s(k)) return s(k);
+  const first = Object.values(item).find((v) => typeof v === 'string' || typeof v === 'number');
+  return first === undefined ? String(index + 1) : String(first);
 }
 
 /** A value for a new map entry: the schema's default, else the plainest value of its type that the schema accepts. */

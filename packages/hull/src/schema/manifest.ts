@@ -12,6 +12,7 @@ export const manifestSchema = Type.Object(
     entry: Type.String(),
     step: Type.Optional(Type.Enum([30, 60, 120], { default: 60, ...ui({ unit: 'Hz', widget: 'segments', help: 'Fixed simulation rate.' }) })),
     features: Type.Optional(Type.Array(Type.Enum(['audio', 'anim', 'ui', 'vfx', 'physics', 'saves']))),
+    generators: Type.Optional(Type.String(ui({ help: 'A module that registers the game\'s code sound generators (registerGenerator, registerLiveGenerator): its default export is called once. The Studio\'s sound bench loads it, so sounds with a code source render there too.' }))),
     render: Type.Optional(
       Type.Object(
         {
