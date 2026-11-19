@@ -1,0 +1,282 @@
+{
+ "kind": "sound",
+ "note": "The hook head biting into roof.",
+ "bus": "sfx",
+ "level": -1.41162,
+ "limit": {
+  "voices": 5
+ },
+ "spatial": {
+  "ref": 25,
+  "max": 400,
+  "airLowpass": true
+ },
+ "source": {
+  "type": "synth",
+  "length": 0.25945,
+  "layers": {
+   "mode0_0": {
+    "from": {
+     "osc": "sine",
+     "freq": [
+      1034,
+      1165.868
+     ]
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.06
+      }
+     },
+     {
+      "gain": -8.87395
+     }
+    ]
+   },
+   "mode0_1": {
+    "from": {
+     "osc": "sine",
+     "freq": [
+      1955.2,
+      2204.5504
+     ]
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.04444
+      }
+     },
+     {
+      "gain": -12.95635
+     }
+    ]
+   },
+   "mode0_2": {
+    "from": {
+     "osc": "sine",
+     "freq": [
+      3102,
+      3497.604
+     ]
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.03529
+      }
+     },
+     {
+      "gain": -15.7224
+     }
+    ]
+   },
+   "mode0_3": {
+    "from": {
+     "osc": "sine",
+     "freq": [
+      4136,
+      4663.472
+     ]
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.02927
+      }
+     },
+     {
+      "gain": -17.81711
+     }
+    ]
+   },
+   "burst1": {
+    "from": {
+     "noise": "white"
+    },
+    "then": [
+     {
+      "filter": "bandpass",
+      "freq": 2800,
+      "q": 1.2
+     },
+     {
+      "envelope": {
+       "attack": 0.0008,
+       "decay": 0.03
+      }
+     },
+     {
+      "gain": -9.37042
+     }
+    ]
+   },
+   "burst2": {
+    "from": {
+     "noise": "white"
+    },
+    "then": [
+     {
+      "filter": "highpass",
+      "freq": 4200,
+      "q": 1
+     },
+     {
+      "envelope": {
+       "attack": 0.0006,
+       "decay": 0.016
+      }
+     },
+     {
+      "gain": -12.39578
+     }
+    ]
+   },
+   "tone3": {
+    "from": {
+     "osc": "sine",
+     "freq": 170,
+     "glideTo": 0.47059,
+     "glideTime": 0.06
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.002,
+       "decay": 0.09
+      }
+     },
+     {
+      "gain": -9.897
+     }
+    ]
+   },
+   "mode4_0": {
+    "from": {
+     "osc": "sine",
+     "freq": [
+      921.2,
+      1038.6824
+     ]
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.05
+      }
+     },
+     {
+      "gain": -15.9176
+     }
+    ],
+    "at": [
+     0.055,
+     0.07998
+    ]
+   },
+   "mode4_1": {
+    "from": {
+     "osc": "sine",
+     "freq": [
+      1786,
+      2013.772
+     ]
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.03704
+      }
+     },
+     {
+      "gain": -20
+     }
+    ],
+    "at": [
+     0.055,
+     0.07998
+    ]
+   },
+   "mode4_2": {
+    "from": {
+     "osc": "sine",
+     "freq": [
+      2726,
+      3073.652
+     ]
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.02941
+      }
+     },
+     {
+      "gain": -22.76605
+     }
+    ],
+    "at": [
+     0.055,
+     0.07998
+    ]
+   },
+   "mode5_0": {
+    "from": {
+     "osc": "sine",
+     "freq": [
+      1269,
+      1430.838
+     ]
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.03
+      }
+     },
+     {
+      "gain": -21.9382
+     }
+    ],
+    "at": [
+     0.12,
+     0.16995
+    ]
+   },
+   "mode5_1": {
+    "from": {
+     "osc": "sine",
+     "freq": [
+      2350,
+      2649.7
+     ]
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.02222
+      }
+     },
+     {
+      "gain": -26.0206
+     }
+    ],
+    "at": [
+     0.12,
+     0.16995
+    ]
+   }
+  },
+  "reverb": 0.12
+ }
+}

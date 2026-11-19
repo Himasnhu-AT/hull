@@ -1,0 +1,151 @@
+{
+ "kind": "sound",
+ "note": "Kicking off a wall, soft.",
+ "bus": "sfx",
+ "level": -6.0206,
+ "limit": {
+  "minGap": 0.12,
+  "voices": 3
+ },
+ "source": {
+  "type": "synth",
+  "length": 0.2962,
+  "layers": {
+   "burst0": {
+    "from": {
+     "noise": "white"
+    },
+    "then": [
+     {
+      "filter": "bandpass",
+      "freq": 2600,
+      "q": 0.9
+     },
+     {
+      "envelope": {
+       "attack": 0.0006,
+       "decay": 0.016
+      }
+     },
+     {
+      "gain": -1.9382
+     }
+    ]
+   },
+   "tone1": {
+    "from": {
+     "osc": "sine",
+     "freq": 185,
+     "glideTo": 0.3027,
+     "glideTime": 0.06
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.002,
+       "decay": 0.125
+      }
+     },
+     {
+      "gain": -3.74173
+     }
+    ]
+   },
+   "burst2": {
+    "from": {
+     "noise": "white"
+    },
+    "then": [
+     {
+      "filter": "lowpass",
+      "freq": 1100,
+      "q": 0.7
+     },
+     {
+      "envelope": {
+       "attack": 0.002,
+       "decay": 0.05
+      }
+     },
+     {
+      "gain": -6.0206
+     }
+    ]
+   },
+   "burst3": {
+    "from": {
+     "noise": "pink"
+    },
+    "then": [
+     {
+      "filter": "bandpass",
+      "freq": 700,
+      "q": 1.2
+     },
+     {
+      "envelope": {
+       "attack": 0.002,
+       "decay": 0.05
+      }
+     },
+     {
+      "gain": 1.58362
+     }
+    ],
+    "at": 0.003
+   },
+   "burst4": {
+    "from": {
+     "noise": "white"
+    },
+    "then": [
+     {
+      "filter": "bandpass",
+      "freq": 3600,
+      "q": 1,
+      "glideTo": 0.41667,
+      "glideTime": 0.16
+     },
+     {
+      "filter": "highpass",
+      "freq": 900,
+      "q": 0.7
+     },
+     {
+      "envelope": {
+       "attack": 0.008,
+       "decay": 0.174
+      }
+     },
+     {
+      "gain": -6.74484
+     }
+    ],
+    "at": 0.012
+   },
+   "burst5": {
+    "from": {
+     "noise": "white"
+    },
+    "then": [
+     {
+      "filter": "bandpass",
+      "freq": 6500,
+      "q": 7
+     },
+     {
+      "envelope": {
+       "attack": 0.01,
+       "decay": 0.12
+      }
+     },
+     {
+      "gain": -20
+     }
+    ],
+    "at": 0.012
+   }
+  },
+  "reverb": 0.104
+ }
+}

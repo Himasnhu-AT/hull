@@ -1,0 +1,161 @@
+{
+ "kind": "sound",
+ "note": "A running footfall on metal.",
+ "bus": "sfx",
+ "level": -7.51642,
+ "limit": {
+  "minGap": 0.085,
+  "voices": 5
+ },
+ "source": {
+  "type": "synth",
+  "length": 0.1935,
+  "layers": {
+   "mode0_0": {
+    "from": {
+     "osc": "sine",
+     "freq": 626.2
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.11
+      }
+     },
+     {
+      "gain": -12.39578
+     },
+     {
+      "pan": [
+       -0.2,
+       0.2
+      ]
+     }
+    ]
+   },
+   "mode0_1": {
+    "from": {
+     "osc": "sine",
+     "freq": 1100.9
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.08148
+      }
+     },
+     {
+      "gain": -16.47817
+     },
+     {
+      "pan": [
+       -0.2,
+       0.2
+      ]
+     }
+    ]
+   },
+   "mode0_2": {
+    "from": {
+     "osc": "sine",
+     "freq": 1747.3
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.06471
+      }
+     },
+     {
+      "gain": -19.24423
+     },
+     {
+      "pan": [
+       -0.2,
+       0.2
+      ]
+     }
+    ]
+   },
+   "mode0_3": {
+    "from": {
+     "osc": "sine",
+     "freq": 2504.8
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.05366
+      }
+     },
+     {
+      "gain": -21.33894
+     },
+     {
+      "pan": [
+       -0.2,
+       0.2
+      ]
+     }
+    ]
+   },
+   "burst1": {
+    "from": {
+     "noise": "white"
+    },
+    "then": [
+     {
+      "filter": "highpass",
+      "freq": 3000,
+      "q": 1
+     },
+     {
+      "envelope": {
+       "attack": 0.0006,
+       "decay": 0.012
+      }
+     },
+     {
+      "gain": -6.0206
+     },
+     {
+      "pan": [
+       -0.2,
+       0.2
+      ]
+     }
+    ]
+   },
+   "tone2": {
+    "from": {
+     "osc": "sine",
+     "freq": 131.3,
+     "glideTo": 0.57121,
+     "glideTime": 0.04
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.002,
+       "decay": 0.05
+      }
+     },
+     {
+      "gain": -12.0412
+     },
+     {
+      "pan": [
+       -0.2,
+       0.2
+      ]
+     }
+    ]
+   }
+  },
+  "reverb": 0.05
+ }
+}

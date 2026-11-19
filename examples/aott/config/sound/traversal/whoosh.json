@@ -1,0 +1,14 @@
+{
+ "kind": "sound",
+ "note": "A fly-by; params: strength 0..1, pan -1..1.",
+ "bus": "sfx",
+ "level": 0,
+ "limit": {
+  "minGap": 0.11,
+  "voices": 4
+ },
+ "source": {
+  "type": "code",
+  "generator": "aott/whoosh"
+ }
+}

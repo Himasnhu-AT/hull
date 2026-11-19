@@ -1,0 +1,14 @@
+{
+ "kind": "sound",
+ "note": "A civilian set down safe: horns resolving to the root, a bell; params: pc, third.",
+ "bus": "top",
+ "level": 0,
+ "limit": {
+  "minGap": 0.25,
+  "voices": 2
+ },
+ "source": {
+  "type": "code",
+  "generator": "aott/rescue-deliver"
+ }
+}

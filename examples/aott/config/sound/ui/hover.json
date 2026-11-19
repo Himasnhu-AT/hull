@@ -1,0 +1,77 @@
+{
+ "kind": "sound",
+ "note": "A wooden tick.",
+ "bus": "top",
+ "level": -1.9382,
+ "limit": {
+  "minGap": 0.035,
+  "voices": 3
+ },
+ "source": {
+  "type": "synth",
+  "length": 0.0687,
+  "layers": {
+   "mode0_0": {
+    "from": {
+     "osc": "sine",
+     "freq": [
+      1175,
+      1324.85
+     ]
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.014
+      }
+     },
+     {
+      "gain": -13.9794
+     }
+    ]
+   },
+   "mode0_1": {
+    "from": {
+     "osc": "sine",
+     "freq": [
+      1927,
+      2172.754
+     ]
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.01037
+      }
+     },
+     {
+      "gain": -18.0618
+     }
+    ]
+   },
+   "burst1": {
+    "from": {
+     "noise": "white"
+    },
+    "then": [
+     {
+      "filter": "bandpass",
+      "freq": 2600,
+      "q": 1.2
+     },
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.008
+      }
+     },
+     {
+      "gain": -18.41638
+     }
+    ]
+   }
+  }
+ }
+}

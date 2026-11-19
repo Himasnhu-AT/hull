@@ -1,0 +1,325 @@
+{
+ "kind": "sound",
+ "note": "The hook head biting into bark.",
+ "bus": "sfx",
+ "level": -1.41162,
+ "limit": {
+  "voices": 5
+ },
+ "spatial": {
+  "ref": 25,
+  "max": 400,
+  "airLowpass": true
+ },
+ "source": {
+  "type": "synth",
+  "length": 0.221,
+  "layers": {
+   "tone0": {
+    "from": {
+     "osc": "sine",
+     "freq": [
+      141,
+      158.982
+     ],
+     "glideTo": 0.3747,
+     "glideTime": 0.09
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.002,
+       "decay": 0.13
+      }
+     },
+     {
+      "gain": -9.37042
+     }
+    ]
+   },
+   "burst1": {
+    "from": {
+     "noise": "pink"
+    },
+    "then": [
+     {
+      "filter": "lowpass",
+      "freq": 850,
+      "q": 0.7
+     },
+     {
+      "envelope": {
+       "attack": 0.002,
+       "decay": 0.07
+      }
+     },
+     {
+      "gain": -0.91515
+     }
+    ]
+   },
+   "burst2": {
+    "from": {
+     "noise": "white"
+    },
+    "then": [
+     {
+      "filter": "bandpass",
+      "freq": [
+       1410,
+       1589.82
+      ],
+      "q": 1
+     },
+     {
+      "envelope": {
+       "attack": 0.001,
+       "decay": 0.05
+      }
+     },
+     {
+      "gain": 0
+     }
+    ]
+   },
+   "mode3_0": {
+    "from": {
+     "osc": "sine",
+     "freq": [
+      291.4,
+      328.5628
+     ]
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.08
+      }
+     },
+     {
+      "gain": -13.9794
+     }
+    ]
+   },
+   "mode3_1": {
+    "from": {
+     "osc": "sine",
+     "freq": [
+      526.4,
+      593.5328
+     ]
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.05926
+      }
+     },
+     {
+      "gain": -18.0618
+     }
+    ]
+   },
+   "burst4": {
+    "from": {
+     "noise": "white"
+    },
+    "then": [
+     {
+      "filter": "bandpass",
+      "freq": [
+       1800,
+       3798
+      ],
+      "q": 2.5
+     },
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": [
+        0.012,
+        0.02599
+       ]
+      }
+     },
+     {
+      "gain": [
+       -12.95635,
+       -6.94009
+      ]
+     }
+    ],
+    "at": [
+     0.012,
+     0.1099
+    ]
+   },
+   "burst5": {
+    "from": {
+     "noise": "white"
+    },
+    "then": [
+     {
+      "filter": "bandpass",
+      "freq": [
+       1800,
+       3798
+      ],
+      "q": 2.5
+     },
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": [
+        0.012,
+        0.02599
+       ]
+      }
+     },
+     {
+      "gain": [
+       -12.95635,
+       -6.94009
+      ]
+     }
+    ],
+    "at": [
+     0.012,
+     0.1099
+    ]
+   },
+   "burst6": {
+    "from": {
+     "noise": "white"
+    },
+    "then": [
+     {
+      "filter": "bandpass",
+      "freq": [
+       1800,
+       3798
+      ],
+      "q": 2.5
+     },
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": [
+        0.012,
+        0.02599
+       ]
+      }
+     },
+     {
+      "gain": [
+       -12.95635,
+       -6.94009
+      ]
+     }
+    ],
+    "at": [
+     0.012,
+     0.1099
+    ]
+   },
+   "burst7": {
+    "from": {
+     "noise": "white"
+    },
+    "then": [
+     {
+      "filter": "bandpass",
+      "freq": [
+       1800,
+       3798
+      ],
+      "q": 2.5
+     },
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": [
+        0.012,
+        0.02599
+       ]
+      }
+     },
+     {
+      "gain": [
+       -12.95635,
+       -6.94009
+      ]
+     }
+    ],
+    "at": [
+     0.012,
+     0.1099
+    ]
+   },
+   "mode8_0": {
+    "from": {
+     "osc": "sine",
+     "freq": [
+      3102,
+      3497.604
+     ]
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.02
+      }
+     },
+     {
+      "gain": -26.0206
+     }
+    ]
+   },
+   "mode8_1": {
+    "from": {
+     "osc": "sine",
+     "freq": [
+      4418,
+      4981.436
+     ]
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.01481
+      }
+     },
+     {
+      "gain": -30.103
+     }
+    ]
+   },
+   "burst9": {
+    "from": {
+     "noise": "white"
+    },
+    "then": [
+     {
+      "filter": "highpass",
+      "freq": 3200,
+      "q": 1
+     },
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.008
+      }
+     },
+     {
+      "gain": -20
+     }
+    ]
+   }
+  },
+  "reverb": 0.12
+ }
+}

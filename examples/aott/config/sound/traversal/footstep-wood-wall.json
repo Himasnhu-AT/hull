@@ -1,0 +1,191 @@
+{
+ "kind": "sound",
+ "note": "A wall-run footfall on wood.",
+ "bus": "sfx",
+ "level": -8.92804,
+ "limit": {
+  "minGap": 0.085,
+  "voices": 5
+ },
+ "source": {
+  "type": "synth",
+  "length": 0.138,
+  "layers": {
+   "tone0": {
+    "from": {
+     "osc": "sine",
+     "freq": 191.9,
+     "glideTo": 0.49505,
+     "glideTime": 0.04
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.002,
+       "decay": 0.06
+      }
+     },
+     {
+      "gain": -17.39332
+     },
+     {
+      "pan": [
+       -0.2,
+       0.2
+      ]
+     }
+    ]
+   },
+   "mode1_0": {
+    "from": {
+     "osc": "sine",
+     "freq": 232.3
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.05
+      }
+     },
+     {
+      "gain": -9.897
+     },
+     {
+      "pan": [
+       -0.2,
+       0.2
+      ]
+     }
+    ]
+   },
+   "mode1_1": {
+    "from": {
+     "osc": "sine",
+     "freq": 515.1
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.03704
+      }
+     },
+     {
+      "gain": -13.9794
+     },
+     {
+      "pan": [
+       -0.2,
+       0.2
+      ]
+     }
+    ]
+   },
+   "mode1_2": {
+    "from": {
+     "osc": "sine",
+     "freq": 888.8
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.02941
+      }
+     },
+     {
+      "gain": -16.74545
+     },
+     {
+      "pan": [
+       -0.2,
+       0.2
+      ]
+     }
+    ]
+   },
+   "mode1_3": {
+    "from": {
+     "osc": "sine",
+     "freq": 1434.2
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.02439
+      }
+     },
+     {
+      "gain": -18.84016
+     },
+     {
+      "pan": [
+       -0.2,
+       0.2
+      ]
+     }
+    ]
+   },
+   "burst2": {
+    "from": {
+     "noise": "pink"
+    },
+    "then": [
+     {
+      "filter": "lowpass",
+      "freq": 1749.5725,
+      "q": 0.7
+     },
+     {
+      "envelope": {
+       "attack": 0.001,
+       "decay": 0.03
+      }
+     },
+     {
+      "gain": -0.91515
+     },
+     {
+      "pan": [
+       -0.2,
+       0.2
+      ]
+     }
+    ]
+   },
+   "burst3": {
+    "from": {
+     "noise": "white"
+    },
+    "then": [
+     {
+      "filter": "bandpass",
+      "freq": 2727,
+      "q": 1.2,
+      "glideTo": 0.48148,
+      "glideTime": 0.06
+     },
+     {
+      "envelope": {
+       "attack": 0.006,
+       "decay": 0.06
+      }
+     },
+     {
+      "gain": -1.9382
+     },
+     {
+      "pan": [
+       -0.2,
+       0.2
+      ]
+     }
+    ],
+    "at": 0.004
+   }
+  },
+  "reverb": 0.05
+ }
+}

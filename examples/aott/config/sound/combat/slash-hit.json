@@ -1,0 +1,326 @@
+{
+ "kind": "sound",
+ "note": "A blade cutting through a titan.",
+ "bus": "sfx",
+ "level": 0,
+ "limit": {
+  "minGap": 0.07,
+  "voices": 6
+ },
+ "source": {
+  "type": "synth",
+  "length": 0.5825,
+  "layers": {
+   "burst0": {
+    "from": {
+     "noise": "white"
+    },
+    "then": [
+     {
+      "filter": "bandpass",
+      "freq": 1200,
+      "q": 1.3,
+      "glideTo": 4.33333,
+      "glideTime": 0.09
+     },
+     {
+      "envelope": {
+       "attack": 0.035,
+       "decay": 0.16
+      }
+     },
+     {
+      "gain": -7.53501
+     },
+     {
+      "pan": [
+       -0.12,
+       0.11976
+      ]
+     }
+    ]
+   },
+   "burst1": {
+    "from": {
+     "noise": "white"
+    },
+    "then": [
+     {
+      "filter": "highpass",
+      "freq": 3500,
+      "q": 1
+     },
+     {
+      "envelope": {
+       "attack": 0.03,
+       "decay": 0.15
+      }
+     },
+     {
+      "gain": -14.89455
+     },
+     {
+      "pan": [
+       -0.12,
+       0.11976
+      ]
+     }
+    ],
+    "at": 0.02
+   },
+   "mode2_0": {
+    "from": {
+     "osc": "sine",
+     "freq": [
+      2050,
+      2349.7
+     ]
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.4
+      }
+     },
+     {
+      "gain": -18.41638
+     },
+     {
+      "pan": [
+       -0.12,
+       0.11976
+      ]
+     }
+    ],
+    "at": 0.012
+   },
+   "mode2_1": {
+    "from": {
+     "osc": "sine",
+     "freq": [
+      3083.2,
+      3533.9488
+     ]
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.2963
+      }
+     },
+     {
+      "gain": -22.49877
+     },
+     {
+      "pan": [
+       -0.12,
+       0.11976
+      ]
+     }
+    ],
+    "at": 0.012
+   },
+   "mode2_2": {
+    "from": {
+     "osc": "sine",
+     "freq": [
+      4346,
+      4981.364
+     ]
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.23529
+      }
+     },
+     {
+      "gain": -25.26483
+     },
+     {
+      "pan": [
+       -0.12,
+       0.11976
+      ]
+     }
+    ],
+    "at": 0.012
+   },
+   "mode2_3": {
+    "from": {
+     "osc": "sine",
+     "freq": [
+      6088.5,
+      6978.609
+     ]
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.19512
+      }
+     },
+     {
+      "gain": -27.35954
+     },
+     {
+      "pan": [
+       -0.12,
+       0.11976
+      ]
+     }
+    ],
+    "at": 0.012
+   },
+   "burst3": {
+    "from": {
+     "noise": "pink"
+    },
+    "then": [
+     {
+      "filter": "lowpass",
+      "freq": 1800,
+      "q": 0.8,
+      "glideTo": 0.19444,
+      "glideTime": 0.12
+     },
+     {
+      "envelope": {
+       "attack": 0.004,
+       "decay": 0.18
+      }
+     },
+     {
+      "gain": -3.09804
+     },
+     {
+      "pan": [
+       -0.12,
+       0.11976
+      ]
+     }
+    ],
+    "at": 0.045
+   },
+   "tone4": {
+    "from": {
+     "osc": "sine",
+     "freq": 170,
+     "glideTo": 0.32353,
+     "glideTime": 0.07
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.002,
+       "decay": 0.2
+      }
+     },
+     {
+      "gain": -7.53501
+     },
+     {
+      "pan": [
+       -0.12,
+       0.11976
+      ]
+     }
+    ],
+    "at": 0.045
+   },
+   "burst5": {
+    "from": {
+     "noise": "pink"
+    },
+    "then": [
+     {
+      "filter": "bandpass",
+      "freq": 900,
+      "q": 1.2,
+      "glideTo": 0.55556,
+      "glideTime": 0.14
+     },
+     {
+      "envelope": {
+       "attack": 0.004,
+       "decay": 0.2
+      }
+     },
+     {
+      "gain": 3.52183
+     },
+     {
+      "pan": [
+       -0.12,
+       0.11976
+      ]
+     }
+    ],
+    "at": 0.05
+   },
+   "burst6": {
+    "from": {
+     "noise": "white"
+    },
+    "then": [
+     {
+      "filter": "bandpass",
+      "freq": 3000,
+      "q": 1.1,
+      "glideTo": 0.5,
+      "glideTime": 0.09
+     },
+     {
+      "envelope": {
+       "attack": 0.001,
+       "decay": 0.16
+      }
+     },
+     {
+      "gain": 6.44439
+     },
+     {
+      "pan": [
+       -0.12,
+       0.11976
+      ]
+     }
+    ],
+    "at": 0.045
+   },
+   "burst7": {
+    "from": {
+     "noise": "white"
+    },
+    "then": [
+     {
+      "filter": "highpass",
+      "freq": 4500,
+      "q": 1
+     },
+     {
+      "envelope": {
+       "attack": 0.0006,
+       "decay": 0.02
+      }
+     },
+     {
+      "gain": -6.0206
+     },
+     {
+      "pan": [
+       -0.12,
+       0.11976
+      ]
+     }
+    ],
+    "at": 0.045
+   }
+  },
+  "reverb": 0.14
+ }
+}

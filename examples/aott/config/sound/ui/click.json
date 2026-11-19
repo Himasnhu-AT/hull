@@ -1,0 +1,144 @@
+{
+ "kind": "sound",
+ "note": "A wooden peg knocked home.",
+ "bus": "top",
+ "level": -2.49877,
+ "limit": {
+  "minGap": 0.05,
+  "voices": 3
+ },
+ "source": {
+  "type": "synth",
+  "length": 0.104,
+  "layers": {
+   "tone0": {
+    "from": {
+     "osc": "sine",
+     "freq": 260,
+     "glideTo": 0.57692,
+     "glideTime": 0.03
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.002,
+       "decay": 0.04
+      }
+     },
+     {
+      "gain": -7.9588
+     }
+    ]
+   },
+   "mode1_0": {
+    "from": {
+     "osc": "sine",
+     "freq": 640
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.035
+      }
+     },
+     {
+      "gain": -9.37042
+     }
+    ]
+   },
+   "mode1_1": {
+    "from": {
+     "osc": "sine",
+     "freq": 1180
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.02593
+      }
+     },
+     {
+      "gain": -13.45282
+     }
+    ]
+   },
+   "mode1_2": {
+    "from": {
+     "osc": "sine",
+     "freq": 1950
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.02059
+      }
+     },
+     {
+      "gain": -16.21888
+     }
+    ]
+   },
+   "burst2": {
+    "from": {
+     "noise": "white"
+    },
+    "then": [
+     {
+      "filter": "bandpass",
+      "freq": 2400,
+      "q": 1
+     },
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.012
+      }
+     },
+     {
+      "gain": -11.05684
+     }
+    ]
+   },
+   "mode3_0": {
+    "from": {
+     "osc": "sine",
+     "freq": 3100
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.02
+      }
+     },
+     {
+      "gain": -21.9382
+     }
+    ],
+    "at": 0.004
+   },
+   "mode3_1": {
+    "from": {
+     "osc": "sine",
+     "freq": 4500
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.01481
+      }
+     },
+     {
+      "gain": -26.0206
+     }
+    ],
+    "at": 0.004
+   }
+  },
+  "reverb": 0.04
+ }
+}

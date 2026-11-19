@@ -1,0 +1,14 @@
+{
+ "kind": "sound",
+ "note": "Kill-chain chime up the score's chord; params: n (2..9), pc, third.",
+ "bus": "top",
+ "level": 0,
+ "limit": {
+  "minGap": 0.14,
+  "voices": 2
+ },
+ "source": {
+  "type": "code",
+  "generator": "aott/combo"
+ }
+}

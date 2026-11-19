@@ -1,0 +1,124 @@
+{
+ "kind": "sound",
+ "note": "A running footfall on stone.",
+ "bus": "sfx",
+ "level": -7.51642,
+ "limit": {
+  "minGap": 0.085,
+  "voices": 5
+ },
+ "source": {
+  "type": "synth",
+  "length": 0.117,
+  "layers": {
+   "tone0": {
+    "from": {
+     "osc": "sine",
+     "freq": 151.5,
+     "glideTo": 0.46205,
+     "glideTime": 0.04
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.002,
+       "decay": 0.05
+      }
+     },
+     {
+      "gain": -10.45757
+     },
+     {
+      "pan": [
+       -0.2,
+       0.2
+      ]
+     }
+    ]
+   },
+   "burst1": {
+    "from": {
+     "noise": "white"
+    },
+    "then": [
+     {
+      "filter": "bandpass",
+      "freq": 1966.975,
+      "q": 1.1
+     },
+     {
+      "envelope": {
+       "attack": 0.001,
+       "decay": 0.03
+      }
+     },
+     {
+      "gain": 6.84845
+     },
+     {
+      "pan": [
+       -0.2,
+       0.2
+      ]
+     }
+    ]
+   },
+   "burst2": {
+    "from": {
+     "noise": "pink"
+    },
+    "then": [
+     {
+      "filter": "bandpass",
+      "freq": 538.33,
+      "q": 1
+     },
+     {
+      "envelope": {
+       "attack": 0.001,
+       "decay": 0.035
+      }
+     },
+     {
+      "gain": 2.92256
+     },
+     {
+      "pan": [
+       -0.2,
+       0.2
+      ]
+     }
+    ]
+   },
+   "burst3": {
+    "from": {
+     "noise": "white"
+    },
+    "then": [
+     {
+      "filter": "bandpass",
+      "freq": 4200,
+      "q": 2.5
+     },
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.02
+      }
+     },
+     {
+      "gain": -10.45757
+     },
+     {
+      "pan": [
+       -0.2,
+       0.2
+      ]
+     }
+    ],
+    "at": 0.022
+   }
+  },
+  "reverb": 0.05
+ }
+}

@@ -1,0 +1,126 @@
+{
+ "kind": "sound",
+ "note": "A wall-run footfall on ground.",
+ "bus": "sfx",
+ "level": -8.92804,
+ "limit": {
+  "minGap": 0.085,
+  "voices": 5
+ },
+ "source": {
+  "type": "synth",
+  "length": 0.143,
+  "layers": {
+   "tone0": {
+    "from": {
+     "osc": "sine",
+     "freq": 106.05,
+     "glideTo": 0.45262,
+     "glideTime": 0.05
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.002,
+       "decay": 0.07
+      }
+     },
+     {
+      "gain": -18.63628
+     },
+     {
+      "pan": [
+       -0.2,
+       0.2
+      ]
+     }
+    ]
+   },
+   "burst1": {
+    "from": {
+     "noise": "pink"
+    },
+    "then": [
+     {
+      "filter": "lowpass",
+      "freq": 565.2465,
+      "q": 0.7
+     },
+     {
+      "envelope": {
+       "attack": 0.002,
+       "decay": 0.06
+      }
+     },
+     {
+      "gain": 0.82785
+     },
+     {
+      "pan": [
+       -0.2,
+       0.2
+      ]
+     }
+    ]
+   },
+   "burst2": {
+    "from": {
+     "noise": "pink"
+    },
+    "then": [
+     {
+      "filter": "bandpass",
+      "freq": 1749.5725,
+      "q": 0.8
+     },
+     {
+      "envelope": {
+       "attack": 0.003,
+       "decay": 0.05
+      }
+     },
+     {
+      "gain": 3.52183
+     },
+     {
+      "pan": [
+       -0.2,
+       0.2
+      ]
+     }
+    ]
+   },
+   "burst3": {
+    "from": {
+     "noise": "white"
+    },
+    "then": [
+     {
+      "filter": "bandpass",
+      "freq": 2727,
+      "q": 1.2,
+      "glideTo": 0.48148,
+      "glideTime": 0.06
+     },
+     {
+      "envelope": {
+       "attack": 0.006,
+       "decay": 0.06
+      }
+     },
+     {
+      "gain": -1.9382
+     },
+     {
+      "pan": [
+       -0.2,
+       0.2
+      ]
+     }
+    ],
+    "at": 0.004
+   }
+  },
+  "reverb": 0.05
+ }
+}

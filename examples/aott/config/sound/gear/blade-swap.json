@@ -1,0 +1,227 @@
+{
+ "kind": "sound",
+ "note": "Click, scrape, clack of a new blade seating.",
+ "bus": "sfx",
+ "level": -1.41162,
+ "limit": {
+  "minGap": 0.15,
+  "voices": 3
+ },
+ "source": {
+  "type": "synth",
+  "length": 0.263,
+  "layers": {
+   "mode0_0": {
+    "from": {
+     "osc": "sine",
+     "freq": 1900
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.02
+      }
+     },
+     {
+      "gain": -11.05684
+     }
+    ]
+   },
+   "mode0_1": {
+    "from": {
+     "osc": "sine",
+     "freq": 3100
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.01481
+      }
+     },
+     {
+      "gain": -15.13924
+     }
+    ]
+   },
+   "mode0_2": {
+    "from": {
+     "osc": "sine",
+     "freq": 4700
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.01176
+      }
+     },
+     {
+      "gain": -17.90529
+     }
+    ]
+   },
+   "burst1": {
+    "from": {
+     "noise": "white"
+    },
+    "then": [
+     {
+      "filter": "highpass",
+      "freq": 3200,
+      "q": 1
+     },
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.012
+      }
+     },
+     {
+      "gain": -12.39578
+     }
+    ]
+   },
+   "burst2": {
+    "from": {
+     "noise": "white"
+    },
+    "then": [
+     {
+      "filter": "bandpass",
+      "freq": 3600,
+      "q": 4,
+      "glideTo": 0.55556,
+      "glideTime": 0.12
+     },
+     {
+      "envelope": {
+       "attack": 0.02,
+       "decay": 0.12
+      }
+     },
+     {
+      "gain": -13.9794
+     }
+    ],
+    "at": 0.025
+   },
+   "mode3_0": {
+    "from": {
+     "osc": "sine",
+     "freq": 880
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.04
+      }
+     },
+     {
+      "gain": -12.39578
+     }
+    ],
+    "at": 0.12
+   },
+   "mode3_1": {
+    "from": {
+     "osc": "sine",
+     "freq": 1480
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.02963
+      }
+     },
+     {
+      "gain": -16.47817
+     }
+    ],
+    "at": 0.12
+   },
+   "mode3_2": {
+    "from": {
+     "osc": "sine",
+     "freq": 2300
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.02353
+      }
+     },
+     {
+      "gain": -19.24423
+     }
+    ],
+    "at": 0.12
+   },
+   "mode3_3": {
+    "from": {
+     "osc": "sine",
+     "freq": 3700
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.01951
+      }
+     },
+     {
+      "gain": -21.33894
+     }
+    ],
+    "at": 0.12
+   },
+   "burst4": {
+    "from": {
+     "noise": "white"
+    },
+    "then": [
+     {
+      "filter": "bandpass",
+      "freq": 1800,
+      "q": 1.2
+     },
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.025
+      }
+     },
+     {
+      "gain": -13.9794
+     }
+    ],
+    "at": 0.12
+   },
+   "tone5": {
+    "from": {
+     "osc": "sine",
+     "freq": 190,
+     "glideTo": 0.57895,
+     "glideTime": 0.04
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.002,
+       "decay": 0.07
+      }
+     },
+     {
+      "gain": -13.9794
+     }
+    ],
+    "at": 0.12
+   }
+  },
+  "reverb": 0.1
+ }
+}

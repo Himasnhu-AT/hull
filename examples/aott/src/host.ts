@@ -8,6 +8,7 @@
 // three.js scene hangs under a SceneObject; its camera is the Hull Camera's. The browser-only parts (HUD, effects,
 // sound, pointer lock) are skipped when there is no document, so a Node run plays the same simulation.
 import { Behaviour, type Game as HullGame, type Node } from 'hull';
+import type { AudioView } from 'hull/audio';
 import { input as hullInput, type InputView } from 'hull/input';
 import { Camera, SceneObject, backendScene } from 'hull/render';
 import * as THREE from 'hull/three';
@@ -51,7 +52,7 @@ export interface BootOptions {
 }
 
 /** Where the headless tests put the input they drive (a Hull InputCore); a browser leaves it null and uses the mounted one. */
-export const hub: { view: InputView | null; options: BootOptions } = { view: null, options: {} };
+export const hub: { view: InputView | null; options: BootOptions; audio: AudioView | null } = { view: null, options: {}, audio: null };
 
 function queryOptions(): BootOptions {
   if (HEADLESS || typeof location === 'undefined') return {};
@@ -68,7 +69,7 @@ function isPlaying(mode: string): mode is Exclude<GameMode, 'menu'> {
   return mode === 'expedition' || mode === 'gate' || mode === 'scout' || mode === 'free' || mode === 'training';
 }
 
-interface HullViews { render?: { setLook(id: string): void; setQuality(q: 'low' | 'medium' | 'high'): void; setPixelRatioCap(c: number): void }; audio?: { context: AudioContext | null; bus(n?: string): AudioNode | undefined } }
+interface HullViews { render?: { setLook(id: string): void; setQuality(q: 'low' | 'medium' | 'high'): void; setPixelRatioCap(c: number): void }; audio?: AudioView }
 const views = (): HullViews | undefined => (globalThis as { hull?: HullViews }).hull;
 
 const STEP = 1 / CFG.physicsHz;
@@ -98,8 +99,6 @@ export class AottHost extends Behaviour {
   private frames = 0;
   private qualityApplied = false;
   private keysAttached = false;
-  private audioWanted = false;
-  private startAudio: () => boolean = () => false;
   private camera!: Camera;
   private sunOff: THREE.Vector3 | null = null;
   private readonly sum = new Digest();
@@ -177,23 +176,12 @@ export class AottHost extends Behaviour {
     }
     if (!HEADLESS) {
       game.fx = await load(() => import('./fx/effects'), (m) => new m.Effects(game));
-      game.audio = await load(() => import('./audio/audio'), (m) => {
-        const a = new m.Audio();
-        // one AudioContext for the page: Hull's, with the game's synthesised mix joining its master bus
-        // (A run started from the page's query asks for sound before the page has mounted it: that waits for the first frame.)
-        const init = a.init.bind(a);
-        this.startAudio = (): boolean => {
-          const av = views()?.audio;
-          return init(av?.context ? { context: av.context, destination: av.bus('master') ?? undefined } : {});
-        };
-        a.init = (o = {}) => {
-          if (!views()?.audio) { this.audioWanted = true; return false; }
-          return o.context ? init(o) : this.startAudio();
-        };
-        return a;
-      });
       game.hud = await load(() => import('./ui/hud'), (m) => new m.Hud(game));
     }
+    // sound: every call goes to Hull's audio (recipes in config/sound, the mix in config/mixer/main.json). A Node run has none
+    // unless a test hands in a view to record the plays (hub.audio). A page that asks for sound before Hull has mounted its
+    // audio waits for the first frame (update() below).
+    if (!HEADLESS || hub.audio) game.audio = await load(() => import('./audio/audio'), (m) => new m.Audio(() => hub.audio ?? views()?.audio));
     game.titans = opts.noTitans ? null : await load(() => import('./titans/titans'), (m) => new m.TitanManager(game));
     game.training = await load(() => import('./titans/dummies'), (m) => new m.TrainingCourse(game));
     game.trainingActive = false;
@@ -413,7 +401,7 @@ export class AottHost extends Behaviour {
     const game = this.g;
     if (!game?.flow) return;
     if (!this.keysAttached) { this.keysAttached = true; keys.attach(hub.view ?? hullInput); }
-    if (this.audioWanted && views()?.audio) { this.audioWanted = false; game.audio?.init?.(); }
+    if (game.audio?.wanted && (hub.audio ?? views()?.audio)) game.audio.init();
     if (!this.qualityApplied && views()?.render) { this.qualityApplied = true; game.setQuality(game.quality, false); views()?.render?.setLook('look/' + (game.world?.atmosphere || 'day')); }
     // fog colour and the background follow the game's own scene (the Greatwood's canopy haze)
     const rs = backendScene(this.world);

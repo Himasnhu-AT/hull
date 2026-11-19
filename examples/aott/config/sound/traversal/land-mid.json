@@ -1,0 +1,138 @@
+{
+ "kind": "sound",
+ "note": "Boots landing, mid.",
+ "bus": "sfx",
+ "level": -3.74173,
+ "limit": {
+  "minGap": 0.07,
+  "voices": 4
+ },
+ "source": {
+  "type": "synth",
+  "length": 0.273,
+  "layers": {
+   "tone0": {
+    "from": {
+     "osc": "sine",
+     "freq": 82.5,
+     "glideTo": 0.50909,
+     "glideTime": 0.08
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.002,
+       "decay": 0.17
+      }
+     },
+     {
+      "gain": -1.9382
+     }
+    ]
+   },
+   "burst1": {
+    "from": {
+     "noise": "white"
+    },
+    "then": [
+     {
+      "filter": "lowpass",
+      "freq": 620,
+      "q": 0.7
+     },
+     {
+      "envelope": {
+       "attack": 0.002,
+       "decay": 0.09
+      }
+     },
+     {
+      "gain": -6.0206
+     }
+    ]
+   },
+   "burst2": {
+    "from": {
+     "noise": "pink"
+    },
+    "then": [
+     {
+      "filter": "bandpass",
+      "freq": 520,
+      "q": 1
+     },
+     {
+      "envelope": {
+       "attack": 0.002,
+       "decay": 0.045
+      }
+     },
+     {
+      "gain": -3.09804
+     }
+    ]
+   },
+   "burst3": {
+    "from": {
+     "noise": "white"
+    },
+    "then": [
+     {
+      "filter": "bandpass",
+      "freq": 1500,
+      "q": 0.8,
+      "glideTo": 0.46667,
+      "glideTime": 0.15
+     },
+     {
+      "envelope": {
+       "attack": 0.003,
+       "decay": 0.15
+      }
+     },
+     {
+      "gain": -11.97199
+     }
+    ],
+    "at": 0.004
+   },
+   "mode4_0": {
+    "from": {
+     "osc": "sine",
+     "freq": 1400
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.04
+      }
+     },
+     {
+      "gain": -26.0206
+     }
+    ],
+    "at": 0.02
+   },
+   "mode4_1": {
+    "from": {
+     "osc": "sine",
+     "freq": 2300
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.02963
+      }
+     },
+     {
+      "gain": -30.103
+     }
+    ],
+    "at": 0.02
+   }
+  },
+  "reverb": 0.11
+ }
+}

@@ -1,0 +1,369 @@
+{
+ "kind": "sound",
+ "note": "The brake-reel latching.",
+ "bus": "sfx",
+ "level": -1.41162,
+ "limit": {
+  "minGap": 0.09,
+  "voices": 3
+ },
+ "source": {
+  "type": "synth",
+  "length": 0.7595,
+  "layers": {
+   "mode0_0": {
+    "from": {
+     "osc": "sine",
+     "freq": [
+      2100,
+      2399.7
+     ]
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.014
+      }
+     },
+     {
+      "gain": -15.9176
+     }
+    ]
+   },
+   "mode0_1": {
+    "from": {
+     "osc": "sine",
+     "freq": 3400
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.01037
+      }
+     },
+     {
+      "gain": -20
+     }
+    ]
+   },
+   "mode0_2": {
+    "from": {
+     "osc": "sine",
+     "freq": 4700
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.00824
+      }
+     },
+     {
+      "gain": -22.76605
+     }
+    ]
+   },
+   "burst1": {
+    "from": {
+     "noise": "white"
+    },
+    "then": [
+     {
+      "filter": "bandpass",
+      "freq": 3800,
+      "q": 2
+     },
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.008
+      }
+     },
+     {
+      "gain": -20
+     }
+    ]
+   },
+   "mode2_0": {
+    "from": {
+     "osc": "sine",
+     "freq": [
+      2100,
+      2399.7
+     ]
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.014
+      }
+     },
+     {
+      "gain": -15.9176
+     }
+    ],
+    "at": 0.024
+   },
+   "mode2_1": {
+    "from": {
+     "osc": "sine",
+     "freq": 3400
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.01037
+      }
+     },
+     {
+      "gain": -20
+     }
+    ],
+    "at": 0.024
+   },
+   "mode2_2": {
+    "from": {
+     "osc": "sine",
+     "freq": 4700
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.00824
+      }
+     },
+     {
+      "gain": -22.76605
+     }
+    ],
+    "at": 0.024
+   },
+   "burst3": {
+    "from": {
+     "noise": "white"
+    },
+    "then": [
+     {
+      "filter": "bandpass",
+      "freq": 3800,
+      "q": 2
+     },
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.008
+      }
+     },
+     {
+      "gain": -20
+     }
+    ],
+    "at": 0.024
+   },
+   "tone4": {
+    "from": {
+     "osc": "sine",
+     "freq": 210,
+     "glideTo": 0.37143,
+     "glideTime": 0.05
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.002,
+       "decay": 0.09
+      }
+     },
+     {
+      "gain": -4.43697
+     }
+    ],
+    "at": 0.055
+   },
+   "mode5_0": {
+    "from": {
+     "osc": "sine",
+     "freq": 470
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.06
+      }
+     },
+     {
+      "gain": -7.9588
+     }
+    ],
+    "at": 0.055
+   },
+   "mode5_1": {
+    "from": {
+     "osc": "sine",
+     "freq": 860
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.04444
+      }
+     },
+     {
+      "gain": -12.0412
+     }
+    ],
+    "at": 0.055
+   },
+   "mode5_2": {
+    "from": {
+     "osc": "sine",
+     "freq": 1390
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.03529
+      }
+     },
+     {
+      "gain": -14.80725
+     }
+    ],
+    "at": 0.055
+   },
+   "mode5_3": {
+    "from": {
+     "osc": "sine",
+     "freq": 2250
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.02927
+      }
+     },
+     {
+      "gain": -16.90196
+     }
+    ],
+    "at": 0.055
+   },
+   "burst6": {
+    "from": {
+     "noise": "white"
+    },
+    "then": [
+     {
+      "filter": "bandpass",
+      "freq": 2400,
+      "q": 1
+     },
+     {
+      "envelope": {
+       "attack": 0.0006,
+       "decay": 0.022
+      }
+     },
+     {
+      "gain": -7.9588
+     }
+    ],
+    "at": 0.055
+   },
+   "mode7_0": {
+    "from": {
+     "osc": "sine",
+     "freq": [
+      1280,
+      1419.86
+     ]
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.5
+      }
+     },
+     {
+      "gain": -20
+     }
+    ],
+    "at": 0.059
+   },
+   "mode7_1": {
+    "from": {
+     "osc": "sine",
+     "freq": [
+      2073.6,
+      2300.1732
+     ]
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.36
+      }
+     },
+     {
+      "gain": -24.43697
+     }
+    ],
+    "at": 0.059
+   },
+   "mode7_2": {
+    "from": {
+     "osc": "sine",
+     "freq": [
+      3212.8,
+      3563.8486
+     ]
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.26
+      }
+     },
+     {
+      "gain": -27.9588
+     }
+    ],
+    "at": 0.059
+   },
+   "mode7_3": {
+    "from": {
+     "osc": "sine",
+     "freq": [
+      4633.6,
+      5139.8932
+     ]
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.16
+      }
+     },
+     {
+      "gain": -32.0412
+     }
+    ],
+    "at": 0.059
+   }
+  },
+  "reverb": 0.12
+ }
+}

@@ -1,108 +1,22 @@
-// Shared DSP helpers for the audio engine: maths, noise / impulse-response generation, and `Rig`,
-// a tiny builder that creates one-shot node graphs and disconnects every node once the last source ends.
-import type { Audio } from './audio';
-import { R } from '../sim';
+// Helpers for the game's code-made sounds (generators): maths, and `Rig`, a tiny builder that creates one sound's node
+// graph and disconnects every node once the last source ends. A `Host` is what a generator sees of the engine.
+import { noiseBufferFor } from 'hull/audio';
 
 export type NoiseKind = 'white' | 'pink' | 'brown';
 
 export const clamp = (v: number, a: number, b: number): number => (v < a ? a : v > b ? b : v);
 export const lerp = (a: number, b: number, t: number): number => a + (b - a) * t;
-export const rand = (a = 0, b = 1): number => a + R.fx() * (b - a);
-export const pick = <T>(arr: readonly T[]): T => arr[(R.fx() * arr.length) | 0];
+// The stream of the play being built: every random choice in a sound comes from the engine's seeded stream, so a bench
+// render repeats and a recorded run draws the same numbers.
+let stream: { next(): number } = { next: () => 0.5 };
+export const useStream = (s: { next(): number }): void => { stream = s; };
+export const fx = (): number => stream.next();
+export const rand = (a = 0, b = 1): number => a + fx() * (b - a);
+export const pick = <T>(arr: readonly T[]): T => arr[(fx() * arr.length) | 0];
 export const mtof = (m: number): number => 440 * Math.pow(2, (m - 69) / 12);
 export function smoothstep(a: number, b: number, x: number): number {
   const t = clamp((x - a) / (b - a), 0, 1);
   return t * t * (3 - 2 * t);
-}
-
-/**
- * Loopable mono noise buffer ('white' | 'pink' | 'brown'), RMS-normalised to ~0.3, with an equal-power crossfaded seam.
- */
-export function noiseBuffer(ctx: BaseAudioContext, kind: NoiseKind, seconds: number): AudioBuffer {
-  const sr = ctx.sampleRate;
-  const N = Math.floor(seconds * sr);
-  const X = 2048;
-  const tmp = new Float32Array(N + X);
-  if (kind === 'pink') {
-    let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
-    for (let i = 0; i < tmp.length; i++) {
-      const w = R.fx() * 2 - 1;
-      b0 = 0.99886 * b0 + w * 0.0555179;
-      b1 = 0.99332 * b1 + w * 0.0750759;
-      b2 = 0.969 * b2 + w * 0.153852;
-      b3 = 0.8665 * b3 + w * 0.3104856;
-      b4 = 0.55 * b4 + w * 0.5329522;
-      b5 = -0.7616 * b5 - w * 0.016898;
-      tmp[i] = b0 + b1 + b2 + b3 + b4 + b5 + b6 + w * 0.5362;
-      b6 = w * 0.115926;
-    }
-  } else if (kind === 'brown') {
-    let l = 0;
-    for (let i = 0; i < tmp.length; i++) {
-      const w = R.fx() * 2 - 1;
-      l = (l + 0.02 * w) / 1.02;
-      tmp[i] = l;
-    }
-  } else {
-    for (let i = 0; i < tmp.length; i++) tmp[i] = R.fx() * 2 - 1;
-  }
-  let s = 0;
-  for (let i = 0; i < tmp.length; i++) s += tmp[i] * tmp[i];
-  const g = 0.3 / Math.sqrt(s / tmp.length || 1);
-  const buf = ctx.createBuffer(1, N, sr);
-  const d = buf.getChannelData(0);
-  for (let i = 0; i < N; i++) d[i] = tmp[i] * g;
-  // seam: the stream continues past d[N-1] into d[0]; make d[0..X) fade from "tail continuation" into the true start.
-  for (let i = 0; i < X; i++) {
-    const w = i / X;
-    d[i] = (tmp[N + i] * Math.cos(w * Math.PI * 0.5) + tmp[i] * Math.sin(w * Math.PI * 0.5)) * g;
-  }
-  return buf;
-}
-
-/**
- * Stereo reverb impulse response: decaying noise whose highs die faster than its lows, a handful of
- * sparse early reflections and (optionally) two wall slap-backs for an outdoor "between city walls" feel.
- */
-export interface IROptions { rt60?: number; pre?: number; bright?: number; dark?: number; slap?: boolean; early?: boolean; hp?: number }
-
-export function impulseResponse(ctx: BaseAudioContext, seconds: number, { rt60 = 2.2, pre = 0.012, bright = 0.85, dark = 0.2, slap = true, early = true, hp = 0.985 }: IROptions = {}): AudioBuffer {
-  const sr = ctx.sampleRate;
-  const len = Math.floor(seconds * sr);
-  const buf = ctx.createBuffer(2, len, sr);
-  const k = 6.908 / rt60;
-  for (let ch = 0; ch < 2; ch++) {
-    const d = buf.getChannelData(ch);
-    let y = 0;
-    for (let i = 0; i < len; i++) {
-      const t = i / sr - pre;
-      if (t < 0) continue;
-      const env = Math.exp(-t * k) * Math.min(1, t / 0.02);
-      const a = lerp(bright, dark, Math.min(1, t / (rt60 * 0.8)));
-      y += a * ((R.fx() * 2 - 1) - y);
-      d[i] = y * env * 2.2;
-    }
-    // high-pass the tail (one-pole) so the reverb never adds boomy low end under every sound
-    let px = 0, py = 0;
-    for (let i = 0; i < len; i++) {
-      const x = d[i];
-      py = hp * (py + x - px);
-      px = x;
-      d[i] = py;
-    }
-    const tap = (time: number, amp: number): void => {
-      const i = Math.floor((time + (ch ? 0.0011 : 0)) * sr);
-      for (let j = 0; j < 12 && i + j < len; j++) d[i + j] += amp * (R.fx() * 2 - 1) * (1 - j / 12);
-    };
-    if (early) {
-      [0.017, 0.031, 0.047, 0.071, 0.098].forEach((tm, n) => tap(tm + ch * 0.0023, 0.5 / (1 + n * 0.5)));
-    }
-    if (slap) {
-      tap(0.142 + ch * 0.011, 0.34);
-      tap(0.27 + ch * 0.017, 0.22);
-    }
-  }
-  return buf;
 }
 
 /** Soft-clip curve (tanh) for waveshapers. `drive` > 1 for harder saturation. */
@@ -139,10 +53,24 @@ export interface ModesOpts { t: number; f: number[]; decay?: number | number[]; 
 
 type Source = OscillatorNode | AudioBufferSourceNode;
 
-export class Rig {
-  A: Audio;
+/** What one play of a generator sees: the context, where its output goes, and the numbers the game passed. */
+export interface Host {
   ctx: BaseAudioContext;
-  cat: string | null;
+  /** Context time the sound starts at. */
+  t0: number;
+  /** Where the sound goes: the recipe's bus (through the engine's gain, pan and air filter when placed). */
+  out: AudioNode;
+  /** The shared reverb's input, or null (the bench has none). */
+  revIn: AudioNode | null;
+  params: Readonly<Record<string, number>>;
+  satHard: Float32Array<ArrayBuffer>;
+  /** The chord of the score (pitch class of the root and the third's distance), as the game last read it. */
+  chord: { pc: number; third: number };
+}
+
+export class Rig {
+  A: Host;
+  ctx: BaseAudioContext;
   nodes: AudioNode[];
   srcs: Source[];
   live: number;
@@ -150,17 +78,15 @@ export class Rig {
   dead: boolean;
   cleanups: (() => void)[];
 
-  constructor(A: Audio, cat: string | null = null) {
+  constructor(A: Host) {
     this.A = A;
-    this.ctx = A.ctx as BaseAudioContext;
-    this.cat = cat;
+    this.ctx = A.ctx;
     this.nodes = [];
     this.srcs = [];
     this.live = 0;
     this.sealed = false;
     this.dead = false;
     this.cleanups = [];
-    A._rigsLive = (A._rigsLive | 0) + 1;
   }
 
   _t<T extends AudioNode>(n: T): T {
@@ -212,7 +138,7 @@ export class Rig {
   /** Looped noise source ('white' | 'pink' | 'brown') running t0..t0+dur from a random offset. */
   noise(kind: NoiseKind, t0: number, dur: number): AudioBufferSourceNode {
     const s = this.ctx.createBufferSource();
-    const buf = this.A.noise[kind] || this.A.noise.white;
+    const buf = noiseBufferFor(this.ctx, kind);
     s.buffer = buf;
     s.loop = true;
     return this._start(s, t0, t0 + dur, rand(0, buf.duration - 0.01));
@@ -268,6 +194,26 @@ export class Rig {
     this.cleanups.push(fn);
   }
 
+  /** Output stage for the sound: gain -> (stereo pan) -> the recipe's bus, plus a reverb send. */
+  dest(o: { vol?: number; pan?: number; rev?: number; to?: unknown; revScale?: number } = {}): GainNode {
+    const g = this.gain(o.vol == null ? 1 : o.vol);
+    let n: AudioNode = g;
+    if (o.pan && this.ctx.createStereoPanner) {
+      const p = this.ctx.createStereoPanner();
+      p.pan.value = clamp(o.pan, -1, 1);
+      this.nodes.push(p);
+      g.connect(p);
+      n = p;
+    }
+    n.connect(this.A.out);
+    if (o.rev && o.rev > 0 && this.A.revIn) {
+      const s = this.gain(o.rev);
+      n.connect(s);
+      s.connect(this.A.revIn);
+    }
+    return g;
+  }
+
   /** Called by the owner after building: if nothing was scheduled there is nothing to wait for. */
   seal(): void {
     this.sealed = true;
@@ -286,7 +232,6 @@ export class Rig {
   dispose(): void {
     if (this.dead) return;
     this.dead = true;
-    this.A._rigsLive--;
     for (const fn of this.cleanups) {
       try { fn(); } catch (e) { /* ignore */ }
     }
@@ -296,6 +241,5 @@ export class Rig {
     this.nodes.length = 0;
     this.srcs.length = 0;
     this.cleanups.length = 0;
-    this.A._release(this);
   }
 }

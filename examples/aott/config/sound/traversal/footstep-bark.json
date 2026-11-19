@@ -1,0 +1,97 @@
+{
+ "kind": "sound",
+ "note": "A running footfall on bark.",
+ "bus": "sfx",
+ "level": -7.51642,
+ "limit": {
+  "minGap": 0.085,
+  "voices": 5
+ },
+ "source": {
+  "type": "synth",
+  "length": 0.1235,
+  "layers": {
+   "tone0": {
+    "from": {
+     "osc": "sine",
+     "freq": 141.4,
+     "glideTo": 0.49505,
+     "glideTime": 0.04
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.002,
+       "decay": 0.055
+      }
+     },
+     {
+      "gain": -10.45757
+     },
+     {
+      "pan": [
+       -0.2,
+       0.2
+      ]
+     }
+    ]
+   },
+   "burst1": {
+    "from": {
+     "noise": "pink"
+    },
+    "then": [
+     {
+      "filter": "bandpass",
+      "freq": 641.855,
+      "q": 0.8
+     },
+     {
+      "envelope": {
+       "attack": 0.0015,
+       "decay": 0.045
+      }
+     },
+     {
+      "gain": 4.0824
+     },
+     {
+      "pan": [
+       -0.2,
+       0.2
+      ]
+     }
+    ]
+   },
+   "burst2": {
+    "from": {
+     "noise": "white"
+    },
+    "then": [
+     {
+      "filter": "bandpass",
+      "freq": 2381.075,
+      "q": 1.4
+     },
+     {
+      "envelope": {
+       "attack": 0.002,
+       "decay": 0.03
+      }
+     },
+     {
+      "gain": 0.82785
+     },
+     {
+      "pan": [
+       -0.2,
+       0.2
+      ]
+     }
+    ],
+    "at": 0.002
+   }
+  },
+  "reverb": 0.05
+ }
+}

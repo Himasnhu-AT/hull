@@ -1,0 +1,14 @@
+{
+ "kind": "sound",
+ "note": "The Behemoth arriving: thunder crack, boom, rumble, two deep roars. The game ducks the score under it.",
+ "bus": "sfx",
+ "level": 0,
+ "limit": {
+  "minGap": 3,
+  "voices": 1
+ },
+ "source": {
+  "type": "code",
+  "generator": "aott/behemoth"
+ }
+}

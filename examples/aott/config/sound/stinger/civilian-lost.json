@@ -1,0 +1,14 @@
+{
+ "kind": "sound",
+ "note": "A civilian taken: sagging low strings and a muffled drum; params: pc, third.",
+ "bus": "top",
+ "level": 0,
+ "limit": {
+  "minGap": 0.6,
+  "voices": 1
+ },
+ "source": {
+  "type": "code",
+  "generator": "aott/civilian-lost"
+ }
+}

@@ -1,0 +1,14 @@
+{
+ "kind": "sound",
+ "note": "A titan's grip closing: creaking leather, a gasp. Code: formant and saw nodes a recipe cannot say.",
+ "bus": "sfx",
+ "level": 0,
+ "limit": {
+  "minGap": 0.6,
+  "voices": 2
+ },
+ "source": {
+  "type": "code",
+  "generator": "aott/grabbed"
+ }
+}

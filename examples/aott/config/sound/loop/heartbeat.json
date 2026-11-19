@@ -1,0 +1,13 @@
+{
+ "kind": "sound",
+ "note": "Low-health lub-dub, 70 to 140 bpm. Live: level 0..1.",
+ "bus": "top",
+ "level": 0,
+ "limit": {
+  "voices": 1
+ },
+ "source": {
+  "type": "code",
+  "generator": "aott/heartbeat"
+ }
+}

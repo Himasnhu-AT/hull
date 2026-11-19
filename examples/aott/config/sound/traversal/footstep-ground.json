@@ -1,0 +1,96 @@
+{
+ "kind": "sound",
+ "note": "A running footfall on ground.",
+ "bus": "sfx",
+ "level": -7.51642,
+ "limit": {
+  "minGap": 0.085,
+  "voices": 5
+ },
+ "source": {
+  "type": "synth",
+  "length": 0.143,
+  "layers": {
+   "tone0": {
+    "from": {
+     "osc": "sine",
+     "freq": 106.05,
+     "glideTo": 0.45262,
+     "glideTime": 0.05
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.002,
+       "decay": 0.07
+      }
+     },
+     {
+      "gain": -11.70053
+     },
+     {
+      "pan": [
+       -0.2,
+       0.2
+      ]
+     }
+    ]
+   },
+   "burst1": {
+    "from": {
+     "noise": "pink"
+    },
+    "then": [
+     {
+      "filter": "lowpass",
+      "freq": 434.805,
+      "q": 0.7
+     },
+     {
+      "envelope": {
+       "attack": 0.002,
+       "decay": 0.06
+      }
+     },
+     {
+      "gain": 0.82785
+     },
+     {
+      "pan": [
+       -0.2,
+       0.2
+      ]
+     }
+    ]
+   },
+   "burst2": {
+    "from": {
+     "noise": "pink"
+    },
+    "then": [
+     {
+      "filter": "bandpass",
+      "freq": 1345.825,
+      "q": 0.8
+     },
+     {
+      "envelope": {
+       "attack": 0.003,
+       "decay": 0.05
+      }
+     },
+     {
+      "gain": 3.52183
+     },
+     {
+      "pan": [
+       -0.2,
+       0.2
+      ]
+     }
+    ]
+   }
+  },
+  "reverb": 0.05
+ }
+}

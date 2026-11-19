@@ -1,0 +1,19 @@
+{
+ "kind": "sound",
+ "note": "A titan's formant growl; params: size (metres).",
+ "bus": "sfx",
+ "level": 0,
+ "limit": {
+  "minGap": 0.12,
+  "voices": 4
+ },
+ "spatial": {
+  "ref": 15,
+  "max": 400,
+  "airLowpass": true
+ },
+ "source": {
+  "type": "code",
+  "generator": "aott/titan-groan"
+ }
+}

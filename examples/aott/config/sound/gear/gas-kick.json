@@ -1,0 +1,14 @@
+{
+ "kind": "sound",
+ "note": "The valve opening under the first instant of a gas burst; params: level.",
+ "bus": "sfx",
+ "level": 0,
+ "limit": {
+  "minGap": 0.12,
+  "voices": 2
+ },
+ "source": {
+  "type": "code",
+  "generator": "aott/gas-kick"
+ }
+}

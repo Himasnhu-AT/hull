@@ -1,0 +1,14 @@
+{
+ "kind": "sound",
+ "note": "Crossing into very high speed: a crack and the air tearing to both sides.",
+ "bus": "sfx",
+ "level": 0,
+ "limit": {
+  "minGap": 1.2,
+  "voices": 1
+ },
+ "source": {
+  "type": "code",
+  "generator": "aott/speed-burst"
+ }
+}

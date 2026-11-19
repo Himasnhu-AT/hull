@@ -1,0 +1,435 @@
+{
+ "kind": "sound",
+ "note": "A small titan falling.",
+ "bus": "sfx",
+ "level": -1.04479,
+ "limit": {
+  "voices": 3
+ },
+ "spatial": {
+  "ref": 15,
+  "max": 400,
+  "airLowpass": true
+ },
+ "source": {
+  "type": "synth",
+  "length": 2.91733,
+  "layers": {
+   "tone0": {
+    "from": {
+     "osc": "sine",
+     "freq": 75,
+     "glideTo": 0.32,
+     "glideTime": 1.1
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.01,
+       "decay": 1.21333
+      }
+     },
+     {
+      "gain": 0
+     }
+    ]
+   },
+   "tone1": {
+    "from": {
+     "osc": "sine",
+     "freq": 140,
+     "glideTo": 0.32143,
+     "glideTime": 0.2
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.004,
+       "decay": 0.45
+      }
+     },
+     {
+      "gain": -3.09804
+     }
+    ]
+   },
+   "burst2": {
+    "from": {
+     "noise": "brown"
+    },
+    "then": [
+     {
+      "filter": "lowpass",
+      "freq": 600,
+      "q": 0.7,
+      "glideTo": 0.11667,
+      "glideTime": 1.6
+     },
+     {
+      "envelope": {
+       "attack": 0.01,
+       "decay": 1.66667
+      }
+     },
+     {
+      "gain": 3.52183
+     }
+    ]
+   },
+   "burst3": {
+    "from": {
+     "noise": "white"
+    },
+    "then": [
+     {
+      "filter": "lowpass",
+      "freq": 4000,
+      "q": 0.8,
+      "glideTo": 0.075,
+      "glideTime": 0.9
+     },
+     {
+      "envelope": {
+       "attack": 0.004,
+       "decay": 0.80667
+      }
+     },
+     {
+      "gain": -3.09804
+     }
+    ]
+   },
+   "burst4": {
+    "from": {
+     "noise": "white"
+    },
+    "then": [
+     {
+      "filter": "bandpass",
+      "freq": [
+       200,
+       1398.8
+      ],
+      "q": 1.2
+     },
+     {
+      "envelope": {
+       "attack": 0.002,
+       "decay": [
+        0.05,
+        0.15989
+       ]
+      }
+     },
+     {
+      "gain": [
+       -21.9382,
+       -12.04711
+      ]
+     }
+    ],
+    "at": [
+     0.12,
+     2.18377
+    ]
+   },
+   "burst5": {
+    "from": {
+     "noise": "white"
+    },
+    "then": [
+     {
+      "filter": "bandpass",
+      "freq": [
+       200,
+       1398.8
+      ],
+      "q": 1.2
+     },
+     {
+      "envelope": {
+       "attack": 0.002,
+       "decay": [
+        0.05,
+        0.15989
+       ]
+      }
+     },
+     {
+      "gain": [
+       -21.9382,
+       -12.04711
+      ]
+     }
+    ],
+    "at": [
+     0.12,
+     2.18377
+    ]
+   },
+   "burst6": {
+    "from": {
+     "noise": "white"
+    },
+    "then": [
+     {
+      "filter": "bandpass",
+      "freq": [
+       200,
+       1398.8
+      ],
+      "q": 1.2
+     },
+     {
+      "envelope": {
+       "attack": 0.002,
+       "decay": [
+        0.05,
+        0.15989
+       ]
+      }
+     },
+     {
+      "gain": [
+       -21.9382,
+       -12.04711
+      ]
+     }
+    ],
+    "at": [
+     0.12,
+     2.18377
+    ]
+   },
+   "burst7": {
+    "from": {
+     "noise": "white"
+    },
+    "then": [
+     {
+      "filter": "bandpass",
+      "freq": [
+       200,
+       1398.8
+      ],
+      "q": 1.2
+     },
+     {
+      "envelope": {
+       "attack": 0.002,
+       "decay": [
+        0.05,
+        0.15989
+       ]
+      }
+     },
+     {
+      "gain": [
+       -21.9382,
+       -12.04711
+      ]
+     }
+    ],
+    "at": [
+     0.12,
+     2.18377
+    ]
+   },
+   "burst8": {
+    "from": {
+     "noise": "white"
+    },
+    "then": [
+     {
+      "filter": "bandpass",
+      "freq": [
+       200,
+       1398.8
+      ],
+      "q": 1.2
+     },
+     {
+      "envelope": {
+       "attack": 0.002,
+       "decay": [
+        0.05,
+        0.15989
+       ]
+      }
+     },
+     {
+      "gain": [
+       -21.9382,
+       -12.04711
+      ]
+     }
+    ],
+    "at": [
+     0.12,
+     2.18377
+    ]
+   },
+   "burst9": {
+    "from": {
+     "noise": "white"
+    },
+    "then": [
+     {
+      "filter": "bandpass",
+      "freq": [
+       200,
+       1398.8
+      ],
+      "q": 1.2
+     },
+     {
+      "envelope": {
+       "attack": 0.002,
+       "decay": [
+        0.05,
+        0.15989
+       ]
+      }
+     },
+     {
+      "gain": [
+       -21.9382,
+       -12.04711
+      ]
+     }
+    ],
+    "at": [
+     0.12,
+     2.18377
+    ]
+   },
+   "burst10": {
+    "from": {
+     "noise": "white"
+    },
+    "then": [
+     {
+      "filter": "bandpass",
+      "freq": [
+       200,
+       1398.8
+      ],
+      "q": 1.2
+     },
+     {
+      "envelope": {
+       "attack": 0.002,
+       "decay": [
+        0.05,
+        0.15989
+       ]
+      }
+     },
+     {
+      "gain": [
+       -21.9382,
+       -12.04711
+      ]
+     }
+    ],
+    "at": [
+     0.12,
+     2.18377
+    ]
+   },
+   "burst11": {
+    "from": {
+     "noise": "white"
+    },
+    "then": [
+     {
+      "filter": "bandpass",
+      "freq": [
+       200,
+       1398.8
+      ],
+      "q": 1.2
+     },
+     {
+      "envelope": {
+       "attack": 0.002,
+       "decay": [
+        0.05,
+        0.15989
+       ]
+      }
+     },
+     {
+      "gain": [
+       -21.9382,
+       -12.04711
+      ]
+     }
+    ],
+    "at": [
+     0.12,
+     2.18377
+    ]
+   },
+   "burst12": {
+    "from": {
+     "noise": "white"
+    },
+    "then": [
+     {
+      "filter": "bandpass",
+      "freq": [
+       200,
+       1398.8
+      ],
+      "q": 1.2
+     },
+     {
+      "envelope": {
+       "attack": 0.002,
+       "decay": [
+        0.05,
+        0.15989
+       ]
+      }
+     },
+     {
+      "gain": [
+       -21.9382,
+       -12.04711
+      ]
+     }
+    ],
+    "at": [
+     0.12,
+     2.18377
+    ]
+   },
+   "burst13": {
+    "from": {
+     "noise": "pink"
+    },
+    "then": [
+     {
+      "filter": "bandpass",
+      "freq": 1200,
+      "q": 0.6,
+      "glideTo": 0.33333,
+      "glideTime": 2.2
+     },
+     {
+      "envelope": {
+       "attack": 0.15,
+       "decay": 2.01333
+      }
+     },
+     {
+      "gain": -11.05684
+     }
+    ],
+    "at": 0.1
+   }
+  },
+  "reverb": 0.5
+ }
+}
