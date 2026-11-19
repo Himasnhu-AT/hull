@@ -168,6 +168,7 @@ export class Graph {
   private readonly rc = new Float64Array(4);
   /** True when some clip the graph can play has root motion. */
   private hasRoot = false;
+  private rootBone = -1;
   /** Foot slide of the layer that plays a speed-matched state, in m/s: |ground speed - what the feet cover|. */
   slide = 0;
   /** What the feet cover and what the game asked for (m/s), for the same layer. */
@@ -312,7 +313,9 @@ export class Graph {
       l.win = new Uint8Array(this.windowNames.length); l.winPrev = new Uint8Array(this.windowNames.length);
       l.winClip = this.windowNames.map(() => '');
     }
-    this.hasRoot = [...this.clipWindows.keys()].some((c) => c.root !== null);
+    const rooted = [...this.clipWindows.keys()].find((c) => c.root !== null);
+    this.hasRoot = rooted !== undefined;
+    this.rootBone = rooted?.root?.bone ?? -1;
     this.reset();
   }
 
@@ -398,11 +401,8 @@ export class Graph {
         this.advance(l, e, dt, i === newest ? emit : null);
         // This entry's travel, weighted like its pose; an entry with no clip says nothing about the root.
         if (this.hasRoot && l.states[e.state]!.clips.length > 0) {
-          const bone = this.rootBoneOf(l.states[e.state]!);
-          if (bone >= 0 && (l.mask === null || l.mask[bone] === 1)) {
-            for (let k = 0; k < 4; k++) lr[k] = lr[k]! + this.rd[k]! * e.w;
-            rootCov += e.w;
-          }
+          for (let k = 0; k < 4; k++) lr[k] = lr[k]! + this.rd[k]! * e.w;
+          rootCov += e.w;
         }
         if (i === newest) {
           const st = l.states[e.state]!;
@@ -415,10 +415,12 @@ export class Graph {
         }
       }
       this.fade(l, dt);
-      if (this.hasRoot && rootCov > 0) {
-        // A layer lays itself over what is below it, like its pose does; an additive one adds.
+      if (this.hasRoot && rootCov > 0 && (l.mask === null || l.mask[this.rootBone] === 1)) {
+        // A state that has a clip but no root motion stands still, with its weight. A layer lays itself over what is
+        // below it, like its pose does; an additive one adds.
         const cov = Math.min(1, rootCov) * l.weight * (l.weightParam >= 0 ? clamp(this.params[l.weightParam]!, 0, 1) : 1);
-        for (let k = 0; k < 4; k++) root[k] = l.additive ? root[k]! + lr[k]! * cov : root[k]! * (1 - cov) + lr[k]! * cov;
+        const norm = 1 / rootCov;
+        for (let k = 0; k < 4; k++) root[k] = l.additive ? root[k]! + lr[k]! * norm * cov : root[k]! * (1 - cov) + lr[k]! * norm * cov;
       }
       this.updateWindows(l, emitWindow);
     }
@@ -544,14 +546,8 @@ export class Graph {
     e.fresh = false;
   }
 
-  private rootBoneOf(st: StateRT): number {
-    for (const c of st.clips) if (c.root) return c.root.bone;
-    return -1;
-  }
-
   /** Adds the travel of `c` between two clip times (seconds, not wrapped), times `w`, into `rd`. */
   private rootAcc(c: Clip, tA: number, tB: number, w: number): void {
-    const r = c.root!;
     this.cumRoot(c, tA, this.rb);
     this.cumRoot(c, tB, this.rc);
     for (let k = 0; k < 4; k++) this.rd[k] = this.rd[k]! + (this.rc[k]! - this.rb[k]!) * w;

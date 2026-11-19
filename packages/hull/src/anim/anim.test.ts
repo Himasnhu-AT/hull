@@ -36,9 +36,9 @@ describe('examples', () => {
   it('validate against their schemas, with every reference resolved', () => {
     const res = createRegistry().load(exampleSources());
     expect(res.problems).toEqual([]);
-    expect(res.ids['character']).toEqual(['soldier', 'titan']);
-    expect(res.ids['anim-set']).toEqual(['humanoid']);
-    expect(res.ids['anim-graph']).toEqual(['locomotion', 'titan']);
+    expect(res.ids['character']).toEqual(['soldier', 'swordswoman', 'titan']);
+    expect(res.ids['anim-set']).toEqual(['humanoid', 'sword']);
+    expect(res.ids['anim-graph']).toEqual(['locomotion', 'sword', 'titan']);
   });
 
   it('name the place of a mistake in a graph or a clip', () => {

@@ -1,0 +1,180 @@
+{
+  "kind": "anim-graph",
+  "note": "Sword fighter: ready stance, one trigger per move, the off-hand gripping the hilt, a ponytail and sash on springs, a procedural flinch.",
+  "params": {
+    "speed": {
+      "type": "number",
+      "default": 0,
+      "min": 0,
+      "max": 6
+    },
+    "twoHand": {
+      "type": "number",
+      "default": 1,
+      "min": 0,
+      "max": 1
+    },
+    "draw": {
+      "type": "trigger"
+    },
+    "light": {
+      "type": "trigger"
+    },
+    "heavy": {
+      "type": "trigger"
+    },
+    "deflect": {
+      "type": "trigger"
+    },
+    "dodge": {
+      "type": "trigger"
+    },
+    "hit": {
+      "type": "trigger"
+    }
+  },
+  "layers": {
+    "base": {
+      "start": "ready",
+      "states": {
+        "ready": {
+          "clip": "idle"
+        },
+        "draw": {
+          "clip": "draw",
+          "exit": "ready",
+          "exitBlend": 0.12
+        },
+        "light1": {
+          "clip": "light1",
+          "exit": "ready",
+          "exitBlend": 0.1
+        },
+        "light2": {
+          "clip": "light2",
+          "exit": "ready",
+          "exitBlend": 0.1
+        },
+        "light3": {
+          "clip": "light3",
+          "exit": "ready",
+          "exitBlend": 0.12
+        },
+        "heavy": {
+          "clip": "heavy",
+          "exit": "ready",
+          "exitBlend": 0.15
+        },
+        "deflect": {
+          "clip": "deflect",
+          "exit": "ready",
+          "exitBlend": 0.1
+        },
+        "dodge": {
+          "clip": "dodge",
+          "exit": "ready",
+          "exitBlend": 0.1
+        },
+        "hit_react": {
+          "clip": "hit_react",
+          "exit": "ready",
+          "exitBlend": 0.15
+        }
+      },
+      "transitions": [
+        {
+          "from": "*",
+          "to": "hit_react",
+          "when": "hit",
+          "blend": 0.04
+        },
+        {
+          "from": "*",
+          "to": "dodge",
+          "when": "dodge",
+          "blend": 0.06
+        },
+        {
+          "from": "*",
+          "to": "deflect",
+          "when": "deflect",
+          "blend": 0.04
+        },
+        {
+          "from": "ready",
+          "to": "draw",
+          "when": "draw",
+          "blend": 0.08
+        },
+        {
+          "from": "light2",
+          "to": "light3",
+          "when": "light",
+          "blend": 0.06,
+          "after": 0.34
+        },
+        {
+          "from": "light1",
+          "to": "light2",
+          "when": "light",
+          "blend": 0.06,
+          "after": 0.38
+        },
+        {
+          "from": "ready",
+          "to": "light1",
+          "when": "light",
+          "blend": 0.06
+        },
+        {
+          "from": "ready",
+          "to": "heavy",
+          "when": "heavy",
+          "blend": 0.1
+        },
+        {
+          "from": "light1",
+          "to": "heavy",
+          "when": "heavy",
+          "blend": 0.08,
+          "after": 0.38
+        }
+      ]
+    }
+  },
+  "ik": {
+    "grips": {
+      "handL": {
+        "socket": "hiltL",
+        "weightFrom": "twoHand"
+      }
+    },
+    "feet": {
+      "enabled": true
+    }
+  },
+  "springs": {
+    "ponytail": {
+      "chain": [
+        "pony1",
+        "pony2",
+        "pony3"
+      ],
+      "stiffness": 90,
+      "damping": 6,
+      "drive": 0.06
+    },
+    "sash": {
+      "chain": [
+        "sash1",
+        "sash2"
+      ],
+      "stiffness": 70,
+      "damping": 5,
+      "drive": 0.05
+    }
+  },
+  "hitReact": {
+    "angle": 0.4
+  }
+}
