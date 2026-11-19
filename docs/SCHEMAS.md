@@ -53,7 +53,7 @@ Standard JSON Schema says what is valid. `x-ui` says how to edit it in the Studi
 
 | Hint | Meaning |
 |---|---|
-| `widget` | `slider`, `dial`, `number`, `toggle`, `select`, `segments`, `color`, `curve`, `vec3`, `range`, `ref`, `text`, `keys` |
+| `widget` | `slider`, `dial`, `number`, `toggle`, `select`, `segments`, `color`, `curve`, `vec3`, `range`, `ref`, `text`, `keys`, `bindings` (a map of input actions as a table with key chips; `input-map` only) |
 | `unit` | Shown after the value: `m`, `s`, `dB`, `Hz`, `°`, `%` |
 | `step` | Slider and arrow-key step |
 | `group`, `order` | Section and position in the form |

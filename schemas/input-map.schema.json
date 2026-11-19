@@ -150,6 +150,10 @@
           },
           "additionalProperties": false
         }
+      },
+      "x-ui": {
+        "widget": "bindings",
+        "help": "One row per action: its type, its keys, mouse and gamepad. A key on two actions is flagged."
       }
     },
     "groups": {
