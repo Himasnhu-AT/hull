@@ -11,7 +11,8 @@ CLAUDE.md, then PLAN.md §7. Those three files are enough to pick up the work.
 - **Built:** M0–M7. M6 (AOTT on Hull, `examples/aott`) was checked in the app: look and tunable edits changed the running game with no reload, and Build wrote one 2.6 MB file that boots and plays Holdout. `examples/aott/PORT.md` says what was ported how and what stays in code.
 - **The `hull` command line is gone.** Tools, MCP and the project server are in `packages/tools` (`@hull/tools`); the app hosts MCP over HTTP on 127.0.0.1; `packages/tools/bin/hull-mcp.js` serves MCP over stdio. Maintainer scripts: `pnpm project:check|build|dev <dir>`, `pnpm project:run <tool> <dir> [json]`.
 - **Next:** M9, the agent panel and Hull's own harness, as decided in PLAN.md §3.4 and D13–D16. The research and the decision are on https://claude.ai/artifact/ByfyFGHAAE2PgKkRyskJtG. Order: ACP client in the app → Hull's agent (loop, tools in-process, user key and ai.marlstudio.com) → edit/patch, compaction, plan mode, subagents, evals → notices file.
-- **Not started:** M8 (hosted).
+- **Since then (19 Nov 2026, later):** M9 core and M10 are on `main`. The app's agent panel is an ACP client (Hull's own agent in `packages/agent`, external ACP agents, Claude Code in a terminal pane); agents can edit `src/` through Hull's code tools. Ironleaf (`examples/ironleaf`, GAME.md) is playable: combat kit (`hull/kits` combat: move-set and enemy configs), layered keyed animation with windows, five enemy types and a duel, camp balance checked by scripted bots over 20 seeds. Studio gained the Content Browser, readable Changes diffs, launch options, the Community tab, input bindings table. Dev commands run without memgate (owner's instruction).
+- **Not started:** M8 (hosted). Next for M9: a live-model run and an eval suite; for M10: someone plays it by hand and listens.
 
 ## 2. What the owner wants (standing instructions)
 
