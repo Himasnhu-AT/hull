@@ -237,6 +237,26 @@
         ],
         "color": "#8a8e93"
       }
+    ],
+    "bones": [
+      {
+        "name": "rag1",
+        "parent": "hips",
+        "offset": [
+          0,
+          -0.1,
+          -0.19
+        ]
+      },
+      {
+        "name": "rag2",
+        "parent": "rag1",
+        "offset": [
+          0,
+          -0.22,
+          -0.01
+        ]
+      }
     ]
   },
   "materials": {
