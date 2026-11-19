@@ -4,7 +4,8 @@
 // Without --project the launcher shows, and templates are created in a scratch folder.
 // With --electron it also starts the Electron window pointed at that Vite server (the `app` script).
 
-import { spawn } from 'node:child_process';
+import { spawn, type ChildProcess } from 'node:child_process';
+import { watch } from 'node:fs';
 import { mkdir, mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -105,8 +106,27 @@ console.log(`[hull] renderer at ${url} (project server: ${await host.serverKind(
 
 if (has('electron')) {
   const electron = createRequire(import.meta.url)('electron') as string;
-  const child = spawn(electron, [join(here, '../main/main.ts')], { stdio: 'inherit', env: { ...process.env, HULL_APP_URL: url, NODE_OPTIONS: '--import tsx' }, cwd: join(here, '../..') });
-  child.on('exit', async () => { await host.closeProject(); await server.close(); process.exit(0); });
+  // Vite reloads the page on its own; Electron's main process is not. A change under main/ or shared/ restarts the window,
+  // so the app never runs new screens against an old main process. Closing the window still ends the whole command.
+  let child: ChildProcess | null = null;
+  let restarting = false;
+  const launch = (): void => {
+    const c = spawn(electron, [join(here, '../main/main.ts')], { stdio: 'inherit', env: { ...process.env, HULL_APP_URL: url, NODE_OPTIONS: '--import tsx' }, cwd: join(here, '../..') });
+    child = c;
+    c.on('exit', async () => {
+      if (restarting) { restarting = false; launch(); return; }
+      await host.closeProject(); await server.close(); process.exit(0);
+    });
+  };
+  launch();
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  for (const dir of ['../main', '../shared']) {
+    watch(join(here, dir), { recursive: true }, (_e, name) => {
+      if (!name || !/\.(ts|cjs)$/.test(name) || /\.test\.ts$/.test(name)) return;
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => { console.log(`[hull] ${name} changed: restarting the app window`); restarting = true; child?.kill(); }, 300);
+    });
+  }
 }
 
 const stop = async (): Promise<void> => { await host.closeProject(); await server.close(); process.exit(0); };

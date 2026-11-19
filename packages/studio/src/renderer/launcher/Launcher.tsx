@@ -165,12 +165,12 @@ export function Launcher({ app, onOpen, startError, home, onNew }: { app: HullAp
               )}
               {games && games.length === 0 && !gamesError && <p className="sub2">No community games yet.</p>}
               {games && games.length > 0 && (
-                <div className="glist">
+                <div className="glist cgrid">
                   {games.map((g) => {
                     const mine = working?.id === g.id;
                     return (
-                      <article key={g.id} className="game">
-                        <div className="cover">{g.cover ? <img src={g.cover} alt="" draggable={false} /> : <Icon name="game" size={28} />}</div>
+                      <article key={g.id} className="game ccard">
+                        <button className="cover" onClick={() => void openGame(g, false)} disabled={busy !== null} aria-label={`Play ${g.title}`}>{g.cover ? <img src={g.cover} alt="" draggable={false} /> : <Icon name="game" size={28} />}<span className="cplay" aria-hidden="true"><Icon name="play" size={16} /></span></button>
                         <div className="g-body">
                           <div className="g-title"><b>{g.title}</b>{g.copy.exists && <span className="tagchip" title={g.copy.root}>Your copy</span>}</div>
                           <p className="g-note">{g.note}</p>
