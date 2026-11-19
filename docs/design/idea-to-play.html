@@ -1,0 +1,1086 @@
+<meta name="claude:viewport-fit-sides" content="cover">
+<title>Hull Play and Fix</title>
+<style>
+/* Layout: the five steps as a rail, one mock app window under it (game left, builder right), then what moves where. */
+:root {
+  --bg: #16181c; --panel: #1b1e23; --panel2: #22262c; --field: #2a2e35;
+  --line: rgba(255,255,255,.08); --line2: rgba(255,255,255,.15);
+  --text: #e9ebee; --muted: #a3aab4; --faint: #8a919c;
+  --accent: #5a9bff; --accent-solid: #2f6be0; --accent-soft: rgba(90,155,255,.14); --on-accent: #fff;
+  --ok: #3cc482; --on-ok: #04180e; --warn: #f2a43c; --on-warn: #1d1400; --danger: #ff7a70;
+  --stage: #0b0c0e; --stage-text: #e9ebee; --glass: rgba(22,25,30,.68); --glass-line: rgba(255,255,255,.16);
+  --shadow: 0 14px 40px rgba(0,0,0,.3);
+  --mono: 'SF Mono', ui-monospace, 'JetBrains Mono', Menlo, monospace;
+  --sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', system-ui, sans-serif;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #f4f5f7; --panel: #ffffff; --panel2: #f0f2f5; --field: #e6e9ee;
+    --line: rgba(0,0,0,.09); --line2: rgba(0,0,0,.17);
+    --text: #1a1d21; --muted: #4f5762; --faint: #66707c;
+    --accent: #2563d6; --accent-solid: #2563d6; --accent-soft: rgba(37,99,214,.1);
+    --ok: #1a8a58; --on-ok: #fff; --warn: #9a5d00; --on-warn: #fff; --danger: #c9332a;
+    --shadow: 0 14px 40px rgba(20,30,50,.16);
+    color-scheme: light;
+  }
+}
+:root[data-theme="light"] {
+  --bg: #f4f5f7; --panel: #ffffff; --panel2: #f0f2f5; --field: #e6e9ee;
+  --line: rgba(0,0,0,.09); --line2: rgba(0,0,0,.17);
+  --text: #1a1d21; --muted: #4f5762; --faint: #66707c;
+  --accent: #2563d6; --accent-solid: #2563d6; --accent-soft: rgba(37,99,214,.1);
+  --ok: #1a8a58; --on-ok: #fff; --warn: #9a5d00; --on-warn: #fff; --danger: #c9332a;
+  --shadow: 0 14px 40px rgba(20,30,50,.16);
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--text); font: 14px/1.5 var(--sans); -webkit-font-smoothing: antialiased;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 32px 64px;
+}
+.page { max-width: 1160px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
+.head { display: flex; flex-direction: column; gap: 8px; }
+.eyebrow { margin: 0; font-size: 11.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); }
+h1 { margin: 0; font-size: clamp(26px, 4vw, 38px); line-height: 1.1; letter-spacing: -.02em; font-weight: 650; text-wrap: balance; }
+h2 { margin: 0; font-size: 20px; letter-spacing: -.01em; text-wrap: balance; }
+h3 { margin: 0; font-size: 13.5px; }
+p { margin: 0; }
+.lede { max-width: 66ch; color: var(--muted); font-size: 15px; }
+button { font: inherit; color: inherit; cursor: pointer; }
+textarea, input { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+svg.i { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.mono { font-family: var(--mono); font-size: 12px; font-variant-numeric: tabular-nums; }
+
+.btn { height: 28px; padding: 0 10px; border-radius: 6px; border: 1px solid var(--line2); background: var(--field); display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; font-size: 12.5px; }
+.btn:hover { border-color: var(--accent); }
+.btn.primary { background: var(--accent-solid); border-color: transparent; color: var(--on-accent); }
+.btn.lg { height: 34px; padding: 0 14px; font-size: 13.5px; }
+.btn:disabled { opacity: .45; cursor: default; border-color: var(--line2); }
+.pill { font-size: 11.5px; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--line2); color: var(--muted); white-space: nowrap; }
+.pill.ok { color: var(--ok); } .pill.warn { color: var(--warn); }
+.chip { display: inline-flex; align-items: center; gap: 5px; min-height: 24px; padding: 0 9px; border-radius: 999px; border: 1px solid var(--line2); background: var(--panel2); font-size: 12px; white-space: nowrap; }
+button.chip:hover { border-color: var(--accent); }
+.chip .k { color: var(--faint); }
+.chip .x { border: 0; background: none; padding: 0 0 0 2px; color: var(--faint); line-height: 1; }
+
+.rail { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.rail button { display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 13px 0 6px; border-radius: 999px; border: 1px solid var(--line2); background: var(--panel); font-size: 13px; color: var(--muted); }
+.rail .n { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; background: var(--field); font: 600 11.5px var(--mono); }
+.rail button[aria-current="step"] { background: var(--accent-soft); border-color: var(--accent); color: var(--text); }
+.rail button[aria-current="step"] .n { background: var(--accent-solid); color: var(--on-accent); }
+.cap { color: var(--muted); min-height: 1.5em; max-width: 80ch; }
+
+.win { border: 1px solid var(--line2); border-radius: 12px; background: var(--panel); box-shadow: var(--shadow); overflow: hidden; position: relative; }
+.bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 8px 12px; border-bottom: 1px solid var(--line); }
+.ttl { display: flex; align-items: baseline; gap: 8px; margin-right: auto; }
+.ttl span { color: var(--faint); font-size: 12px; }
+.seg { display: inline-flex; background: var(--field); border-radius: 8px; padding: 2px; gap: 2px; flex-wrap: wrap; }
+.seg button { height: 26px; padding: 0 10px; border: 0; border-radius: 6px; background: transparent; font-size: 12.5px; color: var(--muted); display: inline-flex; gap: 6px; align-items: center; }
+.seg button.on { background: var(--panel); color: var(--text); box-shadow: 0 0 0 1px var(--line2); }
+.cnt { font: 11px var(--mono); color: var(--faint); }
+
+.play { display: grid; grid-template-columns: minmax(0, 1fr) 330px; }
+.main { min-width: 0; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.stage { position: relative; background: var(--stage); border-radius: 10px; overflow: hidden; aspect-ratio: 16 / 9; max-width: 100%; }
+.stage canvas { width: 100%; height: 100%; display: block; }
+.stage.is-frozen { outline: 2px solid var(--warn); outline-offset: -2px; }
+.hud { position: absolute; left: 10px; right: 10px; top: 10px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.glass { background: var(--glass); border: 1px solid var(--glass-line); color: var(--stage-text); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); border-radius: 999px; padding: 3px 10px; font-size: 12px; }
+button.glass { height: 26px; }
+.frozen { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); border-radius: 8px; padding: 6px 12px; width: max-content; max-width: calc(100% - 24px); text-align: center; }
+.under { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.recent { flex: 1 1 260px; min-width: 0; display: flex; gap: 6px; align-items: center; overflow-x: auto; padding: 3px 2px; }
+.recent .lab { color: var(--faint); font-size: 12px; white-space: nowrap; }
+.off { height: 36px; padding: 0 14px; border-radius: 8px; border: 0; background: var(--warn); color: var(--on-warn); font-weight: 600; display: inline-flex; gap: 8px; align-items: center; white-space: nowrap; }
+kbd { font: 11px var(--mono); padding: 1px 5px; border-radius: 4px; border: 1px solid currentColor; opacity: .8; }
+
+.builder { border-left: 1px solid var(--line); display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.b-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+.b-log { flex: 1 1 0; min-height: 230px; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.msg { max-width: 94%; font-size: 13px; }
+.msg.you { align-self: flex-end; background: var(--accent-soft); border-radius: 10px 10px 2px 10px; padding: 7px 10px; }
+.msg.ai { align-self: flex-start; }
+.msg .chips, .b-attach, .b-quick { display: flex; flex-wrap: wrap; gap: 4px; }
+.msg .chips { margin-top: 6px; }
+.b-attach { padding: 8px 12px 0; }
+.b-quick { padding: 8px 12px 0; }
+.b-quick .lab { width: 100%; font-size: 11.5px; color: var(--faint); }
+.b-form { display: flex; gap: 8px; padding: 10px 12px 12px; align-items: flex-end; }
+.b-form textarea { flex: 1; min-width: 0; resize: none; border-radius: 8px; border: 1px solid var(--line2); background: var(--field); padding: 7px 9px; font-size: 13px; }
+.chg { border: 1px solid var(--line2); border-radius: 10px; padding: 10px; background: var(--panel2); display: flex; flex-direction: column; gap: 6px; }
+.msg .chg { margin-top: 8px; }
+.chg .piece { font-size: 11.5px; color: var(--faint); }
+.chg .kv { display: flex; gap: 4px 10px; flex-wrap: wrap; }
+.chg .kv s { color: var(--faint); }
+.chg .acts { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.chg .from { font-size: 12px; color: var(--muted); }
+.list { display: flex; flex-direction: column; gap: 8px; }
+
+.cats { display: flex; flex-wrap: wrap; gap: 6px; }
+.cats button[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 10px; }
+.card { border: 1px solid var(--line); border-radius: 12px; background: var(--panel2); overflow: hidden; display: flex; flex-direction: column; min-width: 0; }
+.pv { position: relative; background: var(--stage); aspect-ratio: 16 / 10; }
+.pv canvas { width: 100%; height: 100%; display: block; }
+.tag { position: absolute; top: 6px; left: 6px; font-size: 10.5px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; padding: 2px 7px; border-radius: 999px; background: var(--accent-solid); color: var(--on-accent); }
+.tag.noted { background: var(--warn); color: var(--on-warn); }
+.cb { padding: 9px 10px 10px; display: flex; flex-direction: column; gap: 6px; flex: 1; }
+.cb p { color: var(--muted); font-size: 12.5px; flex: 1; }
+.ca { display: flex; gap: 6px; flex-wrap: wrap; }
+.tune summary { font-size: 12px; color: var(--faint); cursor: pointer; }
+.tune label { display: flex; align-items: center; gap: 8px; font-size: 12px; margin-top: 6px; }
+.tune input { flex: 1; min-width: 0; accent-color: var(--accent); }
+
+.pad { padding: 28px 20px 32px; display: flex; flex-direction: column; gap: 14px; max-width: 720px; margin: 0 auto; }
+.pad textarea { width: 100%; border-radius: 10px; border: 1px solid var(--line2); background: var(--field); padding: 10px 12px; font-size: 15px; resize: vertical; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.small { font-size: 12.5px; color: var(--faint); }
+.brief { border: 1px solid var(--line2); border-radius: 12px; background: var(--panel2); padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.brief dl { margin: 0; display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 8px 12px; }
+.brief dt { color: var(--faint); font-size: 12.5px; }
+.brief dd { margin: 0; }
+.stages { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.stages button { display: grid; grid-template-columns: 12px minmax(0, 1fr) auto; gap: 10px; align-items: center; width: 100%; text-align: left; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: transparent; }
+.stages button[aria-current="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.stages .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--field); }
+.stages .dot.doing { background: var(--warn); }
+.stages .dot.done { background: var(--ok); }
+.stages small { color: var(--faint); display: block; }
+.build { display: grid; grid-template-columns: 260px minmax(0, 1fr); }
+.b-side { border-right: 1px solid var(--line); padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.b-pane { min-width: 0; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.lane { color: var(--muted); font-size: 13px; margin-top: 4px; }
+.lane b { color: var(--text); }
+.notebar { padding: 8px 10px; border: 1px solid var(--warn); border-radius: 8px; }
+.notebar input { flex: 1 1 180px; min-width: 0; height: 28px; border-radius: 6px; border: 1px solid var(--line2); background: var(--field); padding: 0 8px; }
+.xcard { border: 1px solid var(--line); border-radius: 12px; background: var(--panel2); overflow: hidden; display: flex; flex-wrap: wrap; }
+.xfig { flex: 3 1 340px; min-width: 0; background: var(--panel); overflow-x: auto; padding: 10px; position: relative; }
+.xfig svg { display: block; min-width: 520px; width: 100%; height: auto; }
+.xfig canvas { display: block; width: 100%; height: auto; border-radius: 8px; }
+.xcard .cb { flex: 2 1 220px; }
+.xcard ol { margin: 0; padding-left: 18px; color: var(--muted); font-size: 12.5px; }
+.flow rect { fill: var(--panel2); stroke: var(--line2); }
+.flow .ask rect { fill: var(--accent-soft); stroke: var(--accent); }
+.flow .end rect { stroke: var(--ok); }
+.flow text { fill: var(--text); font: 12px var(--sans); }
+.flow .lbl { fill: var(--faint); font-size: 11px; }
+.flow line { stroke: var(--faint); stroke-width: 1.4; }
+.flow .ah { fill: var(--faint); }
+.tag.ok { background: var(--ok); color: var(--on-ok); }
+.chat { display: flex; flex-direction: column; max-width: 820px; margin: 0 auto; }
+.chat-top { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+.sw { display: inline-flex; gap: 6px; align-items: center; font-size: 12.5px; color: var(--muted); }
+.chat-log { height: 580px; max-height: 70vh; overflow-y: auto; padding: 16px 14px; display: flex; flex-direction: column; gap: 12px; }
+.cm { max-width: 88%; font-size: 14px; line-height: 1.55; }
+.cm.you { align-self: flex-end; background: var(--accent-soft); border-radius: 12px 12px 2px 12px; padding: 8px 12px; }
+.cm.ai { align-self: flex-start; }
+.typing::after { content: ''; display: inline-block; width: 7px; height: 1em; margin-left: 2px; vertical-align: -2px; background: var(--accent); animation: blink 1s steps(2) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .typing::after { animation: none; } }
+.ev { display: none; color: var(--faint); font-size: 11px; margin-bottom: 3px; }
+.show-ev .ev { display: block; }
+.ui { align-self: stretch; border: 1px solid var(--line2); border-radius: 12px; background: var(--panel2); padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+.ui .opts { display: flex; flex-wrap: wrap; gap: 6px; }
+.ui .opts button { height: 30px; }
+.ui .opts button[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); }
+.ui .opts button:disabled { cursor: default; }
+.bsec { border-top: 1px solid var(--line); padding: 10px 0; display: flex; flex-direction: column; gap: 6px; }
+.bsec:first-child { border-top: 0; padding-top: 0; }
+.bsec-h { display: flex; align-items: center; gap: 8px; }
+.bsec-h .st { font-size: 11.5px; color: var(--warn); }
+.bsec ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 3px; }
+.tbl { overflow-x: auto; }
+.bsec table { border-collapse: collapse; width: 100%; font-size: 13px; }
+.bsec td, .bsec th { text-align: left; padding: 4px 12px 4px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+.bsec th { color: var(--faint); font-weight: 500; font-size: 12px; }
+.linkbtn { border: 0; background: none; padding: 0; color: var(--accent); font-size: 12px; }
+.toast { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); border-radius: 8px; padding: 8px 14px; width: max-content; max-width: calc(100% - 28px); z-index: 5; }
+
+.notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px 28px; padding: 4px 2px 8px; }
+.notes p, .cols li span { color: var(--muted); font-size: 13.5px; }
+.sec { display: flex; flex-direction: column; gap: 12px; padding-top: 18px; border-top: 1px solid var(--line); }
+.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 18px 28px; }
+.cols ul { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 9px; }
+.cols li b { display: block; font-weight: 600; }
+.cols h3 { display: flex; align-items: center; gap: 8px; }
+.cols h3 i { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+.cols h3 i.b { background: var(--faint); } .cols h3 i.c { background: var(--warn); }
+
+@media (max-width: 880px) {
+  .play { grid-template-columns: minmax(0, 1fr); }
+  .builder { border-left: 0; border-top: 1px solid var(--line); }
+  .build { grid-template-columns: minmax(0, 1fr); }
+  .b-side { border-right: 0; border-bottom: 1px solid var(--line); }
+  .off { flex: 1 1 100%; justify-content: center; }
+}
+</style>
+
+<div class="page">
+  <header class="head">
+    <p class="eyebrow">Hull Studio · proposal</p>
+    <h1>Play it, then say what is off</h1>
+    <p class="lede">Today the Studio is an editor: six benches, an Inspector with every field, a console. This turns it around. The game is the screen, you say what feels wrong in your own words, and everything the builder made is laid out to look at and listen to. The mock below is live: the game runs, the sounds play, and three example notes change it.</p>
+  </header>
+
+  <nav aria-label="Steps"><ol class="rail" id="rail"></ol></nav>
+  <p class="cap" id="cap"></p>
+
+  <section class="win" aria-label="Mock of the Hull app">
+    <div class="bar">
+      <div class="ttl"><b>Ironleaf</b><span>Hull</span></div>
+      <div class="seg" role="tablist" aria-label="Views">
+        <button role="tab" id="tab-play">Play</button>
+        <button role="tab" id="tab-all">Everything <span class="cnt" id="cnt-all"></span></button>
+        <button role="tab" id="tab-changes">Changes <span class="cnt" id="cnt-changes"></span></button>
+      </div>
+      <button class="btn" id="sharebtn">Share</button>
+    </div>
+
+    <div id="s-1" class="pad" hidden>
+      <h2>What game do you want to make?</h2>
+      <textarea id="idea" rows="4">A third-person samurai game on a windy island. One swordswoman against raiders. Every enemy shows what it is about to do and I answer with my blade.</textarea>
+      <div class="row">
+        <button class="chip" data-idea="A first-person arena where waves of drones come at me and I pick up ammo between rounds.">Wave shooter</button>
+        <button class="chip" data-idea="A small arena where I run and jump to collect gems before the clock runs out.">Gem run</button>
+        <button class="chip" data-idea="A third-person samurai game on a windy island. One swordswoman against raiders. Every enemy shows what it is about to do and I answer with my blade.">Samurai island</button>
+      </div>
+      <div class="row"><button class="btn primary lg" data-go="2">Write the brief</button><span class="small">No template to pick. The app chooses the closest kit base for you.</span></div>
+    </div>
+
+    <div id="s-2" class="chat" hidden>
+      <div class="chat-top">
+        <b>Brief</b><span class="pill ok" id="cstate">ready</span><span style="flex:1"></span>
+        <label class="sw" for="showev"><input type="checkbox" id="showev"> Show what the builder sends</label>
+        <button class="btn" id="cskip">Skip to the end</button><button class="btn" id="crestart">Start over</button>
+      </div>
+      <div class="chat-log" id="clog" tabindex="0" aria-label="Conversation about the brief"></div>
+      <div class="b-quick"><button class="chip" data-act="csuggest" data-text="Start the first playable at night">Start the first playable at night</button></div>
+      <form class="b-form" id="cform">
+        <textarea id="ctext" rows="2" aria-label="Your message about the brief" placeholder="Ask for a change to the brief"></textarea>
+        <button class="btn primary" type="submit" id="csendbtn">Send</button>
+      </form>
+    </div>
+
+    <div id="s-3" class="build" hidden>
+      <div class="b-side">
+        <div class="row"><b>Building</b><span class="small" id="bcount"></span></div>
+        <ol class="stages" id="stages"></ol>
+        <button class="btn primary lg" id="playnow" data-go="4" disabled>Play what is there</button>
+        <button class="btn" id="rebuild">Run the build again</button>
+        <p class="small">Each stage is its own run. It writes the pieces, checks types and tests, takes a screenshot and saves a point you can return to.</p>
+      </div>
+      <div class="b-pane" id="bpane"></div>
+    </div>
+
+    <div id="s-4" class="play">
+      <div class="main">
+        <div id="v-play" style="display:contents">
+          <div class="stage" id="stage">
+            <canvas id="game" role="img" aria-label="The game running: Aya deflects a raider's cut in the pampas field and answers with her own"></canvas>
+            <div class="hud">
+              <span class="glass mono" id="clock">0:00</span>
+              <span class="glass" id="lookname">Dusk</span>
+              <span style="flex:1"></span>
+              <button class="glass" id="sndbtn" aria-pressed="false">Sound off</button>
+              <button class="glass" id="playbtn">Pause</button>
+            </div>
+            <div class="frozen glass" id="frozen" hidden></div>
+          </div>
+          <div class="under">
+            <div class="recent" id="recent" aria-label="What just happened in the game"></div>
+            <button class="off" id="offbtn">Something is off <kbd>N</kbd></button>
+          </div>
+        </div>
+        <div id="v-all" hidden>
+          <div class="cats" id="cats" role="group" aria-label="Kinds of piece"></div>
+          <div class="grid" id="grid" style="margin-top:10px"></div>
+        </div>
+        <div id="v-changes" class="list" hidden></div>
+      </div>
+      <aside class="builder" aria-label="Builder">
+        <div class="b-head"><b>Builder</b><span class="pill ok" id="bstate">ready</span></div>
+        <div class="b-log" id="blog" tabindex="0" aria-label="Conversation with the builder"></div>
+        <div class="b-attach" id="battach" hidden></div>
+        <div class="b-quick" id="bquick"></div>
+        <form class="b-form" id="bform">
+          <textarea id="btext" rows="2" aria-label="Your note to the builder" placeholder="Say what feels wrong"></textarea>
+          <button class="btn primary" type="submit" id="bsend">Send</button>
+        </form>
+      </aside>
+    </div>
+
+    <div id="s-5" class="pad" hidden>
+      <h2>Share it</h2>
+      <p class="cap">Build writes the whole game to one JavaScript file with a page to open it.</p>
+      <div class="row"><button class="btn primary lg" id="buildbtn">Build</button><button class="btn lg" data-go="4">Back to playing</button></div>
+      <div class="brief" id="built" hidden>
+        <dl>
+          <dt>Website</dt><dd><span class="mono">dist/web/game.js</span> + <span class="mono">index.html</span>. Upload the folder to any static host.</dd>
+          <dt>Desktop</dt><dd>The package step wraps the same file as an app for this computer.</dd>
+        </dl>
+      </div>
+      <p class="small">Both exist in Hull today as the build and package tools. The mock does not build anything.</p>
+    </div>
+
+    <div class="toast glass" id="toast" role="status" hidden></div>
+  </section>
+
+  <section class="notes" id="notes" aria-label="On this screen"></section>
+
+  <section class="sec">
+    <h2>Where today's Studio goes</h2>
+    <div class="cols">
+      <div>
+        <h3><i></i>Up front</h3>
+        <ul>
+          <li><b>The game</b><span>Was one of six view tabs. Now it is the screen.</span></li>
+          <li><b>Builder</b><span>Was a floating panel, closed by default, with an agent picker. Now a fixed column that is already running.</span></li>
+          <li><b>Everything</b><span>Replaces the Library, the Content Browser and the Sound, Character, VFX and Look benches. The benches become the previews on the cards.</span></li>
+          <li><b>Changes</b><span>Replaces the Changes and History tabs with one list in plain words. Put back is the existing history revert.</span></li>
+          <li><b>Share</b><span>The Build button, renamed for what it gives you.</span></li>
+        </ul>
+      </div>
+      <div>
+        <h3><i class="b"></i>Behind an Advanced switch</h3>
+        <ul>
+          <li><b>Inspector with every field</b><span>Cards keep one or two sliders under Fine tune. The full form stays for whoever wants it.</span></li>
+          <li><b>Console, files and code view</b><span>The builder reads problems itself. You see them only if it gets stuck.</span></li>
+          <li><b>Step one tick, quarter speed, launch options</b><span>Tools for the builder and for debugging, not for playing.</span></li>
+          <li><b>Experiments and Compare</b><span>Useful, but a second idea to learn. Keep and Put back cover the common case.</span></li>
+        </ul>
+      </div>
+      <div>
+        <h3><i class="c"></i>New to build</h3>
+        <ul>
+          <li><b>Just now feed</b><span>The running game reports the sounds, animations, effects and actors of the last few seconds over the dev protocol.</span></li>
+          <li><b>Freeze and note</b><span>One key the engine reserves. It pauses the game and attaches a screenshot, the game time and the Just now list to your note.</span></li>
+          <li><b>A card preview per kind</b><span>Sound, character, effect and look reuse their benches. Animation needs a small looping player. Places need a camera shot.</span></li>
+          <li><b>Show in game</b><span>Each piece needs a moment that shows it: a start point, or a demo scene from its kit.</span></li>
+          <li><b>Cards inside the chat</b><span>The builder sends questions, the brief and approvals as small pieces of interface, in the style of AG-UI events, and its text streams as it is written.</span></li>
+          <li><b>Explained pieces</b><span>For rules, behaviour and places the builder writes a flowchart or a map with a plain explanation, kept with the project.</span></li>
+          <li><b>Builder always on</b><span>Start the agent with the project and store the key in the app, so there is nothing to pick.</span></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+(function () {
+'use strict';
+var $ = function (id) { return document.getElementById(id); };
+var reduce = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+function h1(i) { var x = Math.sin(i * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); }
+function lerp(a, b, k) { return a + (b - a) * Math.max(0, Math.min(1, k)); }
+function ez(k) { k = Math.max(0, Math.min(1, k)); return k * k * (3 - 2 * k); }
+
+var IC = {
+  sound: '<path d="M3 9v6h4l5 4V5L7 9z"/><path d="M16 9a4 4 0 0 1 0 6"/>',
+  move: '<path d="M4 19l5-8 4 4 6-10"/>',
+  actor: '<circle cx="12" cy="7" r="3"/><path d="M5 20c1-5 4-7 7-7s6 2 7 7"/>',
+  effect: '<path d="M12 3v5M12 16v5M3 12h5M16 12h5M6 6l3 3M15 15l3 3M18 6l-3 3M9 15l-3 3"/>',
+  world: '<path d="M3 18l6-9 4 6 3-4 5 7z"/>',
+  screen: '<rect x="3" y="5" width="18" height="12" rx="2"/><path d="M9 21h6"/>',
+  moment: '<circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/>'
+};
+function ic(n) { return '<svg class="i" viewBox="0 0 24 24" aria-hidden="true">' + IC[n] + '</svg>'; }
+var KIND = { sound: 'sound', move: 'animation', actor: 'actor', effect: 'effect', world: 'world', screen: 'screen', moment: 'moment' };
+
+/* ---------- what the builder made (names from the Ironleaf example project) ---------- */
+var CATS = [
+  { id: 'actors', name: 'Actors', kind: 'actor', act: 'Show in game', items: [
+    { id: 'aya', name: 'Aya', note: 'You. A lone swordswoman with the ironleaf blade.', col: '#cfd8e6', acc: '#8fbcff' },
+    { id: 'ashblade', name: 'Ashblade', note: 'Raider with a sword. Weak to the Stone stance.', col: '#b0665a', acc: '#e9c9a0' },
+    { id: 'ashpike', name: 'Ashpike', note: 'Raider with a spear. Keeps you at reach.', col: '#b08a4a', acc: '#e9d9a0', spear: 1 },
+    { id: 'ashkite', name: 'Ashkite', note: 'Archer who watches the village road.', col: '#7d9478', acc: '#d6e2c0', bow: 1 },
+    { id: 'hulk', name: 'Hulk', note: 'Brute who holds the gate of Kitsugi.', col: '#8a4a44', acc: '#d9a090', bulk: 1.5 },
+    { id: 'kagari', name: 'Kagari', note: 'The Band\'s duelist. Waits on the shrine stairs.', col: '#c23b3b', acc: '#f0e0d0' }
+  ] },
+  { id: 'moves', name: 'Animations', kind: 'move', act: 'Show in game', tune: { label: 'Speed', min: 50, max: 150, val: 100 }, items: [
+    { id: 'idle', name: 'Idle', note: 'Standing ready, blade low.' },
+    { id: 'run', name: 'Run', note: 'Crossing the field.' },
+    { id: 'cut', name: 'Stone cut', note: 'The first cut of the Stone string.' },
+    { id: 'heavy', name: 'Heavy overhead', note: 'Slow to start. Breaks guard when charged.' },
+    { id: 'deflect', name: 'Deflect', note: 'A tap just before the hit lands.' },
+    { id: 'dodge', name: 'Dodge', note: 'A short slide out of a red attack.' }
+  ] },
+  { id: 'sounds', name: 'Sounds', kind: 'sound', act: 'Play', tune: { label: 'Level', min: 0, max: 100, val: 50 }, items: [
+    { id: 'swing', name: 'Swing', note: 'The blade through air.' },
+    { id: 'clash', name: 'Clash', note: 'Steel on steel when a cut is deflected.' },
+    { id: 'deflect', name: 'Deflect', note: 'A clean block.' },
+    { id: 'perfect-deflect', name: 'Perfect deflect', note: 'The ring that says you timed it.' },
+    { id: 'hit', name: 'Hit', note: 'A cut that lands.' },
+    { id: 'step', name: 'Step', note: 'Feet in the grass.' },
+    { id: 'sword', name: 'Draw', note: 'The blade leaving the sheath.' },
+    { id: 'loop', name: 'Wind', note: 'The pampas field, always on.' },
+    { id: 'music', name: 'Music', note: 'The duel theme.' },
+    { id: 'ui', name: 'Menu click', note: 'Moving through the pause menu.' }
+  ] },
+  { id: 'world', name: 'World', kind: 'world', items: [
+    { id: 'dusk', name: 'Dusk', note: 'Look. Low sun over the pampas.', look: 'dusk', act: 'Use in game' },
+    { id: 'night', name: 'Night', note: 'Look. Moon, cold light.', look: 'night', act: 'Use in game' },
+    { id: 'rain', name: 'Rain', note: 'Look. Grey sky, wet ground.', look: 'rain', act: 'Use in game' },
+    { id: 'beach', name: 'West beach', note: 'Place. Where Aya lands.', place: 'beach', act: 'Start here' },
+    { id: 'camp', name: 'Raider camp', note: 'Place. Five of the Band and a fire.', place: 'camp', act: 'Start here' },
+    { id: 'gate', name: 'Kitsugi gate', note: 'Place. The brute holds it.', place: 'gate', act: 'Start here' },
+    { id: 'stairs', name: 'Shrine stairs', note: 'Place. The duel.', place: 'stairs', act: 'Start here' }
+  ] },
+  { id: 'effects', name: 'Effects', kind: 'effect', act: 'Play', items: [
+    { id: 'clash-sparks', name: 'Clash sparks', note: 'Two blades meet.', mode: 'burst', col: '#ffd27a' },
+    { id: 'deflect-flash', name: 'Deflect flash', note: 'A block lands.', mode: 'flash', col: '#cfe4ff' },
+    { id: 'perfect-flash', name: 'Perfect flash', note: 'A perfect deflect.', mode: 'flash', col: '#fff3c4', sz: 1.5 },
+    { id: 'slash-arc', name: 'Slash arc', note: 'The trail of a cut.', mode: 'arc', col: '#e9f1ff' },
+    { id: 'tell-glint', name: 'Tell glint', note: 'An attack is coming.', mode: 'flash', col: '#ffffff', sz: 0.6 },
+    { id: 'tell-red', name: 'Red tell', note: 'Cannot be blocked: dodge.', mode: 'flash', col: '#ff4a3d' },
+    { id: 'blood-mist', name: 'Blood mist', note: 'A cut that lands.', mode: 'burst', col: '#b23a32', sp: 0.5, g: 0.2, sz: 1.8 },
+    { id: 'dodge-dust', name: 'Dodge dust', note: 'Kicked up by a dodge.', mode: 'rise', col: '#b9a58c', n: 12, loop: 0 },
+    { id: 'dust-step', name: 'Step dust', note: 'Under running feet.', mode: 'rise', col: '#a89880', n: 6, loop: 0 },
+    { id: 'embers', name: 'Embers', note: 'Off the camp fire.', mode: 'rise', col: '#ff8a3c', n: 22, loop: 1 },
+    { id: 'fireflies', name: 'Fireflies', note: 'In the field at night.', mode: 'drift', col: '#d8f07a', loop: 1 },
+    { id: 'leaves', name: 'Leaves', note: 'Blown through the bamboo.', mode: 'fall', col: '#7fa05a', n: 16, loop: 1, slant: 0.4 },
+    { id: 'petals', name: 'Petals', note: 'Around the shrine.', mode: 'fall', col: '#f0b8c8', n: 16, loop: 1, slant: 0.25 },
+    { id: 'rain', name: 'Rain', note: 'The rain look.', mode: 'fall', col: '#9fb4cc', n: 46, loop: 1, streak: 1, sp: 3, slant: 0.08 },
+    { id: 'rain-splash', name: 'Rain splash', note: 'Drops on the ground.', mode: 'burst', col: '#b8c8dc', n: 10, sp: 0.35, g: 0.9 }
+  ] },
+  { id: 'screens', name: 'Screens', kind: 'screen', act: 'Show in game', items: [
+    { id: 'hud', name: 'Fight display', note: 'Health, posture and your stance.' },
+    { id: 'pause', name: 'Pause menu', note: 'Resume, settings, quit.' },
+    { id: 'controls', name: 'Controls', note: 'Which key does what.' }
+  ] }
+];
+var TOTAL = CATS.reduce(function (n, c) { return n + c.items.length; }, 0);
+function find(key) {
+  var p = key.split('/');
+  for (var i = 0; i < CATS.length; i++) if (CATS[i].kind === p[0]) for (var j = 0; j < CATS[i].items.length; j++) if (CATS[i].items[j].id === p[1]) return { cat: CATS[i], item: CATS[i].items[j] };
+  return null;
+}
+
+/* ---------- state ---------- */
+var S = {
+  step: 4, tab: 'play', cat: 'actors', t: 0, playing: !reduce, frozen: false, sound: false, look: 'dusk',
+  p: { startup: 0.55, bright: 0, clash: 0.07, grassFade: 1 },
+  attach: [], busy: false, recent: [], seen: {}, noted: {}, ok: {}, tune: {}, built: 0, bsel: 0, follow: true, bnote: null, bstarted: false,
+  log: [], changes: []
+};
+
+var STEPS = [
+  { name: 'Idea', cap: 'You type what you want to play. There is no template to pick.' },
+  { name: 'Brief', cap: 'The builder writes the game down on one page. You approve it or say what to change.' },
+  { name: 'Build', cap: 'It builds in stages and checks each one. You can play as soon as the first stages pass.' },
+  { name: 'Play and fix', cap: 'The game is the screen. When something feels wrong, freeze it and say so in your own words.' },
+  { name: 'Share', cap: 'One button builds the game to a single file you can put on any website.' }
+];
+var NOTES = {
+  s1: [['One box', 'The launcher today asks for a template, a name and a folder before anything runs. Here the first thing you do is describe the game.'], ['The app picks the base', 'It maps the idea to the closest kit template itself and opens the project with the builder already working.']],
+  s2: [['A conversation, not a form', 'The builder streams its answer as it writes, and asks its questions as buttons you click. Turn on "Show what the builder sends" to see the event behind each piece.'], ['The brief fills in live', 'Nine parts: premise, what you do, controls, cast, world, fight rules, look and sound, the first playable, and what is left out. Each has its own Change.'], ['It is a file', 'The card is the project\'s GAME.md. The builder reads it at the start of every stage, so a change here changes what gets built.']],
+  s3: [['Look and listen', 'Actors, animations, sounds, effects, looks and screens are things you can judge yourself. Each arrives as a card to play, then Approve or Change.'], ['Explained', 'Rules, enemy behaviour and the layout of the world cannot be seen directly. The builder draws a flowchart or a map and says in plain words what it decided.'], ['Play early', 'Stages are separate runs. After the world, the actors and their animations pass you can play, without approving everything first.']],
+  play: [['Something is off', 'Press it or the N key. The game freezes and the moment goes to the builder with your note: a screenshot, the game time, and what just played.'], ['Just now', 'The strip under the game names the sounds, animations, effects and actors of the last few seconds. Click one to say "this one" without knowing its name.'], ['Keep or put back', 'Each fix comes back as a card with what changed, in numbers. The game carries on with the change already in. Try the three example notes.']],
+  all: [['Everything the builder made', 'Actors, animations, sounds, world, effects and screens as cards you can play. This replaces the Library tree and the four benches.'], ['Change, not edit', 'Every card has Change. It attaches the piece to your note, so "make him bigger" needs no name and no field.'], ['Fine tune stays small', 'A card shows one slider, like a sound\'s level or a clip\'s speed. A timeline editor for animation is out: a sentence does that job.']],
+  changes: [['Plain words first', 'What changed, on which piece, from your note. The numbers sit under it for when you want them.'], ['Put back is one click', 'It is the history revert the engine already has. Put the grass change back and look at the game: the fight disappears behind it.'], ['Nothing is lost', 'A change you put back stays in the list, so you can apply it again.']],
+  s5: [['Share is the Build button', 'Same tool, named for what you get out of it.'], ['One file', 'The build inlines the assets into game.js, so a static host is enough.']]
+};
+
+/* ---------- sound (synth stand-ins; the app plays the project's own sound recipes) ---------- */
+var AC = null;
+function ac() { if (!AC) { var C = window.AudioContext || window.webkitAudioContext; if (C) { try { AC = new C(); } catch (e) { AC = null; } } } if (AC && AC.state === 'suspended') AC.resume(); return AC; }
+function envl(g, t, d, peak) { g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(Math.max(0.0002, peak), t + 0.008); g.gain.exponentialRampToValueAtTime(0.0001, t + d); }
+function tone(a, type, f0, f1, d, peak, t0) { var o = a.createOscillator(), g = a.createGain(), t = a.currentTime + (t0 || 0); o.type = type; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f1, t + d); envl(g, t, d, peak); o.connect(g); g.connect(a.destination); o.start(t); o.stop(t + d + 0.03); }
+function noise(a, f0, f1, d, peak, t0) { var n = Math.floor(a.sampleRate * d), b = a.createBuffer(1, n, a.sampleRate), ch = b.getChannelData(0), i; for (i = 0; i < n; i++) ch[i] = Math.random() * 2 - 1; var s = a.createBufferSource(), fl = a.createBiquadFilter(), g = a.createGain(), t = a.currentTime + (t0 || 0); s.buffer = b; fl.type = 'bandpass'; fl.Q.value = 1.2; fl.frequency.setValueAtTime(f0, t); fl.frequency.exponentialRampToValueAtTime(f1, t + d); envl(g, t, d, peak); s.connect(fl); fl.connect(g); g.connect(a.destination); s.start(t); }
+function playSound(id, v) {
+  var a = ac(); if (!a) return;
+  if (id === 'swing') noise(a, 500, 3200, 0.22, v);
+  else if (id === 'clash') { tone(a, 'square', 1900, 1700, 0.18, v * 0.5); tone(a, 'triangle', 2870, 2600, 0.26, v * 0.6); noise(a, 5000, 2500, 0.08, v); }
+  else if (id === 'deflect') tone(a, 'triangle', 1400, 1900, 0.2, v);
+  else if (id === 'perfect-deflect') { tone(a, 'sine', 1760, 1760, 0.5, v); tone(a, 'sine', 2640, 2640, 0.6, v * 0.6, 0.03); }
+  else if (id === 'hit') { noise(a, 300, 90, 0.16, v * 1.4); tone(a, 'sine', 120, 50, 0.16, v); }
+  else if (id === 'step') noise(a, 900, 300, 0.07, v * 0.8);
+  else if (id === 'sword') { noise(a, 2000, 6000, 0.35, v * 0.6); tone(a, 'sine', 3000, 5200, 0.3, v * 0.2); }
+  else if (id === 'loop') noise(a, 300, 520, 1.3, v * 0.6);
+  else if (id === 'music') [293.7, 349.2, 392, 523.3, 440].forEach(function (f, i) { tone(a, 'triangle', f, f, 0.5, v * 0.7, i * 0.22); });
+  else if (id === 'ui') tone(a, 'sine', 880, 880, 0.06, v);
+}
+
+/* ---------- drawing ---------- */
+function line(c, x1, y1, x2, y2) { c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.stroke(); }
+function dot(c, x, y, r) { c.beginPath(); c.arc(x, y, Math.max(0.3, r), 0, 6.2832); c.fill(); }
+var LOOKS = {
+  dusk: { sky: ['#2a2148', '#b5523c', '#f0a35a'], hill: '#3a2440', ground: '#2a1c22', grass: '#6a4a3a', front: '#1c1218' },
+  night: { sky: ['#070b1c', '#101a38', '#24365c'], hill: '#0c1226', ground: '#0a0e18', grass: '#24304a', front: '#05080f' },
+  rain: { sky: ['#262b33', '#3d4550', '#5a636e'], hill: '#333a44', ground: '#262b30', grass: '#4a545c', front: '#181c20' }
+};
+function grass(c, w, h, t, y0, n, len, col, skip) {
+  c.strokeStyle = col; c.lineWidth = Math.max(1, h * 0.005); c.lineCap = 'round'; c.beginPath();
+  for (var i = 0; i < n; i++) {
+    var x = (i + h1(i)) / n * w; if (skip && x > skip[0] && x < skip[1]) continue;
+    var l = len * (0.55 + h1(i + 50) * 0.85), sw = Math.sin(t * 1.6 + i * 0.7) * len * 0.18;
+    c.moveTo(x, y0); c.quadraticCurveTo(x + sw * 0.3, y0 - l * 0.6, x + sw, y0 - l);
+  }
+  c.stroke();
+}
+function scene(c, w, h, look, t, place) {
+  var L = LOOKS[look], g = c.createLinearGradient(0, 0, 0, h * 0.74), i;
+  g.addColorStop(0, L.sky[0]); g.addColorStop(0.7, L.sky[1]); g.addColorStop(1, L.sky[2]); c.fillStyle = g; c.fillRect(0, 0, w, h);
+  if (look === 'dusk') { c.fillStyle = 'rgba(255,214,150,.9)'; dot(c, w * 0.74, h * 0.6, h * 0.07); }
+  if (look === 'night') { c.fillStyle = 'rgba(220,230,255,.92)'; dot(c, w * 0.8, h * 0.2, h * 0.045); }
+  c.fillStyle = L.hill; c.beginPath(); c.moveTo(0, h * 0.75);
+  for (i = 0; i <= 24; i++) c.lineTo(i / 24 * w, h * (0.63 - 0.07 * Math.sin(i * 0.55 + 1.3) - 0.03 * Math.sin(i * 1.7)));
+  c.lineTo(w, h * 0.75); c.closePath(); c.fill();
+  c.fillStyle = L.ground; c.fillRect(0, h * 0.74, w, h * 0.26);
+  if (place === 'beach') { c.fillStyle = 'rgba(120,170,200,.55)'; c.fillRect(0, h * 0.74, w, h * 0.07); c.fillStyle = 'rgba(230,240,255,.5)'; c.fillRect(0, h * 0.805, w, h * 0.008); }
+  if (place === 'camp') { c.fillStyle = '#ff9a3c'; dot(c, w * 0.5, h * 0.78, h * 0.035); c.fillStyle = 'rgba(255,170,80,.25)'; dot(c, w * 0.5, h * 0.76, h * 0.14); c.fillStyle = '#3a2a22'; c.fillRect(w * 0.64, h * 0.68, w * 0.16, h * 0.08); dot(c, w * 0.67, h * 0.78, h * 0.03); dot(c, w * 0.77, h * 0.78, h * 0.03); }
+  if (place === 'gate') { c.fillStyle = '#3a2a26'; c.fillRect(w * 0.34, h * 0.36, w * 0.04, h * 0.42); c.fillRect(w * 0.62, h * 0.36, w * 0.04, h * 0.42); c.fillRect(w * 0.3, h * 0.34, w * 0.4, h * 0.05); c.fillRect(w * 0.33, h * 0.44, w * 0.34, h * 0.03); }
+  if (place === 'stairs') { c.fillStyle = '#4a4048'; for (i = 0; i < 6; i++) c.fillRect(w * (0.3 + i * 0.03), h * (0.78 - i * 0.055), w * (0.4 - i * 0.06), h * 0.06); }
+  grass(c, w, h, t, h * 0.76, 70, h * 0.09, L.grass);
+  if (look === 'rain') { c.strokeStyle = 'rgba(190,205,225,.35)'; c.lineWidth = Math.max(1, h * 0.003); c.beginPath(); for (i = 0; i < 60; i++) { var q = (t * 2.2 * (0.7 + h1(i) * 0.6) + h1(i + 5)) % 1, x = h1(i + 1) * w * 1.1; c.moveTo(x - q * w * 0.05, q * h); c.lineTo(x - q * w * 0.05 - h * 0.012, q * h + h * 0.06); } c.stroke(); }
+}
+function fig(c, x, y, H, o) {
+  var f = o.facing || 1, b = o.bulk || 1, cr = o.crouch || 0, ln = (o.lean || 0) * H * f, st = (o.stride || 0) * H * 0.16 * f;
+  var hip = y - H * 0.45 * (1 - cr * 0.45), sh = y - H * 0.8 * (1 - cr * 0.35), hx0 = x + ln * 0.3, sx = x + ln;
+  c.lineCap = 'round'; c.lineJoin = 'round';
+  function body(col, extra) {
+    c.strokeStyle = col; c.fillStyle = col;
+    c.lineWidth = H * 0.075 * b + extra; line(c, hx0, hip, x - st - H * 0.05 * f, y); line(c, hx0, hip, x + st + H * 0.08 * f, y);
+    c.lineWidth = H * 0.17 * b + extra; line(c, hx0, hip, sx, sh);
+    dot(c, sx + ln * 0.15, sh - H * 0.14, H * 0.078 + extra / 2);
+  }
+  if (o.rim) body('rgba(255,225,190,.6)', H * 0.035);
+  body(o.col, 0);
+  var a = o.arm == null ? 2.2 : o.arm, ax = sx + f * H * 0.03, ay = sh + H * 0.03;
+  var px = ax + f * Math.sin(a) * H * 0.2, py = ay - Math.cos(a) * H * 0.2;
+  c.strokeStyle = o.col; c.lineWidth = H * 0.06 * b; line(c, ax, ay, px, py);
+  var wa = a + (o.wOff == null ? -0.5 : o.wOff), wl = H * (o.spear ? 0.62 : 0.52);
+  c.strokeStyle = o.acc; c.lineWidth = Math.max(1.5, H * 0.024);
+  var tx = px + f * Math.sin(wa) * wl, ty = py - Math.cos(wa) * wl;
+  if (o.bow) { c.beginPath(); if (f > 0) c.arc(px - H * 0.08, py, H * 0.24, -1.1, 1.1); else c.arc(px + H * 0.08, py, H * 0.24, Math.PI - 1.1, Math.PI + 1.1); c.stroke(); }
+  else { var bk = o.spear ? 0.5 : 0; line(c, px - f * Math.sin(wa) * wl * bk, py + Math.cos(wa) * wl * bk, tx, ty); }
+  return { tx: tx, ty: ty };
+}
+function pose(id, t) {
+  var u, k;
+  if (id === 'run') return { arm: 1.9 + Math.sin(t * 10) * 0.25, stride: Math.sin(t * 10), lean: 0.1 };
+  if (id === 'cut') { u = (t % 1.3) / 1.3; return u < 0.3 ? { arm: lerp(2.2, 0.15, ez(u / 0.3)) } : u < 0.42 ? { arm: lerp(0.15, 2.4, (u - 0.3) / 0.12), lean: 0.1, stride: 0.6 } : { arm: lerp(2.4, 2.2, (u - 0.42) / 0.58), lean: 0.1 * (1 - (u - 0.42) / 0.58) }; }
+  if (id === 'heavy') { u = (t % 2) / 2; return u < 0.5 ? { arm: lerp(2.2, -0.5, ez(u / 0.5)), lean: -0.06 * ez(u / 0.5) } : u < 0.6 ? { arm: lerp(-0.5, 2.7, (u - 0.5) / 0.1), lean: 0.16, stride: 0.9, crouch: 0.2 } : { arm: lerp(2.7, 2.2, (u - 0.6) / 0.4), crouch: 0.2 * (1 - (u - 0.6) / 0.4) }; }
+  if (id === 'deflect') { u = (t % 1.2) / 1.2; k = u < 0.12 ? u / 0.12 : u < 0.5 ? 1 : Math.max(0, 1 - (u - 0.5) / 0.3); return { arm: lerp(2.2, 1.0, k), wOff: lerp(-0.5, -1.3, k), flash: u > 0.12 && u < 0.28 }; }
+  if (id === 'dodge') { u = (t % 1.5) / 1.5; k = u < 0.25 ? ez(u / 0.25) : u < 0.6 ? 1 : Math.max(0, 1 - (u - 0.6) / 0.4); return { arm: 2.3, crouch: 0.45 * Math.sin(Math.min(1, u / 0.35) * 3.1416), dx: -k * 0.55, lean: -0.1 * k }; }
+  return { arm: 2.2 + Math.sin(t * 2) * 0.05, crouch: 0.03 + Math.sin(t * 2) * 0.02 };
+}
+function drawEffect(c, w, h, e, ph) {
+  c.fillStyle = '#0b0c0e'; c.fillRect(0, 0, w, h);
+  var cx = w / 2, cy = h * 0.55, i, n, a, q, x, y;
+  c.fillStyle = e.col; c.strokeStyle = e.col;
+  if (e.mode === 'burst') { n = e.n || 26; for (i = 0; i < n; i++) { a = h1(i) * 6.283; var sp = (0.25 + h1(i + 9) * 0.75) * h * 0.55 * (e.sp || 1); c.globalAlpha = Math.max(0, 1 - ph); dot(c, cx + Math.cos(a) * sp * ph, cy + Math.sin(a) * sp * ph + (e.g == null ? 0.5 : e.g) * h * 0.5 * ph * ph, h * 0.012 * (e.sz || 1) * (1 + h1(i + 3))); } }
+  else if (e.mode === 'flash') { var r = h * (0.12 + 0.3 * ph) * (e.sz || 1), g = c.createRadialGradient(cx, cy, 0, cx, cy, r); g.addColorStop(0, e.col); g.addColorStop(1, 'rgba(0,0,0,0)'); c.globalAlpha = Math.max(0, 1 - ph * ph); c.fillStyle = g; c.fillRect(0, 0, w, h); }
+  else if (e.mode === 'arc') { c.globalAlpha = Math.max(0, 1 - ph); c.lineWidth = h * 0.03; c.lineCap = 'round'; c.beginPath(); c.arc(cx, cy + h * 0.12, h * 0.34, -2.6, -2.6 + 2.2 * Math.min(1, ph * 2.2)); c.stroke(); }
+  else if (e.mode === 'rise') { n = e.n || 18; for (i = 0; i < n; i++) { q = (ph * (0.6 + h1(i) * 0.8) + h1(i + 5) * (e.loop ? 1 : 0.15)) % 1; c.globalAlpha = Math.max(0, 1 - q); dot(c, cx + (h1(i + 1) - 0.5) * w * 0.4 * (0.4 + q), h * 0.9 - q * h * 0.7, h * 0.014 * (1 + h1(i + 3))); } }
+  else if (e.mode === 'fall') { n = e.n || 30; c.lineWidth = Math.max(1, h * 0.008); for (i = 0; i < n; i++) { q = (ph * (e.sp || 1) * (0.7 + h1(i) * 0.6) + h1(i + 5)) % 1; x = (h1(i + 1) * 1.3 - 0.2) * w + q * w * (e.slant || 0.1); y = q * h; c.globalAlpha = 0.85; if (e.streak) line(c, x, y, x + h * 0.01, y + h * 0.08); else dot(c, x + Math.sin(q * 9 + i) * w * 0.02, y, h * 0.016 * (1 + h1(i + 3))); } }
+  else if (e.mode === 'drift') { for (i = 0; i < 14; i++) { c.globalAlpha = 0.25 + 0.75 * Math.abs(Math.sin(ph * 6.283 + i * 1.3)); dot(c, h1(i) * w + Math.sin(ph * 6.283 + i) * w * 0.04, h1(i + 3) * h + Math.cos(ph * 4.4 + i * 2) * h * 0.05, h * 0.014); } }
+  c.globalAlpha = 1;
+}
+function rr(c, x, y, w, h, r) { c.beginPath(); c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r); c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath(); c.fill(); }
+function drawScreen(c, w, h, id) {
+  scene(c, w, h, 'dusk', 1); c.fillStyle = 'rgba(8,8,14,' + (id === 'hud' ? 0.25 : 0.7) + ')'; c.fillRect(0, 0, w, h);
+  c.textBaseline = 'middle';
+  if (id === 'hud') {
+    c.fillStyle = 'rgba(255,255,255,.18)'; rr(c, 14, h - 34, 120, 8, 4); rr(c, 14, h - 20, 90, 6, 3);
+    c.fillStyle = '#e06a5a'; rr(c, 14, h - 34, 84, 8, 4); c.fillStyle = '#f2c14e'; rr(c, 14, h - 20, 32, 6, 3);
+    c.fillStyle = 'rgba(255,255,255,.16)'; rr(c, w - 74, h - 36, 60, 22, 11); c.fillStyle = '#fff'; c.font = '600 12px -apple-system, system-ui, sans-serif'; c.textAlign = 'center'; c.fillText('Stone', w - 44, h - 25);
+    c.fillStyle = 'rgba(255,255,255,.18)'; rr(c, w / 2 - 50, 14, 100, 6, 3); c.fillStyle = '#f2c14e'; rr(c, w / 2 - 50, 14, 62, 6, 3);
+  } else if (id === 'pause') {
+    c.textAlign = 'center'; c.fillStyle = '#fff'; c.font = '600 16px -apple-system, system-ui, sans-serif'; c.fillText('Paused', w / 2, 44);
+    ['Resume', 'Settings', 'Quit'].forEach(function (s, i) { c.fillStyle = i === 0 ? 'rgba(90,155,255,.5)' : 'rgba(255,255,255,.12)'; rr(c, w / 2 - 60, 68 + i * 34, 120, 26, 6); c.fillStyle = '#fff'; c.font = '13px -apple-system, system-ui, sans-serif'; c.fillText(s, w / 2, 81 + i * 34); });
+  } else {
+    [['W A S D', 'Move'], ['Click', 'Light attack'], ['Q', 'Block'], ['Space', 'Dodge'], ['Tab', 'Stance']].forEach(function (k, i) { var y = 30 + i * 32; c.fillStyle = 'rgba(255,255,255,.14)'; rr(c, 24, y - 11, 84, 22, 5); c.fillStyle = '#fff'; c.font = '12px ui-monospace, Menlo, monospace'; c.textAlign = 'center'; c.fillText(k[0], 66, y); c.font = '13px -apple-system, system-ui, sans-serif'; c.textAlign = 'left'; c.fillText(k[1], 124, y); });
+  }
+}
+function drawWave(c, w, h, id, level) {
+  c.fillStyle = '#0b0c0e'; c.fillRect(0, 0, w, h);
+  var seed = 0, i; for (i = 0; i < id.length; i++) seed += id.charCodeAt(i) * (i + 1);
+  var n = 56, len = { loop: 1, music: 1, swing: 0.5, sword: 0.6, 'perfect-deflect': 0.75 }[id] || 0.32;
+  for (i = 0; i < n; i++) {
+    var u = i / n, e = u > len ? 0.03 : (id === 'loop' || id === 'music') ? 0.55 + 0.3 * Math.sin(u * 20 + seed) : Math.pow(1 - u / len, 1.6) * Math.min(1, u * 40 + 0.4);
+    var a = Math.max(0.02, e * (0.5 + 0.5 * h1(i + seed))) * (0.25 + level * 1.5) * h * 0.42;
+    c.fillStyle = u > len ? 'rgba(255,255,255,.14)' : '#5a9bff'; c.fillRect(12 + u * (w - 24), h / 2 - a, (w - 24) / n * 0.6, a * 2);
+  }
+}
+
+/* ---------- the game ---------- */
+var EV = [[0.5, 'effect', 'tell-glint', 'Tell glint'], [0.5, 'actor', 'ashblade', 'Ashblade'], [1.1, 'sound', 'swing', 'Swing'], [1.3, 'move', 'deflect', 'Deflect'], [1.3, 'effect', 'clash-sparks', 'Clash sparks'], [1.3, 'sound', 'clash', 'Clash'], [-1, 'move', 'cut', 'Stone cut'], [-2, 'sound', 'hit', 'Hit']];
+var CYCLE = 3.4, fired = {}, lastU = 0, lastClock = '';
+function evTime(e) { return e[0] === -1 ? 1.5 + S.p.startup : e[0] === -2 ? 1.5 + S.p.startup + 0.16 : e[0]; }
+function clock(t) { var s = Math.floor(t); return Math.floor(s / 60) + ':' + ('0' + (s % 60)).slice(-2); }
+function tick() {
+  var u = S.t % CYCLE, i; if (u < lastU) fired = {}; lastU = u;
+  for (i = 0; i < EV.length; i++) if (!fired[i] && u >= evTime(EV[i])) {
+    fired[i] = 1; pushRecent({ kind: EV[i][1], id: EV[i][2], name: EV[i][3] });
+    if (EV[i][1] === 'sound' && S.sound) playSound(EV[i][2], EV[i][2] === 'clash' ? S.p.clash : 0.14);
+  }
+}
+function pushRecent(r) {
+  S.recent = [r].concat(S.recent.filter(function (x) { return x.kind + x.id !== r.kind + r.id; })).slice(0, 5);
+  renderRecent();
+}
+function drawGame() {
+  var cv = $('game'), r = cv.getBoundingClientRect(), d = Math.min(2, window.devicePixelRatio || 1), w = Math.round(r.width * d), h = Math.round(r.height * d);
+  if (!w || !h) return; if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
+  var c = cv.getContext('2d'), t = S.t, u = t % CYCLE, L = LOOKS[S.look];
+  scene(c, w, h, S.look, t);
+  var gy = h * 0.82, H = h * 0.32, ax = w * 0.43, ex = w * 0.59, st = S.p.startup, cut0 = 1.5 + st, hit = cut0 + 0.16;
+  var e = { col: S.p.bright ? '#b0665a' : '#4a2f36', acc: S.p.bright ? '#e9c9a0' : '#8a7566', facing: -1, arm: 2.2, rim: !!S.p.bright };
+  if (u > 0.5 && u < 1.1) e.arm = lerp(2.2, 0.15, ez((u - 0.5) / 0.6));
+  else if (u >= 1.1 && u < 1.3) e.arm = lerp(0.15, 1.9, (u - 1.1) / 0.2);
+  else if (u >= 1.3 && u < 1.9) e.arm = lerp(1.9, 2.2, (u - 1.3) / 0.6);
+  if (u > hit && u < hit + 0.6) { var k = 1 - (u - hit) / 0.6; e.lean = -0.22 * k; e.crouch = 0.15 * k; }
+  var a = { col: '#cfd8e6', acc: '#8fbcff', facing: 1, arm: 2.2 + Math.sin(t * 2) * 0.04 };
+  if (u > 1.2 && u < 1.5) { a.arm = 1.0; a.wOff = -1.3; }
+  else if (u >= 1.5 && u < cut0) { a.arm = lerp(1.0, 0.15, (u - 1.5) / Math.min(st, 0.16)); a.wOff = -0.5; }
+  else if (u >= cut0 && u < hit) { a.arm = lerp(0.15, 2.4, (u - cut0) / 0.16); a.lean = 0.1; a.stride = 0.6; }
+  else if (u >= hit && u < hit + 0.5) { a.arm = lerp(2.4, 2.2, (u - hit) / 0.5); a.lean = 0.1 * (1 - (u - hit) / 0.5); }
+  var et = fig(c, ex, gy, H, e); fig(c, ax, gy, H, a);
+  var mx = (ax + ex) / 2, my = gy - H * 0.75, i;
+  if (u > 0.5 && u < 1.05) { c.fillStyle = 'rgba(255,255,255,' + (0.5 + 0.5 * Math.sin(u * 30)) + ')'; dot(c, et.tx, et.ty, h * 0.012); }
+  if (u > 1.3 && u < 1.62) { var ph = (u - 1.3) / 0.32; c.fillStyle = '#ffd27a'; for (i = 0; i < 16; i++) { var an = h1(i) * 6.283, sp = (0.3 + h1(i + 9)) * H * 0.5; c.globalAlpha = 1 - ph; dot(c, mx + Math.cos(an) * sp * ph, my + Math.sin(an) * sp * ph + H * 0.3 * ph * ph, h * 0.006); } c.globalAlpha = 1; }
+  if (u > hit && u < hit + 0.14) { c.strokeStyle = 'rgba(233,241,255,' + (1 - (u - hit) / 0.14) + ')'; c.lineWidth = h * 0.012; c.beginPath(); c.arc(ax + H * 0.1, gy - H * 0.55, H * 0.55, -1.2, 0.5); c.stroke(); }
+  grass(c, w, h, t, h * 1.02, 46, h * 0.5, L.front, S.p.grassFade ? [w * 0.3, w * 0.72] : null);
+  if (!S.p.bright) { c.fillStyle = 'rgba(8,8,18,.34)'; c.fillRect(0, 0, w, h); }
+  var ck = clock(t); if (ck !== lastClock) { lastClock = ck; $('clock').textContent = ck; }
+}
+
+/* ---------- builder ---------- */
+var FIXES = [
+  { id: 'clash', re: /quiet|loud|hear|volume|clash/i, piece: 'Sound · Clash', title: 'The clash is louder', lines: [['level', '-14 dB', '-8 dB']], say: 'The clash sat under the swing, so I raised it 6 dB. Turn Sound on above the game to hear it.', on: function () { S.p.clash = 0.3; }, off: function () { S.p.clash = 0.07; } },
+  { id: 'bright', re: /dark|dim|see|bright|read|visible/i, piece: 'Look · Dusk', title: 'Dusk is brighter and raiders have a rim light', lines: [['exposure', '0.90', '1.25'], ['rim on enemies', '0', '0.6']], say: 'The raider had almost the same brightness as the hill behind him. I raised the exposure and gave enemies a rim light.', on: function () { S.p.bright = 1; }, off: function () { S.p.bright = 0; } },
+  { id: 'startup', re: /slow|sluggish|late|delay|heavy|counter|cut|swing/i, piece: 'Animation · Stone cut', title: 'The counter cut starts sooner', lines: [['wind-up', '0.55 s', '0.20 s']], say: 'After a deflect, Aya held the blade up for 0.55 s before the cut. I shortened that to 0.20 s. Watch the gap after the sparks.', on: function () { S.p.startup = 0.2; }, off: function () { S.p.startup = 0.55; } }
+];
+var QUICK = ['The counter cut feels slow', 'Too dark to read the raider', 'The clash is too quiet'];
+function chipHtml(c, removable, n) {
+  return '<span class="chip">' + ic(c.kind) + '<span class="k">' + KIND[c.kind] + '</span>' + esc(c.name) + (removable ? '<button class="x" data-act="unattach" data-n="' + n + '" aria-label="Remove ' + esc(c.name) + '">×</button>' : '') + '</span>';
+}
+function changeHtml(ch, inLog) {
+  var st = ch.state, h = '<div class="chg"><span class="piece">' + esc(ch.piece) + '</span><b>' + esc(ch.title) + '</b><div class="kv mono">';
+  ch.lines.forEach(function (l) { h += '<span>' + esc(l[0]) + ' <s>' + esc(l[1]) + '</s> → ' + esc(l[2]) + '</span>'; });
+  h += '</div>';
+  if (!inLog) h += '<span class="from">From your note: “' + esc(ch.from) + '”</span>';
+  h += '<div class="acts">';
+  if (st === 'back') h += '<span class="pill">put back</span><button class="btn" data-act="again" data-id="' + ch.id + '">Apply again</button>';
+  else { h += st === 'kept' ? '<span class="pill ok">kept</span>' : '<button class="btn primary" data-act="keep" data-id="' + ch.id + '">Keep</button>'; h += '<button class="btn" data-act="back" data-id="' + ch.id + '">Put back</button>'; }
+  return h + '</div></div>';
+}
+function getChange(id) { for (var i = 0; i < S.changes.length; i++) if (S.changes[i].id === id) return S.changes[i]; return null; }
+function say(who, text, extra) { S.log.push({ who: who, text: text, chips: (extra && extra.chips) || [], change: (extra && extra.change) || null }); renderLog(); }
+function renderLog() {
+  var el = $('blog');
+  el.innerHTML = S.log.map(function (m) {
+    var h = '<div class="msg ' + m.who + '">' + esc(m.text);
+    if (m.chips.length) h += '<div class="chips">' + m.chips.map(function (c) { return chipHtml(c); }).join('') + '</div>';
+    if (m.change) h += changeHtml(getChange(m.change), true);
+    return h + '</div>';
+  }).join('');
+  el.scrollTop = el.scrollHeight;
+}
+function renderAttach() {
+  var el = $('battach'); el.hidden = S.attach.length === 0;
+  el.innerHTML = S.attach.map(function (c, n) { return chipHtml(c, true, n); }).join('');
+  var one = S.attach.length === 1 && S.attach[0].kind !== 'moment' ? S.attach[0] : null;
+  $('btext').placeholder = one ? 'What should change about ' + one.name + '?' : S.frozen ? 'What is off here?' : 'Say what feels wrong';
+}
+function renderChanges() {
+  var fresh = S.changes.filter(function (c) { return c.state === 'new'; }).length;
+  $('cnt-changes').textContent = fresh ? fresh + ' new' : String(S.changes.length);
+  $('v-changes').innerHTML = S.changes.length ? S.changes.slice().reverse().map(function (c) { return changeHtml(c, false); }).join('') : '<p class="small">Nothing changed yet.</p>';
+}
+function setState() {
+  var b = $('bstate'); b.textContent = S.busy ? 'working' : S.frozen ? 'waiting for your note' : 'ready'; b.className = 'pill ' + (S.busy || S.frozen ? 'warn' : 'ok');
+  $('stage').classList.toggle('is-frozen', S.frozen);
+  var fz = $('frozen'); fz.hidden = !S.frozen; if (S.frozen) fz.textContent = 'Frozen at ' + clock(S.t) + '. Tell the builder what is off.';
+  $('offbtn').innerHTML = S.frozen ? 'Carry on playing <kbd>Esc</kbd>' : 'Something is off <kbd>N</kbd>';
+  $('playbtn').textContent = S.playing ? 'Pause' : 'Play';
+  $('sndbtn').textContent = S.sound ? 'Sound on' : 'Sound off'; $('sndbtn').setAttribute('aria-pressed', String(S.sound));
+  $('lookname').textContent = S.look.charAt(0).toUpperCase() + S.look.slice(1);
+  $('bsend').disabled = S.busy;
+}
+function freeze(extra) {
+  if (S.step !== 4) return;
+  setTab('play'); S.frozen = true;
+  var list = [{ kind: 'moment', name: clock(S.t) + ' with screenshot' }];
+  (extra ? [extra] : S.recent.slice(0, 3)).forEach(function (r) { list.push(r); });
+  S.attach = list; renderAttach(); setState(); $('btext').focus({ preventScroll: true });
+}
+function unfreeze() { S.frozen = false; S.attach = []; renderAttach(); setState(); }
+function send(text) {
+  text = text.trim(); if (!text || S.busy) return;
+  var chips = S.attach.slice(); say('you', text, { chips: chips });
+  chips.forEach(function (c) { if (c.id) { S.noted[c.kind + '/' + c.id] = 1; setTag(c.kind + '/' + c.id); } });
+  S.attach = []; renderAttach(); S.busy = true; setState();
+  setTimeout(function () {
+    var f = null, i; for (i = 0; i < FIXES.length; i++) if (FIXES[i].re.test(text)) { f = FIXES[i]; break; }
+    var ch = f ? getChange(f.id) : null;
+    if (!f) say('ai', 'This mock only knows the three example notes below. In the app the builder reads your words with the frozen moment attached, changes the piece, runs its checks, and the game carries on.');
+    else if (ch && ch.state !== 'back') say('ai', 'I already changed that. Put it back from Changes if it went too far.');
+    else {
+      f.on();
+      if (ch) { ch.state = 'new'; ch.from = text; } else S.changes.push({ id: f.id, piece: f.piece, title: f.title, lines: f.lines, state: 'new', from: text, fix: f });
+      say('ai', f.say, { change: f.id });
+    }
+    S.busy = false; S.frozen = false; setState(); renderChanges(); renderLog();
+  }, 900);
+}
+function actChange(id, act) {
+  var ch = getChange(id); if (!ch) return;
+  if (act === 'keep') ch.state = 'kept';
+  if (act === 'back') { ch.state = 'back'; ch.fix.off(); }
+  if (act === 'again') { ch.state = 'kept'; ch.fix.on(); }
+  renderChanges(); renderLog();
+}
+
+/* ---------- Everything ---------- */
+var pvs = [], bpvs = [];
+function tagHtml(key) { return S.noted[key] ? '<span class="tag noted">note sent</span>' : S.ok[key] ? '<span class="tag ok">approved</span>' : S.seen[key] ? '' : '<span class="tag">new</span>'; }
+function setTag(key) { Array.prototype.forEach.call(document.querySelectorAll('[data-tag="' + key + '"]'), function (el) { el.innerHTML = tagHtml(key); }); }
+function cardHtml(cat, it, mode) {
+  var key = cat.kind + '/' + it.id, tune = '', acts, playable = cat.kind === 'sound' || cat.kind === 'effect';
+  if (mode === 'all' && cat.tune) { var v = S.tune[key] == null ? cat.tune.val : S.tune[key]; tune = '<details class="tune"><summary>Fine tune</summary><label for="tune-' + cat.kind + '-' + it.id + '">' + cat.tune.label + '<input type="range" id="tune-' + cat.kind + '-' + it.id + '" data-tune="' + key + '" min="' + cat.tune.min + '" max="' + cat.tune.max + '" value="' + v + '"><span class="mono" data-tv="' + key + '">' + v + '%</span></label></details>'; }
+  if (mode === 'review') acts = (playable ? '<button class="btn" data-act="pv" data-key="' + key + '">Play</button>' : '') + '<button class="btn primary" data-act="ok" data-key="' + key + '">Approve</button><button class="btn" data-act="bchange" data-key="' + key + '">Change</button>';
+  else acts = '<button class="btn" data-act="pv" data-key="' + key + '">' + (it.act || cat.act) + '</button><button class="btn" data-act="change" data-key="' + key + '">Change</button>';
+  return '<article class="card"><div class="pv"><canvas width="320" height="200" data-pv="' + key + '" role="img" aria-label="Preview of ' + esc(it.name) + '"></canvas><span data-tag="' + key + '">' + tagHtml(key) + '</span></div><div class="cb"><b>' + esc(it.name) + '</b><p>' + esc(it.note) + '</p>' + tune + '<div class="ca">' + acts + '</div></div></article>';
+}
+function mount(host) {
+  var list = [];
+  Array.prototype.forEach.call(host.querySelectorAll('canvas[data-pv]'), function (cv) {
+    var f = find(cv.getAttribute('data-pv')); var o = { key: cv.getAttribute('data-pv'), ctx: cv.getContext('2d'), it: f.item, kind: f.cat.kind, cat: f.cat, start: null };
+    list.push(o); drawPv(o, 0);
+  });
+  return list;
+}
+function allPv() { return pvs.concat(bpvs); }
+function renderAll() {
+  $('cnt-all').textContent = String(TOTAL);
+  $('cats').innerHTML = CATS.map(function (c) { return '<button class="chip" aria-pressed="' + (c.id === S.cat) + '" data-cat="' + c.id + '">' + ic(c.kind) + esc(c.name) + ' <span class="cnt">' + c.items.length + '</span></button>'; }).join('');
+  var cat = CATS.filter(function (c) { return c.id === S.cat; })[0];
+  $('grid').innerHTML = cat.items.map(function (it) { return cardHtml(cat, it, 'all'); }).join('');
+  pvs = mount($('grid'));
+}
+function tuneOf(o) { return (S.tune[o.key] == null ? o.cat.tune.val : S.tune[o.key]) / 100; }
+function drawPv(o, now) {
+  var c = o.ctx, w = 320, h = 200, it = o.it;
+  if (o.kind === 'actor') { c.fillStyle = '#0b0c0e'; c.fillRect(0, 0, w, h); c.fillStyle = 'rgba(255,255,255,.06)'; c.beginPath(); c.ellipse(w / 2, 172, 70, 10, 0, 0, 6.2832); c.fill(); fig(c, w / 2 - 8, 172, 128, { col: it.col, acc: it.acc, bulk: it.bulk, spear: it.spear, bow: it.bow, arm: it.bow ? 1.5 : it.spear ? 1.7 : 2.1, wOff: it.spear ? -0.25 : -0.5 }); }
+  else if (o.kind === 'move') { c.fillStyle = '#0b0c0e'; c.fillRect(0, 0, w, h); c.fillStyle = 'rgba(255,255,255,.06)'; c.fillRect(0, 172, w, 1); var p = pose(it.id, (reduce ? 0.45 : now) * tuneOf(o)); p.col = '#cfd8e6'; p.acc = '#8fbcff'; if (p.flash) { c.fillStyle = 'rgba(207,228,255,.5)'; dot(c, w / 2 + 34, 86, 16); } fig(c, w / 2 - 14 + (p.dx || 0) * 120, 172, 120, p); }
+  else if (o.kind === 'sound') drawWave(c, w, h, it.id, tuneOf(o));
+  else if (o.kind === 'world') scene(c, w, h, it.look || 'dusk', 1, it.place);
+  else if (o.kind === 'effect') { var el = o.start == null ? null : now - o.start; if (el != null && el > (it.loop ? 3 : 0.9)) { o.start = null; el = null; } drawEffect(c, w, h, it, el == null ? 0.4 : it.loop ? (el * 0.45) % 1 : el / 0.9); }
+  else drawScreen(c, w, h, it.id);
+}
+function toast(text) { var el = $('toast'); el.textContent = text; el.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(function () { el.hidden = true; }, 3600); }
+function preview(key) {
+  var f = find(key), it = f.item, k = f.cat.kind; S.seen[key] = 1; setTag(key);
+  if (k === 'sound') { var o = allPv().filter(function (p) { return p.key === key; })[0]; playSound(it.id, 0.05 + tuneOf(o) * 0.4); }
+  else if (k === 'effect') { allPv().forEach(function (p) { if (p.key === key) p.start = reduce ? null : performance.now() / 1000; }); }
+  else if (k === 'world' && it.look) { S.look = it.look; setTab('play'); setState(); toast('The game now uses the ' + it.name + ' look.'); }
+  else if (k === 'world') toast('In the app, the game restarts at ' + it.name + '.');
+  else toast('In the app, the game jumps to a moment that shows ' + it.name + '.');
+}
+
+/* ---------- build: pieces you can judge, and pieces that are explained ---------- */
+function flowSvg(W, H, nodes, edges, label) {
+  var s = '<svg class="flow" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + esc(label) + '">', by = {};
+  nodes.forEach(function (n) { by[n.id] = n; });
+  edges.forEach(function (e) {
+    var a = by[e[0]], b = by[e[1]], x1, y1, x2, y2;
+    if (Math.abs((b.y + b.h / 2) - (a.y + a.h / 2)) < 8) { var r = b.x > a.x; x1 = r ? a.x + a.w : a.x; x2 = r ? b.x - 4 : b.x + b.w + 4; y1 = y2 = a.y + a.h / 2; }
+    else { var d = b.y > a.y; x1 = a.x + a.w / 2; x2 = b.x + b.w / 2; y1 = d ? a.y + a.h : a.y; y2 = d ? b.y - 4 : b.y + b.h + 4; }
+    var an = Math.atan2(y2 - y1, x2 - x1), hx = x2 - Math.cos(an) * 8, hy = y2 - Math.sin(an) * 8, px = -Math.sin(an) * 4, py = Math.cos(an) * 4;
+    s += '<line x1="' + x1 + '" y1="' + y1 + '" x2="' + hx.toFixed(1) + '" y2="' + hy.toFixed(1) + '"/><polygon class="ah" points="' + x2 + ',' + y2 + ' ' + (hx + px).toFixed(1) + ',' + (hy + py).toFixed(1) + ' ' + (hx - px).toFixed(1) + ',' + (hy - py).toFixed(1) + '"/>';
+    if (e[2]) s += '<text class="lbl" x="' + ((x1 + x2) / 2 + 6) + '" y="' + ((y1 + y2) / 2 - 3) + '">' + e[2] + '</text>';
+  });
+  nodes.forEach(function (n) {
+    var lines = n.text.split('|');
+    s += '<g class="' + (n.t || '') + '"><rect x="' + n.x + '" y="' + n.y + '" width="' + n.w + '" height="' + n.h + '" rx="' + (n.t === 'ask' ? n.h / 2 : 8) + '"/>';
+    lines.forEach(function (l, i) { s += '<text x="' + (n.x + n.w / 2) + '" y="' + (n.y + n.h / 2 + 4 + (i - (lines.length - 1) / 2) * 15) + '" text-anchor="middle">' + esc(l) + '</text>'; });
+    s += '</g>';
+  });
+  return s + '</svg>';
+}
+function drawMap(c, w, h) {
+  c.fillStyle = '#0f1a26'; c.fillRect(0, 0, w, h);
+  function blob(pts, col) { c.fillStyle = col; c.beginPath(); var n = pts.length, i; c.moveTo((pts[0][0] + pts[n - 1][0]) / 2, (pts[0][1] + pts[n - 1][1]) / 2); for (i = 0; i < n; i++) { var p = pts[i], q = pts[(i + 1) % n]; c.quadraticCurveTo(p[0], p[1], (p[0] + q[0]) / 2, (p[1] + q[1]) / 2); } c.closePath(); c.fill(); }
+  blob([[60, 190], [110, 80], [260, 40], [430, 50], [570, 110], [600, 220], [520, 310], [330, 330], [150, 300]], '#c9b98a');
+  blob([[90, 190], [130, 100], [260, 62], [425, 70], [550, 122], [575, 218], [505, 292], [330, 310], [165, 282]], '#5d6b4a');
+  blob([[150, 200], [190, 130], [300, 120], [350, 190], [300, 262], [200, 260]], '#8f8b52');
+  blob([[380, 150], [470, 130], [530, 180], [500, 250], [400, 250], [360, 200]], '#7a6a5c');
+  blob([[450, 70], [520, 80], [545, 125], [490, 140], [440, 115]], '#48553f');
+  var i; c.fillStyle = '#3f6b45'; for (i = 0; i < 46; i++) dot(c, 250 + h1(i) * 150, 66 + h1(i + 7) * 46, 4 + h1(i + 3) * 3);
+  var P = [[92, 196], [248, 196], [372, 196], [452, 160], [494, 108]];
+  c.strokeStyle = '#f3ead2'; c.lineWidth = 2.5; c.setLineDash([7, 6]); c.beginPath(); c.moveTo(P[0][0], P[0][1]); for (i = 1; i < P.length; i++) c.lineTo(P[i][0], P[i][1]); c.stroke(); c.setLineDash([]);
+  c.fillStyle = '#ff9a3c'; dot(c, 262, 214, 5); c.fillStyle = '#c23b3b'; c.fillRect(488, 86, 12, 5); c.fillRect(491, 91, 2, 10); c.fillRect(495, 91, 2, 10);
+  c.font = '600 13px -apple-system, system-ui, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
+  P.forEach(function (p, n) { c.fillStyle = '#f3ead2'; dot(c, p[0], p[1], 11); c.fillStyle = '#16181c'; c.fillText(String(n + 1), p[0], p[1] + 0.5); });
+  c.fillStyle = 'rgba(243,234,210,.75)'; c.font = '12px -apple-system, system-ui, sans-serif';
+  c.fillText('pampas plain', 250, 244); c.fillText('bamboo', 326, 54); c.fillText('Kitsugi', 448, 226); c.fillText('west beach', 96, 236);
+}
+var EXPL = {
+  map: { name: 'The island', why: 'A place is too big to judge from one view. The builder draws the map and marks where each fight happens, in the order you meet them.', fig: '<canvas width="640" height="360" data-map="1" role="img" aria-label="Map of Hoshiro island with five numbered encounters along the road from the west beach to the shrine"></canvas>', list: ['West beach: Aya lands at dusk', 'Raider camp: five of the Band and a fire', 'Kitsugi gate: the brute holds it', 'Village road: an archer in the rocks', 'Shrine stairs: the duel with Kagari'] },
+  rules: { name: 'Fight rules', why: 'You cannot see a rule. This is the decision the game makes on every enemy attack, with the numbers the builder used.', fig: flowSvg(570, 326, [
+    { id: 'tell', x: 200, y: 8, w: 170, h: 36, text: 'Enemy shows a tell' },
+    { id: 'red', x: 200, y: 74, w: 170, h: 36, t: 'ask', text: 'Red flash?' },
+    { id: 'dodge', x: 410, y: 74, w: 150, h: 36, text: 'Only a dodge works' },
+    { id: 'how', x: 200, y: 140, w: 170, h: 36, t: 'ask', text: 'Hold Q or tap Q?' },
+    { id: 'block', x: 14, y: 208, w: 230, h: 46, text: 'Hold: block|60% of the posture damage goes back' },
+    { id: 'defl', x: 326, y: 208, w: 234, h: 46, text: 'Tap at the last moment: deflect|120% goes back, the raider staggers' },
+    { id: 'post', x: 200, y: 284, w: 170, h: 36, t: 'ask', text: 'Their posture full?' },
+    { id: 'fin', x: 410, y: 284, w: 150, h: 36, t: 'end', text: 'Finishing strike' }
+  ], [['tell', 'red'], ['red', 'dodge', 'yes'], ['red', 'how', 'no'], ['how', 'block'], ['how', 'defl'], ['block', 'post'], ['defl', 'post'], ['post', 'fin', 'yes']], 'Flowchart of what happens on each enemy attack') },
+  raider: { name: 'How a sword raider behaves', why: 'The loop every Ashblade follows. The gap after the cut is where you counter, so its length decides how hard he is.', fig: flowSvg(570, 132, [
+    { id: 'wait', x: 10, y: 8, w: 160, h: 36, text: 'Waits by the fire' },
+    { id: 'see', x: 205, y: 8, w: 160, h: 36, t: 'ask', text: 'Sees you?' },
+    { id: 'walk', x: 400, y: 8, w: 160, h: 36, text: 'Walks in, blade low' },
+    { id: 'tell', x: 400, y: 88, w: 160, h: 36, text: 'Tell: blade up, a glint' },
+    { id: 'cut', x: 205, y: 88, w: 160, h: 36, text: 'Cuts' },
+    { id: 'rec', x: 10, y: 88, w: 160, h: 36, t: 'end', text: 'Recovers: open' }
+  ], [['wait', 'see'], ['see', 'walk', 'yes'], ['walk', 'tell'], ['tell', 'cut'], ['cut', 'rec'], ['rec', 'walk', 'again']], 'Flowchart of the loop a sword raider follows') }
+};
+var BUILD = [
+  { name: 'World', sub: 'the island, 4 places, 3 looks', cats: ['world'], expl: ['map'] },
+  { name: 'Actors', sub: 'Aya and 5 raiders', cats: ['actors'], expl: [] },
+  { name: 'Animations', sub: 'idle, run, cuts, deflect, dodge', cats: ['moves'], expl: [] },
+  { name: 'Rules', sub: 'the fight, how raiders behave', cats: [], expl: ['rules', 'raider'] },
+  { name: 'Sounds', sub: '10 groups', cats: ['sounds'], expl: [] },
+  { name: 'Effects', sub: '15 effects', cats: ['effects'], expl: [] },
+  { name: 'Screens', sub: 'fight display, pause, controls', cats: ['screens'], expl: [] }
+];
+var buildTimer = null;
+function catById(id) { return CATS.filter(function (c) { return c.id === id; })[0]; }
+function stageKeys(b) { var k = []; b.cats.forEach(function (id) { var c = catById(id); c.items.forEach(function (it) { k.push(c.kind + '/' + it.id); }); }); b.expl.forEach(function (e) { k.push('explain/' + e); }); return k; }
+function nameOf(key) { var p = key.split('/'); return p[0] === 'explain' ? EXPL[p[1]].name : find(key).item.name; }
+function renderStages() {
+  var all = 0, okc = 0;
+  $('stages').innerHTML = BUILD.map(function (b, i) {
+    var keys = stageKeys(b), ok = keys.filter(function (k) { return S.ok[k]; }).length, cls = '', txt = 'waiting';
+    all += keys.length; okc += ok;
+    if (i === S.built) { cls = 'warn'; txt = 'building'; } else if (i < S.built && ok === keys.length) { cls = 'ok'; txt = 'approved'; } else if (i < S.built) txt = (keys.length - ok) + ' to look at';
+    return '<li><button data-stage="' + i + '" aria-current="' + (i === S.bsel) + '"><span class="dot ' + (i < S.built ? 'done' : i === S.built ? 'doing' : '') + '"></span><span><b>' + b.name + '</b><small>' + b.sub + '</small></span><span class="pill ' + cls + '">' + txt + '</span></button></li>';
+  }).join('');
+  $('playnow').disabled = S.built < 3; $('bcount').textContent = okc + ' of ' + all + ' approved';
+}
+function xtag(key) { return S.noted[key] ? '<span class="pill warn">note sent</span>' : S.ok[key] ? '<span class="pill ok">approved</span>' : '<span class="pill">new</span>'; }
+function xcardHtml(id) {
+  var x = EXPL[id], key = 'explain/' + id;
+  return '<article class="xcard"><div class="xfig">' + x.fig + '</div><div class="cb"><div class="row"><b>' + esc(x.name) + '</b>' + xtag(key) + '</div><p>' + esc(x.why) + '</p>' + (x.list ? '<ol>' + x.list.map(function (l) { return '<li>' + esc(l) + '</li>'; }).join('') + '</ol>' : '') + '<div class="ca"><button class="btn primary" data-act="ok" data-key="' + key + '">Looks right</button><button class="btn" data-act="bchange" data-key="' + key + '">Change</button></div></div></article>';
+}
+function renderPane() {
+  var b = BUILD[S.bsel], el = $('bpane'), h;
+  if (S.bsel >= S.built) { el.innerHTML = '<h2>' + b.name + '</h2><p class="small">' + (S.bsel === S.built ? 'The builder is on this stage now.' : 'This stage has not started.') + ' Pick a finished stage on the left.</p>'; bpvs = []; return; }
+  h = '<div class="row"><h2>' + b.name + '</h2><span style="flex:1"></span><button class="btn" data-act="okall">Approve all of ' + b.name + '</button></div>';
+  if (S.bnote) h += '<form class="row notebar" id="bnoteform"><label for="bnote">What should change about <b>' + esc(nameOf(S.bnote)) + '</b>?</label><input id="bnote" autocomplete="off"><button class="btn primary" type="submit">Send</button><button class="btn" type="button" data-act="bcancel">Cancel</button></form>';
+  if (b.cats.length) { h += '<p class="lane"><b>Look and listen.</b> You can judge these yourself. Approve each one, or say what to change.</p><div class="grid">'; b.cats.forEach(function (id) { var c = catById(id); h += c.items.map(function (it) { return cardHtml(c, it, 'review'); }).join(''); }); h += '</div>'; }
+  if (b.expl.length) { h += '<p class="lane"><b>Explained.</b> You cannot see these directly, so the builder draws them and says what it decided.</p>'; b.expl.forEach(function (id) { h += xcardHtml(id); }); }
+  el.innerHTML = h; bpvs = mount(el);
+  var mc = el.querySelector('canvas[data-map]'); if (mc) drawMap(mc.getContext('2d'), 640, 360);
+}
+function setTagX(key) { if (key.indexOf('explain/') === 0) renderPane(); else setTag(key); }
+function runBuild() {
+  clearInterval(buildTimer); S.bstarted = true; S.follow = true; S.bsel = 0; S.bnote = null; S.built = reduce ? BUILD.length : 0; renderStages(); renderPane(); if (reduce) return;
+  buildTimer = setInterval(function () {
+    S.built++; if (S.follow) S.bsel = S.built - 1;
+    renderStages(); if (S.follow || S.bsel === S.built - 1) renderPane();
+    if (S.built >= BUILD.length) clearInterval(buildTimer);
+  }, 1300);
+}
+
+/* ---------- brief: a chat with streamed text and cards the builder sends ---------- */
+var C = { run: 0, fast: false, ans: {}, started: false, idea: '', wait: null, busy: false, night: false };
+function firstText() { return (C.ans.scope && C.ans.scope.indexOf('whole') >= 0 ? 'The road from the west beach to the shrine stairs: the camp, the gate, the archer and the duel' : 'The raider camp: five of the Band around a fire') + ', at ' + (C.night ? 'night' : 'dusk') + '. It is done when you can win it and lose it.'; }
+var BRIEF = [
+  { id: 'premise', name: 'Premise', type: 'text', val: 'Aya, a lone swordswoman of the Sedge Hall, lands on the island of Hoshiro at dusk. The Ashfall Band, raiders who burn what they cannot carry, hold the road to the shrine. Her order has one rule: answer, do not attack first.' },
+  { id: 'verbs', name: 'What you do', type: 'list', val: ['Read: every enemy attack starts with a pose and a glint on the blade.', 'Answer: block it, deflect it at the last moment, or dodge the red ones.', 'Break: blocks and deflects fill the enemy\'s posture. A full bar opens a finishing strike.', 'Switch: three stances, each strong against one kind of raider.'] },
+  { id: 'controls', name: 'Controls', type: 'table', head: ['Action', 'Keyboard and mouse'], val: [['Move', 'W A S D'], ['Light attack', 'Left click'], ['Heavy attack, hold to charge', 'Right click'], ['Block, or deflect with a tap', 'Q'], ['Dodge', 'Space'], ['Change stance', 'Tab'], ['Lock on', 'T']] },
+  { id: 'cast', name: 'Cast', type: 'table', head: ['Who', 'Kind', 'Answer with'], val: [['Aya', 'You', ''], ['Ashblade', 'Sword raider', 'Stone stance'], ['Ashpike', 'Spear raider', 'Water stance'], ['Hulk', 'Brute at the gate', 'Wind stance'], ['Ashkite', 'Archer', 'Closing the distance'], ['Kagari', 'Duelist, two phases', 'Reading the pattern']] },
+  { id: 'world', name: 'World', type: 'text', val: 'One island. The west beach where Aya lands, the pampas plain with the raider camp, bamboo groves, the hill village Kitsugi behind its gate, and the shrine stairs above it. Three looks: dusk, night and rain.' },
+  { id: 'rules', name: 'Fight rules', type: 'list', val: ['A blocked hit sends 60% of its posture damage back. A deflect sends 120% and staggers.', 'The right stance does 1.5 times the posture damage, the wrong one 0.7 times.', 'Changing stance takes 0.25 s.', 'A swing starts within 0.1 s of the button.', 'A red flash cannot be blocked.'] },
+  { id: 'feel', name: 'Look and sound', type: 'text', val: 'Low sun, tall grass that moves with the wind, strong outlines so a pose reads from far away. Sound carries the timing: a swing, a clash, and a clear ring for a perfect deflect.' },
+  { id: 'first', name: 'First playable', type: 'text', val: firstText },
+  { id: 'out', name: 'Not in the first version', type: 'text', val: 'Story lines and cutscenes, more than one island, difficulty settings.' }
+];
+function cscroll() { var el = $('clog'); el.scrollTop = el.scrollHeight; }
+function cadd(html) { var d = document.createElement('div'); d.innerHTML = html; var el = d.firstChild; $('clog').appendChild(el); cscroll(); return el; }
+function evl(text) { return '<div class="ev mono">' + text + '</div>'; }
+function cuser(text) { cadd('<div class="cm you">' + esc(text) + '</div>'); }
+function cstate(t) { var el = $('cstate'); el.textContent = t; el.className = 'pill ' + (t === 'ready' ? 'ok' : 'warn'); $('csendbtn').disabled = t !== 'ready'; }
+function stream(el, text, done) {
+  var tok = C.run, i = 0;
+  if (C.fast || reduce) { el.textContent = text; cscroll(); return done(); }
+  el.classList.add('typing');
+  (function step() {
+    if (tok !== C.run) return;
+    i = C.fast ? text.length : Math.min(text.length, i + 2 + Math.floor(Math.random() * 3));
+    el.textContent = text.slice(0, i); cscroll();
+    if (i < text.length) setTimeout(step, 16); else { el.classList.remove('typing'); done(); }
+  })();
+}
+function ctext(text, done) { var m = cadd('<div class="cm ai">' + evl('TEXT_MESSAGE_CONTENT · streamed as it is written') + '<span></span></div>'); stream(m.lastChild, text, done); }
+function cask(id, q, opts, done) {
+  var m = cadd('<div class="ui">' + evl('TOOL_CALL ui.ask · the run waits for your answer') + '<b>' + esc(q) + '</b><div class="opts">' + opts.map(function (o, n) { return '<button class="chip" data-act="answer" data-n="' + n + '" aria-pressed="false">' + esc(o) + '</button>'; }).join('') + '</div></div>');
+  C.wait = { id: id, opts: opts, el: m, done: done }; cstate('waiting for you');
+  if (C.fast) canswer(0);
+}
+function canswer(n) {
+  var w = C.wait; if (!w) return; C.wait = null; C.ans[w.id] = w.opts[n];
+  Array.prototype.forEach.call(w.el.querySelectorAll('button'), function (b, i) { b.disabled = true; b.setAttribute('aria-pressed', String(i === n)); });
+  cstate('writing'); w.done();
+}
+function fillSec(body, s, done) {
+  var tok = C.run, val = typeof s.val === 'function' ? s.val() : s.val, i = 0, host;
+  if (s.type === 'text') { var p = document.createElement('p'); body.appendChild(p); return stream(p, val, done); }
+  if (s.type === 'list') { host = document.createElement('ul'); body.appendChild(host); }
+  else { var w = document.createElement('div'); w.className = 'tbl'; w.innerHTML = '<table><thead><tr>' + s.head.map(function (x) { return '<th>' + x + '</th>'; }).join('') + '</tr></thead><tbody></tbody></table>'; body.appendChild(w); host = w.querySelector('tbody'); }
+  (function row() {
+    if (tok !== C.run) return; if (i >= val.length) return done();
+    var r = val[i++], el;
+    if (s.type === 'list') { el = document.createElement('li'); host.appendChild(el); stream(el, r, row); }
+    else { el = document.createElement('tr'); el.innerHTML = r.map(function (x) { return '<td>' + esc(x) + '</td>'; }).join(''); host.appendChild(el); cscroll(); if (C.fast || reduce) row(); else setTimeout(row, 110); }
+  })();
+}
+function cbrief(done) {
+  var card = cadd('<div class="ui">' + evl('STATE_DELTA brief · the card fills as each part arrives') + '<div class="row"><b>Ironleaf</b><span class="pill">brief</span><span style="flex:1"></span><span class="small">saved as GAME.md</span></div><div class="bsecs"></div></div>');
+  var host = card.querySelector('.bsecs'), i = 0, tok = C.run;
+  (function next() {
+    if (tok !== C.run) return; if (i >= BRIEF.length) return done();
+    var s = BRIEF[i++], d = document.createElement('div'); d.className = 'bsec'; d.setAttribute('data-sec', s.id);
+    d.innerHTML = '<div class="bsec-h"><b>' + s.name + '</b><span class="st">writing</span><span style="flex:1"></span><button class="linkbtn" data-act="secchange" data-name="' + s.name + '">Change</button></div><div class="bsec-b"></div>';
+    host.appendChild(d); fillSec(d.lastChild, s, function () { d.querySelector('.st').textContent = ''; next(); });
+  })();
+}
+function cdone() { C.busy = false; cstate('ready'); }
+function capprove() {
+  cadd('<div class="ui">' + evl('RUN_FINISHED interrupt · the build starts when you approve') + '<b>Build from this brief?</b><p class="small">You can play as soon as the world, the actors and their animations pass.</p><div class="row"><button class="btn primary lg" data-go="3">Build this</button><button class="btn lg" data-act="talk">Keep talking</button></div></div>');
+  cdone();
+}
+function chatStart() {
+  C.run++; C.fast = false; C.ans = {}; C.wait = null; C.started = true; C.busy = true; C.night = false;
+  C.idea = $('idea').value.trim() || 'A samurai game on an island.'; $('clog').innerHTML = ''; cstate('writing');
+  cuser(C.idea);
+  ctext('Good start. Two choices shape most of this game, so I will ask before I write it down.', function () {
+    cask('feel', 'How should a fight feel?', ['Weighty: few cuts, each one counts', 'Fast: long strings of light cuts'], function () {
+      ctext(C.ans.feel.indexOf('Fast') === 0 ? 'Fast, then: light strings with a short recovery. A well-timed deflect still pays best.' : 'Weighty, then: each cut commits you, and a well-timed deflect is what opens an enemy.', function () {
+        cask('scope', 'How much should the first playable cover?', ['One fight: the raider camp', 'The whole road to the shrine'], function () {
+          ctext('Writing the brief. Each part appears as I finish it, and you can change any of them.', function () {
+            cbrief(function () { ctext('That is the whole brief. I read it again at the start of every build stage, so a change here changes what gets built.', capprove); });
+          });
+        });
+      });
+    });
+  });
+}
+function csend(text) {
+  text = text.trim(); if (!text || C.busy || C.wait) return;
+  cuser(text); C.busy = true; cstate('writing'); var tok = C.run;
+  setTimeout(function () {
+    if (tok !== C.run) return;
+    var sec = document.querySelector('#clog [data-sec="first"]');
+    if (/night/i.test(text) && !C.night && sec) {
+      C.night = true; sec.querySelector('.st').textContent = 'changed'; var b = sec.querySelector('.bsec-b'); b.innerHTML = '<p></p>';
+      var m = cadd('<div class="cm ai">' + evl('STATE_DELTA brief/first-playable · only this part is sent again') + '<span></span></div>');
+      stream(b.firstChild, firstText(), function () { stream(m.lastChild, 'Changed the first playable to start at night. It is marked in the brief above. Nothing else moved.', cdone); });
+    } else ctext('In the app I rewrite the part you named and mark it as changed in the card. This mock knows one change: the suggestion under this box.', cdone);
+  }, 350);
+}
+
+/* ---------- navigation ---------- */
+function renderRail() {
+  $('rail').innerHTML = STEPS.map(function (s, i) { return '<li><button data-go="' + (i + 1) + '"' + (S.step === i + 1 ? ' aria-current="step"' : '') + '><span class="n">' + (i + 1) + '</span>' + s.name + '</button></li>'; }).join('');
+  $('cap').textContent = STEPS[S.step - 1].cap;
+  var key = S.step === 4 ? S.tab : 's' + S.step;
+  $('notes').innerHTML = NOTES[key].map(function (n) { return '<div><h3>' + esc(n[0]) + '</h3><p>' + esc(n[1]) + '</p></div>'; }).join('');
+}
+function setStep(n) {
+  S.step = n; for (var i = 1; i <= 5; i++) $('s-' + i).hidden = i !== n;
+  if (n === 3 && !S.bstarted) runBuild();
+  if (n === 2 && (!C.started || C.idea !== ($('idea').value.trim() || 'A samurai game on an island.'))) chatStart();
+  if (n !== 4 && S.frozen) unfreeze();
+  renderTabs(); renderRail();
+}
+function renderTabs() {
+  ['play', 'all', 'changes'].forEach(function (t) { var on = S.step === 4 && S.tab === t; $('tab-' + t).className = on ? 'on' : ''; $('tab-' + t).setAttribute('aria-selected', String(on)); });
+  $('v-play').hidden = S.tab !== 'play'; $('v-play').style.display = S.tab === 'play' ? 'contents' : 'none';
+  $('v-all').hidden = S.tab !== 'all'; $('v-changes').hidden = S.tab !== 'changes';
+}
+function setTab(t) { S.tab = t; if (S.step !== 4) setStep(4); else { renderTabs(); renderRail(); } if (t === 'all') renderAll(); if (t === 'changes') renderChanges(); }
+function renderRecent() {
+  $('recent').innerHTML = '<span class="lab">Just now</span>' + (S.recent.length ? S.recent.map(function (r, n) { return '<button class="chip" data-act="recent" data-n="' + n + '">' + ic(r.kind) + esc(r.name) + '</button>'; }).join('') : '<span class="small">Nothing yet. Press Play.</span>');
+}
+
+/* ---------- events ---------- */
+document.addEventListener('click', function (ev) {
+  var el = ev.target.closest('[data-go],[data-act],[data-cat],[data-idea],[data-stage]'); if (!el) return;
+  if (el.hasAttribute('data-stage')) { S.bsel = Number(el.getAttribute('data-stage')); S.follow = false; S.bnote = null; renderStages(); return renderPane(); }
+  if (el.hasAttribute('data-go')) return setStep(Number(el.getAttribute('data-go')));
+  if (el.hasAttribute('data-cat')) { S.cat = el.getAttribute('data-cat'); return renderAll(); }
+  if (el.hasAttribute('data-idea')) { $('idea').value = el.getAttribute('data-idea'); return; }
+  var act = el.getAttribute('data-act');
+  if (act === 'keep' || act === 'back' || act === 'again') actChange(el.getAttribute('data-id'), act);
+  else if (act === 'pv') preview(el.getAttribute('data-key'));
+  else if (act === 'change') { var f = find(el.getAttribute('data-key')); S.attach = [{ kind: f.cat.kind, id: f.item.id, name: f.item.name }]; renderAttach(); $('btext').focus(); }
+  else if (act === 'recent') freeze(S.recent[Number(el.getAttribute('data-n'))]);
+  else if (act === 'unattach') { S.attach.splice(Number(el.getAttribute('data-n')), 1); renderAttach(); }
+  else if (act === 'quick') send(el.getAttribute('data-text'));
+  else if (act === 'ok') { var k = el.getAttribute('data-key'); S.ok[k] = 1; delete S.noted[k]; setTagX(k); renderStages(); }
+  else if (act === 'okall') { stageKeys(BUILD[S.bsel]).forEach(function (k2) { S.ok[k2] = 1; delete S.noted[k2]; }); renderStages(); renderPane(); }
+  else if (act === 'bchange') { S.bnote = el.getAttribute('data-key'); S.follow = false; renderPane(); $('bnote').focus(); }
+  else if (act === 'bcancel') { S.bnote = null; renderPane(); }
+  else if (act === 'answer') canswer(Number(el.getAttribute('data-n')));
+  else if (act === 'secchange') { $('ctext').value = 'Change the ' + el.getAttribute('data-name').toLowerCase() + ': '; $('ctext').focus(); }
+  else if (act === 'talk') $('ctext').focus();
+  else if (act === 'csuggest') csend(el.getAttribute('data-text'));
+});
+document.addEventListener('input', function (ev) {
+  var key = ev.target.getAttribute && ev.target.getAttribute('data-tune'); if (!key) return;
+  S.tune[key] = Number(ev.target.value); var tv = document.querySelector('[data-tv="' + key + '"]'); if (tv) tv.textContent = ev.target.value + '%';
+  pvs.forEach(function (p) { if (p.key === key && p.kind === 'sound') drawPv(p, 0); });
+});
+$('tab-play').addEventListener('click', function () { setTab('play'); });
+$('tab-all').addEventListener('click', function () { setTab('all'); });
+$('tab-changes').addEventListener('click', function () { setTab('changes'); });
+$('sharebtn').addEventListener('click', function () { setStep(5); });
+$('rebuild').addEventListener('click', runBuild);
+document.addEventListener('submit', function (ev) {
+  if (ev.target.id !== 'bnoteform') return; ev.preventDefault();
+  var k = S.bnote, v = $('bnote').value.trim(); if (!v) return;
+  S.noted[k] = 1; delete S.ok[k]; S.bnote = null; renderPane(); renderStages(); toast('Sent. The builder reworks ' + nameOf(k) + ' and it comes back marked new.');
+});
+$('cform').addEventListener('submit', function (ev) { ev.preventDefault(); var v = $('ctext').value; if (C.busy || C.wait) return; $('ctext').value = ''; csend(v); });
+$('ctext').addEventListener('keydown', function (ev) { if (ev.key === 'Enter' && !ev.shiftKey && !ev.isComposing) { ev.preventDefault(); if (C.busy || C.wait) return; var v = $('ctext').value; $('ctext').value = ''; csend(v); } });
+$('cskip').addEventListener('click', function () { C.fast = true; if (C.wait) canswer(0); });
+$('crestart').addEventListener('click', chatStart);
+$('showev').addEventListener('change', function () { $('s-2').classList.toggle('show-ev', $('showev').checked); });
+$('buildbtn').addEventListener('click', function () { $('built').hidden = false; });
+$('offbtn').addEventListener('click', function () { if (S.frozen) unfreeze(); else freeze(); });
+$('playbtn').addEventListener('click', function () { S.playing = !S.playing; setState(); });
+$('sndbtn').addEventListener('click', function () { S.sound = !S.sound; if (S.sound) ac(); setState(); });
+$('bform').addEventListener('submit', function (ev) { ev.preventDefault(); var v = $('btext').value; $('btext').value = ''; send(v); });
+$('btext').addEventListener('keydown', function (ev) { if (ev.key === 'Enter' && !ev.shiftKey && !ev.isComposing) { ev.preventDefault(); var v = $('btext').value; $('btext').value = ''; send(v); } });
+document.addEventListener('keydown', function (ev) {
+  var t = ev.target, typing = t && (t.tagName === 'TEXTAREA' || t.tagName === 'INPUT');
+  if (ev.key === 'Escape' && S.frozen) { unfreeze(); if (typing) t.blur(); }
+  else if (!typing && !ev.metaKey && !ev.ctrlKey && ev.key.toLowerCase() === 'n' && S.step === 4) { ev.preventDefault(); freeze(); }
+});
+
+/* ---------- start ---------- */
+S.changes.push({ id: 'grass', piece: 'World · Pampas grass', title: 'Grass fades between the camera and the fight', lines: [['fade near fighters', 'off', 'on']], state: 'kept', from: 'The grass hides the fight', fix: { on: function () { S.p.grassFade = 1; }, off: function () { S.p.grassFade = 0; } } });
+S.log.push({ who: 'you', text: 'The grass hides the fight', chips: [{ kind: 'moment', name: '0:31 with screenshot' }], change: null });
+S.log.push({ who: 'ai', text: 'The tall grass in front of the camera covered both fighters. It now fades out between the camera and anyone fighting.', chips: [], change: 'grass' });
+$('bquick').innerHTML = '<span class="lab">Example notes that work in this mock</span>' + QUICK.map(function (q) { return '<button class="chip" data-act="quick" data-text="' + esc(q) + '">' + esc(q) + '</button>'; }).join('');
+if (reduce) { S.t = 1.45; S.recent = [{ kind: 'sound', id: 'clash', name: 'Clash' }, { kind: 'effect', id: 'clash-sparks', name: 'Clash sparks' }, { kind: 'move', id: 'deflect', name: 'Deflect' }, { kind: 'actor', id: 'ashblade', name: 'Ashblade' }]; }
+$('cnt-all').textContent = String(TOTAL);
+renderLog(); renderAttach(); renderChanges(); renderRecent(); setState(); setStep(4);
+function frame(now) {
+  var dt = Math.min(0.05, (now - (frame.last || now)) / 1000); frame.last = now;
+  if (S.step === 4 && S.tab === 'play') { if (S.playing && !S.frozen) { S.t += dt; tick(); } drawGame(); }
+  else if (S.step === 3 && !reduce) bpvs.forEach(function (p) { if (p.kind === 'move' || (p.kind === 'effect' && p.start != null)) drawPv(p, now / 1000); });
+  else if (S.step === 4 && S.tab === 'all' && !reduce) pvs.forEach(function (p) { if (p.kind === 'move' || (p.kind === 'effect' && p.start != null)) drawPv(p, now / 1000); });
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+})();
+</script>
