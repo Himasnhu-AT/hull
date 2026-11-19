@@ -428,6 +428,7 @@ overrides a kit's tunables (section 4).
 | `health` | `Health`, `HealthHud`, `Weapon` |
 | `pickups` | `Pickup`, `Stock`, `StockHud`, `scatterPickups` |
 | `spawner` | `Spawner`, `Chaser`, `WaveHud`, `GameOver` |
+| `combat` | `Combatant`, `EnemyBrain`, `FighterInput`, `LockOn`, `Standoff`, weapon traces (`Blade`, `HurtShapes`), `combatHub`, `CombatDebug`; config kinds `move-set` and `enemy` |
 | `pause`, `saves` | `PauseMenu`, `SaveSlots` |
 
 **Pure helpers.** For a game that builds its own player or enemies, four kits also export plain functions and small state

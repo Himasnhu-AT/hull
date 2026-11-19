@@ -23,6 +23,9 @@ export const followTuning = tunables('followCamera', {
   speedSmoothing: num(5, { min: 0.5, max: 30, step: 0.5, unit: '1/s', help: 'How quickly the speed effects settle.' }),
   collisionRadius: num(0.3, { min: 0.05, max: 1, step: 0.05, unit: 'm', help: 'Size of the camera when it is pushed off walls.' }),
   recover: num(5, { min: 0.5, max: 30, step: 0.5, unit: '1/s', help: 'How quickly the camera returns after a wall let it go.' }),
+  lockFollow: num(7, { min: 1, max: 30, step: 0.5, unit: '1/s', help: 'How quickly the view swings round to keep a locked-on target in front.' }),
+  lockPitch: num(0.28, { min: -0.3, max: 1, step: 0.02, unit: 'rad', help: 'Camera height angle while locked on.' }),
+  shakeSize: num(0.22, { min: 0, max: 1, step: 0.01, unit: 'm', help: 'Sideways and vertical travel of a full-strength shake.' }),
 });
 
 const lk = { x: 0, y: 0 };
@@ -37,7 +40,7 @@ const dir = { x: 0, y: 0, z: 0 };
  * relative to the view. The node needs a `Camera` behaviour; the target is found by name.
  */
 export class FollowCamera extends Behaviour {
-  static override state = ['yaw', 'pitch', 'dist', 'speed', 'px', 'py', 'pz', 'lx', 'lz'];
+  static override state = ['yaw', 'pitch', 'dist', 'speed', 'px', 'py', 'pz', 'lx', 'lz', 'shakeA', 'shakeT', 'shakeLen'];
   targetName = 'player';
   yaw = 0;
   pitch = 0;
@@ -46,6 +49,10 @@ export class FollowCamera extends Behaviour {
   px = 0; py = 0; pz = 0;
   /** Where the target was a step ago, for its speed. */
   lx = 0; lz = 0;
+  /** A node to keep in front of the target (lock-on); null for free look. */
+  lockTarget: Node | null = null;
+  /** Shake strength left (0 to 1), seconds left, and the length it started with. */
+  shakeA = 0; shakeT = 0; shakeLen = 0;
   private target!: Node;
   private cam!: Camera;
   private phys!: Physics;
@@ -73,14 +80,50 @@ export class FollowCamera extends Behaviour {
   override fixedUpdate(dt: number): void {
     if (this.flags.paused) return;
     const input = kitIO.input;
-    input.vec2('look', lk);
-    this.yaw -= lk.x * followTuning.mouseSensitivity;
-    this.pitch += lk.y * followTuning.mouseSensitivity;
-    input.vec2('lookPad', lk);
-    this.yaw -= lk.x * followTuning.padLookSpeed * dt;
-    this.pitch += lk.y * followTuning.padLookSpeed * dt;
+    const lock = this.lockTarget;
+    if (lock && !lock.destroyed) {
+      // Locked on: the view swings round behind the target so the locked node stays in front; look input is ignored.
+      const k = 1 - Math.exp(-followTuning.lockFollow * dt);
+      const want = Math.atan2(this.target.position.x - lock.position.x, this.target.position.z - lock.position.z);
+      let d = (want - this.yaw) % (Math.PI * 2);
+      if (d > Math.PI) d -= Math.PI * 2;
+      else if (d < -Math.PI) d += Math.PI * 2;
+      this.yaw += d * k;
+      this.pitch += (followTuning.lockPitch - this.pitch) * k;
+    } else {
+      input.vec2('look', lk);
+      this.yaw -= lk.x * followTuning.mouseSensitivity;
+      this.pitch += lk.y * followTuning.mouseSensitivity;
+      input.vec2('lookPad', lk);
+      this.yaw -= lk.x * followTuning.padLookSpeed * dt;
+      this.pitch += lk.y * followTuning.padLookSpeed * dt;
+    }
     this.pitch = Math.min(Math.max(this.pitch, followTuning.pitchMin), followTuning.pitchMax);
     this.place(dt);
+    this.applyShake(dt);
+  }
+
+  /** Shakes the view: strength 0 to 1 for this long. A stronger shake replaces a weaker one; a weaker one is ignored. */
+  shake(amount: number, seconds: number): void {
+    if (amount * seconds < this.shakeA * this.shakeT) return;
+    this.shakeA = Math.min(1, amount);
+    this.shakeT = seconds;
+    this.shakeLen = seconds;
+  }
+
+  // A shake is a decaying wobble on the camera's position, from game time so a replay shakes the same.
+  private applyShake(dt: number): void {
+    if (this.shakeT <= 0) return;
+    this.shakeT = Math.max(0, this.shakeT - dt);
+    const k = this.shakeLen > 0 ? this.shakeT / this.shakeLen : 0;
+    const a = this.shakeA * k * followTuning.shakeSize;
+    const t = this.world.time;
+    const cy = Math.cos(this.yaw), sy = Math.sin(this.yaw);
+    const sx = Math.sin(t * 71) * a, sv = Math.cos(t * 59) * a;
+    this.node.position.x += cy * sx;
+    this.node.position.z -= sy * sx;
+    this.node.position.y += sv;
+    if (this.shakeT <= 0) this.shakeA = 0;
   }
 
   private place(dt: number): void {

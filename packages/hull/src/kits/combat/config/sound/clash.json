@@ -1,0 +1,63 @@
+{
+ "kind": "sound",
+ "note": "Blade on blade, caught on a guard.",
+ "bus": "sfx",
+ "level": -3,
+ "pitch": [
+  0.97,
+  1.03
+ ],
+ "limit": {
+  "minGap": 0.05,
+  "voices": 4,
+  "over": "steal-oldest"
+ },
+ "source": {
+  "type": "synth",
+  "length": 0.5,
+  "layers": {
+   "ring": {
+    "from": {
+     "modes": [
+      1400,
+      2650,
+      4100,
+      5200
+     ],
+     "decay": [
+      0.08,
+      0.14
+     ],
+     "tilt": 0.5
+    },
+    "then": [
+     {
+      "gain": -4
+     }
+    ]
+   },
+   "scrape": {
+    "from": {
+     "noise": "white"
+    },
+    "then": [
+     {
+      "filter": "bandpass",
+      "freq": 4200,
+      "q": 2
+     },
+     {
+      "envelope": {
+       "attack": 0.002,
+       "decay": 0.07
+      }
+     },
+     {
+      "gain": -8
+     }
+    ]
+   }
+  },
+  "reverb": 0.15
+ }
+}

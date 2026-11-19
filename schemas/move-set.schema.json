@@ -1,0 +1,356 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:hull:schema:move-set",
+  "type": "object",
+  "required": [
+    "kind",
+    "weapon",
+    "moves"
+  ],
+  "properties": {
+    "kind": {
+      "type": "string",
+      "const": "move-set"
+    },
+    "note": {
+      "type": "string"
+    },
+    "weapon": {
+      "type": "object",
+      "required": [
+        "socket",
+        "base",
+        "tip"
+      ],
+      "properties": {
+        "socket": {
+          "type": "string",
+          "minLength": 1,
+          "x-ui": {
+            "help": "A socket of the fighter's character the blade hangs from."
+          }
+        },
+        "base": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "minItems": 3,
+          "maxItems": 3,
+          "items": false,
+          "x-ui": {
+            "widget": "vec3"
+          }
+        },
+        "tip": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "minItems": 3,
+          "maxItems": 3,
+          "items": false,
+          "x-ui": {
+            "widget": "vec3"
+          }
+        },
+        "radius": {
+          "type": "number",
+          "minimum": 0,
+          "default": 0.04,
+          "x-ui": {
+            "unit": "m",
+            "step": 0.005,
+            "help": "Thickness of the blade for the trace."
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "stances": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "x-ui": {
+        "help": "The stances this fighter knows; the first is the starting one."
+      }
+    },
+    "moves": {
+      "type": "object",
+      "patternProperties": {
+        "^.*$": {
+          "type": "object",
+          "required": [
+            "length",
+            "damage"
+          ],
+          "properties": {
+            "note": {
+              "type": "string"
+            },
+            "clip": {
+              "type": "string",
+              "x-ui": {
+                "help": "The animation clip of this move, for people reading the file. Default: the move name."
+              }
+            },
+            "trigger": {
+              "type": "string",
+              "x-ui": {
+                "help": "Animator trigger that starts the clip. Default: the clip name."
+              }
+            },
+            "input": {
+              "type": "string",
+              "x-ui": {
+                "help": "The button this move answers: light, heavy, charged, finisher, or any word the game maps."
+              }
+            },
+            "start": {
+              "type": "boolean",
+              "default": true,
+              "x-ui": {
+                "help": "false: only reachable by cancelling out of another move (a string's second and third cut)."
+              }
+            },
+            "stance": {
+              "type": "string",
+              "x-ui": {
+                "help": "Only usable in this stance. Empty: any stance."
+              }
+            },
+            "length": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "x-ui": {
+                "widget": "dial",
+                "unit": "s",
+                "step": 0.01,
+                "help": "How long the move lasts, start to ready again."
+              }
+            },
+            "damage": {
+              "type": "number",
+              "minimum": 0,
+              "default": 10,
+              "x-ui": {
+                "widget": "dial",
+                "step": 1,
+                "help": "Hit points taken by a clean hit."
+              }
+            },
+            "posture": {
+              "type": "number",
+              "minimum": 0,
+              "default": 10,
+              "x-ui": {
+                "widget": "dial",
+                "step": 1,
+                "help": "Posture added to the one who blocks it or is hit by it."
+              }
+            },
+            "reach": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "x-ui": {
+                "unit": "m",
+                "step": 0.05,
+                "help": "How far from the fighter the blade can land, for the enemy brain and the range check of a finisher."
+              }
+            },
+            "windows": {
+              "type": "object",
+              "patternProperties": {
+                "^.*$": {
+                  "anyOf": [
+                    {
+                      "type": "array",
+                      "prefixItems": [
+                        {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        {
+                          "type": "number",
+                          "minimum": 0
+                        }
+                      ],
+                      "minItems": 2,
+                      "maxItems": 2,
+                      "items": false
+                    },
+                    {
+                      "type": "array",
+                      "items": {
+                        "type": "array",
+                        "prefixItems": [
+                          {
+                            "type": "number",
+                            "minimum": 0
+                          },
+                          {
+                            "type": "number",
+                            "minimum": 0
+                          }
+                        ],
+                        "minItems": 2,
+                        "maxItems": 2,
+                        "items": false
+                      },
+                      "minItems": 1
+                    }
+                  ],
+                  "x-ui": {
+                    "widget": "keys"
+                  }
+                }
+              },
+              "x-ui": {
+                "help": "Named ranges of the move, in seconds. trace: the blade is live. telegraph: the tell (glint or red flash). cancel: the move may be cut short. iframe: nothing can hurt. parry: reserved for a counter."
+              }
+            },
+            "windowsFrom": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "const": "move-set"
+                },
+                {
+                  "type": "string",
+                  "const": "clip"
+                }
+              ],
+              "default": "move-set",
+              "x-ui": {
+                "widget": "segments",
+                "help": "move-set: the windows above. clip: the windows named inside the animation clip (animator.inWindow)."
+              }
+            },
+            "cancelsInto": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "x-ui": {
+                "help": "Moves reachable in this move's cancel window."
+              }
+            },
+            "unblockable": {
+              "type": "boolean",
+              "default": false,
+              "x-ui": {
+                "help": "A red-flash attack: guard and deflect do nothing, only a dodge avoids it."
+              }
+            },
+            "guardBreak": {
+              "type": "number",
+              "minimum": 1,
+              "maximum": 10,
+              "default": 1,
+              "x-ui": {
+                "help": "Posture multiplier against a guard (a charged heavy that breaks it)."
+              }
+            },
+            "finisher": {
+              "type": "boolean",
+              "default": false,
+              "x-ui": {
+                "help": "Only starts, and only hurts, a fighter whose posture is broken; deals a fraction of its hit points."
+              }
+            },
+            "stagger": {
+              "type": "number",
+              "minimum": 0,
+              "x-ui": {
+                "unit": "s",
+                "help": "How long a clean hit staggers. Default: the combat tuning."
+              }
+            },
+            "knockback": {
+              "type": "number",
+              "minimum": 0,
+              "x-ui": {
+                "unit": "m",
+                "step": 0.05,
+                "help": "How far a clean hit pushes the target."
+              }
+            },
+            "hitStop": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 0.5,
+              "x-ui": {
+                "unit": "s",
+                "step": 0.005,
+                "help": "Both fighters freeze this long on a clean hit. Default: the combat tuning (light or heavy)."
+              }
+            },
+            "lunge": {
+              "type": "object",
+              "required": [
+                "distance",
+                "from",
+                "to"
+              ],
+              "properties": {
+                "distance": {
+                  "type": "number",
+                  "x-ui": {
+                    "unit": "m",
+                    "step": 0.05
+                  }
+                },
+                "from": {
+                  "type": "number",
+                  "minimum": 0,
+                  "x-ui": {
+                    "unit": "s"
+                  }
+                },
+                "to": {
+                  "type": "number",
+                  "minimum": 0,
+                  "x-ui": {
+                    "unit": "s"
+                  }
+                }
+              },
+              "additionalProperties": false,
+              "x-ui": {
+                "help": "Steps forward (or back, negative) over this part of the move. Until the animation carries root motion."
+              }
+            },
+            "sound": {
+              "type": "string",
+              "x-ref": "sound",
+              "x-ui": {
+                "widget": "ref",
+                "help": "Played when the move starts."
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      }
+    }
+  },
+  "additionalProperties": false,
+  "title": "Hull move-set"
+}
