@@ -7,5 +7,5 @@ const { createMcpServer, serveMcpStdio, findRoot } = await import('../src/index.
 const { resolve } = await import('node:path');
 const root = process.argv[2] ? resolve(process.argv[2]) : findRoot(process.cwd());
 const server = createMcpServer(root, { log: (l) => console.error(l) });
-await serveMcpStdio(server, process.stdin, process.stdout);
+await serveMcpStdio(server, process.stdin, process.stdout, { author: process.env.HULL_MCP_AUTHOR });
 process.exit(0);

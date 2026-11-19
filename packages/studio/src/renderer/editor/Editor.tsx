@@ -188,7 +188,7 @@ function EditorBody({ rpc, project, platform, onClose }: { rpc: RpcClient; proje
         branch={view === 'game' ? <ExpSwitch h={h} openExp={openInfo ? openInfo.name : null} onOpenExp={setOpenExp} /> : undefined}
         onReload={view === 'game' ? () => setGameKey((k) => k + 1) : undefined}
       />
-      {agentsOpen && <AgentPanel project={project} onClose={() => setAgentsOpen(false)} />}
+      <AgentPanel project={project} open={agentsOpen} onClose={() => setAgentsOpen(false)} />
 
       {lib && <Library ref={search} items={p.library} error={p.libraryError} selected={selected} changed={changed} onSelect={select} onOpenChanged={openChange} />}
 

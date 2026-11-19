@@ -206,6 +206,20 @@ export interface AssetRef {
   col: number;
 }
 
+/** `ok` is false for a refusal (nothing written) and also when the write was kept but the type check found problems; `written` tells them apart. */
+export interface CodeWriteResult {
+  ok: boolean;
+  written: boolean;
+  problems: Problem[];
+  /** Problems the type check found in other files than the one written (the check tool lists them). */
+  elsewhere?: number;
+  created?: boolean;
+  /** Edits: the 1-based line of the first change. */
+  line?: number;
+  replaced?: number;
+  importers?: { file: string; line: number; col: number; specifier: string }[];
+}
+
 export interface AssetResult {
   ok: boolean;
   problems: Problem[];
@@ -269,6 +283,18 @@ export interface Methods {
   /** Deletes assets (or whole folders). Refused, with the places, while anything still names one. */
   'asset.delete': { params: { ids: string[]; author?: Author }; result: AssetResult };
   'folder.new': { params: { path: string; author?: Author }; result: AssetResult };
+  /** Every file under src/ with its size. */
+  'code.list': { params: Record<string, never>; result: { ok: boolean; problems: Problem[]; items: { path: string; bytes: number }[] } };
+  /** A file of src/, or the lines from..to (1-based, inclusive). */
+  'code.read': { params: { path: string; from?: number; to?: number }; result: { ok: boolean; problems: Problem[]; path?: string; text?: string; from?: number; to?: number; total?: number } };
+  /** Literal (or regex) search over src/: file:line:col and the line. */
+  'code.search': { params: { pattern: string; regex?: boolean; ignoreCase?: boolean; path?: string; limit?: number }; result: { ok: boolean; problems: Problem[]; matches: { file: string; line: number; col: number; text: string }[]; truncated: boolean } };
+  /** Exact-string replace that must match once (or `all`). Written atomically, recorded with its author; type problems in the file come back but the write stays. */
+  'code.edit': { params: { path: string; old: string; new: string; all?: boolean; typecheck?: boolean; author?: Author }; result: CodeWriteResult };
+  /** Creates or overwrites a file under src/. Same safety and record as code.edit. */
+  'code.write': { params: { path: string; text: string; typecheck?: boolean; author?: Author }; result: CodeWriteResult };
+  /** Deletes a file of src/. Refused, with the places, while another file imports it or hull.json names it. */
+  'code.delete': { params: { path: string; author?: Author }; result: CodeWriteResult };
   /** Runs a tool from the registry: 'check', 'test', 'build'. */
   /** The server's problem state: config problems plus authorship problems (what the `problems` push carries). */
   'problems.list': { params: Record<string, never>; result: Problem[] };

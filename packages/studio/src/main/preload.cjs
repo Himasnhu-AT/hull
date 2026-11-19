@@ -16,5 +16,21 @@ contextBridge.exposeInMainWorld('hullApp', {
   recents: call('recents'),
   forgetRecent: call('forgetRecent'),
   reveal: call('reveal'),
+  agentList: call('agentList'),
+  agentStart: call('agentStart'),
+  agentPrompt: call('agentPrompt'),
+  agentCancel: call('agentCancel'),
+  agentStop: call('agentStop'),
+  agentAnswer: call('agentAnswer'),
+  claudeInfo: call('claudeInfo'),
+  termOpen: call('termOpen'),
+  termWrite: call('termWrite'),
+  termResize: call('termResize'),
+  termKill: call('termKill'),
+  onAgentEvent: (cb) => {
+    const l = (_e, ev) => cb(ev);
+    ipcRenderer.on('hull:agent-event', l);
+    return () => ipcRenderer.removeListener('hull:agent-event', l);
+  },
   initialProject: () => Promise.resolve(null),
 });
