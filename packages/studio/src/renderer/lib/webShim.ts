@@ -19,7 +19,7 @@ export function webShim(): HullApp {
     // and for "open" a typed path.
     pickFolder: async (purpose) => (purpose === 'location' ? call<string>('scratchDir') : (window.prompt('Path of the project folder') || null)),
     listCommunity: () => call('listCommunity'),
-    openCommunity: (id, reset) => call('openCommunity', { id, reset }),
+    openCommunity: (id, reset, update) => call('openCommunity', { id, reset, update }),
     createProject: (o) => call('createProject', o),
     createFromIdea: (o) => call('createFromIdea', o),
     openProject: (root) => call('openProject', root),

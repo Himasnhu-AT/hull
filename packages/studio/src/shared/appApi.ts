@@ -5,7 +5,8 @@
 export interface TemplateInfo { name: string; title: string; description: string }
 
 /** A community game: what the launcher shows, and whether this person already has their own copy. */
-export interface CommunityGame { id: string; title: string; note: string; cover: string | null; copy: { root: string; exists: boolean } }
+/** `version` is the newest published; `update` is set when it is newer than the person's copy. */
+export interface CommunityGame { id: string; title: string; note: string; cover: string | null; version: string | null; copy: { root: string; exists: boolean; version: string | null }; update: string | null; source: 'server' | 'local' }
 
 /** `cover` is a small data: URL: the game's own cover.{webp,jpg,png}, else the last screenshot Hull kept while it was played (.hull/thumb.jpg), else null. */
 export interface RecentProject { root: string; title: string; openedAt: string; cover?: string | null }
@@ -32,7 +33,8 @@ export interface HullApp extends HullAppAgents {
   closeProject(): Promise<void>;
   /** The community games. Opening one copies it into the person's projects folder the first time; `reset` replaces that copy with the original. */
   listCommunity(): Promise<CommunityGame[]>;
-  openCommunity(id: string, reset?: boolean): Promise<OpenedProject>;
+  /** `update`: replace the copy with the newest version when one is out. */
+  openCommunity(id: string, reset?: boolean, update?: boolean): Promise<OpenedProject>;
   recents(): Promise<RecentProject[]>;
   forgetRecent(root: string): Promise<void>;
   /** Renames a recent game: its hull.json title, through config.set (validated, kept in the history as yours). Resolves with the new title. */

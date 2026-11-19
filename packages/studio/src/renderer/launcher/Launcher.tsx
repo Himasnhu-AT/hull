@@ -49,6 +49,8 @@ export function Launcher({ app, onOpen, startError, home, onNew }: { app: HullAp
   // The game being opened or reset, and the one asking "replace your copy?".
   const [working, setWorking] = useState<{ id: string; reset: boolean } | null>(null);
   const [confirming, setConfirming] = useState<string | null>(null);
+  // The game asking "update your copy to the new version?".
+  const [updating, setUpdating] = useState<string | null>(null);
   const settings = useSettings();
 
   useEffect(() => {
@@ -62,9 +64,9 @@ export function Launcher({ app, onOpen, startError, home, onNew }: { app: HullAp
   };
   useEffect(() => { if (pane === 'community' && games === null && !gamesError) loadGames(); }, [pane]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const openGame = (g: CommunityGame, reset: boolean): Promise<void> => {
-    setWorking({ id: g.id, reset }); setConfirming(null);
-    return run('Opening', () => app.openCommunity(g.id, reset)).finally(() => setWorking(null));
+  const openGame = (g: CommunityGame, reset: boolean, update = false): Promise<void> => {
+    setWorking({ id: g.id, reset: reset || update }); setConfirming(null); setUpdating(null);
+    return run('Opening', () => app.openCommunity(g.id, reset, update)).finally(() => setWorking(null));
   };
 
   const run = async (label: string, job: () => Promise<OpenedProject | null>): Promise<void> => {
@@ -172,9 +174,15 @@ export function Launcher({ app, onOpen, startError, home, onNew }: { app: HullAp
                       <article key={g.id} className="game ccard">
                         <button className="cover" onClick={() => void openGame(g, false)} disabled={busy !== null} aria-label={`Play ${g.title}`}>{g.cover ? <img src={g.cover} alt="" draggable={false} /> : <Icon name="game" size={28} />}<span className="cplay" aria-hidden="true"><Icon name="play" size={16} /></span></button>
                         <div className="g-body">
-                          <div className="g-title"><b>{g.title}</b></div>
+                          <div className="g-title"><b>{g.title}</b>{g.version && <span className="g-ver" title={g.copy.version && g.copy.version !== g.version ? `Your copy is ${g.copy.version}` : undefined}>v{g.copy.exists && g.copy.version ? g.copy.version : g.version}</span>}{g.update && <span className="g-new">v{g.update} out</span>}</div>
                           <p className="g-note">{g.note}</p>
-                          {confirming === g.id ? (
+                          {updating === g.id ? (
+                            <div className="g-confirm" role="alertdialog" aria-label={`Update ${g.title}`}>
+                              <span>Update your copy to v{g.update}? It replaces your copy, so your changes to it are lost.</span>
+                              <button className="btn primary" onClick={() => void openGame(g, false, true)} disabled={busy !== null}>Update</button>
+                              <button className="btn ghost" onClick={() => setUpdating(null)}>Not now</button>
+                            </div>
+                          ) : confirming === g.id ? (
                             <div className="g-confirm" role="alertdialog" aria-label={`Reset ${g.title}`}>
                               <span>Replace your copy with the original? Your changes to it are lost.</span>
                               <button className="btn danger" onClick={() => void openGame(g, true)} disabled={busy !== null}>Reset</button>
@@ -183,8 +191,9 @@ export function Launcher({ app, onOpen, startError, home, onNew }: { app: HullAp
                           ) : (
                             <div className="g-acts">
                               <button className="btn primary" onClick={() => void openGame(g, false)} disabled={busy !== null}>
-                                <Icon name={g.copy.exists ? 'back' : 'play'} size={12} style={g.copy.exists ? { transform: 'rotate(180deg)' } : undefined} />{mine ? (working?.reset ? 'Resetting...' : g.copy.exists ? 'Opening...' : 'Copying...') : g.copy.exists ? 'Visit your copy' : 'Play'}
+                                <Icon name={g.copy.exists ? 'back' : 'play'} size={12} style={g.copy.exists ? { transform: 'rotate(180deg)' } : undefined} />{mine ? (working?.reset ? (g.update ? 'Updating...' : 'Resetting...') : g.copy.exists ? 'Opening...' : g.source === 'server' ? 'Downloading...' : 'Copying...') : g.copy.exists ? 'Visit your copy' : 'Play'}
                               </button>
+                              {g.update && <button className="btn" onClick={() => setUpdating(g.id)} disabled={busy !== null}><Icon name="reload" size={13} />Update to v{g.update}</button>}
                               {g.copy.exists && (
                                 <button className="btn ghost" onClick={() => setConfirming(g.id)} disabled={busy !== null} aria-label={`Reset ${g.title} to the original`} title="Reset to original"><Icon name="reset" size={14} />Reset to original</button>
                               )}

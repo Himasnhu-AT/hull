@@ -36,7 +36,7 @@ const handle = (channel: string, fn: (...a: never[]) => unknown): void => {
 function registerIpc(): void {
   handle('listTemplates', () => host.listTemplates());
   handle('listCommunity', () => host.listCommunity());
-  handle('openCommunity', (id: string, reset?: boolean) => host.openCommunity(id, reset));
+  handle('openCommunity', (id: string, reset?: boolean, update?: boolean) => host.openCommunity(id, reset, update));
   handle('createProject', (opts: { template: string; title: string; parentDir: string }) => host.createProject(opts));
   handle('createFromIdea', (opts: { idea: string }) => host.createFromIdea(opts.idea));
   handle('openProject', (root: string) => host.openProject(root));

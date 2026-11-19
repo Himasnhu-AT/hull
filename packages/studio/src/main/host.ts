@@ -24,8 +24,8 @@ interface ServerModule {
   startProjectServer(opts: { root: string; port?: number; log?: (line: string) => void }): Promise<ProjectServer>;
   listTemplates(): TemplateInfo[];
   createProject(opts: { template: string; dir: string; title: string }): Promise<{ root: string }>;
-  listCommunity(opts: { projectsDir: string }): CommunityGame[];
-  openCommunity(opts: { id: string; projectsDir: string; reset?: boolean }): { root: string; created: boolean };
+  listCommunity(opts: { projectsDir: string; server?: string }): Promise<CommunityGame[]>;
+  openCommunity(opts: { id: string; projectsDir: string; reset?: boolean; update?: boolean; server?: string }): Promise<{ root: string; created: boolean; version: string | null }>;
 }
 
 export interface HostOptions {
@@ -49,7 +49,7 @@ export interface HostOptions {
 export interface Host {
   listTemplates(): Promise<TemplateInfo[]>;
   listCommunity(): Promise<CommunityGame[]>;
-  openCommunity(id: string, reset?: boolean): Promise<OpenedProject>;
+  openCommunity(id: string, reset?: boolean, update?: boolean): Promise<OpenedProject>;
   createProject(opts: { template: string; title: string; parentDir: string }): Promise<OpenedProject>;
   /** The idea box: picks the closest template, makes the project in the app's own projects folder and opens it. */
   createFromIdea(idea: string): Promise<OpenedProject & { idea: string }>;
@@ -184,13 +184,14 @@ export function createHost(opts: HostOptions): Host {
 
     async listTemplates() { return (await load()).mod.listTemplates(); },
 
-    async listCommunity() { return (await load()).mod.listCommunity({ projectsDir }); },
+    // The community catalog lives on the Hull backend (the account server); without one it is the repo's examples/.
+    async listCommunity() { return (await load()).mod.listCommunity({ projectsDir, server: await settings.accountUrl() }); },
 
-    async openCommunity(id, reset) {
+    async openCommunity(id, reset, update) {
       const { mod } = await load();
       // A reset replaces the folder under a running server, so the project is closed first.
       if (reset) await host.closeProject();
-      const { root } = mod.openCommunity({ id, projectsDir, ...(reset ? { reset: true } : {}) });
+      const { root } = await mod.openCommunity({ id, projectsDir, server: await settings.accountUrl(), ...(reset ? { reset: true } : {}), ...(update ? { update: true } : {}) });
       return host.openProject(root);
     },
 
