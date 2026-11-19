@@ -31,6 +31,18 @@
     },
     "hit": {
       "type": "trigger"
+    },
+    "moveX": {
+      "type": "number",
+      "default": 0,
+      "min": -1,
+      "max": 1
+    },
+    "moveY": {
+      "type": "number",
+      "default": 0,
+      "min": 0,
+      "max": 2
     }
   },
   "layers": {
@@ -79,6 +91,39 @@
           "clip": "hit_react",
           "exit": "ready",
           "exitBlend": 0.15
+        },
+        "move": {
+          "blend2d": {
+            "x": "moveX",
+            "y": "moveY",
+            "points": [
+              {
+                "x": 0,
+                "y": 0,
+                "clip": "idle"
+              },
+              {
+                "x": 0,
+                "y": 1,
+                "clip": "walk"
+              },
+              {
+                "x": 0,
+                "y": 2,
+                "clip": "run"
+              },
+              {
+                "x": -1,
+                "y": 0.3,
+                "clip": "strafeL"
+              },
+              {
+                "x": 1,
+                "y": 0.3,
+                "clip": "strafeR"
+              }
+            ]
+          }
         }
       },
       "transitions": [
@@ -138,6 +183,37 @@
           "when": "heavy",
           "blend": 0.08,
           "after": 0.38
+        },
+        {
+          "from": "ready",
+          "to": "move",
+          "when": "speed > 0.3",
+          "blend": 0.15,
+          "sync": true
+        },
+        {
+          "from": "move",
+          "to": "ready",
+          "when": "speed < 0.2",
+          "blend": 0.2
+        },
+        {
+          "from": "move",
+          "to": "light1",
+          "when": "light",
+          "blend": 0.06
+        },
+        {
+          "from": "move",
+          "to": "heavy",
+          "when": "heavy",
+          "blend": 0.1
+        },
+        {
+          "from": "move",
+          "to": "draw",
+          "when": "draw",
+          "blend": 0.08
         }
       ]
     }

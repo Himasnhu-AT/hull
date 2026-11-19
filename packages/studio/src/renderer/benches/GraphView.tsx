@@ -62,7 +62,7 @@ function BlendPad({ state, space, live, params, onParam, weights }: { state: str
   const lo = (n: string, v: number[]): number => params?.[n]?.min ?? Math.min(...v, 0);
   const hi = (n: string, v: number[]): number => params?.[n]?.max ?? Math.max(...v, 0);
   const x0 = lo(space.x, xs), x1 = Math.max(hi(space.x, xs), x0 + 0.01), y0 = lo(space.y, ys), y1 = Math.max(hi(space.y, ys), y0 + 0.01);
-  const S = 150, M = 14;
+  const S = 160, M = 24;
   const px = (v: number): number => M + ((v - x0) / (x1 - x0)) * (S - 2 * M);
   const py = (v: number): number => S - M - ((v - y0) / (y1 - y0)) * (S - 2 * M);
   const set = (e: React.PointerEvent<SVGSVGElement>): void => {

@@ -146,4 +146,10 @@
 "shinL":{"rotation":[[0,[-0.595,0.005,-0.017]],[0.05,[-0.595,0.005,-0.017],"snap"],[0.14,[-0.413,0.002,-0.011]],[0.3,[-0.907,0.045,-0.093]],[0.6,[-0.595,0.005,-0.017]]]},
 "footL":{"rotation":[[0,[0.573,0.004,0.085]],[0.05,[0.573,0.004,0.085],"snap"],[0.14,[0.475,0.005,0.079]],[0.3,[0.744,-0.055,0.153]],[0.6,[0.573,0.004,0.085]]]}},
 "windows":{"stun":[0,0.4]},
-"rootMotion":true}}}
+"rootMotion":true},
+"walk":{"type":"generated","generator":"humanoid/walk","loop":true,"knobs":{"stride":0.6,"armSwing":0.05,"lean":0.05},
+"events":{"footL":0.25,"footR":0.75}},
+"run":{"type":"generated","generator":"humanoid/run","loop":true,"knobs":{"stride":1.1,"armSwing":0.08,"lean":0.25,"bounce":0.04},
+"events":{"footL":0.25,"footR":0.75}},
+"strafeL":{"type":"generated","generator":"humanoid/walk","loop":true,"knobs":{"stride":0.4,"armSwing":0.03,"lean":0.12}},
+"strafeR":{"type":"generated","generator":"humanoid/walk","loop":true,"knobs":{"stride":0.4,"armSwing":0.03,"lean":-0.12}}}}
