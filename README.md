@@ -4,7 +4,7 @@ Marl Studio's game engine, in TypeScript, where an AI writes the game and a pers
 
 **Status: the engine is built (M0–M5 and M7); AOTT on Hull (M6) is next.** Open a project in the Hull app with
 `pnpm app` (or `pnpm app:web -- --project <dir>` in a browser), make one from a template (`cube`, `arena`, `fps`,
-`third-person`), tune it live and build it. `pnpm check` runs types and every test. See PLAN.md §7 for what each
+`third-person`), tune it live and build it. `pnpm check` runs types and every test. A local agent (Claude Code, Codex) connects to the open app over MCP (the Agents button shows the line to paste); `packages/tools/bin/hull-mcp.js <dir>` serves the same tools over stdio when the app is closed. Maintainers: `pnpm project:check|build|dev <dir>`. See PLAN.md §7 for what each
 milestone delivered and what is still missing.
 
 ## The idea in five lines
@@ -43,9 +43,9 @@ milestone delivered and what is still missing.
   the library the       check · test · play      a desktop app:
   game runs on:         bench · history · exp    a bench for every
   loop, world,          build · package          kind of piece,
-  render, sound,        (one command line,       sliders from the
-  animation, UI,        made for an agent        schemas, the
-  input, saves          to drive)                timeline, review
+  render, sound,        (defined once; the app,      sliders from the
+  animation, UI,        MCP and Marl AI          schemas, the
+  input, saves          call them)               timeline, review
         │
         ▼
    dist/game.js  ──►  website

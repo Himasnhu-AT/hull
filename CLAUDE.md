@@ -4,7 +4,7 @@ Hull is Marl Studio's TypeScript game engine for one workflow: an AI writes the 
 it in Hull Studio, and the game builds to one JavaScript file that runs on the web and on the desktop.
 
 **Status: M0–M5 and M7 are built and merged on `main`; M6 (AOTT on Hull) is next.** `pnpm check` runs types and
-every test; `pnpm app` opens the Hull app. PLAN.md §7 has each milestone's state and its known gaps. The design is in
+every test; `pnpm app` opens the Hull app. Maintainer scripts that call the tools on a project: `pnpm project:check <dir>`, `pnpm project:build <dir>`, `pnpm project:dev <dir>`, `pnpm project:run <tool> <dir> [json]` (they never ship). PLAN.md §7 has each milestone's state and its known gaps. The design is in
 these files. Read them in this order before changing code:
 
 1. `PLAN.md`: goals, the parts, history and experiments, the tech stack, milestones, decisions made (section 9)
@@ -44,7 +44,7 @@ needs: read its `ARCHITECTURE.md` when designing an engine module, and expect to
   remote project later.
 * Games never touch the renderer: everything goes through the render bridge, so the WebGL2 and WebGPU backends
   both work.
-* A tool is defined once and exposed as a command, as an MCP tool and to Marl AI. Do not add a capability to one
+* A tool is defined once, in `packages/tools` (`@hull/tools`), and exposed to the app, as an MCP tool and to Marl AI. There is no command line. Do not add a capability to one
   front only.
 * A write to a user's file (JSON or a TypeScript literal) is validated before it is kept, and recorded in the
   history with its author.

@@ -16,13 +16,6 @@ export const newGame = defineTool<NewInput, NewOutput>({
     properties: { dir: { type: 'string' }, template: { type: 'string', default: 'cube' }, title: { type: 'string' } },
   },
   output: { type: 'object', required: ['dir', 'template'] },
-  cli: {
-    args: [{ name: 'dir', description: 'Folder to create' }],
-    options: [
-      { name: 'template', flags: '--template <name>', description: 'Template to copy', default: 'cube' },
-      { name: 'title', flags: '--title <title>', description: 'The game\'s title (default: the folder name)' },
-    ],
-  },
   format: (o) => [`Created ${o.dir} from the ${o.template} template.`],
   async run(ctx, input) {
     const template = input.template ?? 'cube';

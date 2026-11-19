@@ -43,7 +43,7 @@ A field that points at another config file is a string id, and its schema says w
 { "type": "string", "x-ref": "sound" }
 ```
 
-`hull check` fails on an id that does not exist, and the generated id list makes the same mistake a compile error
+`check` fails on an id that does not exist, and the generated id list makes the same mistake a compile error
 in code.
 
 ### UI hints (`x-ui`)
@@ -529,5 +529,5 @@ Not config: the record of what you have checked. It lives with Hull's own data, 
 * `hash` is the content hash at review time. When the piece changes, the state falls back to `unreviewed` and the
   old note is kept beside it until you clear it.
 * `by` is who wrote the entry (`you`, `ai:<agent>`). A key must name a piece that exists; the write is refused otherwise.
-* `hull review list` prints the open notes; `hull review list --json` gives them to the AI. Also `hull review set <key> <state> [--note]` and `hull review note <key> <text>`; the project server has the same as `review.list`, `review.set`, `review.note`.
+* * The `review.list`, `review.set` and `review.note` tools (and project methods of the same names) read and write the notes; `review.list` with `open: true` gives the open ones to the AI.
 * `hash` is six hex digits of a SHA-1 of the file text (config) or of the block's keys and values (tunables). A `#part` key hashes the whole piece.

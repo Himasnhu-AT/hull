@@ -19,7 +19,7 @@ CLAUDE.md, then PLAN.md §7. Those three files are enough to pick up the work.
 - **The product is the Hull desktop app** (`packages/studio`), like Unreal's editor:
   - make a project from a template, the game runs inside, tune it in the Inspector, press Build
   - the `hull` CLI is paused: keep it compiling, don't grow its front
-  - tools are still defined once (`packages/cli/src/tools`), and the app, MCP and the CLI all reach them
+  - tools are defined once (`packages/tools`, `@hull/tools`), and the app and MCP reach them; the CLI was removed on 19 Nov 2026
 - **The end goal:** AOTT migrated onto Hull, tested in the app with config edits updating the game live, and a
   build performed. Then stop.
 - **UI work:** follow the `/apple-design` and `/design-taste-frontend` skills (files in `~/.claude/skills/`) and
@@ -71,7 +71,7 @@ packages/hull/src/      the runtime a game imports ('hull', 'hull/render', 'hull
   render/               bridge; webgl2.ts and webgpu.ts backends ('auto' tries WebGPU); look, post, environment
   vfx/ audio/ input/ ui/ anim/ physics/ platform/ kits/
   dev/                  protocol.ts (the one protocol), runtime.ts (connectDev, control port)
-packages/cli/src/       tools (check, test, build, package, play, new, project methods), server/ (project
+packages/tools/src/     tools (check, test, build, package, play, new, project methods), mcp/, server/ (project
                         server: WS JSON-RPC + Vite dev page, edits, journal, build), history/, review/, mcp/
 packages/studio/        the Hull app: Electron main + preload, React renderer (launcher, editor, Inspector,
                         benches/, history/). `pnpm app` = Electron, `pnpm app:web -- --project <dir>` = browser
@@ -80,8 +80,8 @@ templates/              cube, arena, fps, third-person
 ```
 
 **Tools to check by hand:**
-- `node packages/cli/bin/hull.js check|build|new|mcp|play …` (run through tsx).
-- `pnpm exec tsx <script.mts>` with `createProject` and `startProjectServer` from `packages/cli/src/server/index.ts`
+- `pnpm project:check|build|dev <dir>`, `pnpm project:run <tool> <dir> [json]` (maintainer scripts in `scripts/`), `packages/tools/bin/hull-mcp.js [dir]` (MCP over stdio).
+- `pnpm exec tsx <script.mts>` with `createProject` and `startProjectServer` from `packages/tools/src/server/index.ts`
   drives a project over its WebSocket (role `studio`).
 
 ## 5. Traps already hit (do not repeat)

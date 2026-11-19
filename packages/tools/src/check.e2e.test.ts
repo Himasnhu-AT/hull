@@ -1,22 +1,19 @@
-import { spawnSync, type SpawnSyncReturns } from 'node:child_process';
 import { join } from 'node:path';
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { Problem } from 'hull';
+import { failed, runTool } from './run.ts';
 
-// Runs the real command on a fixture project with one mistake of each kind M0 must catch.
-const bin = join(import.meta.dirname, '..', 'bin', 'hull.js');
+// Calls the check tool on a fixture project with one mistake of each kind M0 must catch.
 const fixture = join(import.meta.dirname, '..', 'fixtures', 'bad-config');
 
-describe('hull check (e2e)', () => {
-  let run: SpawnSyncReturns<string>;
+describe('check tool (e2e)', () => {
   let out: { ok: boolean; problems: Problem[] };
-  beforeAll(() => {
-    run = spawnSync(process.execPath, [bin, 'check', '--json', '--root', fixture], { encoding: 'utf8', timeout: 120_000 });
-    out = JSON.parse(run.stdout) as { ok: boolean; problems: Problem[] };
-  });
+  beforeAll(async () => {
+    out = (await runTool(fixture, 'check')) as { ok: boolean; problems: Problem[] };
+  }, 120_000);
 
-  it('fails with a non-zero exit code', () => {
-    expect(run.status).not.toBe(0);
+  it('fails', () => {
+    expect(failed(out)).toBe(true);
     expect(out.ok).toBe(false);
   });
   it('names the manifest field that is wrong', () => {

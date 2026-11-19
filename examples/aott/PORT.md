@@ -4,10 +4,10 @@ AOTT (the game in `../aot`, 27k lines of TypeScript and three.js) now runs on th
 folder. It plays, tunes live, tests headless and builds to one file. This page says what was ported and how, what was
 dropped or stubbed, the known gaps, and the work packages phase 2 can run in parallel.
 
-Run it: `pnpm app` (open this folder), or `node packages/cli/bin/hull.js --root examples/aott dev`; add `?play=expedition`
+Run it: `pnpm app` (open this folder), or `pnpm project:dev examples/aott`; add `?play=expedition`
 to the page address to skip the title (`gate`, `scout`, `training`, `free` also work, as do AOTT's old flags
 `notitans`, `noallies`, `nohorses`, `nocivilians`, `allies=N`). Tests: `pnpm test` (the Holdout run is
-`src/main.test.ts`). Build: `node packages/cli/bin/hull.js --root examples/aott build`, which runs `check` first (types,
+`src/main.test.ts`). Build: `pnpm project:build examples/aott`, which runs `check` first (types,
 config schemas, house rules: all pass).
 
 ## 1. How it runs
@@ -16,7 +16,7 @@ config schemas, house rules: all pass).
   node `aott` with `AottHost` (`src/host.ts`). The host is what AOTT's `main.ts` was, minus what Hull owns now.
 * **The whole AOTT frame is one fixed step.** `AottHost.fixedUpdate` does input, hit-stop and slow motion, the soldier's
   physics, titans, comrades, horses, civilians, the flow (modes, waves, missions), effects, the world and the camera.
-  `game.step(n)` therefore plays exactly n steps of the game: the control port, `hull play` scripts and the headless
+  `game.step(n)` therefore plays exactly n steps of the game: the control port, `play` scripts and the headless
   tests all see the real game. Hit-stop and slow motion scale the game's own time inside the step (the soldier's fixed
   physics runs once per whole unit of scaled time, as it did); they do not use `game.timeScale`.
 * **Drawing is Hull's.** The game's own three.js `Scene` (everything the world, titans, soldiers and effects add to
@@ -99,7 +99,7 @@ config schemas, house rules: all pass).
 
 Shared rules: the `Game` object (`src/types.ts`) is the contract between packages; add optional fields only, never
 rename or retype. `src/host.ts` is the one shared file: each package edits only the block named for it. Every package
-keeps `pnpm typecheck`, `pnpm test` (including `main.test.ts`) and `hull check` green. A package that changes what
+keeps `pnpm typecheck`, `pnpm test` (including `main.test.ts`) and `pnpm project:check examples/aott` green. A package that changes what
 the Holdout test measures (a new checksum) says so in its commit and updates the test's expectations deliberately.
 
 ### P1. Sounds -> `sound` configs and the sound bench

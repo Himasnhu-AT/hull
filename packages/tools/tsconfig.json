@@ -1,6 +1,6 @@
 {
   "extends": "../../tsconfig.base.json",
-  "compilerOptions": { "outDir": "../../.tsbuild/cli", "types": ["node"] },
+  "compilerOptions": { "outDir": "../../.tsbuild/tools", "types": ["node"] },
   "include": ["src"],
   "references": [{ "path": "../hull" }]
 }

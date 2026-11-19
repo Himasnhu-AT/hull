@@ -10,7 +10,6 @@ export const reviewList = defineTool<{ open?: boolean }, { ok: boolean; problems
   summary: 'Review notes: what has been checked and what needs a change.',
   input: { type: 'object', properties: { open: { type: 'boolean', description: 'Only notes that still need attention (needs-change, changed since review, or a note on an unreviewed piece).' } }, additionalProperties: false },
   output: { type: 'object', required: ['entries'] },
-  cli: { options: [{ name: 'open', flags: '--open', description: 'Only open notes' }] },
   format: (o) => (o.entries.length ? o.entries.map(line) : ['no review notes']),
   async run(ctx, input) { return { ok: true, problems: [], entries: listReview(ctx.root, input.open === true) }; },
 });
@@ -31,7 +30,6 @@ export const reviewSet = defineTool<{ key: string; state: ReviewState; note?: st
     additionalProperties: false,
   },
   output: { type: 'object', required: ['ok'] },
-  cli: { args: [{ name: 'key', description: 'config id or tunables:<block>' }, { name: 'state', description: REVIEW_STATES.join(' | ') }], options: [{ name: 'note', flags: '--note <text>', description: 'A note to keep with it' }] },
   format: (o) => (o.entry ? [line(o.entry)] : []),
   async run(ctx, input) { return result(setReview(ctx.root, { ...input, author: ctx.author as never })); },
 });
@@ -46,7 +44,6 @@ export const reviewNote = defineTool<{ key: string; note: string }, ReviewResult
     additionalProperties: false,
   },
   output: { type: 'object', required: ['ok'] },
-  cli: { args: [{ name: 'key', description: 'config id or tunables:<block>' }, { name: 'note', description: 'the note' }] },
   format: (o) => (o.entry ? [line(o.entry)] : []),
   async run(ctx, input) { return result(noteReview(ctx.root, { ...input, author: ctx.author as never })); },
 });

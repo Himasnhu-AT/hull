@@ -5,7 +5,7 @@
       "path": "packages/hull"
     },
     {
-      "path": "packages/cli"
+      "path": "packages/tools"
     },
     {
       "path": "templates/cube"

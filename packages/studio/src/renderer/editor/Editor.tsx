@@ -10,6 +10,7 @@ import { Inspector } from './Inspector.tsx';
 import { Library } from './Library.tsx';
 import { BenchView, type BenchKind } from '../benches/Benches.tsx'; // w3-app-benches
 import { SoundBench } from './SoundBench.tsx';
+import { AgentPanel } from './AgentPanel.tsx';
 import { TitleBar, type BuildState, type Panels } from './TitleBar.tsx';
 import { useProject, idFromPath } from './useProject.ts';
 // History and experiments (M2): the wiring lines are marked "history:".
@@ -43,6 +44,7 @@ function EditorBody({ rpc, project, platform, onClose }: { rpc: RpcClient; proje
   const p = useProject(rpc);
 
   const [panels, setPanels] = useState<Panels>({ lib: true, dock: true, insp: true });
+  const [agentsOpen, setAgentsOpen] = useState(false);
   const [view, setView] = useState<View>('game');
   const [dockTab, setDockTab] = useState<DockTab>('console');
   const [selected, setSelected] = useState<string | null>(null);
@@ -164,7 +166,9 @@ function EditorBody({ rpc, project, platform, onClose }: { rpc: RpcClient; proje
         onBuild={() => void runBuild()}
         onProblems={() => { setPanels((s) => ({ ...s, dock: true })); setDockTab('console'); }}
         onClose={onClose}
+        agents={agentsOpen} onAgents={() => setAgentsOpen((v) => !v)}
       />
+      {agentsOpen && <AgentPanel project={project} onClose={() => setAgentsOpen(false)} />}
 
       {lib && <Library ref={search} items={p.library} error={p.libraryError} selected={selected} changed={changed} onSelect={select} />}
 

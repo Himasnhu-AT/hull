@@ -37,37 +37,6 @@ importers:
         specifier: 0.187.0
         version: 0.187.0
 
-  packages/cli:
-    dependencies:
-      commander:
-        specifier: 15.1.0
-        version: 15.1.0
-      hull:
-        specifier: workspace:*
-        version: link:../hull
-      isomorphic-git:
-        specifier: 1.44.17
-        version: 1.44.17
-      typescript:
-        specifier: 7.0.2
-        version: 7.0.2
-      typescript6:
-        specifier: npm:typescript@6.0.3
-        version: typescript@6.0.3
-      vite:
-        specifier: 8.3.8
-        version: 8.3.8(@types/node@26.6.6)(esbuild@0.28.2)(tsx@4.23.15)
-      vitest:
-        specifier: 5.1.1
-        version: 5.1.1(@types/node@26.6.6)(vite@8.3.8(@types/node@26.6.6)(esbuild@0.28.2)(tsx@4.23.15))
-      ws:
-        specifier: 8.23.0
-        version: 8.23.0
-    devDependencies:
-      '@types/ws':
-        specifier: 8.18.2
-        version: 8.18.2
-
   packages/hull:
     dependencies:
       ajv:
@@ -86,9 +55,9 @@ importers:
 
   packages/studio:
     dependencies:
-      '@hull/cli':
+      '@hull/tools':
         specifier: workspace:*
-        version: link:../cli
+        version: link:../tools
       hull:
         specifier: workspace:*
         version: link:../hull
@@ -114,6 +83,34 @@ importers:
       vite:
         specifier: 8.3.8
         version: 8.3.8(@types/node@26.6.6)(esbuild@0.28.2)(tsx@4.23.15)
+
+  packages/tools:
+    dependencies:
+      hull:
+        specifier: workspace:*
+        version: link:../hull
+      isomorphic-git:
+        specifier: 1.44.17
+        version: 1.44.17
+      typescript:
+        specifier: 7.0.2
+        version: 7.0.2
+      typescript6:
+        specifier: npm:typescript@6.0.3
+        version: typescript@6.0.3
+      vite:
+        specifier: 8.3.8
+        version: 8.3.8(@types/node@26.6.6)(esbuild@0.28.2)(tsx@4.23.15)
+      vitest:
+        specifier: 5.1.1
+        version: 5.1.1(@types/node@26.6.6)(vite@8.3.8(@types/node@26.6.6)(esbuild@0.28.2)(tsx@4.23.15))
+      ws:
+        specifier: 8.23.0
+        version: 8.23.0
+    devDependencies:
+      '@types/ws':
+        specifier: 8.18.2
+        version: 8.18.2
 
   templates/arena:
     dependencies:
@@ -664,10 +661,6 @@ packages:
 
   clean-git-ref@2.0.1:
     resolution: {integrity: sha512-bLSptAy2P0s6hU4PzuIMKmMJJSE6gLXGH1cntDu7bWJUksvuM+7ReOK61mozULErYvP6a15rnYl0zFDef+pyPw==}
-
-  commander@15.1.0:
-    resolution: {integrity: sha512-cgnQ88TRrWcC7pVq46RzJVRMktu3W2RcbnoidnfBsl1bmDCBwJS/udcIZpKoCrbAYYaCqsz1yZCVIgbIaU3ddQ==}
-    engines: {node: '>=22.12.0'}
 
   crc-32@1.2.2:
     resolution: {integrity: sha512-ROmzCKrTnOwybPcJApAA6WBWij23HVfGVNKqqrZpuyZOHqK2CwHSvpGuyt/UNNvaIjEd8X5IFGp4Mh+Ie1IHJQ==}
@@ -1524,8 +1517,6 @@ snapshots:
   chai@6.3.0: {}
 
   clean-git-ref@2.0.1: {}
-
-  commander@15.1.0: {}
 
   crc-32@1.2.2: {}
 

@@ -10,9 +10,13 @@
     "typecheck": "tsc -b",
     "test": "vitest run",
     "check": "pnpm typecheck && pnpm test",
-    "hull": "tsx packages/cli/src/main.ts",
     "app": "pnpm --filter @hull/studio app",
-    "app:web": "pnpm --filter @hull/studio web"
+    "app:web": "pnpm --filter @hull/studio web",
+    "project:check": "tsx scripts/project.ts check",
+    "project:build": "tsx scripts/project.ts build",
+    "project:dev": "tsx scripts/project.ts dev",
+    "project:run": "tsx scripts/project.ts",
+    "mcp": "node packages/tools/bin/hull-mcp.js"
   },
   "devDependencies": {
     "@types/node": "26.6.6",

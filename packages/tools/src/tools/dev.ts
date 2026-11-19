@@ -18,7 +18,6 @@ export const dev = defineTool<DevInput, DevOutput>({
   summary: 'Serves the game in a browser; reloads on code and config changes.',
   input: { type: 'object', properties: { port: { type: 'number' } } },
   output: { type: 'object', required: ['url'] },
-  cli: { options: [{ name: 'port', flags: '--port <n>', description: 'Port to listen on' }] },
   format: (o) => [`Hull dev server: ${o.url}`],
   async run(ctx, input) {
     const manifest = await loadManifest(ctx.root);

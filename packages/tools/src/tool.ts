@@ -1,4 +1,5 @@
-// A tool is defined once. main.ts turns it into a command today; the MCP server and Marl AI read the same list.
+// A tool is defined once: a typed function plus JSON Schemas. The Hull app calls it directly, the MCP server lists and
+// calls the same objects, and Marl AI will read the same list. There is no command line.
 import type { Problem } from 'hull';
 
 export interface ToolContext {
@@ -6,7 +7,7 @@ export interface ToolContext {
   root: string;
   /** Who is acting: 'you', 'ai:<agent>', 'marl:<model>'. Recorded in the history. */
   author: string;
-  /** The running project server, when the tool is called from inside one (the app, or `hull dev`). Tools that need a game start their own otherwise. */
+  /** The running project server, when the tool is called from inside one (the app). Tools that need a game start their own otherwise. */
   server?: { url: string; gameUrl: string };
   /** The project's server, attached or started in-process on first use. Method tools (config.set, game.run, ...) call through it. */
   project?: { call(method: string, params: unknown): Promise<unknown> };
@@ -14,21 +15,12 @@ export interface ToolContext {
   signal: AbortSignal;
 }
 
-/** How the command line maps words onto a tool's input object. Other fronts ignore it. */
-export interface CliShape {
-  args?: { name: string; description: string; optional?: boolean }[];
-  options?: { name: string; flags: string; description: string; default?: string }[];
-  /** Turns the words (all strings) into the input object, for inputs that are not flat strings. */
-  toInput?(words: Record<string, unknown>): Record<string, unknown>;
-}
-
 export interface ToolDef<I, O> {
   name: string;
   summary: string;
-  /** JSON Schema of the input; the same object gives the CLI flags and the MCP tool schema. */
+  /** JSON Schema of the input; the MCP tool schema and the app's forms come from it. */
   input: unknown;
   output: unknown;
-  cli?: CliShape;
   /** Human-readable lines for output that is not a problem list. */
   format?(out: O): string[];
   run(ctx: ToolContext, input: I): Promise<O>;
@@ -38,7 +30,7 @@ export function defineTool<I, O>(def: ToolDef<I, O>): ToolDef<I, O> {
   return def;
 }
 
-/** What tools that find problems return; the CLI prints them and sets the exit code from them. */
+/** What tools that find problems return; callers fail on a non-empty list. */
 export interface ProblemOutput { ok: boolean; problems: Problem[] }
 
 /** `file:line:col: message` for code, `file#/pointer (line:col): message` for config. */

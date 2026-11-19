@@ -33,7 +33,7 @@ export interface PackageOutput {
 
 export const currentTarget = (): Target => (process.platform === 'darwin' ? 'mac' : process.platform === 'win32' ? 'win' : 'linux');
 
-/** The repo's shell/electron folder: it sits three levels above this file (packages/cli/src/tools). */
+/** The repo's shell/electron folder: it sits three levels above this file (packages/tools/src/tools). */
 const shellDir = (): string => resolve(import.meta.dirname, '..', '..', '..', '..', 'shell', 'electron');
 
 /** Where an unpacked Electron runtime for this OS can be found, or undefined. */
@@ -165,11 +165,6 @@ export const packageTool = defineTool<PackageInput, PackageOutput>({
     additionalProperties: false,
   },
   output: { type: 'object', required: ['ok', 'problems'] },
-  cli: { options: [
-    { name: 'targets', flags: '--targets <list>', description: 'Comma separated: mac,win,linux (default: this system)' },
-    { name: 'skipCheck', flags: '--skip-check', description: 'Do not run the check first' },
-    { name: 'smoke', flags: '--smoke', description: 'Launch the app once and save a screenshot' },
-  ] },
   format: (o) => [
     ...(o.artifacts ?? []).map((a) => `Packaged ${a.target}: ${a.path} (${(a.bytes / 1048576).toFixed(0)} MB)`),
     ...(o.skipped ?? []).map((s) => `Skipped ${s.target}: ${s.reason}`),

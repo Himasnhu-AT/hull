@@ -13,7 +13,7 @@ import type { PlayScript } from './play/run.ts';
 
 // The M3 agent loop on a temp copy of the arena: review notes set through the protocol and listed over MCP, and a step
 // script whose golden image catches a changed runSpeed.
-const bin = join(import.meta.dirname, '..', 'bin', 'hull.js');
+const bin = join(import.meta.dirname, '..', 'bin', 'hull-mcp.js');
 const hasBrowser = spawnSync('agent-browser', ['--version']).status === 0;
 
 let dir: string;
@@ -36,7 +36,7 @@ afterAll(async () => {
 class Mcp {
   private n = 0;
   private waiting = new Map<number, (m: any) => void>();
-  private proc = spawn(process.execPath, [bin, 'mcp', '--root', dir], { stdio: ['pipe', 'pipe', 'pipe'] });
+  private proc = spawn(process.execPath, [bin, dir], { stdio: ['pipe', 'pipe', 'pipe'] });
   constructor() {
     createInterface({ input: this.proc.stdout }).on('line', (l) => { const m = JSON.parse(l); this.waiting.get(m.id)?.(m); });
   }

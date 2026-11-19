@@ -412,3 +412,12 @@ textarea.field-in { height: auto; min-height: 76px; padding: 6px 8px; font-famil
 .logl.prob { grid-template-columns: 62px max-content minmax(0, 1fr); }
 .mapv .fh:has(> label.fl:empty) { display: none; }
 .mapv textarea.field-in { min-height: 30px; height: 30px; }
+
+/* ---------- connect an agent (title bar popover) ---------- */
+.agents { position: absolute; top: 48px; right: 10px; z-index: 30; width: 420px; max-width: calc(100vw - 20px); padding: 14px; border-radius: 10px; border: 1px solid var(--glass-line); box-shadow: var(--shadow); animation: fadein 0.2s var(--ease); }
+.agents h3 { margin: 0 0 6px; font-size: 13px; display: flex; align-items: center; gap: 6px; }
+.agents p { margin: 0 0 10px; color: var(--muted); font-size: 12px; }
+.agents .ag-foot { margin: 8px 0 0; color: var(--faint); }
+.ag-row { margin-top: 8px; }
+.ag-h { display: flex; align-items: center; justify-content: space-between; font-size: 11.5px; color: var(--muted); }
+.ag-row pre { margin: 4px 0 0; padding: 8px 10px; background: var(--field); border-radius: 6px; white-space: pre-wrap; word-break: break-all; user-select: all; color: var(--text); }

@@ -1,6 +1,6 @@
 // The config contract types. They live in their own file so the schema module can augment `HullKinds` here.
 
-/** Every id per kind, written by `hull check` / `hull dev` into .hull/gen/ids.ts through module augmentation. */
+/** Every id per kind, written by `check` / `dev` into .hull/gen/ids.ts through module augmentation. */
 export interface HullIds {}
 
 /** Value types per kind, filled in by the schema module (packages/hull/src/schema). */

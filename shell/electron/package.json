@@ -3,5 +3,5 @@
   "version": "0.0.0",
   "private": true,
   "main": "main.cjs",
-  "description": "Hull desktop shell: loads dist/web in a window. `hull package` fills in name and version."
+  "description": "Hull desktop shell: loads dist/web in a window. `package` fills in name and version."
 }

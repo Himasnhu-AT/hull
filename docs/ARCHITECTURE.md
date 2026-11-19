@@ -25,13 +25,16 @@ hull/
         platform/        browser and desktop shell differences
         kits/            reusable gameplay pieces
         dev/             control API, benches, scenario runner, golden images, budgets (not in ship builds)
-    cli/                 the `hull` command; also the project server the Studio talks to
-      src/tools/         every tool, defined once; exposed as commands, as MCP tools and to Marl AI
+    tools/               @hull/tools: every tool, defined once; the app, MCP and Marl AI call them (no command line)
+      src/tools/         the tool list (typed function + JSON Schema each)
+      src/mcp/           the MCP server library: stdio and streamable HTTP
+      src/server/        the project server the Studio talks to
       src/history/       the history store, the diff, experiments, merge
       src/edit/          writes to JSON and to TypeScript literals
+      bin/hull-mcp.js    stdio launcher, MCP only
     studio/              Hull Studio (Electron app, React inside)
   schemas/               generated JSON Schema files
-  templates/             starting points for `hull new`
+  templates/             starting points for the `new` tool
   shell/                 desktop shells for games: electron/ (default), tauri/ (experimental)
   examples/              small games used as tests of the engine itself
   docs/
@@ -176,11 +179,11 @@ config/**/*.json  ──►  validate (schema)  ──►  resolve references  �
 
 * The id of a file is its path under `config/` without the extension: `config/sound/sword/hit.json` is
   `sound/sword/hit`. The first folder is the kind, repeated in the file's `kind` field.
-* Files carry no `$schema` line. `hull check` and the Studio know the schema from the kind, and Hull writes the
+* Files carry no `$schema` line. `check` and the Studio know the schema from the kind, and Hull writes the
   editor mapping (`.vscode/settings.json`) so autocomplete works.
-* A reference is a string id in a field the schema marks as a reference (`x-ref: "sound"`). `hull check` resolves
+* A reference is a string id in a field the schema marks as a reference (`x-ref: "sound"`). `check` resolves
   every one, in config and in code.
-* **Typed access**: `hull check` and `hull dev` write `.hull/gen/ids.ts`, a list of every id per kind. So
+* **Typed access**: `check` and `dev` write `.hull/gen/ids.ts`, a list of every id per kind. So
   `config.sound('sword/hit')` autocompletes and a missing id is a compile error.
 * **In dev**, files are loaded and validated at start, and the project server pushes changes: the registry
   replaces the value and calls the subscribers, so a slider in the Studio is heard or seen on the next frame.
@@ -250,7 +253,7 @@ generator registered in code and carries its knobs. It still appears in the Libr
   state a game owns (a fog colour that follows the player). Such a game's GLSL only runs on WebGL2, so it pins the
   backend in `hull.json` `render.backend`; `mountRender` is then given that backend instead of choosing.
 * **Custom effects** are written once in a form both backends accept (three.js's node language where it serves
-  both; otherwise a pair of shaders registered under one name). `hull check` fails on an effect only one backend
+  both; otherwise a pair of shaders registered under one name). `check` fails on an effect only one backend
   has.
 * **Golden images run on both backends** with a small tolerance, so they cannot drift apart unnoticed.
 * To settle at kickoff, by a spike: whether three.js's WebGPU renderer with its own WebGL2 fallback is solid
@@ -338,8 +341,8 @@ composes kits and talks to them only through their signals, public methods and t
 ## 6. Build and output
 
 ```
-src/ + config/ + hull  ──►  hull build
-   1. hull check (types, schemas, references, rules)
+src/ + config/ + hull  ──►  build
+   1. check (types, schemas, references, rules)
    2. inline config (defaults stripped) and tunables (as constants)
    3. bundle the game and the engine modules it uses; drop dev/; minify
    4. write dist/web/game.js, index.html, assets/ (if any), build.json (sizes, hashes)
@@ -350,13 +353,13 @@ src/ + config/ + hull  ──►  hull build
 * Binary assets are copied to `assets/` with hashed names; `--single-file` embeds them instead.
 * `build.json` lists what took the space, so the AI can act on a size budget.
 
-**Desktop**: `hull package` copies `dist/web` into a shell.
+**Desktop**: `package` copies `dist/web` into a shell.
 
 * `shell/electron` (default): one window, the game served from a private scheme, a preload exposing only the
   `platform` interface. Targets: macOS (`dmg`, `zip`; arm64 and x64), Windows (`nsis`, portable), Linux
   (`AppImage`, `deb`).
 * `shell/tauri` (experimental, `--shell tauri`): the same `platform` interface over Tauri commands. Offered for
-  macOS and Windows. A check in `hull package` runs the game's own step script inside the built app, because the
+  macOS and Windows. A check in `package` runs the game's own step script inside the built app, because the
   web view is not the Chromium the game was tested in.
 * Signing and notarisation are configured in the manifest and done in CI on each system.
 
@@ -369,7 +372,7 @@ Hull keeps a private git repository at `.hull/history/` whose work tree is the p
 from any `.git` the project has. `.hull/` is in the project's `.gitignore`.
 
 * A **change** is a commit there, made automatically: after a burst of Studio edits (about two seconds of quiet),
-  after each AI turn that passes `hull check`, and before anything destructive. Its message is generated:
+  after each AI turn that passes `check`, and before anything destructive. Its message is generated:
   author (`you` or `ai`), and the plain-words diff.
 * A **checkpoint** is a tag.
 * An **experiment** is a branch with its own working copy under `.hull/exp/<name>/`, so two experiments can be
@@ -387,20 +390,20 @@ Git stores and merges lines. Hull adds a layer that understands the files, used 
 | `assets/` | Content hash | `assets/rock.glb replaced (1.2 MB → 0.9 MB)` |
 
 **Authorship per value**: because config and tunables are compared by path, Hull knows who last set each value.
-`hull check` lists AI changes that overwrite a value you set.
+`check` lists AI changes that overwrite a value you set.
 
 ### Operations
 
-| | Command | In the Studio |
+| | Tool | In the Studio |
 |---|---|---|
-| See what changed | `hull history` | Timeline |
-| Name this point | `hull history checkpoint "before new camera"` | Checkpoint button |
-| Go back | `hull history restore <id>` (itself a new change, so it can be undone) | Restore |
-| Try something | `hull exp start heavier-jump` | New experiment |
-| Compare | `hull exp diff heavier-jump` | Two game views side by side, differences listed |
-| Keep it | `hull exp adopt heavier-jump` | Adopt |
-| Combine two | `hull exp merge a b` | Merge; asks only when both changed the same value |
-| To git | `hull history export` | (command only) |
+| See what changed | `history.list` | Timeline |
+| Name this point | `history.checkpoint {name: "before new camera"}` | Checkpoint button |
+| Go back | `history.restore {id}` (itself a new change, so it can be undone) | Restore |
+| Try something | `exp.start {name: "heavier-jump"}` | New experiment |
+| Compare | `exp.compare {a, b}` | Two game views side by side, differences listed |
+| Keep it | `exp.adopt {name: "heavier-jump"}` | Adopt |
+| Combine two | `exp.adopt` into the other line | Merge; asks only when both changed the same value |
+| To git | `history.export` | (tool only) |
 
 Merges work by path for config and tunables (three-way: base, ours, theirs) and fall back to git's line merge for
 other code.
@@ -408,7 +411,7 @@ other code.
 ## 8. Hull Studio and the project server
 
 ```
-Hull Studio (Electron window)          project server (inside `hull studio`)             the project
+Hull Studio (Electron window)          project server (inside the app)             the project
   Library, Inspector, History,  ◄─ WebSocket ─►  files: read, write JSON, rewrite tunables  ◄──►  src/ config/
   Review, Play                                    history: changes, experiments, diff              .hull/
   GameView  ◄──── local: a web view of the dev game with a bench loaded
@@ -422,7 +425,7 @@ Hull Studio (Electron window)          project server (inside `hull studio`)    
   field sends one `set` to the project server, which writes the file and pushes the new value to the running game.
 * **Review** state per id (`unreviewed`, `approved`, `needs-change`, a note, the content hash) lives in
   `.hull/review.json`. When a piece changes, its state returns to `unreviewed`.
-* **Measurements** come from the same code the command line uses, so the Studio and the AI see the same numbers.
+* **Measurements** come from the same tool code the MCP server calls, so the Studio and the AI see the same numbers.
 * **Hosted** (PLAN section 8): the project server runs on Marl's machines and holds the code; the Studio's front
   end is served to the customer's browser; `GameView` switches to a remote source (a video stream, or a
   server-built bundle run in the browser). The protocol and the panels are the same. A chat panel talks to
@@ -430,13 +433,13 @@ Hull Studio (Electron window)          project server (inside `hull studio`)    
 
 ## 9. Tools for the agent
 
-Every tool is defined once, in `packages/cli/src/tools/`, as a typed function with a JSON Schema for its input.
-Three fronts expose the same list:
+Every tool is defined once, in `packages/tools/src/tools/` (`@hull/tools`), as a typed function with a JSON Schema for
+its input. There is no command line: the app is the product, so one front less to keep. Three fronts expose the list:
 
 | Front | For | Notes |
 |---|---|---|
-| `hull <command>` | A local agent in a terminal (Claude Code, Codex) | Text, or data with `--json` |
-| `hull mcp` | Any MCP client | The same list as MCP tools |
+| The Hull desktop app | The person | Calls the tool functions directly. |
+| MCP | A local agent (Claude Code, Codex, any MCP client) | `createMcpServer(projectRoot)` in `@hull/tools`. The app hosts it over streamable HTTP on 127.0.0.1 for the open project and shows how to connect; `bin/hull-mcp.js` serves it over stdio when the app is closed. |
 | Marl AI | Customers of the hosted Studio, and the Studio's chat panel | A separate backend service. It runs the agent loop with a model from Marl's list, calls the tools on the project server, streams text and changes back, and meters usage. One turn ends as one change in the history. |
 
 The author of a change records the front and the model (`you`, `ai:local`, `ai:mcp`, `ai:marl/<model>`), so the
@@ -446,25 +449,24 @@ front end. Its providers and models are chosen when it is built, from their docu
 What the tools give an agent:
 
 * **Errors are located.** `path:line:col: message` for code, `path#/json/pointer: message` for config, and
-  `--json` gives the same as data.
+  every tool returns the same problems as data.
 * **Scenario tests** (Node): `const game = await testGame(); game.press('jump'); game.step(30);
   expect(game.find('player').position.y).toBeGreaterThan(1)`.
 * **Step scripts** (browser): a JSON list of `press`, `step`, `waitUntil`, `expect`, `shot`. A `shot` with a golden
   image fails on a perceptual difference and writes the diff.
 * **Control port**: in a dev build the game listens on a local WebSocket: `step`, `press`, `release`, `state`,
-  `set`, `spawn`, `teleport`, `shot`, `errors`, `perf`. `hull mcp` exposes the same list as MCP tools.
+  `set`, `spawn`, `teleport`, `shot`, `errors`, `perf`. The MCP server exposes the same list as MCP tools.
 * **As built (M3).** The control port is the project server's `game.run` method: the server sends `game.rpc` to a
   connected game and the game answers `game.result` (`dev/protocol.ts`, `dev/runtime.ts`). Ops so far: `step`, `press`,
   `release`, `state`, `screenshot`. A page opened with `?hull-paused&hull-client=<id>` starts frozen at tick 0 and
   can be aimed at by id, so a script starts from the same state every time. The `play` tool takes a JSON script of
   `step`, `press`, `release`, `hold`, `read`, `check` and `screenshot` steps, runs it in a headless browser
   (agent-browser) and compares each screenshot with `tests/golden/<name>.png` per channel and per pixel (default: 8
-  of 255 per channel, 0 pixels allowed). A missing golden is written; `--update` rewrites them; a mismatch stops the
-  script and leaves `.hull/play/<name>.actual.png` and `.diff.png`. `hull mcp` speaks newline-delimited JSON-RPC
-  on stdio (initialize, tools/list, tools/call) and serves the registry without `dev` and `new`; tool names with a
-  dot are subcommands on the command line (`hull review list`). Not yet: `set`, `spawn`, `teleport`, `errors`,
-  `perf`, `waitUntil`, perceptual (not per-pixel) compare, and the project methods (`config.set`, `history.*`) as
-  MCP tools.
+  of 255 per channel, 0 pixels allowed). A missing golden is written; the `update` input rewrites them; a mismatch stops the
+  script and leaves `.hull/play/<name>.actual.png` and `.diff.png`. The MCP server speaks JSON-RPC (initialize, tools/list, tools/call) over stdio (newline-delimited) and over
+  streamable HTTP, and serves the registry without `dev` and `new`. Not yet: `set`, `spawn`, `teleport`, `errors`,
+  `perf`, `waitUntil` and perceptual (not per-pixel) compare. The project methods (`config.set`, `history.*`, `game.run`)
+  are MCP tools too.
 * **Budgets**: a test can assert frame time at the 95th percentile, draw calls, node count and allocations per
   frame.
 * **Sound bench**: peak, loudness, length, spectral centre per sound; a rule file states the expected order and
@@ -476,9 +478,9 @@ What the tools give an agent:
 |---|---|
 | No wall clock or unseeded random in game code | Lint rule; the engine's versions are the only ones exported |
 | `core` and `config` run without a browser | Import test in Node |
-| Config matches its schema; references resolve | `hull check` |
+| Config matches its schema; references resolve | `check` |
 | A write from the Studio leaves the file valid | Re-validate (JSON) or re-parse and type-check (TypeScript) before keeping it |
-| An AI change over a value the person set is visible | `hull check` lists it |
+| An AI change over a value the person set is visible | `check` lists it |
 | A subsystem that throws at start does not stop the game | Each module is started in a guard; the error is reported once |
 | No allocations per frame in engine code | Budget test in the examples |
 | Dev tools are not in ship builds | Build test greps the bundle |
