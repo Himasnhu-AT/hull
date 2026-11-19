@@ -73,6 +73,34 @@ function pointersOf(text: string, wanted: ReadonlySet<string>): Map<string, stri
 
 const CODE_RE = /(['"`])([A-Za-z0-9_./-]+)\1/g;
 
+const shortId = (id: string): string => id.slice(id.indexOf('/') + 1);
+
+/**
+ * String literals in code that name one of `ids`. Code names an asset by the whole id ('sound/combat/hurt') or, through the
+ * engine's kind-first calls, without the kind ('combat/hurt', or config.lookup('material', 'soldier-jacket')). A short form
+ * with no slash is taken only when the same line also names the kind as a literal, so an unrelated 'hurt' is left alone.
+ */
+export function codeMatches(text: string, ids: ReadonlySet<string>): { at: number; len: number; quote: string; id: string; short: boolean }[] {
+  const byShort = new Map<string, string[]>();
+  for (const id of ids) { const s = shortId(id); const l = byShort.get(s) ?? []; l.push(id); byShort.set(s, l); }
+  const out: { at: number; len: number; quote: string; id: string; short: boolean }[] = [];
+  CODE_RE.lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = CODE_RE.exec(text))) {
+    const lit = m[2]!;
+    if (ids.has(lit)) { out.push({ at: m.index, len: m[0].length, quote: m[1]!, id: lit, short: false }); continue; }
+    const cands = byShort.get(lit);
+    if (!cands) continue;
+    const from = text.lastIndexOf('\n', m.index) + 1;
+    const to = text.indexOf('\n', m.index);
+    const line = text.slice(from, to < 0 ? text.length : to);
+    const withKind = cands.filter((id) => new RegExp("['\"`]" + id.split('/')[0]!.replace(/[-]/g, '\\-') + "['\"`]").test(line));
+    const chosen = lit.includes('/') ? (withKind.length ? withKind : cands) : withKind;
+    for (const id of chosen) out.push({ at: m.index, len: m[0].length, quote: m[1]!, id, short: true });
+  }
+  return out;
+}
+
 /** Where an id is named: in other configs (string values equal to it) and in src/ (string literals equal to it). */
 export function findRefs(src: Sources, ids: ReadonlySet<string>): Map<string, AssetRef[]> {
   const out = new Map<string, AssetRef[]>();
@@ -89,11 +117,7 @@ export function findRefs(src: Sources, ids: ReadonlySet<string>): Map<string, As
       add(h.value, { kind: 'config', file: f.path, ...(isConfigId(f.path) ? { id: idOfPath(f.path) } : {}), ...(pointer !== undefined ? { pointer } : {}), ...lineCol(f.text, h.at) });
     }
   }
-  for (const f of src.code) {
-    CODE_RE.lastIndex = 0;
-    let m: RegExpExecArray | null;
-    while ((m = CODE_RE.exec(f.text))) if (ids.has(m[2]!)) add(m[2]!, { kind: 'code', file: f.path, ...lineCol(f.text, m.index) });
-  }
+  for (const f of src.code) for (const h of codeMatches(f.text, ids)) add(h.id, { kind: 'code', file: f.path, ...lineCol(f.text, h.at) });
   return out;
 }
 
@@ -123,8 +147,16 @@ const rewriteConfig = (text: string, map: ReadonlyMap<string, string>): string =
   }
   return out + text.slice(last);
 };
-const rewriteCode = (text: string, map: ReadonlyMap<string, string>): string =>
-  text.replace(CODE_RE, (all, q: string, id: string) => (map.has(id) ? `${q}${map.get(id)}${q}` : all));
+const rewriteCode = (text: string, map: ReadonlyMap<string, string>): string => {
+  let out = '', last = 0;
+  for (const h of codeMatches(text, new Set(map.keys()))) {
+    if (h.at < last) continue; // two candidates for one literal: the first wins
+    const to = map.get(h.id)!;
+    out += text.slice(last, h.at) + h.quote + (h.short ? shortId(to) : to) + h.quote;
+    last = h.at + h.len;
+  }
+  return out + text.slice(last);
+};
 
 const places = (refs: readonly AssetRef[]): string => refs.map((r) => `${r.file}${r.pointer ? `#${r.pointer}` : ''}:${r.line}:${r.col}`).join('; ');
 

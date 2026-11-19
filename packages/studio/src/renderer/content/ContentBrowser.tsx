@@ -1,7 +1,7 @@
 // The Content Browser: the project's folders and assets, organised the way Unreal's is. The folder tree on the left, tiles or a
 // list on the right, a details pane with "Referenced by" and "Uses". It shares ONE selection with the Library (the id the Editor
 // holds), and every change of the project goes through the asset tools of the project server: the Studio never touches the disk.
-import { useCallback, useEffect, useMemo, useRef, useState, type JSX } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type JSX } from 'react';
 import type { AssetRef, AssetResult, ContentThumb, LibraryItem } from 'hull/dev/protocol';
 import { leaveBox } from '../lib/keys.ts';
 import type { RpcClient } from '../lib/rpc.ts';
@@ -43,7 +43,7 @@ const save = (key: string, v: unknown): void => { try { localStorage.setItem(key
 const KIND_LABEL: Record<string, string> = { 'input-map': 'input-map' };
 const mac = typeof navigator !== 'undefined' && /Mac/.test(navigator.platform);
 
-export function ContentBrowser(p: Props): JSX.Element {
+function ContentBrowserBody(p: Props): JSX.Element {
   const { rpc, items, selected, changed, onSelect, onOpen, onReveal, notify } = p;
   const [data, setData] = useState<Data | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
@@ -118,7 +118,7 @@ export function ContentBrowser(p: Props): JSX.Element {
 
   // ---- Operations (each one is a tool call; a refusal is shown with its reasons) ----------------------------------------------
   const settle = useCallback((r: AssetResult, ok: string, what: string): boolean => {
-    if (r.ok) { notify(ok); load(); return true; }
+    if (r.ok) { notify(ok); load(); setTimeout(() => grid.current?.focus(), 60); return true; }
     if (r.refs && r.refs.length) setDialog({ type: 'blocked', what, refs: r.refs, message: r.problems[0]?.message });
     else setDialog({ type: 'problem', title: `Could not ${what}`, lines: r.problems.map((x) => x.message) });
     return false;
@@ -146,6 +146,7 @@ export function ContentBrowser(p: Props): JSX.Element {
   });
   const rename = (key: string, name: string): void => {
     setRenaming(null);
+    setTimeout(() => grid.current?.focus(), 0);
     const e = byKey.get(key);
     const folder = key.startsWith('dir:');
     const from = folder ? key.slice(4) : e?.dir ?? '';
@@ -298,8 +299,9 @@ export function ContentBrowser(p: Props): JSX.Element {
   });
 
   // ---- Rendering ------------------------------------------------------------------------------------------------------------
-  const Name = ({ n, name }: { n: Nav; name: string }): JSX.Element =>
-    renaming === n.key ? <NameEdit value={name} onCommit={(v) => rename(n.key, v)} onCancel={() => setRenaming(null)} /> : <span className="nm" title={n.t === 'entry' ? n.e.key : n.dir}>{name}</span>;
+  // A plain function, not a component: a component defined here would be a new type on every render and remount the name box, losing the typing.
+  const Name = (n: Nav, name: string): JSX.Element =>
+    renaming === n.key ? <NameEdit value={name} onCommit={(v) => rename(n.key, v)} onCancel={() => { setRenaming(null); setTimeout(() => grid.current?.focus(), 0); }} /> : <span className="nm" title={n.t === 'entry' ? n.e.key : n.dir}>{name}</span>;
 
   const badges = (e: Entry): JSX.Element => (
     <>
@@ -315,7 +317,7 @@ export function ContentBrowser(p: Props): JSX.Element {
         <div key={n.key} id={`cb-${n.key}`} className={`cb-tile folder${on ? ' sel' : ''}${dropOn === n.dir ? ' drop' : ''}`} role="option" aria-selected={on}
           onClick={(e) => pick(n, e)} onDoubleClick={() => open_(n)} onContextMenu={(e) => { e.preventDefault(); menuFor(n, e.clientX, e.clientY); }} {...dragProps(n)} {...dropProps(n.dir)}>
           <div className="ct ct-folder"><Icon name="folder" /><small>{countIn(entries, n.dir)}</small></div>
-          <Name n={n} name={folderName(n.dir)} />
+          {Name(n, folderName(n.dir))}
         </div>
       );
     }
@@ -324,7 +326,7 @@ export function ContentBrowser(p: Props): JSX.Element {
       <div key={n.key} id={`cb-${n.key}`} className={`cb-tile${on ? ' sel' : ''}${drag?.includes(n.key) ? ' dragging' : ''}`} role="option" aria-selected={on}
         onClick={(ev) => pick(n, ev)} onDoubleClick={() => open_(n)} onContextMenu={(ev) => { ev.preventDefault(); menuFor(n, ev.clientX, ev.clientY); }} {...dragProps(n)}>
         <div className="cb-thumb"><Thumb kind={e.kind} thumb={data?.thumbs[e.key]} />{badges(e)}</div>
-        <Name n={n} name={e.name} />
+        {Name(n, e.name)}
         <span className="kd">{KIND_LABEL[e.kind] ?? e.kind}</span>
       </div>
     );
@@ -406,12 +408,12 @@ export function ContentBrowser(p: Props): JSX.Element {
         </div>
 
         <div className="cb-chips" role="group" aria-label="Filters">
+          <button className={`chip${onlyChanged ? ' on' : ''}`} aria-pressed={onlyChanged} onClick={() => setOnlyChanged((v) => !v)}><span className="edot" />Changed</button>
+          <button className={`chip warn${onlyProblems ? ' on' : ''}`} aria-pressed={onlyProblems} onClick={() => setOnlyProblems((v) => !v)}><Icon name="warn" />Problems</button>
+          <span className="vr" />
           {chips.map((k) => (
             <button key={k} className={`chip${kinds.has(k) ? ' on' : ''}`} aria-pressed={kinds.has(k)} onClick={() => setKinds((s) => { const n = new Set(s); if (n.has(k)) n.delete(k); else n.add(k); return n; })}>{k}</button>
           ))}
-          <span className="vr" />
-          <button className={`chip${onlyChanged ? ' on' : ''}`} aria-pressed={onlyChanged} onClick={() => setOnlyChanged((v) => !v)}><span className="edot" />Changed</button>
-          <button className={`chip warn${onlyProblems ? ' on' : ''}`} aria-pressed={onlyProblems} onClick={() => setOnlyProblems((v) => !v)}><Icon name="warn" />Problems</button>
           {filtering && <button className="chip clear" onClick={() => { setQuery(''); setKinds(new Set()); setOnlyChanged(false); setOnlyProblems(false); }}>Clear</button>}
           <span className="cb-count" aria-live="polite">{loading ? '' : `${shown.length} item${shown.length === 1 ? '' : 's'}${subfolders.length ? `, ${subfolders.length} folder${subfolders.length === 1 ? '' : 's'}` : ''}${busy ? '  working...' : ''}`}</span>
         </div>
@@ -453,7 +455,7 @@ export function ContentBrowser(p: Props): JSX.Element {
 
       {dialog?.type === 'blocked' && (
         <Modal title={`Can't delete ${dialog.what}`} onClose={() => setDialog(null)} foot={<button className="btn" onClick={() => setDialog(null)} autoFocus>Close</button>}>
-          <p className="mp">{dialog.refs.length} place{dialog.refs.length === 1 ? ' still names' : 's still name'} {dialog.refs.length === 1 ? 'it' : 'it or one of them'}. Change or remove {dialog.refs.length === 1 ? 'that reference' : 'those references'} first; nothing was deleted.</p>
+          <p className="mp">{dialog.refs.length} place{dialog.refs.length === 1 ? ' still names' : 's still name'} {dialog.what}. Change or remove {dialog.refs.length === 1 ? 'that reference' : 'those references'} first; nothing was deleted.</p>
           <div className="cb-reflist">
             {dialog.refs.map((r, i) => (
               <div key={i} className="rr">
@@ -511,3 +513,6 @@ function MoveDialog({ keys, folders, byKey, onCancel, onMove }: { keys: string[]
     </Modal>
   );
 }
+
+/** The game reports many times a second and the editor re-renders with it; the browser only re-renders when what it shows changes. */
+export const ContentBrowser = memo(ContentBrowserBody);

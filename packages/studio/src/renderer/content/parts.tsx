@@ -67,7 +67,7 @@ export function NameEdit({ value, onCommit, onCancel }: { value: string; onCommi
 export function Modal({ title, onClose, children, foot }: { title: string; onClose(): void; children: ReactNode; foot?: ReactNode }): JSX.Element {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    ref.current?.focus();
+    if (!ref.current?.contains(document.activeElement)) ref.current?.focus();
     const key = (e: KeyboardEvent): void => { if (e.key === 'Escape') { e.stopPropagation(); onClose(); } };
     window.addEventListener('keydown', key, true);
     return () => window.removeEventListener('keydown', key, true);

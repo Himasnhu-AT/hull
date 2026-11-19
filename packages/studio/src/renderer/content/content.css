@@ -28,7 +28,7 @@
 .cb-ic { padding: 0 6px; }
 .cb-size { width: 84px; accent-color: var(--accent); }
 .cb-size:disabled { opacity: 0.35; }
-.btn.danger { background: color-mix(in srgb, var(--danger) 18%, var(--field)); color: var(--danger); }
+.btn.danger { background: #c9332a; color: #fff; }
 .btn.primary { background: var(--accent-solid); color: #fff; }
 .btn:disabled { opacity: 0.45; }
 

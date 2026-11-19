@@ -11,13 +11,13 @@ const src = (): Sources => ({
     cfg('character/soldier', { kind: 'character', materials: { jacket: 'material/jacket', boot: 'material/boot' }, again: ['material/jacket'] }),
     cfg('sound/hit', { kind: 'sound', note: 'material/jacket is only a note', level: -3 }),
   ],
-  code: [{ path: 'src/game.ts', text: "const a = 'material/jacket'; const b = `material/boot`; // 'sound/hit'\nconst c = 'material/jacketx';\n" }],
+  code: [{ path: 'src/game.ts', text: "const a = 'material/jacket'; const b = `material/boot`; // 'sound/hit'\nconst c = 'material/jacketx';\nconst d = config.lookup('material', 'jacket');\nconst e = 'jacket';\nplay('combat/x');\n" }],
 });
 
 describe('references', () => {
   it('finds a config value by pointer and a code literal, not a key, not a longer id', () => {
     const refs = findRefs(src(), new Set(['material/jacket'])).get('material/jacket')!;
-    expect(refs.map((r) => `${r.file}${r.pointer ?? ''}`)).toEqual(['config/character/soldier.json/materials/jacket', 'config/character/soldier.json/again/0', 'src/game.ts']);
+    expect(refs.map((r) => `${r.file}${r.pointer ?? ''}`)).toEqual(['config/character/soldier.json/materials/jacket', 'config/character/soldier.json/again/0', 'src/game.ts', 'src/game.ts']);
     expect(refs[0]).toMatchObject({ kind: 'config', id: 'character/soldier', line: 4 });
   });
   it('lists what an asset uses', () => {
@@ -37,7 +37,9 @@ describe('rename and move', () => {
     expect(w['src/game.ts']).toContain("'material/cloth/jacket'");
     expect(w['src/game.ts']).toContain("'material/jacketx'");
     expect(w['src/game.ts']).toContain("'sound/hit'");
-    expect(plan.refs).toHaveLength(3);
+    expect(w['src/game.ts']).toContain("config.lookup('material', 'cloth/jacket')");
+    expect(w['src/game.ts']).toContain("const e = 'jacket';"); // a short form with no kind on its line is not a reference
+    expect(plan.refs).toHaveLength(4);
     // the notes that merely mention the id are not references
     expect(plan.writes.some((x) => x.path === 'config/sound/hit.json')).toBe(false);
   });
@@ -65,7 +67,7 @@ describe('delete', () => {
   it('refuses while referenced and says where', () => {
     const plan = planDelete(src(), ['material/jacket']);
     expect(plan.ok).toBe(false);
-    expect(plan.refs).toHaveLength(3);
+    expect(plan.refs).toHaveLength(4);
     expect(plan.problems[0]!.message).toContain('config/character/soldier.json#/materials/jacket:4:15');
     expect(plan.problems[0]!.message).toContain('src/game.ts');
   });

@@ -149,6 +149,7 @@ function EditorBody({ rpc, project, platform, onClose }: { rpc: RpcClient; proje
     if (kind === 'sound') setView('sound');
     else if (kind === 'character' || kind === 'vfx' || kind === 'look') setView(kind);
   }, [p.library]);
+  const toggleWide = useCallback(() => { setDockWide((v) => { if (!v) split.grow('dock', Math.round(window.innerHeight * 0.55)); return !v; }); }, [split.grow]);
   const openFromConsole = useCallback((id: string) => { setSelected(id); setPanels((s) => ({ ...s, insp: true })); }, []);
 
   const { lib, insp, dock } = panels;
@@ -213,9 +214,9 @@ function EditorBody({ rpc, project, platform, onClose }: { rpc: RpcClient; proje
           onOpenSound={(id) => { setSelected(id); setView('sound'); }} reveal={reveal} />
       )}
 
-      {dock && <Dock tab={dockTab} onTab={setDockTab} logs={p.logs} problems={allProblems} journal={p.journal} onClear={p.clearLogs} onOpen={openFromConsole}
+      {dock && <Dock tab={dockTab} onTab={(t) => { setDockTab(t); if (t === 'content') split.grow('dock', 340); }} logs={p.logs} problems={allProblems} journal={p.journal} onClear={p.clearLogs} onOpen={openFromConsole}
         flagged={h.flagged.size}
-        content={<ContentBrowser rpc={rpc} items={p.library} error={p.libraryError} selected={selected} changed={changed} onSelect={select} onOpen={openAsset} onReveal={reveal} notify={notify} wide={dockWide} onWide={() => setDockWide((v) => !v)} />}
+        content={<ContentBrowser rpc={rpc} items={p.library} error={p.libraryError} selected={selected} changed={changed} onSelect={select} onOpen={openAsset} onReveal={reveal} notify={notify} wide={dockWide} onWide={toggleWide} />}
         history={<HistoryPanel h={h} openExp={openInfo ? openInfo.name : null} onOpenExp={setOpenExp} onCompare={compareExps} onProblems={() => setDockTab('console')} />} />}
 
       {lib && <div className={`splitter v${split.active === 'lib' ? ' drag' : ''}`} style={{ left: w.lib - 3 }} {...split.bind('lib', 1, 200, 420)} role="separator" aria-orientation="vertical" aria-label="Resize Library" />}

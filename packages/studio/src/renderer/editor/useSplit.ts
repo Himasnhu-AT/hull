@@ -18,6 +18,7 @@ function load(): Sizes {
 export function useSplit(): {
   sizes: Sizes;
   active: keyof Sizes | null;
+  grow(key: keyof Sizes, min: number): void;
   bind(key: keyof Sizes, dir: 1 | -1, min: number, max: number, axis?: 'x' | 'y'): { onPointerDown(e: RPointerEvent<HTMLElement>): void; onPointerMove(e: RPointerEvent<HTMLElement>): void; onPointerUp(e: RPointerEvent<HTMLElement>): void; onDoubleClick(): void };
 } {
   const [sizes, setSizes] = useState<Sizes>(load);
@@ -46,5 +47,8 @@ export function useSplit(): {
     onDoubleClick: () => setSizes((s) => ({ ...s, [key]: DEFAULTS[key] })),
   }), []);
 
-  return { sizes, active, bind };
+  /** Makes a panel at least `min` big (the Content Browser asks for room when it opens). Not saved: it is a one-off, not a choice. */
+  const grow = useCallback((key: keyof Sizes, min: number) => setSizes((s) => (s[key] >= min ? s : { ...s, [key]: Math.round(min) })), []);
+
+  return { sizes, active, bind, grow };
 }
