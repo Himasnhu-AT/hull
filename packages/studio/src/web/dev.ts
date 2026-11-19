@@ -12,6 +12,7 @@ import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { createServer } from 'vite';
 import { createHost } from '../main/host.ts';
+import type { AgentSettingsInput, PromptOptions } from '../shared/agentApi.ts';
 import type { OpenedProject } from '../shared/appApi.ts';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -47,7 +48,10 @@ const api: Record<string, (arg: never) => unknown> = {
   reveal: (path: string) => { console.log(`[hull] reveal ${path}`); },
   agentList: () => host.agents.list(),
   agentStart: (o: { a: [string] }) => host.agents.start(...o.a),
-  agentPrompt: (o: { a: [string, string] }) => host.agents.prompt(...o.a),
+  agentPrompt: (o: { a: [string, string, PromptOptions | undefined] }) => host.agents.prompt(...o.a),
+  agentEnsure: () => host.agents.ensure(),
+  agentSettings: () => host.agentSettings(),
+  setAgentSettings: (s: AgentSettingsInput) => host.setAgentSettings(s),
   agentCancel: (o: { a: [string] }) => host.agents.cancel(...o.a),
   agentStop: (o: { a: [string] }) => host.agents.stop(...o.a),
   agentAnswer: (o: { a: [string, string, string | null] }) => host.agents.answer(...o.a),

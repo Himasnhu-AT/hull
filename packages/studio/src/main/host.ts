@@ -7,9 +7,10 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHub, type Hub } from './agents.ts';
+import { createSettingsStore, type KeyCrypto } from './agentSettings.ts';
 import { createTerminals, type Terminals } from './terminal.ts';
 import { pickTemplate, titleFromIdea } from './idea.ts';
-import type { AgentEvent } from '../shared/agentApi.ts';
+import type { AgentEvent, AgentSettings, AgentSettingsInput } from '../shared/agentApi.ts';
 import type { CommunityGame, OpenedProject, RecentProject, TemplateInfo } from '../shared/appApi.ts';
 
 interface ProjectServer { url: string; gameUrl: string; close(): Promise<void> }
@@ -31,6 +32,8 @@ export interface HostOptions {
   log?: (line: string) => void;
   /** Env the agents and the terminal start with (tests); defaults to the process's. */
   env?: NodeJS.ProcessEnv;
+  /** Where the builder's key can be kept safely (Electron's safeStorage). Without it the environment decides. */
+  crypto?: KeyCrypto;
 }
 
 export interface Host {
@@ -47,6 +50,9 @@ export interface Host {
   /** Agents (ACP) and the Claude Code terminal, working on the open project. */
   agents: Hub;
   terminals: Terminals;
+  /** The builder's model and key (the key itself never leaves the main process). */
+  agentSettings(): Promise<AgentSettings>;
+  setAgentSettings(s: AgentSettingsInput): Promise<AgentSettings>;
   /** Subscribes to agent and terminal events; returns the unsubscribe. */
   onAgentEvent(cb: (e: AgentEvent) => void): () => void;
   /** The server module in use, for tests and the banner. */
@@ -72,7 +78,8 @@ export function createHost(opts: HostOptions): Host {
   const emit = (e: AgentEvent): void => { for (const l of listeners) { try { l(e); } catch { /* a dead window must not stop the others */ } } };
   const current = (): { root: string; mcp: { url: string; launcher: string } } | null =>
     running ? { root: running.root, mcp: { url: running.mcp.url, launcher: fileURLToPath(new URL('../../../tools/bin/hull-mcp.js', import.meta.url)) } } : null;
-  const hub = createHub({ project: current, emit, log, ...(opts.env ? { env: opts.env } : {}) });
+  const settings = createSettingsStore({ dataDir: opts.dataDir, crypto: opts.crypto, env: opts.env });
+  const hub = createHub({ project: current, emit, log, settings, ...(opts.env ? { env: opts.env } : {}) });
   const terminals = createTerminals({ project: current, emit, ...(opts.env ? { env: opts.env } : {}) });
 
   async function load(): Promise<{ mod: ServerModule; mcp: McpModule; kind: 'real' }> {
@@ -105,6 +112,8 @@ export function createHost(opts: HostOptions): Host {
   const host: Host = {
     agents: hub,
     terminals,
+    agentSettings: () => settings.get(),
+    async setAgentSettings(s) { const r = await settings.set(s); await hub.stopEnsured(); return r; },
     onAgentEvent(cb) { listeners.add(cb); return () => { listeners.delete(cb); }; },
 
     async listTemplates() { return (await load()).mod.listTemplates(); },

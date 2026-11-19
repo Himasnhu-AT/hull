@@ -6,17 +6,10 @@
 import { useCallback, useEffect, useMemo, useState, type JSX } from 'react';
 import type { HistoryChange } from 'hull/dev/protocol';
 import type { RpcClient } from '../lib/rpc.ts';
-import type { Revert } from '../history/changesView.ts';
-import { entryOf, mainLine, putBackRows } from './changesList.ts';
+import { entryOf, mainLine } from './changesList.ts';
+import { putBackChange } from './putBack.ts';
 
 export interface ChangesProps { rpc: RpcClient }
-
-async function applyRevert(rpc: RpcClient, r: Revert, from: string): Promise<string | null> {
-  const res = r.via === 'config.set' ? await rpc.call('config.set', { id: r.id, pointer: r.pointer, value: r.value, author: 'you' })
-    : r.via === 'tunables.set' ? await rpc.call('tunables.set', { block: r.block, key: r.key, value: r.value, author: 'you' })
-      : await rpc.call('history.revert', { from, file: r.file, ...(r.pointer !== undefined ? { pointer: r.pointer } : {}), author: 'you' });
-  return res.ok ? null : (res.problems[0]?.message ?? 'the old value is not valid now');
-}
 
 export function Changes({ rpc }: ChangesProps): JSX.Element {
   const [changes, setChanges] = useState<HistoryChange[] | null>(null);
@@ -38,17 +31,10 @@ export function Changes({ rpc }: ChangesProps): JSX.Element {
   const list = useMemo(() => mainLine(changes ?? []), [changes]);
 
   const putBack = useCallback(async (c: HistoryChange) => {
-    const from = c.parents[0];
-    if (!from) { setError('This is the start of the project; there is nothing before it to go back to.'); return; }
     setBusy(c.id); setError(null);
-    try {
-      const diff = await rpc.call('history.diff', { to: c.id });
-      for (const row of putBackRows(diff.deltas)) {
-        const problem = await applyRevert(rpc, row.revert, from);
-        if (problem) { setError(`Could not put it back: ${problem}`); return; }
-      }
-      setBack((s) => new Set(s).add(c.id));
-    } catch (e) { setError(`Could not put it back: ${e instanceof Error ? e.message : String(e)}`); } finally { setBusy(null); }
+    const problem = await putBackChange(rpc, c);
+    if (problem) setError(problem); else setBack((s) => new Set(s).add(c.id));
+    setBusy(null);
   }, [rpc]);
 
   if (changes === null) return <div className="cr-pad">{error ? <div className="note-err" role="alert">{error}</div> : <div className="skeleton" />}</div>;

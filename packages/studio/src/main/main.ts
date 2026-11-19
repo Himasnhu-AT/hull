@@ -1,9 +1,10 @@
 // Electron main process: one window, the launcher and the project server per open project. The page is the Vite
 // dev server in development (HULL_APP_URL) and the built files in out/renderer otherwise.
 
-import { app, BrowserWindow, dialog, ipcMain, nativeTheme, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, nativeTheme, safeStorage, shell } from 'electron';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import type { AgentSettingsInput, PromptOptions } from '../shared/agentApi.ts';
 import { createHost } from './host.ts';
 
 // Dev only: lets a test driver (agent-browser) attach to the window.
@@ -13,7 +14,11 @@ if (process.env['HULL_CDP_PORT'] && !app.isPackaged) app.commandLine.appendSwitc
 if (process.env['HULL_USER_DATA']) app.setPath('userData', process.env['HULL_USER_DATA']);
 
 const here = dirname(fileURLToPath(import.meta.url));
-const host = createHost({ dataDir: app.getPath('userData'), log: (l) => console.log(`[hull] ${l}`) });
+// The builder's API key is kept encrypted with the OS keychain (safeStorage), as base64 text in userData.
+const host = createHost({
+  dataDir: app.getPath('userData'), log: (l) => console.log(`[hull] ${l}`),
+  crypto: { available: () => safeStorage.isEncryptionAvailable(), encrypt: (s) => safeStorage.encryptString(s).toString('base64'), decrypt: (b) => safeStorage.decryptString(Buffer.from(b, 'base64')) },
+});
 let win: BrowserWindow | null = null;
 
 // A bad id from the page must not crash the process; the renderer shows the message.
@@ -36,7 +41,10 @@ function registerIpc(): void {
   handle('forgetRecent', (root: string) => host.forgetRecent(root));
   handle('agentList', () => host.agents.list());
   handle('agentStart', (id: string) => host.agents.start(id));
-  handle('agentPrompt', (sid: string, text: string) => host.agents.prompt(sid, text));
+  handle('agentPrompt', (sid: string, text: string, options?: PromptOptions) => host.agents.prompt(sid, text, options));
+  handle('agentEnsure', () => host.agents.ensure());
+  handle('agentSettings', () => host.agentSettings());
+  handle('setAgentSettings', (s: AgentSettingsInput) => host.setAgentSettings(s));
   handle('agentCancel', (sid: string) => host.agents.cancel(sid));
   handle('agentStop', (sid: string) => host.agents.stop(sid));
   handle('agentAnswer', (sid: string, reqId: string, optionId: string | null) => host.agents.answer(sid, reqId, optionId));

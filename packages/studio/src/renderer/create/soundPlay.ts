@@ -1,6 +1,7 @@
 // A sound card plays its sound the way the Sound bench does: render the recipe with the engine (the project's own when it has
 // code generators, the Studio's otherwise), then play the buffer. The engine loads once per game page.
 
+import type { LibraryItem } from 'hull/dev/protocol';
 import type { RpcClient } from '../lib/rpc.ts';
 import { loadAudio, loadProjectAudio, type AudioApi } from '../lib/audioApi.ts';
 
@@ -22,9 +23,9 @@ export async function playSound(rpc: RpcClient, gameUrl: string, id: string): Pr
   const doc = await rpc.call('config.read', { id });
   // A `pick` source looks other sounds up in the project bundle's own registry, so fill it first (as the bench does).
   if (audio.config && (doc.value as { source?: { type?: string } } | null)?.source?.type === 'pick') {
-    const all = (await rpc.call('library.list', {})).filter((i) => i.kind === 'sound');
-    const docs = await Promise.all(all.map((i) => rpc.call('config.read', { id: i.id }).catch(() => null)));
-    audio.config.load(docs.filter((d) => d !== null).map((d) => ({ path: d.path, text: d.text })));
+    const all = (await rpc.call('library.list', {})).filter((i: LibraryItem) => i.kind === 'sound');
+    const docs = await Promise.all(all.map((i: LibraryItem) => rpc.call('config.read', { id: i.id }).catch(() => null)));
+    audio.config.load(docs.flatMap((d: { path: string; text: string } | null) => (d ? [{ path: d.path, text: d.text }] : [])));
   }
   audio.playBuffer(await audio.renderSound(doc.value));
 }
