@@ -170,7 +170,7 @@
   },
   {
    "name": "reset",
-   "weight": 1,
+   "weight": 100,
    "steps": [
     {
      "travel": {
@@ -185,9 +185,14 @@
    "when": {
     "distance": [
      0,
-     3.2
+     3.6
+    ],
+    "streak": [
+     3,
+     99
     ]
-   }
+   },
+   "rest": true
   }
  ]
 }

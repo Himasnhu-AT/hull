@@ -12,5 +12,8 @@
  "hitStopLight": 0.04,
  "hitStopHeavy": 0.07,
  "dodgeDistance": 2.8,
- "modelYaw": 0
+ "modelYaw": 0,
+ "blockChip": 0.15,
+ "resistMult": 0.7,
+ "fightRange": 10
 }

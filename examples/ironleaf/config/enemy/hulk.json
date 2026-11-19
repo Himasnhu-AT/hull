@@ -11,6 +11,7 @@
   "broken": 2.6
  },
  "weakTo": "wind",
+ "resists": "water",
  "finisherDamage": 1,
  "speed": {
   "walk": 1.2,

@@ -75,6 +75,14 @@
             "unit": "s"
           }
         },
+        "fightRecover": {
+          "type": "number",
+          "minimum": 0,
+          "x-ui": {
+            "unit": "/s",
+            "help": "Posture regained each second while an enemy of the other team is near (slower than \"recover\")."
+          }
+        },
         "broken": {
           "type": "number",
           "minimum": 0,
@@ -91,6 +99,12 @@
       "type": "string",
       "x-ui": {
         "help": "The stance that deals extra posture damage to this enemy."
+      }
+    },
+    "resists": {
+      "type": "string",
+      "x-ui": {
+        "help": "The stance that deals less posture damage to this enemy (the wrong one)."
       }
     },
     "finisherDamage": {
@@ -339,6 +353,13 @@
               "help": "Time before the enemy thinks again."
             }
           },
+          "rest": {
+            "type": "boolean",
+            "default": false,
+            "x-ui": {
+              "help": "A breather (a reset, a back-step): starting it sets the streak that \"when.streak\" reads back to 0."
+            }
+          },
           "token": {
             "type": "boolean",
             "default": true,
@@ -378,6 +399,23 @@
                 "items": false,
                 "x-ui": {
                   "help": "Fraction of full health, 0 to 1."
+                }
+              },
+              "streak": {
+                "type": "array",
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "minItems": 2,
+                "maxItems": 2,
+                "items": false,
+                "x-ui": {
+                  "help": "Patterns started in a row since the last \"rest\" pattern: [3, 99] is \"after three patterns\"."
                 }
               },
               "phase": {

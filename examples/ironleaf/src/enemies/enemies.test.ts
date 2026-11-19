@@ -4,7 +4,7 @@ import { Combatant, combatHub, DuelDemo, EnemyBrain, attackTokens, checkEnemy, c
 import { kitSources, projectSources, startRig, type Rig } from 'hull/kits/testing';
 import { config, defineGame } from 'hull';
 import { describe, expect, it } from 'vitest';
-import { encounters, spawnEncounters } from './index';
+import { AimLine, encounters, spawnEncounters } from './index';
 
 const root = fileURLToPath(new URL('../..', import.meta.url));
 const sources = [...kitSources('third-person', 'health', 'combat'), ...projectSources(root)];
@@ -138,6 +138,33 @@ describe('Ironleaf enemies', () => {
     expect(back).toBeGreaterThan(0);
     r2.r.g.dispose();
   }, 120000);
+
+  it('Kagari steps back to reset after three patterns in a row', async () => {
+    const { log } = await fight('kagari', 60 * 45);
+    expect(log.patterns.length).toBeGreaterThan(6);
+    expect(log.patterns).toContain('reset');
+    let run = 0, longest = 0;
+    for (const p of log.patterns) { run = p === 'reset' ? 0 : run + 1; longest = Math.max(longest, run); }
+    expect(longest).toBeLessThanOrEqual(4);
+  });
+
+  it('the archer draws a red aim line to Aya while it draws the bow and drops it when the arrow is loosed', async () => {
+    const { r } = await fight('ashkite', 0, undefined, 5, false);
+    const w = r.g.world;
+    const brain = w.find('foe')!.get(EnemyBrain)!;
+    brain.wake();
+    w.find('foe')!.add(AimLine);
+    r.step(1);
+    const line = w.find('aim-line')!;
+    expect(line).toBeTruthy();
+    let shown = 0, shots = 0;
+    combatHub(w).shot.connect(() => shots++);
+    for (let i = 0; i < 60 * 10 && shots === 0; i++) { r.step(1); if (line.object3d.visible) shown++; }
+    expect(shots).toBe(1);
+    expect(shown).toBeGreaterThan(30);
+    r.step(1);
+    expect(line.object3d.visible).toBe(false);
+  });
 
   it('the archer backs away from a player who closes in, then shoots from range', async () => {
     const def = defineGame({

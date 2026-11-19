@@ -32,6 +32,7 @@ const when = Type.Object(
   {
     distance: Type.Optional(range),
     health: Type.Optional(Type.Unsafe<[number, number]>({ ...range, ...ui({ help: 'Fraction of full health, 0 to 1.' }) })),
+    streak: Type.Optional(Type.Unsafe<[number, number]>({ ...range, ...ui({ help: 'Patterns started in a row since the last "rest" pattern: [3, 99] is "after three patterns".' }) })),
     phase: Type.Optional(Type.Unsafe<[number, number]>({ ...range, ...ui({ help: 'Phases are counted by \'phases\' below, from 0.' }) })),
     stance: Type.Optional(Type.Array(Type.String(), ui({ help: 'Only while the target fights in one of these stances.' }))),
     clear: Type.Optional(Type.Number({ minimum: 0, ...ui({ unit: 'm', help: 'Only while no friend of this enemy is within this many metres of the target (an archer waits for a clear line).' }) })),
@@ -45,6 +46,7 @@ const pattern = Type.Object(
     weight: Type.Number({ minimum: 0, default: 1, ...ui({ widget: 'dial', step: 0.1, help: 'Chance of being picked among the patterns that fit.' }) }),
     steps: Type.Array(step, { minItems: 1 }),
     recover: Type.Optional(Type.Number({ minimum: 0, default: 0.8, ...ui({ unit: 's', step: 0.05, help: 'Time before the enemy thinks again.' }) })),
+    rest: Type.Optional(Type.Boolean({ default: false, ...ui({ help: 'A breather (a reset, a back-step): starting it sets the streak that "when.streak" reads back to 0.' }) })),
     token: Type.Optional(Type.Boolean({ default: true, ...ui({ help: 'false: may start without a place in the attack queue (a ranged shot).' }) })),
     when: Type.Optional(when),
     answers: Type.Optional(Type.Record(Type.String(), Type.Number({ minimum: 0 }), ui({ help: 'Weight multiplier by the target\'s stance: { "stone": 3 } makes this pattern three times likelier against a target in Stone.' }))),
@@ -65,12 +67,14 @@ export const enemySchema = Type.Object(
           max: Type.Number({ exclusiveMinimum: 0, default: 80, ...ui({ widget: 'dial', step: 5, help: 'Posture that breaks the guard and opens a finisher.' }) }),
           recover: Type.Number({ minimum: 0, default: 10, ...ui({ unit: '/s', help: 'Posture regained each second, once the delay has passed.' }) }),
           delay: Type.Number({ minimum: 0, default: 1.5, ...ui({ unit: 's' }) }),
+          fightRecover: Type.Optional(Type.Number({ minimum: 0, ...ui({ unit: '/s', help: 'Posture regained each second while an enemy of the other team is near (slower than "recover").' }) })),
           broken: Type.Number({ minimum: 0, default: 2.4, ...ui({ unit: 's', help: 'How long a broken enemy stays open.' }) }),
         },
         { additionalProperties: false },
       ),
     ),
     weakTo: Type.Optional(Type.String({ ...ui({ help: 'The stance that deals extra posture damage to this enemy.' }) })),
+    resists: Type.Optional(Type.String({ ...ui({ help: 'The stance that deals less posture damage to this enemy (the wrong one).' }) })),
     finisherDamage: Type.Optional(Type.Number({ minimum: 0, maximum: 1, default: 1, ...ui({ widget: 'slider', step: 0.05, help: 'Fraction of full health a finisher takes. 1 kills; a boss takes less per finisher.' }) })),
     speed: Type.Optional(
       Type.Object(

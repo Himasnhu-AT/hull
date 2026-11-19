@@ -427,10 +427,10 @@ lists the stances (the first starts). `moves` maps a name to:
 | `lunge` | `{ distance, from, to }`: steps forward over that part of the move. |
 | `sound` | A `sound` id played when the move starts. |
 
-`enemy`: `moveSet`, `character`, `health`, `posture` (`max`, `recover`, `delay`, `broken`), `weakTo` (the stance that costs it
-extra posture), `finisherDamage`, `speed` (`walk`, `circle`, `turn`), `spacing` (`min`, `max`), `think`, `phases` (health fractions where a
+`enemy`: `moveSet`, `character`, `health`, `posture` (`max`, `recover`, `fightRecover` (slower, while an enemy is near), `delay`, `broken`), `weakTo` (the stance that costs it
+extra posture), `resists` (the stance that costs it less), `finisherDamage`, `speed` (`walk`, `circle`, `turn`), `spacing` (`min`, `max`), `think`, `phases` (health fractions where a
 new phase starts) and `patterns`: each `{ name, weight, steps, recover, token, when }`. A step is `{ move, telegraph, gap, feint,
-unblockable }`. `when` limits a pattern by `distance`, `health` (0 to 1) and `phase`. `checkMoveSet` and `checkEnemy`
+unblockable }`. `when` limits a pattern by `distance`, `health` (0 to 1), `phase` and `streak` (patterns started in a row since a pattern with `rest: true`). `checkMoveSet` and `checkEnemy`
 (`hull/kits`) check cancels, windows and pattern moves against the move-set, naming the pointer.
 
 Added for Ironleaf (M10): a step may leave out `move` and carry `travel: { by | to, speed }` (the enemy runs that far toward or away from the

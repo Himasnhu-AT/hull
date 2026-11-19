@@ -11,6 +11,7 @@
   "broken": 2.6
  },
  "weakTo": "water",
+ "resists": "stone",
  "finisherDamage": 1,
  "speed": {
   "walk": 1.4,
