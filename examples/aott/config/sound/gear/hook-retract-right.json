@@ -1,0 +1,152 @@
+{
+ "kind": "sound",
+ "note": "Quick zip and latch click.",
+ "bus": "sfx",
+ "level": -1.9382,
+ "limit": {
+  "voices": 6
+ },
+ "source": {
+  "type": "synth",
+  "length": 0.203,
+  "layers": {
+   "burst0": {
+    "from": {
+     "noise": "white"
+    },
+    "then": [
+     {
+      "filter": "bandpass",
+      "freq": 800,
+      "q": 3,
+      "glideTo": 6.5,
+      "glideTime": 0.1
+     },
+     {
+      "envelope": {
+       "attack": 0.01,
+       "decay": 0.11
+      }
+     },
+     {
+      "gain": -10.45757
+     },
+     {
+      "pan": 0.6
+     }
+    ]
+   },
+   "tone1": {
+    "from": {
+     "osc": "sine",
+     "freq": 1500,
+     "glideTo": 2.8,
+     "glideTime": 0.1
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.008,
+       "decay": 0.1
+      }
+     },
+     {
+      "gain": -26.0206
+     },
+     {
+      "pan": 0.6
+     }
+    ]
+   },
+   "mode2_0": {
+    "from": {
+     "osc": "sine",
+     "freq": 2900
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.02
+      }
+     },
+     {
+      "gain": -13.15155
+     },
+     {
+      "pan": 0.6
+     }
+    ],
+    "at": 0.1
+   },
+   "mode2_1": {
+    "from": {
+     "osc": "sine",
+     "freq": 4300
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.01481
+      }
+     },
+     {
+      "gain": -17.23395
+     },
+     {
+      "pan": 0.6
+     }
+    ],
+    "at": 0.1
+   },
+   "mode2_2": {
+    "from": {
+     "osc": "sine",
+     "freq": 6100
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.01176
+      }
+     },
+     {
+      "gain": -20
+     },
+     {
+      "pan": 0.6
+     }
+    ],
+    "at": 0.1
+   },
+   "burst3": {
+    "from": {
+     "noise": "white"
+    },
+    "then": [
+     {
+      "filter": "highpass",
+      "freq": 3500,
+      "q": 1
+     },
+     {
+      "envelope": {
+       "attack": 0.0006,
+       "decay": 0.012
+      }
+     },
+     {
+      "gain": -13.9794
+     },
+     {
+      "pan": 0.6
+     }
+    ],
+    "at": 0.1
+   }
+  },
+  "reverb": 0.06
+ }
+}

@@ -1,0 +1,14 @@
+{
+ "kind": "sound",
+ "note": "A hit taken: thump and a short formant grunt.",
+ "bus": "sfx",
+ "level": 0,
+ "limit": {
+  "minGap": 0.25,
+  "voices": 3
+ },
+ "source": {
+  "type": "code",
+  "generator": "aott/hurt"
+ }
+}

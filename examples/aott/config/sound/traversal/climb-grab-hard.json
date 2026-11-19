@@ -1,0 +1,125 @@
+{
+ "kind": "sound",
+ "note": "A hand catching hard stone.",
+ "bus": "sfx",
+ "level": -6.46613,
+ "limit": {
+  "minGap": 0.13,
+  "voices": 4
+ },
+ "source": {
+  "type": "synth",
+  "length": 0.171,
+  "layers": {
+   "tone0": {
+    "from": {
+     "osc": "sine",
+     "freq": 167.475,
+     "glideTo": 0.40603,
+     "glideTime": 0.04
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.002,
+       "decay": 0.05
+      }
+     },
+     {
+      "gain": -10.45757
+     }
+    ]
+   },
+   "burst1": {
+    "from": {
+     "noise": "white"
+    },
+    "then": [
+     {
+      "filter": "bandpass",
+      "freq": 1725.5,
+      "q": 1
+     },
+     {
+      "envelope": {
+       "attack": 0.001,
+       "decay": 0.028
+      }
+     },
+     {
+      "gain": 0.82785
+     }
+    ]
+   },
+   "burst2": {
+    "from": {
+     "noise": "white"
+    },
+    "then": [
+     {
+      "filter": "bandpass",
+      "freq": 4100,
+      "q": 3
+     },
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.016
+      }
+     },
+     {
+      "gain": -18.41638
+     }
+    ],
+    "at": 0.0425
+   },
+   "burst3": {
+    "from": {
+     "noise": "white"
+    },
+    "then": [
+     {
+      "filter": "bandpass",
+      "freq": 4100,
+      "q": 3
+     },
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.016
+      }
+     },
+     {
+      "gain": -18.41638
+     }
+    ],
+    "at": 0.0425
+   },
+   "burst4": {
+    "from": {
+     "noise": "white"
+    },
+    "then": [
+     {
+      "filter": "bandpass",
+      "freq": 2639,
+      "q": 1.5,
+      "glideTo": 1.38462,
+      "glideTime": 0.07
+     },
+     {
+      "envelope": {
+       "attack": 0.02,
+       "decay": 0.07
+      }
+     },
+     {
+      "gain": -15.9176
+     }
+    ],
+    "at": 0.01
+   }
+  },
+  "reverb": 0.05
+ }
+}

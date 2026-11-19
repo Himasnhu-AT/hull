@@ -1,0 +1,430 @@
+{
+ "kind": "sound",
+ "note": "Docking at a depot: clunk, gas filling, latch.",
+ "bus": "sfx",
+ "level": -0.91515,
+ "limit": {
+  "minGap": 0.5,
+  "voices": 2
+ },
+ "source": {
+  "type": "synth",
+  "length": 1.415,
+  "layers": {
+   "mode0_0": {
+    "from": {
+     "osc": "sine",
+     "freq": 210
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.12
+      }
+     },
+     {
+      "gain": -6.93575
+     }
+    ]
+   },
+   "mode0_1": {
+    "from": {
+     "osc": "sine",
+     "freq": 410
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.08889
+      }
+     },
+     {
+      "gain": -11.01815
+     }
+    ]
+   },
+   "mode0_2": {
+    "from": {
+     "osc": "sine",
+     "freq": 880
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.07059
+      }
+     },
+     {
+      "gain": -13.7842
+     }
+    ]
+   },
+   "mode0_3": {
+    "from": {
+     "osc": "sine",
+     "freq": 1750
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.05854
+      }
+     },
+     {
+      "gain": -15.87891
+     }
+    ]
+   },
+   "tone1": {
+    "from": {
+     "osc": "sine",
+     "freq": 130,
+     "glideTo": 0.46154,
+     "glideTime": 0.05
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.002,
+       "decay": 0.12
+      }
+     },
+     {
+      "gain": -6.0206
+     }
+    ]
+   },
+   "burst2": {
+    "from": {
+     "noise": "white"
+    },
+    "then": [
+     {
+      "filter": "bandpass",
+      "freq": 1500,
+      "q": 1
+     },
+     {
+      "envelope": {
+       "attack": 0.001,
+       "decay": 0.04
+      }
+     },
+     {
+      "gain": -10.45757
+     }
+    ]
+   },
+   "burst3": {
+    "from": {
+     "noise": "white"
+    },
+    "then": [
+     {
+      "filter": "bandpass",
+      "freq": 2200,
+      "q": 1.1,
+      "glideTo": 2.36364,
+      "glideTime": 0.9
+     },
+     {
+      "filter": "highpass",
+      "freq": 1200,
+      "q": 0.7
+     },
+     {
+      "envelope": {
+       "attack": 0.18,
+       "decay": 0.85
+      }
+     },
+     {
+      "gain": -9.37042
+     }
+    ],
+    "at": 0.08
+   },
+   "burst4": {
+    "from": {
+     "noise": "white"
+    },
+    "then": [
+     {
+      "filter": "bandpass",
+      "freq": 7000,
+      "q": 8
+     },
+     {
+      "envelope": {
+       "attack": 0.3,
+       "decay": 0.7
+      }
+     },
+     {
+      "gain": -18.41638
+     }
+    ],
+    "at": 0.08
+   },
+   "mode5_0": {
+    "from": {
+     "osc": "sine",
+     "freq": 2100
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.014
+      }
+     },
+     {
+      "gain": -18.41638
+     }
+    ],
+    "at": 0.35
+   },
+   "mode5_1": {
+    "from": {
+     "osc": "sine",
+     "freq": 3300
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.01037
+      }
+     },
+     {
+      "gain": -22.49877
+     }
+    ],
+    "at": 0.35
+   },
+   "mode6_0": {
+    "from": {
+     "osc": "sine",
+     "freq": 2100
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.014
+      }
+     },
+     {
+      "gain": -18.41638
+     }
+    ],
+    "at": 0.47
+   },
+   "mode6_1": {
+    "from": {
+     "osc": "sine",
+     "freq": 3300
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.01037
+      }
+     },
+     {
+      "gain": -22.49877
+     }
+    ],
+    "at": 0.47
+   },
+   "mode7_0": {
+    "from": {
+     "osc": "sine",
+     "freq": 2100
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.014
+      }
+     },
+     {
+      "gain": -18.41638
+     }
+    ],
+    "at": 0.59
+   },
+   "mode7_1": {
+    "from": {
+     "osc": "sine",
+     "freq": 3300
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.01037
+      }
+     },
+     {
+      "gain": -22.49877
+     }
+    ],
+    "at": 0.59
+   },
+   "mode8_0": {
+    "from": {
+     "osc": "sine",
+     "freq": 2100
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.014
+      }
+     },
+     {
+      "gain": -18.41638
+     }
+    ],
+    "at": 0.71
+   },
+   "mode8_1": {
+    "from": {
+     "osc": "sine",
+     "freq": 3300
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.01037
+      }
+     },
+     {
+      "gain": -22.49877
+     }
+    ],
+    "at": 0.71
+   },
+   "mode9_0": {
+    "from": {
+     "osc": "sine",
+     "freq": 320
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.1
+      }
+     },
+     {
+      "gain": -11.05684
+     }
+    ],
+    "at": 1
+   },
+   "mode9_1": {
+    "from": {
+     "osc": "sine",
+     "freq": 640
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.07407
+      }
+     },
+     {
+      "gain": -15.13924
+     }
+    ],
+    "at": 1
+   },
+   "mode9_2": {
+    "from": {
+     "osc": "sine",
+     "freq": 1900
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.05882
+      }
+     },
+     {
+      "gain": -17.90529
+     }
+    ],
+    "at": 1
+   },
+   "tone10": {
+    "from": {
+     "osc": "sine",
+     "freq": 150,
+     "glideTo": 0.46667,
+     "glideTime": 0.04
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.002,
+       "decay": 0.1
+      }
+     },
+     {
+      "gain": -11.05684
+     }
+    ],
+    "at": 1
+   },
+   "mode11_0": {
+    "from": {
+     "osc": "sine",
+     "freq": 2400
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.02
+      }
+     },
+     {
+      "gain": -13.9794
+     }
+    ],
+    "at": 1.13
+   },
+   "mode11_1": {
+    "from": {
+     "osc": "sine",
+     "freq": 3600
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.01481
+      }
+     },
+     {
+      "gain": -18.0618
+     }
+    ],
+    "at": 1.13
+   }
+  },
+  "reverb": 0.16
+ }
+}

@@ -1,0 +1,111 @@
+{
+ "kind": "sound",
+ "note": "A xl titan footfall.",
+ "bus": "sfx",
+ "level": -5.15,
+ "limit": {
+  "voices": 7
+ },
+ "spatial": {
+  "ref": 15,
+  "max": 400,
+  "airLowpass": true
+ },
+ "source": {
+  "type": "synth",
+  "length": 2.851,
+  "layers": {
+   "tone0": {
+    "from": {
+     "osc": "sine",
+     "freq": [
+      48.735,
+      53.85987
+     ],
+     "glideTo": 0.52632,
+     "glideTime": 0.06
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.004,
+       "decay": 1.72
+      }
+     },
+     {
+      "gain": -0.91515
+     }
+    ]
+   },
+   "tone1": {
+    "from": {
+     "osc": "triangle",
+     "freq": [
+      66.69,
+      73.70298
+     ],
+     "glideTo": 0.61538,
+     "glideTime": 0.08
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.002,
+       "decay": 0.72
+      }
+     },
+     {
+      "gain": -11.05684
+     }
+    ]
+   },
+   "burst2": {
+    "from": {
+     "noise": "brown"
+    },
+    "then": [
+     {
+      "filter": "lowpass",
+      "freq": 290,
+      "q": 0.7,
+      "glideTo": 0.24138,
+      "glideTime": 1.6
+     },
+     {
+      "envelope": {
+       "attack": 0.006,
+       "decay": 2.15
+      }
+     },
+     {
+      "gain": 1.58362
+     }
+    ]
+   },
+   "burst3": {
+    "from": {
+     "noise": "white"
+    },
+    "then": [
+     {
+      "filter": "bandpass",
+      "freq": 750,
+      "q": 0.8,
+      "glideTo": 0.42667,
+      "glideTime": 0.2
+     },
+     {
+      "envelope": {
+       "attack": 0.004,
+       "decay": 0.72
+      }
+     },
+     {
+      "gain": -13.15155
+     }
+    ]
+   }
+  },
+  "reverb": 0.3
+ }
+}

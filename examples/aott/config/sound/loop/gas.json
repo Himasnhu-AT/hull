@@ -1,0 +1,13 @@
+{
+ "kind": "sound",
+ "note": "The gas jet hiss. Live: level 0..1.",
+ "bus": "sfx",
+ "level": 0,
+ "limit": {
+  "voices": 1
+ },
+ "source": {
+  "type": "code",
+  "generator": "aott/gas"
+ }
+}

@@ -1,0 +1,121 @@
+{
+ "kind": "sound",
+ "note": "Steam venting from a medium titan.",
+ "bus": "sfx",
+ "level": 1.1381,
+ "limit": {
+  "voices": 5
+ },
+ "spatial": {
+  "ref": 15,
+  "max": 400,
+  "airLowpass": true
+ },
+ "source": {
+  "type": "synth",
+  "length": 1.8048,
+  "layers": {
+   "burst0": {
+    "from": {
+     "noise": "white"
+    },
+    "then": [
+     {
+      "filter": "highpass",
+      "freq": 1500,
+      "q": 0.7
+     },
+     {
+      "filter": "lowpass",
+      "freq": 11000,
+      "q": 0.7
+     },
+     {
+      "envelope": {
+       "attack": 0.07,
+       "decay": [
+        1.296,
+        1.58371
+       ]
+      }
+     },
+     {
+      "gain": -3.09804
+     }
+    ]
+   },
+   "burst1": {
+    "from": {
+     "noise": "white"
+    },
+    "then": [
+     {
+      "filter": "bandpass",
+      "freq": 4300,
+      "q": 2.2,
+      "glideTo": 0.69767,
+      "glideTime": 1.43986
+     },
+     {
+      "envelope": {
+       "attack": 0.09,
+       "decay": [
+        1.1664,
+        1.42534
+       ]
+      }
+     },
+     {
+      "gain": -6.0206
+     }
+    ]
+   },
+   "burst2": {
+    "from": {
+     "noise": "white"
+    },
+    "then": [
+     {
+      "filter": "bandpass",
+      "freq": 7000,
+      "q": 11
+     },
+     {
+      "envelope": {
+       "attack": 0.1,
+       "decay": [
+        1.0368,
+        1.26697
+       ]
+      }
+     },
+     {
+      "gain": -17.07744
+     }
+    ]
+   },
+   "burst3": {
+    "from": {
+     "noise": "pink"
+    },
+    "then": [
+     {
+      "filter": "lowpass",
+      "freq": 420,
+      "q": 0.7
+     },
+     {
+      "envelope": {
+       "attack": 0.02,
+       "decay": 0.35
+      }
+     },
+     {
+      "gain": -6.93575
+     }
+    ]
+   }
+  },
+  "reverb": 0.2
+ }
+}

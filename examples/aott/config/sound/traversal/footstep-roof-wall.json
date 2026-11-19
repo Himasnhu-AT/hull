@@ -1,0 +1,168 @@
+{
+ "kind": "sound",
+ "note": "A wall-run footfall on roof.",
+ "bus": "sfx",
+ "level": -8.92804,
+ "limit": {
+  "minGap": 0.085,
+  "voices": 5
+ },
+ "source": {
+  "type": "synth",
+  "length": 0.138,
+  "layers": {
+   "mode0_0": {
+    "from": {
+     "osc": "sine",
+     "freq": 1060.5
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.035
+      }
+     },
+     {
+      "gain": -9.37042
+     },
+     {
+      "pan": [
+       -0.2,
+       0.2
+      ]
+     }
+    ]
+   },
+   "mode0_1": {
+    "from": {
+     "osc": "sine",
+     "freq": 1999.8
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.02593
+      }
+     },
+     {
+      "gain": -13.45282
+     },
+     {
+      "pan": [
+       -0.2,
+       0.2
+      ]
+     }
+    ]
+   },
+   "mode0_2": {
+    "from": {
+     "osc": "sine",
+     "freq": 3181.5
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.02059
+      }
+     },
+     {
+      "gain": -16.21888
+     },
+     {
+      "pan": [
+       -0.2,
+       0.2
+      ]
+     }
+    ]
+   },
+   "burst1": {
+    "from": {
+     "noise": "white"
+    },
+    "then": [
+     {
+      "filter": "bandpass",
+      "freq": 3633.7275,
+      "q": 1.2
+     },
+     {
+      "envelope": {
+       "attack": 0.0008,
+       "decay": 0.02
+      }
+     },
+     {
+      "gain": -3.09804
+     },
+     {
+      "pan": [
+       -0.2,
+       0.2
+      ]
+     }
+    ]
+   },
+   "tone2": {
+    "from": {
+     "osc": "sine",
+     "freq": 171.7,
+     "glideTo": 0.52417,
+     "glideTime": 0.04
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.002,
+       "decay": 0.04
+      }
+     },
+     {
+      "gain": -20.0873
+     },
+     {
+      "pan": [
+       -0.2,
+       0.2
+      ]
+     }
+    ]
+   },
+   "burst3": {
+    "from": {
+     "noise": "white"
+    },
+    "then": [
+     {
+      "filter": "bandpass",
+      "freq": 2727,
+      "q": 1.2,
+      "glideTo": 0.48148,
+      "glideTime": 0.06
+     },
+     {
+      "envelope": {
+       "attack": 0.006,
+       "decay": 0.06
+      }
+     },
+     {
+      "gain": -1.9382
+     },
+     {
+      "pan": [
+       -0.2,
+       0.2
+      ]
+     }
+    ],
+    "at": 0.004
+   }
+  },
+  "reverb": 0.05
+ }
+}

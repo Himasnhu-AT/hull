@@ -1,0 +1,127 @@
+{
+ "kind": "sound",
+ "note": "A wall-run footfall on bark.",
+ "bus": "sfx",
+ "level": -8.92804,
+ "limit": {
+  "minGap": 0.085,
+  "voices": 5
+ },
+ "source": {
+  "type": "synth",
+  "length": 0.138,
+  "layers": {
+   "tone0": {
+    "from": {
+     "osc": "sine",
+     "freq": 141.4,
+     "glideTo": 0.49505,
+     "glideTime": 0.04
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.002,
+       "decay": 0.055
+      }
+     },
+     {
+      "gain": -17.39332
+     },
+     {
+      "pan": [
+       -0.2,
+       0.2
+      ]
+     }
+    ]
+   },
+   "burst1": {
+    "from": {
+     "noise": "pink"
+    },
+    "then": [
+     {
+      "filter": "bandpass",
+      "freq": 834.4115,
+      "q": 0.8
+     },
+     {
+      "envelope": {
+       "attack": 0.0015,
+       "decay": 0.045
+      }
+     },
+     {
+      "gain": 4.0824
+     },
+     {
+      "pan": [
+       -0.2,
+       0.2
+      ]
+     }
+    ]
+   },
+   "burst2": {
+    "from": {
+     "noise": "white"
+    },
+    "then": [
+     {
+      "filter": "bandpass",
+      "freq": 3095.3975,
+      "q": 1.4
+     },
+     {
+      "envelope": {
+       "attack": 0.002,
+       "decay": 0.03
+      }
+     },
+     {
+      "gain": 0.82785
+     },
+     {
+      "pan": [
+       -0.2,
+       0.2
+      ]
+     }
+    ],
+    "at": 0.002
+   },
+   "burst3": {
+    "from": {
+     "noise": "white"
+    },
+    "then": [
+     {
+      "filter": "bandpass",
+      "freq": 2727,
+      "q": 1.2,
+      "glideTo": 0.48148,
+      "glideTime": 0.06
+     },
+     {
+      "envelope": {
+       "attack": 0.006,
+       "decay": 0.06
+      }
+     },
+     {
+      "gain": -1.9382
+     },
+     {
+      "pan": [
+       -0.2,
+       0.2
+      ]
+     }
+    ],
+    "at": 0.004
+   }
+  },
+  "reverb": 0.05
+ }
+}

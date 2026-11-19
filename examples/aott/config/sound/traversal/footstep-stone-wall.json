@@ -1,0 +1,154 @@
+{
+ "kind": "sound",
+ "note": "A wall-run footfall on stone.",
+ "bus": "sfx",
+ "level": -8.92804,
+ "limit": {
+  "minGap": 0.085,
+  "voices": 5
+ },
+ "source": {
+  "type": "synth",
+  "length": 0.138,
+  "layers": {
+   "tone0": {
+    "from": {
+     "osc": "sine",
+     "freq": 151.5,
+     "glideTo": 0.46205,
+     "glideTime": 0.04
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.002,
+       "decay": 0.05
+      }
+     },
+     {
+      "gain": -17.39332
+     },
+     {
+      "pan": [
+       -0.2,
+       0.2
+      ]
+     }
+    ]
+   },
+   "burst1": {
+    "from": {
+     "noise": "white"
+    },
+    "then": [
+     {
+      "filter": "bandpass",
+      "freq": 2557.0675,
+      "q": 1.1
+     },
+     {
+      "envelope": {
+       "attack": 0.001,
+       "decay": 0.03
+      }
+     },
+     {
+      "gain": 6.84845
+     },
+     {
+      "pan": [
+       -0.2,
+       0.2
+      ]
+     }
+    ]
+   },
+   "burst2": {
+    "from": {
+     "noise": "pink"
+    },
+    "then": [
+     {
+      "filter": "bandpass",
+      "freq": 699.829,
+      "q": 1
+     },
+     {
+      "envelope": {
+       "attack": 0.001,
+       "decay": 0.035
+      }
+     },
+     {
+      "gain": -4.01319
+     },
+     {
+      "pan": [
+       -0.2,
+       0.2
+      ]
+     }
+    ]
+   },
+   "burst3": {
+    "from": {
+     "noise": "white"
+    },
+    "then": [
+     {
+      "filter": "bandpass",
+      "freq": 4200,
+      "q": 2.5
+     },
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.02
+      }
+     },
+     {
+      "gain": -10.45757
+     },
+     {
+      "pan": [
+       -0.2,
+       0.2
+      ]
+     }
+    ],
+    "at": 0.022
+   },
+   "burst4": {
+    "from": {
+     "noise": "white"
+    },
+    "then": [
+     {
+      "filter": "bandpass",
+      "freq": 2727,
+      "q": 1.2,
+      "glideTo": 0.48148,
+      "glideTime": 0.06
+     },
+     {
+      "envelope": {
+       "attack": 0.006,
+       "decay": 0.06
+      }
+     },
+     {
+      "gain": -1.9382
+     },
+     {
+      "pan": [
+       -0.2,
+       0.2
+      ]
+     }
+    ],
+    "at": 0.004
+   }
+  },
+  "reverb": 0.05
+ }
+}

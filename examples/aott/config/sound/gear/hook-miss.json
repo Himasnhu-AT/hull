@@ -1,0 +1,119 @@
+{
+ "kind": "sound",
+ "note": "A wire whip and the dry click of an empty launcher.",
+ "bus": "sfx",
+ "level": -1.9382,
+ "limit": {
+  "voices": 6
+ },
+ "source": {
+  "type": "synth",
+  "length": 0.3487,
+  "layers": {
+   "burst0": {
+    "from": {
+     "noise": "white"
+    },
+    "then": [
+     {
+      "filter": "bandpass",
+      "freq": 5600,
+      "q": 3,
+      "glideTo": 0.16071,
+      "glideTime": 0.09
+     },
+     {
+      "envelope": {
+       "attack": 0.012,
+       "decay": 0.1
+      }
+     },
+     {
+      "gain": -9.37042
+     }
+    ]
+   },
+   "burst1": {
+    "from": {
+     "noise": "white"
+    },
+    "then": [
+     {
+      "filter": "highpass",
+      "freq": 3000,
+      "q": 1
+     },
+     {
+      "envelope": {
+       "attack": 0.0006,
+       "decay": 0.02
+      }
+     },
+     {
+      "gain": -11.05684
+     }
+    ],
+    "at": 0.085
+   },
+   "mode2_0": {
+    "from": {
+     "osc": "sine",
+     "freq": 1650
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.014
+      }
+     },
+     {
+      "gain": -15.9176
+     }
+    ],
+    "at": 0.28
+   },
+   "mode2_1": {
+    "from": {
+     "osc": "sine",
+     "freq": 2500
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.01037
+      }
+     },
+     {
+      "gain": -20
+     }
+    ],
+    "at": 0.28
+   },
+   "burst3": {
+    "from": {
+     "noise": "white"
+    },
+    "then": [
+     {
+      "filter": "bandpass",
+      "freq": 3000,
+      "q": 2
+     },
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.01
+      }
+     },
+     {
+      "gain": -17.72113
+     }
+    ],
+    "at": 0.28
+   }
+  },
+  "reverb": 0.08
+ }
+}

@@ -1,0 +1,78 @@
+{
+ "kind": "sound",
+ "note": "A body impact, light.",
+ "bus": "sfx",
+ "level": -6.0206,
+ "limit": {
+  "minGap": 0.07,
+  "voices": 4
+ },
+ "source": {
+  "type": "synth",
+  "length": 0.234,
+  "layers": {
+   "tone0": {
+    "from": {
+     "osc": "sine",
+     "freq": 114,
+     "glideTo": 0.33333,
+     "glideTime": 0.1
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.002,
+       "decay": 0.14
+      }
+     },
+     {
+      "gain": -1.41162
+     }
+    ]
+   },
+   "burst1": {
+    "from": {
+     "noise": "white"
+    },
+    "then": [
+     {
+      "filter": "lowpass",
+      "freq": 620,
+      "q": 0.7
+     },
+     {
+      "envelope": {
+       "attack": 0.002,
+       "decay": 0.08
+      }
+     },
+     {
+      "gain": -4.43697
+     }
+    ]
+   },
+   "burst2": {
+    "from": {
+     "noise": "pink"
+    },
+    "then": [
+     {
+      "filter": "bandpass",
+      "freq": 620,
+      "q": 1
+     },
+     {
+      "envelope": {
+       "attack": 0.002,
+       "decay": 0.058
+      }
+     },
+     {
+      "gain": -1.9382
+     }
+    ]
+   }
+  },
+  "reverb": 0.104
+ }
+}

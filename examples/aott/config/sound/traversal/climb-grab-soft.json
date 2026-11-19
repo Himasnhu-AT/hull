@@ -1,0 +1,147 @@
+{
+ "kind": "sound",
+ "note": "A hand catching bark or earth.",
+ "bus": "sfx",
+ "level": -6.46613,
+ "limit": {
+  "minGap": 0.13,
+  "voices": 4
+ },
+ "source": {
+  "type": "synth",
+  "length": 0.171,
+  "layers": {
+   "tone0": {
+    "from": {
+     "osc": "sine",
+     "freq": 137.025,
+     "glideTo": 0.49626,
+     "glideTime": 0.04
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.002,
+       "decay": 0.05
+      }
+     },
+     {
+      "gain": -10.45757
+     }
+    ]
+   },
+   "burst1": {
+    "from": {
+     "noise": "pink"
+    },
+    "then": [
+     {
+      "filter": "lowpass",
+      "freq": 964.25,
+      "q": 0.7
+     },
+     {
+      "envelope": {
+       "attack": 0.002,
+       "decay": 0.045
+      }
+     },
+     {
+      "gain": 0.82785
+     }
+    ]
+   },
+   "burst2": {
+    "from": {
+     "noise": "white"
+    },
+    "then": [
+     {
+      "filter": "bandpass",
+      "freq": 2500,
+      "q": 2
+     },
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.0185
+      }
+     },
+     {
+      "gain": -15.9176
+     }
+    ],
+    "at": 0.037
+   },
+   "burst3": {
+    "from": {
+     "noise": "white"
+    },
+    "then": [
+     {
+      "filter": "bandpass",
+      "freq": 2500,
+      "q": 2
+     },
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.0185
+      }
+     },
+     {
+      "gain": -15.9176
+     }
+    ],
+    "at": 0.037
+   },
+   "burst4": {
+    "from": {
+     "noise": "white"
+    },
+    "then": [
+     {
+      "filter": "bandpass",
+      "freq": 2500,
+      "q": 2
+     },
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.0185
+      }
+     },
+     {
+      "gain": -15.9176
+     }
+    ],
+    "at": 0.037
+   },
+   "burst5": {
+    "from": {
+     "noise": "white"
+    },
+    "then": [
+     {
+      "filter": "bandpass",
+      "freq": 2639,
+      "q": 1.5,
+      "glideTo": 1.38462,
+      "glideTime": 0.07
+     },
+     {
+      "envelope": {
+       "attack": 0.02,
+       "decay": 0.07
+      }
+     },
+     {
+      "gain": -15.9176
+     }
+    ],
+    "at": 0.01
+   }
+  },
+  "reverb": 0.05
+ }
+}

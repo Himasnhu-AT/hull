@@ -1,0 +1,138 @@
+{
+ "kind": "sound",
+ "note": "Boots landing, heavy.",
+ "bus": "sfx",
+ "level": -0.63034,
+ "limit": {
+  "minGap": 0.07,
+  "voices": 4
+ },
+ "source": {
+  "type": "synth",
+  "length": 0.3666,
+  "layers": {
+   "tone0": {
+    "from": {
+     "osc": "sine",
+     "freq": 72.5,
+     "glideTo": 0.57931,
+     "glideTime": 0.08
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.002,
+       "decay": 0.242
+      }
+     },
+     {
+      "gain": -1.9382
+     }
+    ]
+   },
+   "burst1": {
+    "from": {
+     "noise": "white"
+    },
+    "then": [
+     {
+      "filter": "lowpass",
+      "freq": 780,
+      "q": 0.7
+     },
+     {
+      "envelope": {
+       "attack": 0.002,
+       "decay": 0.122
+      }
+     },
+     {
+      "gain": -6.0206
+     }
+    ]
+   },
+   "burst2": {
+    "from": {
+     "noise": "pink"
+    },
+    "then": [
+     {
+      "filter": "bandpass",
+      "freq": 520,
+      "q": 1
+     },
+     {
+      "envelope": {
+       "attack": 0.002,
+       "decay": 0.045
+      }
+     },
+     {
+      "gain": -3.09804
+     }
+    ]
+   },
+   "burst3": {
+    "from": {
+     "noise": "white"
+    },
+    "then": [
+     {
+      "filter": "bandpass",
+      "freq": 1500,
+      "q": 0.8,
+      "glideTo": 0.46667,
+      "glideTime": 0.15
+     },
+     {
+      "envelope": {
+       "attack": 0.003,
+       "decay": 0.19
+      }
+     },
+     {
+      "gain": -8.77797
+     }
+    ],
+    "at": 0.004
+   },
+   "mode4_0": {
+    "from": {
+     "osc": "sine",
+     "freq": 1400
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.04
+      }
+     },
+     {
+      "gain": -20.91515
+     }
+    ],
+    "at": 0.02
+   },
+   "mode4_1": {
+    "from": {
+     "osc": "sine",
+     "freq": 2300
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.02963
+      }
+     },
+     {
+      "gain": -24.99755
+     }
+    ],
+    "at": 0.02
+   }
+  },
+  "reverb": 0.15
+ }
+}

@@ -1,0 +1,76 @@
+{
+ "kind": "sound",
+ "note": "Two-note whistle for the horse.",
+ "bus": "sfx",
+ "level": -5.19275,
+ "limit": {
+  "voices": 3
+ },
+ "source": {
+  "type": "synth",
+  "length": 0.85,
+  "layers": {
+   "tone0": {
+    "from": {
+     "osc": "sine",
+     "freq": 1900,
+     "glideTo": 1.52632,
+     "glideTime": 0.09
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.02,
+       "decay": 0.13
+      }
+     },
+     {
+      "gain": -13.15155
+     }
+    ]
+   },
+   "tone1": {
+    "from": {
+     "osc": "sine",
+     "freq": 2950,
+     "glideTo": 0.74576,
+     "glideTime": 0.42
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.03,
+       "decay": 0.42
+      }
+     },
+     {
+      "gain": -11.70053
+     }
+    ],
+    "at": 0.2
+   },
+   "burst2": {
+    "from": {
+     "noise": "white"
+    },
+    "then": [
+     {
+      "filter": "bandpass",
+      "freq": 2600,
+      "q": 3
+     },
+     {
+      "envelope": {
+       "attack": 0.02,
+       "decay": 0.6
+      }
+     },
+     {
+      "gain": -26.0206
+     }
+    ]
+   }
+  },
+  "reverb": 0.25
+ }
+}

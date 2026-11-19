@@ -1,0 +1,13 @@
+{
+ "kind": "sound",
+ "note": "Wind that opens up with speed. Live: speed in m/s.",
+ "bus": "sfx",
+ "level": 0,
+ "limit": {
+  "voices": 1
+ },
+ "source": {
+  "type": "code",
+  "generator": "aott/wind"
+ }
+}

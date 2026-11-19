@@ -1,0 +1,161 @@
+{
+ "kind": "sound",
+ "note": "The hook head biting into metal.",
+ "bus": "sfx",
+ "level": -1.41162,
+ "limit": {
+  "voices": 5
+ },
+ "spatial": {
+  "ref": 25,
+  "max": 400,
+  "airLowpass": true
+ },
+ "source": {
+  "type": "synth",
+  "length": 0.7655,
+  "layers": {
+   "burst0": {
+    "from": {
+     "noise": "white"
+    },
+    "then": [
+     {
+      "filter": "highpass",
+      "freq": 3000,
+      "q": 1
+     },
+     {
+      "envelope": {
+       "attack": 0.0006,
+       "decay": 0.025
+      }
+     },
+     {
+      "gain": -7.9588
+     }
+    ]
+   },
+   "mode1_0": {
+    "from": {
+     "osc": "sine",
+     "freq": [
+      601.6,
+      678.3232
+     ]
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.55
+      }
+     },
+     {
+      "gain": -15.9176
+     }
+    ]
+   },
+   "mode1_1": {
+    "from": {
+     "osc": "sine",
+     "freq": [
+      1062.2,
+      1197.6644
+     ]
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.44
+      }
+     },
+     {
+      "gain": -20
+     }
+    ]
+   },
+   "mode1_2": {
+    "from": {
+     "osc": "sine",
+     "freq": [
+      1682.6,
+      1897.1852
+     ]
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.34
+      }
+     },
+     {
+      "gain": -22.76605
+     }
+    ]
+   },
+   "mode1_3": {
+    "from": {
+     "osc": "sine",
+     "freq": [
+      2378.2,
+      2681.4964
+     ]
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.26
+      }
+     },
+     {
+      "gain": -24.86076
+     }
+    ]
+   },
+   "mode1_4": {
+    "from": {
+     "osc": "sine",
+     "freq": [
+      3496.8,
+      3942.7536
+     ]
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.2
+      }
+     },
+     {
+      "gain": -26.54718
+     }
+    ]
+   },
+   "tone2": {
+    "from": {
+     "osc": "sine",
+     "freq": 120,
+     "glideTo": 0.58333,
+     "glideTime": 0.05
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.002,
+       "decay": 0.08
+      }
+     },
+     {
+      "gain": -10.45757
+     }
+    ]
+   }
+  },
+  "reverb": 0.12
+ }
+}

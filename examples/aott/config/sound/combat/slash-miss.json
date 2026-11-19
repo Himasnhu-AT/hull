@@ -1,0 +1,182 @@
+{
+ "kind": "sound",
+ "note": "A blade swish with nothing to cut.",
+ "bus": "sfx",
+ "level": -0.91515,
+ "limit": {
+  "minGap": 0.07,
+  "voices": 6
+ },
+ "source": {
+  "type": "synth",
+  "length": 0.5825,
+  "layers": {
+   "burst0": {
+    "from": {
+     "noise": "white"
+    },
+    "then": [
+     {
+      "filter": "bandpass",
+      "freq": 1200,
+      "q": 1.3,
+      "glideTo": 4.33333,
+      "glideTime": 0.09
+     },
+     {
+      "envelope": {
+       "attack": 0.035,
+       "decay": 0.16
+      }
+     },
+     {
+      "gain": -6.0206
+     },
+     {
+      "pan": [
+       -0.12,
+       0.11976
+      ]
+     }
+    ]
+   },
+   "burst1": {
+    "from": {
+     "noise": "white"
+    },
+    "then": [
+     {
+      "filter": "highpass",
+      "freq": 3500,
+      "q": 1
+     },
+     {
+      "envelope": {
+       "attack": 0.03,
+       "decay": 0.15
+      }
+     },
+     {
+      "gain": -14.89455
+     },
+     {
+      "pan": [
+       -0.12,
+       0.11976
+      ]
+     }
+    ],
+    "at": 0.02
+   },
+   "mode2_0": {
+    "from": {
+     "osc": "sine",
+     "freq": [
+      2050,
+      2349.7
+     ]
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.4
+      }
+     },
+     {
+      "gain": -17.07744
+     },
+     {
+      "pan": [
+       -0.12,
+       0.11976
+      ]
+     }
+    ],
+    "at": 0.012
+   },
+   "mode2_1": {
+    "from": {
+     "osc": "sine",
+     "freq": [
+      3083.2,
+      3533.9488
+     ]
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.2963
+      }
+     },
+     {
+      "gain": -21.15984
+     },
+     {
+      "pan": [
+       -0.12,
+       0.11976
+      ]
+     }
+    ],
+    "at": 0.012
+   },
+   "mode2_2": {
+    "from": {
+     "osc": "sine",
+     "freq": [
+      4346,
+      4981.364
+     ]
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.23529
+      }
+     },
+     {
+      "gain": -23.92589
+     },
+     {
+      "pan": [
+       -0.12,
+       0.11976
+      ]
+     }
+    ],
+    "at": 0.012
+   },
+   "mode2_3": {
+    "from": {
+     "osc": "sine",
+     "freq": [
+      6088.5,
+      6978.609
+     ]
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.19512
+      }
+     },
+     {
+      "gain": -26.0206
+     },
+     {
+      "pan": [
+       -0.12,
+       0.11976
+      ]
+     }
+    ],
+    "at": 0.012
+   }
+  },
+  "reverb": 0.08
+ }
+}

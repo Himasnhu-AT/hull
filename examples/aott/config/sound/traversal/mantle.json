@@ -1,0 +1,14 @@
+{
+ "kind": "sound",
+ "note": "Hauling up over a ledge.",
+ "bus": "sfx",
+ "level": 0,
+ "limit": {
+  "minGap": 0.4,
+  "voices": 2
+ },
+ "source": {
+  "type": "code",
+  "generator": "aott/mantle"
+ }
+}

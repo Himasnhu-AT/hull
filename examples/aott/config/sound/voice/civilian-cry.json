@@ -1,0 +1,19 @@
+{
+ "kind": "sound",
+ "note": "A stranded civilian calling out, wordless but shaped like speech; params: urgency.",
+ "bus": "sfx",
+ "level": 0,
+ "limit": {
+  "minGap": 0.22,
+  "voices": 3
+ },
+ "spatial": {
+  "ref": 18,
+  "max": 400,
+  "airLowpass": true
+ },
+ "source": {
+  "type": "code",
+  "generator": "aott/civilian-cry"
+ }
+}

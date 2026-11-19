@@ -1,0 +1,277 @@
+{
+ "kind": "sound",
+ "note": "The hook head biting into stone.",
+ "bus": "sfx",
+ "level": -1.41162,
+ "limit": {
+  "voices": 5
+ },
+ "spatial": {
+  "ref": 25,
+  "max": 400,
+  "airLowpass": true
+ },
+ "source": {
+  "type": "synth",
+  "length": 0.28589,
+  "layers": {
+   "burst0": {
+    "from": {
+     "noise": "white"
+    },
+    "then": [
+     {
+      "filter": "highpass",
+      "freq": 2500,
+      "q": 1
+     },
+     {
+      "envelope": {
+       "attack": 0.0006,
+       "decay": 0.03
+      }
+     },
+     {
+      "gain": -7.53501
+     }
+    ]
+   },
+   "mode1_0": {
+    "from": {
+     "osc": "sine",
+     "freq": [
+      1720.2,
+      1939.5804
+     ]
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.13
+      }
+     },
+     {
+      "gain": -11.37272
+     }
+    ]
+   },
+   "mode1_1": {
+    "from": {
+     "osc": "sine",
+     "freq": [
+      2575.6,
+      2904.0712
+     ]
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.0963
+      }
+     },
+     {
+      "gain": -15.45512
+     }
+    ]
+   },
+   "mode1_2": {
+    "from": {
+     "osc": "sine",
+     "freq": [
+      4051.4,
+      4568.0828
+     ]
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.07647
+      }
+     },
+     {
+      "gain": -18.22118
+     }
+    ]
+   },
+   "mode1_3": {
+    "from": {
+     "osc": "sine",
+     "freq": [
+      5546,
+      6253.292
+     ]
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": 0.06341
+      }
+     },
+     {
+      "gain": -20.31589
+     }
+    ]
+   },
+   "tone2": {
+    "from": {
+     "osc": "sine",
+     "freq": 150,
+     "glideTo": 0.4,
+     "glideTime": 0.06
+    },
+    "then": [
+     {
+      "envelope": {
+       "attack": 0.002,
+       "decay": 0.1
+      }
+     },
+     {
+      "gain": -7.9588
+     }
+    ]
+   },
+   "burst3": {
+    "from": {
+     "noise": "white"
+    },
+    "then": [
+     {
+      "filter": "bandpass",
+      "freq": [
+       1800,
+       4397.4
+      ],
+      "q": 3
+     },
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": [
+        0.012,
+        0.02599
+       ]
+      }
+     },
+     {
+      "gain": [
+       -20,
+       -13.98374
+      ]
+     }
+    ],
+    "at": [
+     0.012,
+     0.21979
+    ]
+   },
+   "burst4": {
+    "from": {
+     "noise": "white"
+    },
+    "then": [
+     {
+      "filter": "bandpass",
+      "freq": [
+       1800,
+       4397.4
+      ],
+      "q": 3
+     },
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": [
+        0.012,
+        0.02599
+       ]
+      }
+     },
+     {
+      "gain": [
+       -20,
+       -13.98374
+      ]
+     }
+    ],
+    "at": [
+     0.012,
+     0.21979
+    ]
+   },
+   "burst5": {
+    "from": {
+     "noise": "white"
+    },
+    "then": [
+     {
+      "filter": "bandpass",
+      "freq": [
+       1800,
+       4397.4
+      ],
+      "q": 3
+     },
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": [
+        0.012,
+        0.02599
+       ]
+      }
+     },
+     {
+      "gain": [
+       -20,
+       -13.98374
+      ]
+     }
+    ],
+    "at": [
+     0.012,
+     0.21979
+    ]
+   },
+   "burst6": {
+    "from": {
+     "noise": "white"
+    },
+    "then": [
+     {
+      "filter": "bandpass",
+      "freq": [
+       1800,
+       4397.4
+      ],
+      "q": 3
+     },
+     {
+      "envelope": {
+       "attack": 0.0005,
+       "decay": [
+        0.012,
+        0.02599
+       ]
+      }
+     },
+     {
+      "gain": [
+       -20,
+       -13.98374
+      ]
+     }
+    ],
+    "at": [
+     0.012,
+     0.21979
+    ]
+   }
+  },
+  "reverb": 0.12
+ }
+}
