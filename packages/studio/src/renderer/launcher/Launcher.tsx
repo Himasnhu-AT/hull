@@ -128,9 +128,9 @@ export function Launcher({ app, onOpen, startError, home, onNew }: { app: HullAp
               {busy === 'Creating' && <p className="sub2 l-making">Making your game...</p>}
               {recents && recents.length > 0 && (
                 <section className="l-recents" aria-label="Recent projects">
-                  <div className="l-rh"><b>Pick up where you left off</b>{recents.length > 6 && <button className="btn ghost" onClick={() => setPane('recent')}>All {recents.length}</button>}</div>
+                  <div className="l-rh"><b>Pick up where you left off</b>{recents.length > 4 && <button className="btn ghost" onClick={() => setPane('recent')}>View all {recents.length}</button>}</div>
                   <div className="l-rgrid">
-                    {recents.slice(0, 6).map((r, i) => (
+                    {recents.slice(0, 4).map((r, i) => (
                       <RecentCard key={r.root} app={app} r={r} when={ago(r.openedAt)} delay={120 + i * 40} disabled={busy !== null}
                         onOpen={() => void run('Opening', () => app.openProject(r.root))} onError={setError}
                         onChange={(n) => setRecents((l) => (l ?? []).flatMap((x) => (x.root !== r.root ? [x] : n ? [n] : [])))} />
@@ -147,14 +147,11 @@ export function Launcher({ app, onOpen, startError, home, onNew }: { app: HullAp
               {recents === null && <div className="rlist"><div className="skeleton" /><div className="skeleton" /></div>}
               {recents && recents.length === 0 && <p className="sub2">Nothing here yet. Start a new project, or open a folder.</p>}
               {recents && recents.length > 0 && (
-                <div className="rlist">
-                  {recents.map((r) => (
-                    <div key={r.root} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <button className="rrow" style={{ flex: 1 }} disabled={busy !== null} onClick={() => void run('Opening', () => app.openProject(r.root))}>
-                        <span style={{ minWidth: 0 }}><b>{r.title}</b><small>{r.root}</small></span><span className="when">{ago(r.openedAt)}</span>
-                      </button>
-                      <button className="btn ghost" onClick={() => void app.forgetRecent(r.root).then(() => setRecents((l) => (l ?? []).filter((x) => x.root !== r.root)))} aria-label={`Remove ${r.title} from the list`} title="Remove from the list (keeps the files)" style={{ padding: '0 6px' }}><Icon name="close" /></button>
-                    </div>
+                <div className="l-rgrid l-rall">
+                  {recents.map((r, i) => (
+                    <RecentCard key={r.root} app={app} r={r} when={ago(r.openedAt)} delay={Math.min(i, 8) * 30} disabled={busy !== null}
+                      onOpen={() => void run('Opening', () => app.openProject(r.root))} onError={setError}
+                      onChange={(n) => setRecents((l) => (l ?? []).flatMap((x) => (x.root !== r.root ? [x] : n ? [n] : [])))} />
                   ))}
                 </div>
               )}

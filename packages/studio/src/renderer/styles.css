@@ -1114,3 +1114,23 @@ textarea.cr-idea-in { width: 100%; resize: vertical; min-height: 96px; font-fami
 .g-title { flex-wrap: wrap; }
 .g-ver { font: 500 11px var(--mono); color: var(--faint); padding: 1px 7px; border-radius: 999px; box-shadow: inset 0 0 0 0.5px var(--line2); }
 .g-new { font-size: 11px; font-weight: 600; color: var(--signal); }
+
+/* the model menu opens downward when the box is near the top */
+.mp-menu.down { bottom: auto; top: calc(100% + 8px); transform-origin: top left; }
+
+/* home: the idea box sits in the middle of the page; recent games use the space under it, one row of small cards */
+.l-main.center { display: block; overflow-y: auto; }
+/* The heading and the box are about 250px tall: starting that far above the middle puts the box at the centre. */
+.l-main.center .l-in { margin: 0 auto; padding-top: max(32px, calc(50vh - 210px)); padding-bottom: 40px; }
+.l-main.center .l-hero { padding-bottom: 0; }
+.l-hero .l-recents { margin-top: 36px; }
+.l-rgrid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.l-rgrid .l-rbody { padding: 7px 34px 9px 10px; }
+.l-rgrid .l-rbody b { font-size: 12.5px; }
+.l-rgrid .l-rbody small { font-size: 11px; }
+.l-rgrid .l-rdots { width: 24px; height: 24px; right: 6px; bottom: 8px; }
+.l-rgrid .l-rmark { font-size: 22px; }
+@media (max-width: 1100px) { .l-rgrid { grid-template-columns: repeat(3, minmax(0, 1fr)); } .l-hero .l-rgrid > :nth-child(4) { display: none; } }
+/* Recent projects page: every game as a card */
+.l-rall { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 14px; }
+.l-main:not(.center) .l-in:has(.l-rall) { max-width: 1040px; }

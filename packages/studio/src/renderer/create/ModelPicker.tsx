@@ -28,6 +28,8 @@ export function ModelPicker(): JSX.Element {
   const [cfg, setCfg] = useState<AgentSettings | null>(null);
   const [clis, setClis] = useState<CliStatus[] | null>(null);
   const [open, setOpen] = useState(false);
+  // The menu opens upward, over the box; with too little room above (the box near the top) it opens downward.
+  const [down, setDown] = useState(false);
   const box = useRef<HTMLDivElement>(null);
 
   const load = (): void => {
@@ -63,11 +65,11 @@ export function ModelPicker(): JSX.Element {
 
   return (
     <div className="mp" ref={box}>
-      <button type="button" className={`mp-chip${open ? ' on' : ''}`} onClick={() => setOpen((o) => !o)} aria-haspopup="menu" aria-expanded={open} title="Who builds, and on which model">
+      <button type="button" className={`mp-chip${open ? ' on' : ''}`} onClick={(e) => { setDown(e.currentTarget.getBoundingClientRect().top < 440); setOpen((o) => !o); }} aria-haspopup="menu" aria-expanded={open} title="Who builds, and on which model">
         <Icon name={via === 'hull' ? 'chat' : 'terminal'} size={13} /><span>{label}</span><Icon name="chevron" size={10} />
       </button>
       {open && (
-        <div className="mp-menu" role="menu">
+        <div className={`mp-menu${down ? ' down' : ''}`} role="menu">
           <div className="mp-h">{cfg?.provider === 'account' ? `Hull account${cfg.account?.email ? ` · ${cfg.account.email}` : ''}` : "Hull's builder"}{cfg && !cfg.hasKey && <span className="mp-need">{cfg.provider === 'account' ? 'sign in' : 'needs a key'}</span>}</div>
           {cfg?.provider !== 'openai' ? ANTHROPIC_MODELS.map((m) => (
             <button key={m.id} role="menuitemradio" aria-checked={via === 'hull' && model === m.id} onClick={() => void pickHull(m.id)}>
