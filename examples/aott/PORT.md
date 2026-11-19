@@ -129,15 +129,29 @@ the Holdout test measures (a new checksum) says so in its commit and updates the
   driven, play in Holdout with no visible difference in pose or hit zones (screenshots compared), and a rebuilt model
   changes live when its config is edited.
 
-### P3. Effects -> `vfx` configs
+### P3. Effects -> `vfx` configs (done)
 
-* **Owns**: `src/fx/effects.ts`, `config/vfx/**`, the `game.fx` load line of `host.ts`.
-* **Does**: express steam, gas, blood, dust, sparks, chips, leaves, lightning, slash arcs, decals and the light pillar as
-  `vfx` emitters on `hull/vfx`, on both backends.
-* **Interface**: `Game.fx` keeps its calls (`impact(pos, normal, material)`, `steam`, `blood`, `sparks`, `gas`, `leaves`,
-  `skidDust`, `lightning`, `slashArc`, `impactFrame`...); only the inside changes. Random numbers stay on `R.fx`.
-* **Done when**: every call maps to a `vfx` config shown on the vfx bench, budgets set, the world and Holdout look the
-  same in screenshots, and the effects file is a thin map.
+* **Done**: `Effects` in `src/fx/effects.ts` keeps every call (`impact`, `steam`, `blood`, `sparks`, `gas`, `leaves`, `skidDust`,
+  `lightning`, `flare`, `hookBite`, `slashArc`, `impactFrame`...) and plays 21 configs in `config/vfx/`: `steam` and
+  `steam-red|black|green|yellow|purple` (flare smoke), `gas`, `blood`, `blood-mist`, `chip-stone|wood|bark|roof|dirt`,
+  `dust-stone|dirt`, `sparks`, `spark-flash`, `leaves`, `skid-dust`, `lightning-dust`. The file went from 1445 to about 940 lines:
+  the texture atlas, the particle pool and its shader are gone. Random numbers stay on `R.fx` / Hull's cosmetic stream.
+* **Engine changes** (`hull/vfx`, additive, tested in `vfx.test.ts`): `vfx.burst(id, at, dir, { count, size, speed, life, spread })`;
+  `particle.ground` (`die|bounce|rest`) with `vfx.setGround(fn)`; `particle.flutter`; sprites `chip` and `leaf` (WebGL2 and WebGPU
+  shaders). Schema, `schemas/vfx.schema.json` and SCHEMAS.md section 10 updated.
+* **Still in code** (a particle emitter cannot say them): ground decals (blood splats, boot scrapes), the blade smear, slash
+  arcs, the lightning bolt ribbon, light pillar, ground rings, the screen flash and strike light, and the flare's rising
+  streak (a position that moves, calling `steam`). The light pillar is not a `vfx` emitter.
+* **Differences from the old look**: the particle sprites are Hull's procedural ones, not AOTT's painted atlas (so steam is noisier,
+  chips are squares); a drop that dies no longer leaves a steam wisp and blood does not steam in flight (the stain decal does,
+  and is laid down by predicting where a sample drop lands); steam puffs no longer keep their lower edge above the ground by
+  their size (`rest` holds them just above it); the old pool recycled its oldest particle when full, vfx skips new ones;
+  hit-stop and slow motion do not slow particles (they run on Hull's step); per-particle colour pairs (a chip is stone or
+  dark stone) became one start-to-end colour curve. Custom flare colours other than the five named ones play as plain steam.
+* **Checked**: typecheck, `pnpm test` (463 tests), `hull check`; in a browser (agent-browser, WebGL2) a throwaway test hook fired
+  every call and `vfx.stats()` showed all 15 effects spawning with 0 dropped; screenshots show the steam, flare smoke, gas,
+  leaves, dust and blood drops. **Not judged**: no side-by-side against the old effects from the same camera, the look of
+  steam and blood against the original, how it feels in play, WebGPU.
 
 ### P4. Look, sky and post
 

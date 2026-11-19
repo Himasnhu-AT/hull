@@ -469,6 +469,10 @@ Clip `events` are times (0 to 1 for loops, seconds otherwise) at which a named s
 }
 ```
 
+Fields beyond the sample: `particle.sprite` is `soft`, `smoke`, `hard`, `spark`, `chip` (a hard-edged flake that turns with the particle) or `leaf` (a pointed oval). `particle.ground` (`none`, `die`, `bounce`, `rest`) says what a particle does at the ground height the game gives `vfx.setGround(fn)`: die on touch, bounce and roll, or slide along it. `particle.flutter` (m/s) is a sideways wobble per particle, for a falling leaf. `ground` and `flutter` run on the CPU pool only (effects with a budget of 2048 or more on WebGPU ignore them).
+
+A call can change one burst without a second config: `vfx.burst(id, at, dir, { count, size, speed, life, spread })` sets the exact count and multiplies size, start speed, life and the emit shape's reach. The count draw still happens, so the random stream stays in step.
+
 ## 11. `material`, `prefab`, `level`
 
 ```json
