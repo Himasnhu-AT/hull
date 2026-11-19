@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld('hullApp', {
   listCommunity: call('listCommunity'),
   openCommunity: call('openCommunity'),
   createProject: call('createProject'),
+  createFromIdea: call('createFromIdea'),
   openProject: call('openProject'),
   closeProject: call('closeProject'),
   recents: call('recents'),

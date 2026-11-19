@@ -39,6 +39,7 @@ const api: Record<string, (arg: never) => unknown> = {
   listCommunity: () => host.listCommunity(),
   openCommunity: (o: { id: string; reset?: boolean }) => host.openCommunity(o.id, o.reset),
   createProject: (o: { template: string; title: string; parentDir: string }) => host.createProject(o),
+  createFromIdea: (o: { idea: string }) => host.createFromIdea(o.idea),
   openProject: (root: string) => host.openProject(root),
   closeProject: () => host.closeProject(),
   recents: () => host.recents(),
