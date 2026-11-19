@@ -20,8 +20,11 @@ const TITLE_KIND: Record<TraceKind, 'sound' | 'vfx' | 'character' | undefined> =
 
 export function connectDev(game: Game, opts: { url: string; /** Called for `restart`; the default reloads the page, which runs `ready` again with the same seed. */ onRestart?: () => void }): DevConnection {
   // A page opened by the play tool names itself (?hull-client=) so the tool can aim control ops at exactly this game.
-  const client = new URLSearchParams(location.search).get('hull-client') ?? crypto.randomUUID().slice(0, 6);
-  const url = `${opts.url}${opts.url.includes('?') ? '&' : '?'}role=game&client=${client}`;
+  // The app names its frame the same way (?hull-client=), so its calls aim at the game the person is looking at. A page the
+  // play tool opened with no app around it says so (?hull-headless), so the server never prefers it to a game in a frame.
+  const query = new URLSearchParams(location.search);
+  const client = query.get('hull-client') ?? crypto.randomUUID().slice(0, 6);
+  const url = `${opts.url}${opts.url.includes('?') ? '&' : '?'}role=game&client=${encodeURIComponent(client)}${query.has('hull-headless') ? '&headless=1' : ''}`;
   let ws: WebSocket | null = null;
   let disposed = false;
   let attempt = 0;
@@ -174,6 +177,17 @@ export function connectDev(game: Game, opts: { url: string; /** Called for `rest
     };
     send('game.report', body);
   };
+  // The note key. A person who is playing has focus inside the game frame (another origin), so the page around it never sees
+  // the key: tell it. N freezes the moment, Escape carries on. Only when embedded, and never while typing in a field.
+  const win = (globalThis as { window?: Window }).window;
+  const noteKey = (e: KeyboardEvent): void => {
+    if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey || e.repeat) return;
+    const t = e.target as { tagName?: string; isContentEditable?: boolean } | null;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+    const hull = e.code === 'KeyN' ? 'note' : e.code === 'Escape' ? 'resume' : undefined;
+    if (hull && win && win.parent && win.parent !== win) win.parent.postMessage({ hull }, '*');
+  };
+  if (win && win.parent && win.parent !== win) win.addEventListener('keydown', noteKey);
   // A page opened with ?hull-paused starts frozen at tick 0, before its first frame, so a script begins from the same state every time.
   if (new URLSearchParams(location.search).has('hull-paused')) game.paused = true;
   const reporter = setInterval(report, REPORT_MS);
@@ -201,6 +215,7 @@ export function connectDev(game: Game, opts: { url: string; /** Called for `rest
       clearInterval(feeder);
       setTraceSink(null);
       clearTimeout(timer);
+      win?.removeEventListener('keydown', noteKey);
       offFrame();
       ws?.close();
     },

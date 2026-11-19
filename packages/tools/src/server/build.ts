@@ -84,7 +84,7 @@ export async function buildProject(root: string, log: (line: string) => void = (
   const js = readFileSync(join(outDir, 'game.js'));
   const text = js.toString('utf8');
   // Dev code is recognisable by what it logs and by its module path; neither may appear in a ship build.
-  const devFree = !/\[dev\]|dev\/runtime|connectDev|role=game/.test(text);
+  const devFree = !/\[dev\]|dev\/runtime|connectDev|role=game|hull-client|hull-headless/.test(text);
   const report = [{ path: 'game.js', bytes: js.length, gzip: gzipSync(js).length }, { path: 'index.html', bytes: statSync(join(outDir, 'index.html')).size, gzip: 0 }];
   writeFileSync(join(outDir, 'build.json'), `${JSON.stringify({ files: report, devFree }, null, 2)}\n`);
   log(`dist/web/game.js ${(js.length / 1024).toFixed(0)} kB (${(report[0]!.gzip / 1024).toFixed(0)} kB gzip)`);

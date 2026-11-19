@@ -558,7 +558,8 @@ Hull Studio (Electron window)          project server (inside the app)          
   pushed to studios as `game.recent`. Characters built before a studio connected are announced again on every socket open (one walk of the
   tree that asks each `Animator` to `announceActor()`; never per frame), and a restart reloads the page, which builds them anew. `game.moment` pauses its own game (not others), reads its state and a screenshot through the control
   port, and returns them with the recent events; the runtime flushes the ring before answering `state`, `screenshot` and `step`, and
-  reports `paused` at once after any `game.control`, so a later `game.control { paused: false }` resumes it and the studio sees both. A game that reconnects starts a fresh feed. Labels are made by one pure function (`dev/labels.ts`): a config `title` when it has one (no schema has one yet),
+  reports `paused` at once after any `game.control`, so a later `game.control { paused: false }` resumes it and the studio sees both. A game that reconnects starts a fresh feed.
+  **Which game.** Every game connection has a client id: the page's `?hull-client=<id>` (the app puts one on its Play frame), else a random one. `game.run`, `game.recent`, `game.moment` and `game.control` take an optional `client`; without one the server picks the first game of the project's own that is not headless, and a headless page (one a tool opened with `?hull-headless` because no app was around; the runtime adds `headless=1` to its socket) only when nothing else is connected. A headless page opens once per link, is reused by later calls and closed with the link; it is never preferred to a game in a frame. The `game.recent` push carries the `client` that did it, so a studio keeps only its own frame's events. **Keys from the frame.** The frame is another origin and keeps the keys while the person plays, so when embedded the runtime posts `{ hull: 'note' }` (N, no modifier, not in a text field) and `{ hull: 'resume' }` (Escape) to `window.parent`; the Play screen accepts them only from its own frame. This is dev code and never reaches a build (the build checks for `hull-client`). Labels are made by one pure function (`dev/labels.ts`): a config `title` when it has one (no schema has one yet),
   else the id in words ('vfx/clash-sparks' is 'Clash sparks', 'sound/sword/hit' is 'Sword hit', an anim state 'light-attack' is
   'Light attack', a character is its id's last part, or its node's name when inline).
 * **Measurements** come from the same tool code the MCP server calls, so the Studio and the AI see the same numbers.
@@ -643,7 +644,7 @@ values. Their rules, in `server/code.ts` (pure, unit-tested) and the project ser
 * **Control port.** In a dev build the game connects to the project server (`connectDev`, `dev/protocol.ts`). The server sends
   `game.rpc` and the game answers `game.result`; the `game.run` method is the way in. Ops: `step`, `press`, `release`,
   `state`, `screenshot`. A page opened with `?hull-paused&hull-client=<id>` starts frozen at tick 0 and can be aimed at by
-  id, so a script starts from the same state every time. Time moves only by `step`. Not built: `set`, `spawn`, `teleport`,
+  id (the tool's page also says `hull-headless`), so a script starts from the same state every time. Time moves only by `step`. Not built: `set`, `spawn`, `teleport`,
   `errors`, `perf`, `waitUntil`.
 * **Step scripts** (`play`): a JSON list of `step`, `press`, `release`, `hold`, `read`, `check` and `screenshot` steps, run in a
   headless browser (agent-browser). Each screenshot is compared with `tests/golden/<name>.png` per channel and per pixel
