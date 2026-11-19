@@ -59,7 +59,7 @@ export function turnToward(from: number, to: number, rate: number, dt: number): 
  * stagger or a broken posture drops the pattern and the place. Every number that decides anything is game time.
  */
 export class EnemyBrain extends Behaviour {
-  static override state = ['mode', 'modeT', 'patternIdx', 'stepIdx', 'cooldown', 'thinkT', 'circleDir', 'circleT', 'phase', 'dormant', 'travelTo'];
+  static override state = ['mode', 'modeT', 'patternIdx', 'stepIdx', 'cooldown', 'thinkT', 'circleDir', 'circleT', 'phase', 'dormant', 'travelTo', 'streak'];
   /** Config id of the enemy ("enemy/swordsman" or "swordsman"). */
   enemy = '';
   /** The node to fight, by name. */
@@ -73,6 +73,8 @@ export class EnemyBrain extends Behaviour {
   circleDir = 1;
   circleT = 0;
   phase = 0;
+  /** Patterns started since the last `rest` pattern (or since an interruption). */
+  streak = 0;
   /** A dormant enemy stands and does nothing until `wake()` (an encounter that has not started, a standoff). */
   dormant = false;
   /** Distance to the target a travel step stops at. */
@@ -125,6 +127,8 @@ export class EnemyBrain extends Behaviour {
       c.brokenSeconds = d.posture.broken;
     }
     c.weakTo = d.weakTo ?? '';
+    c.resists = d.resists ?? '';
+    if (d.posture?.fightRecover !== undefined) c.postureRecoverFight = d.posture.fightRecover;
     c.finisherDamage = d.finisherDamage ?? 1;
   }
 
@@ -132,6 +136,7 @@ export class EnemyBrain extends Behaviour {
     attackTokens(this.world).release(this.node);
     this.mode = 'spacing';
     this.patternIdx = -1;
+    this.streak = 0;
     this.combatant.unblockableOverride = null;
     this.cooldown = Math.max(this.cooldown, 0.5);
   }
@@ -245,6 +250,7 @@ export class EnemyBrain extends Behaviour {
       if (w?.clear !== undefined && this.friendNearTarget(w.clear)) continue;
       if (dist < dr[0] || dist > dr[1]) continue;
       if (w?.health && (frac < w.health[0] || frac > w.health[1])) continue;
+      if (w?.streak && (this.streak < w.streak[0] || this.streak > w.streak[1])) continue;
       if (w?.phase && (this.phase < w.phase[0] || this.phase > w.phase[1])) continue;
       el.push(i);
       total += this.weightOf(p);
@@ -260,6 +266,7 @@ export class EnemyBrain extends Behaviour {
     if (pat.token !== false && !tk.acquire(this.node)) return;
     this.patternIdx = pick;
     this.stepIdx = 0;
+    this.streak = pat.rest ? 0 : this.streak + 1;
     this.patternStarted.emit(pat.name);
     this.beginStep(d);
   }

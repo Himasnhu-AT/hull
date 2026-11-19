@@ -35,6 +35,9 @@ export const combatTuning = tunables('swordfight', {
   hitStopHeavy: num(0.09, { min: 0, max: 0.3, step: 0.005, unit: 's', help: 'Freeze on a hit by a move with damage over 25.' }),
   shakeHit: num(0.35, { min: 0, max: 1, step: 0.05, help: 'Camera shake of a clean hit.' }),
   bodyRadius: num(0.3, { min: 0.1, max: 1.5, step: 0.05, unit: 'm', help: 'A fighter without hit shapes is a capsule this wide and 1.7 m tall.' }),
+  blockChip: num(0.15, { min: 0, max: 1, step: 0.01, widget: 'dial', help: 'Share of a blow\'s damage that gets through a plain block (a deflect stops all of it).' }),
+  resistMult: num(0.7, { min: 0, max: 1, step: 0.05, help: 'Posture multiplier when the attacker\'s stance is what the target resists (the wrong stance).' }),
+  fightRange: num(10, { min: 1, max: 40, step: 1, unit: 'm', help: 'A living enemy this close puts a fighter "in combat": its posture comes back at the in-combat rate.' }),
   postureRecover: num(10, { min: 0, max: 60, step: 1, unit: '/s', help: 'Posture regained each second (an enemy\'s own file overrides it).' }),
   postureDelay: num(1.5, { min: 0, max: 6, step: 0.1, unit: 's', help: 'Quiet seconds before posture starts to come back.' }),
   modelYaw: num(0, { min: -3.15, max: 3.15, step: 0.05, unit: 'rad', help: 'Turns a fighter\'s model so its front faces where the fighter faces.' }),
@@ -108,6 +111,10 @@ export class Combatant extends Behaviour {
   brokenSeconds = -1;
   /** The stance that deals extra posture damage to this fighter. */
   weakTo = '';
+  /** The stance that deals less posture damage to this fighter (the wrong one). */
+  resists = '';
+  /** Posture regained each second while an enemy is within `fightRange`. Negative: same as `postureRecover`. */
+  postureRecoverFight = -1;
   /** Fraction of full health a finisher takes. */
   finisherDamage = 1;
   /** Called to move the node (a game with physics or a navmesh). Default: the node's position changes. */
@@ -357,6 +364,7 @@ export class Combatant extends Behaviour {
   addPosture(amount: number, stance = '', info?: HitInfo, by: Combatant | null = null): void {
     if (this.state === 'dead' || amount <= 0) return;
     if (this.weakTo !== '' && stance === this.weakTo) amount *= combatTuning.weakBonus;
+    else if (this.resists !== '' && stance === this.resists) amount *= combatTuning.resistMult;
     this.posture = Math.min(this.maxPosture, this.posture + amount);
     this.postureIdle = 0;
     if (this.posture >= this.maxPosture && this.state !== 'broken') this.breakPosture(info, by);
@@ -432,6 +440,12 @@ export class Combatant extends Behaviour {
       info.posture = a.posture * share;
       kitIO.play(deflect ? 'sound/deflect' : 'sound/clash');
       this.freezePair(att, 0.05);
+      // A plain block lets a little through; a deflect none. The chip is never a hit: no stagger, no blood.
+      if (!deflect && combatTuning.blockChip > 0 && a.damage > 0) {
+        this.health.damage(a.damage * combatTuning.blockChip, a.zone, att?.node ?? null);
+        info.damage = a.damage * combatTuning.blockChip;
+        if (this.health.dead) { this.die(); return info.outcome; }
+      }
       if (deflect) { this.deflected.emit(info); this.hub.deflected.emit(info); }
       else { this.blocked.emit(info); this.hub.blocked.emit(info); }
       this.hub.shake.emit(deflect ? 0.12 : 0.18, 0.12);
@@ -610,8 +624,22 @@ export class Combatant extends Behaviour {
     this.postureIdle += dt;
     const delay = this.postureDelay >= 0 ? this.postureDelay : combatTuning.postureDelay;
     if (this.postureIdle < delay) return;
-    const rate = this.postureRecover >= 0 ? this.postureRecover : combatTuning.postureRecover;
+    let rate = this.postureRecover >= 0 ? this.postureRecover : combatTuning.postureRecover;
+    if (this.postureRecoverFight >= 0 && this.enemyNear()) rate = this.postureRecoverFight;
     this.posture = Math.max(0, this.posture - rate * dt);
+  }
+
+  /** A living fighter of another team within `fightRange`. */
+  private enemyNear(): boolean {
+    const g = this.world.group(FIGHTERS);
+    const p = this.node.position, r2 = combatTuning.fightRange ** 2;
+    for (let i = 0; i < g.length; i++) {
+      const c = g[i]!.get(Combatant);
+      if (!c || c === this || c.state === 'dead' || (this.team !== '' && c.team === this.team)) continue;
+      const dx = c.node.position.x - p.x, dz = c.node.position.z - p.z;
+      if (dx * dx + dz * dz <= r2) return true;
+    }
+    return false;
   }
 
   private stepFree(dt: number): void {

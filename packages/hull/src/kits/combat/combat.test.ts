@@ -324,6 +324,73 @@ describe('posture and finishers', () => {
   });
 });
 
+describe('chip, resistance and in-combat posture', () => {
+  it('a plain block lets 15% of the damage through and a deflect none', async () => {
+    const bare = await duel(1.0);
+    bare.a.attack('slash');
+    bare.r.step(60);
+    const full = 100 - bare.d.health.hp;
+    expect(full).toBeGreaterThan(0);
+    const x = await duel(1.0);
+    let blocked = 0;
+    x.d.blocked.connect(() => blocked++);
+    x.d.guard(true);
+    x.r.step(60);
+    x.a.attack('slash');
+    x.r.step(60);
+    expect(blocked).toBe(1);
+    expect(x.d.health.hp).toBeCloseTo(100 - full * combatTuning.blockChip, 6);
+    expect(x.d.state).toBe('free');
+  });
+
+  it('the wrong stance costs less posture, the right one more', async () => {
+    const x = await duel(5);
+    x.d.weakTo = 'wind';
+    x.d.resists = 'water';
+    x.d.addPosture(10, 'water');
+    expect(x.d.posture).toBeCloseTo(10 * combatTuning.resistMult, 9);
+    x.d.posture = 0;
+    x.d.addPosture(10, 'wind');
+    expect(x.d.posture).toBeCloseTo(10 * combatTuning.weakBonus, 9);
+    x.d.posture = 0;
+    x.d.addPosture(10, 'stone');
+    expect(x.d.posture).toBe(10);
+  });
+
+  it('posture comes back slower while an enemy is near, at the full rate when none is', async () => {
+    const near = await duel(5);
+    near.d.postureRecover = 30; near.d.postureRecoverFight = 3;
+    near.d.posture = 60;
+    near.r.step(60 * 2.5);
+    // 1.5 s of quiet, then one second at 3 a second.
+    expect(near.d.posture).toBeGreaterThan(55);
+    expect(near.d.posture).toBeLessThan(58.5);
+    const far = await duel(50);
+    far.d.postureRecover = 30; far.d.postureRecoverFight = 3;
+    far.d.posture = 60;
+    far.r.step(60 * 2.5);
+    expect(far.d.posture).toBeLessThan(35);
+  });
+
+  it('a rest pattern comes after the streak the pattern asks for, and an interruption clears the streak', async () => {
+    const def = defineGame({
+      ready(g) {
+        spawnFighter(g.world, { name: 'p', team: 'p', x: 0, z: 0, yaw: 0, character: 'character/duelist', moveSet: 'move-set/duelist' });
+        spawnEnemy(g.world, 'duelist', { name: 'e', x: 0, z: -1.6, yaw: Math.PI, target: 'p' });
+      },
+    });
+    const r = await startRig(def, sources, '', 5);
+    const b = r.g.world.find('e')!.get(EnemyBrain)!;
+    expect(b.streak).toBe(0);
+    for (let i = 0; i < 600 && b.patternIdx < 0; i++) r.step(1);
+    expect(b.streak).toBe(1);
+    b.streak = 2;
+    b.combatant.stagger(0.3);
+    r.step(5);
+    expect(b.streak).toBe(0);
+  });
+});
+
 describe('enemies', () => {
   it('at most two enemies are in an attack at once, and they do attack', async () => {
     const def = defineGame({

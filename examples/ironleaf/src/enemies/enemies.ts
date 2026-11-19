@@ -19,6 +19,48 @@ export const ENCOUNTERS: EncounterDef[] = [
   { name: 'duel', match: (id) => id.startsWith('stairs-'), wake: 13, standoff: true, sting: 'sound/music/sting-duel' },
 ];
 
+/**
+ * The archer's aim line: a thin red line from the bow to the target while it draws (the tell) and until the arrow is
+ * loosed, so a shot can be read and answered (GAME.md section 6). Shown on the fixed step so it follows the interpolated body.
+ */
+export class AimLine extends Behaviour {
+  private line: Node | null = null;
+  private c!: Combatant;
+  private brain!: EnemyBrain;
+  private target: Node | null = null;
+
+  override ready(): void {
+    this.c = this.node.get(Combatant)!;
+    this.brain = this.node.get(EnemyBrain)!;
+    const l = this.world.spawn('aim-line');
+    l.add(Mesh, { shape: 'box', color: '#ff2a1c', castShadow: false, receiveShadow: false });
+    l.rotation.order = 'YXZ';
+    l.object3d.visible = false;
+    this.line = l;
+  }
+
+  override dispose(): void { this.line?.destroy(); this.line = null; }
+
+  override fixedUpdate(): void {
+    const l = this.line, c = this.c;
+    if (!l) return;
+    const m = c.move;
+    const drawing = (this.brain.mode === 'tell' && this.brain.patternIdx >= 0) || (c.state === 'attack' && !!m?.shoot && c.moveT < m.shoot.at);
+    if (!drawing || c.isDead || this.brain.dormant) { l.object3d.visible = false; return; }
+    if (!this.target || this.target.destroyed) this.target = this.world.find(this.brain.targetName) ?? null;
+    const t = this.target;
+    if (!t) { l.object3d.visible = false; return; }
+    const p = this.node.position, q = t.position;
+    const ax = p.x, ay = p.y + 1.3, az = p.z, bx = q.x, by = q.y + 1.1, bz = q.z;
+    const dx = bx - ax, dy = by - ay, dz = bz - az;
+    const hd = Math.hypot(dx, dz), len = Math.hypot(hd, dy);
+    l.position.set((ax + bx) / 2, (ay + by) / 2, (az + bz) / 2);
+    l.rotation.set(Math.atan2(dy, hd), Math.atan2(-dx, -dz), 0);
+    l.scale.set(0.03, 0.03, len);
+    l.object3d.visible = true;
+  }
+}
+
 /** Keeps a fighter's feet on the island's ground. */
 export class Grounded extends Behaviour {
   override fixedUpdate(): void {
@@ -79,6 +121,7 @@ export class EncounterDirector extends Behaviour {
     const an = model?.get(Animator);
     if (an) an.ground = groundHeight;
     dressFighter(n, kind as Kind);
+    if (kind === 'ashkite') n.add(AimLine);
     const brain = n.get(EnemyBrain)!;
     brain.dormant = true;
     const combatant = n.get(Combatant)!;

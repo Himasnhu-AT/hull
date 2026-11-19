@@ -28,7 +28,7 @@ export function spawnAya(world: World, o: AyaOpts = {}): Node {
   me.rotation.y = yaw;
   me.add(Health, { max: 100, hp: 100, invulnAfterHit: 0 });
   // Her posture (GAME.md section 5): 100, back at 18 a second after 1.2 s out of combat, staggered for 1 s at zero.
-  me.add(Combatant, { team: 'player', moveSet: 'move-set/aya', stance: 'stone', maxPosture: 100, postureRecover: 18, postureDelay: 1.2, brokenSeconds: 1.0 });
+  me.add(Combatant, { team: 'player', moveSet: 'move-set/aya', stance: 'stone', maxPosture: 100, postureRecover: 18, postureDelay: 1.2, postureRecoverFight: 8, brokenSeconds: 1.0 });
   me.add(Collider, { shape: { type: 'capsule', radius: tpTuning.radius, height: tpTuning.height, center: [0, tpTuning.height / 2, 0] }, layer: LAYER.player });
   const model = world.spawn('model', me);
   model.add(Animator, { character: 'character/aya', ground: groundHeight });
