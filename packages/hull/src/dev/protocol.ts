@@ -154,6 +154,8 @@ export interface GameControl {
   timeScale?: number;
   /** Start the game again from `ready` with the same seed. */
   restart?: boolean;
+  /** Only this game hears it (the id the app put on its frame, ?hull-client=). Without it, every game does. */
+  client?: string;
 }
 
 // ---- M3: the control port --------------------------------------------------------------------------------------------
@@ -271,7 +273,7 @@ export interface Methods extends CreateMethods {
   'exp.discard': { params: { name: string }; result: { ok: boolean } };
   /** Forwarded to every connected game. */
   'game.control': { params: GameControl; result: Record<string, never> };
-  /** Runs one control op on a connected game (the first of the project's games unless `client` is given) and returns its answer. */
+  /** Runs one control op on a connected game and returns its answer. `client` names the game (the app's frame loads the game page with ?hull-client=<id>); without it, the first game in a frame, and a headless page a tool opened only when no other is connected. */
   'game.run': { params: { control: ControlOp; client?: string }; result: ControlState | ControlShot | Record<string, never> };
   /** Review notes (.hull/review.json): what has been checked, what needs a change. */
   'review.list': { params: { open?: boolean }; result: ReviewEntry[] };
@@ -440,7 +442,8 @@ export interface CreateMethods {
 
 /** Pushed to every studio. `game.recent` carries only the new events, at most ten times a second. */
 export interface CreatePushes {
-  'game.recent': { items: RecentEvent[] };
+  /** `client` is the game that did it, so a studio keeps only its own frame's events. */
+  'game.recent': { items: RecentEvent[]; client?: string };
   'brief.changed': BriefDoc;
   'explain.changed': { id: string };
   'create.changed': CreateState;

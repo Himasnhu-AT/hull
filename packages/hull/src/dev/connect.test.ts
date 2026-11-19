@@ -25,6 +25,52 @@ class FakeSocket {
 beforeAll(() => { expect(config.load(exampleSources()).problems).toEqual([]); });
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
 
+describe('connectDev: the frame', () => {
+  const setup = async (embedded: boolean, search = ''): Promise<{ conn: ReturnType<typeof connectDev>; fire(e: Partial<KeyboardEvent>): void; posted: unknown[]; game: Awaited<ReturnType<typeof startGame>> }> => {
+    const listeners: ((e: KeyboardEvent) => void)[] = [];
+    const posted: unknown[] = [];
+    const win: any = { addEventListener: (_t: string, f: any) => listeners.push(f), removeEventListener: (_t: string, f: any) => { listeners.splice(listeners.indexOf(f), 1); } };
+    win.parent = embedded ? { postMessage: (m: unknown) => posted.push(m) } : win;
+    vi.stubGlobal('window', win);
+    vi.stubGlobal('location', { search });
+    vi.stubGlobal('WebSocket', FakeSocket);
+    const game = await startGame(defineGame({ ready() {} }), { seed: 1, stepRate: 60 });
+    const conn = connectDev(game, { url: 'ws://x' });
+    return { conn, game, posted, fire: (e) => listeners.slice().forEach((f) => f({ target: {}, ...e } as KeyboardEvent)) };
+  };
+
+  it('tells the page around it about N and Escape, and nothing else', async () => {
+    const s = await setup(true);
+    s.fire({ code: 'KeyN' }); s.fire({ code: 'Escape' }); s.fire({ code: 'KeyM' });
+    s.fire({ code: 'KeyN', ctrlKey: true }); s.fire({ code: 'KeyN', target: { tagName: 'INPUT' } as never });
+    expect(s.posted).toEqual([{ hull: 'note' }, { hull: 'resume' }]);
+    s.conn.dispose(); s.game.dispose();
+  });
+
+  it('listens to nothing when the game is not in a frame, and stops on dispose', async () => {
+    const alone = await setup(false);
+    alone.fire({ code: 'KeyN' });
+    expect(alone.posted).toEqual([]);
+    alone.conn.dispose(); alone.game.dispose();
+    const s = await setup(true);
+    s.conn.dispose();
+    s.fire({ code: 'KeyN' });
+    expect(s.posted).toEqual([]);
+    s.game.dispose();
+  });
+
+  it('connects under the name the page gives it, and says when it is headless', async () => {
+    const a = await setup(true, '?hull-client=app1');
+    expect(FakeSocket.last.url).toContain('client=app1');
+    expect(FakeSocket.last.url).not.toContain('headless');
+    a.conn.dispose(); a.game.dispose();
+    const b = await setup(false, '?hull-paused&hull-headless&hull-client=link9');
+    expect(FakeSocket.last.url).toContain('client=link9');
+    expect(FakeSocket.last.url).toContain('headless=1');
+    b.conn.dispose(); b.game.dispose();
+  });
+});
+
 describe('connectDev', () => {
   it('names the characters already in the game when the studio connects, and reports pause and resume at once', async () => {
     vi.useFakeTimers();

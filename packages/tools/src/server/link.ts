@@ -82,11 +82,12 @@ export async function openProject(o: LinkOptions): Promise<ProjectLink> {
   let launched = false;
   let gameId: string | undefined;
 
-  // The game runs in a page. When nobody has one open (no app), open a headless one, once.
+  // The game runs in a page. When nobody has one open (no app), open a headless one, once. It stays until the link closes (a
+  // later call reuses it); it says ?hull-headless, so the server never prefers it to a game in the app's frame.
   const launchGame = (): Promise<void> => (launching ??= (async () => {
     const id = `link${process.pid}`;
     await exec(browser, ['--session', session, 'set', 'viewport', '640', '360'], { timeout: 60_000 });
-    await exec(browser, ['--session', session, 'open', `${server.gameUrl}?hull-paused&hull-client=${id}`], { timeout: 60_000 });
+    await exec(browser, ['--session', session, 'open', `${server.gameUrl}?hull-paused&hull-headless&hull-client=${id}`], { timeout: 60_000 });
     launched = true;
     for (const t0 = Date.now(); ; await new Promise((r) => setTimeout(r, 200))) {
       try { await client.call('game.run', { control: { op: 'state' }, client: id }); break; } catch (e) {

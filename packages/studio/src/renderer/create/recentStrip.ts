@@ -4,15 +4,34 @@ import type { RecentEvent } from 'hull/dev/protocol';
 import type { AttachedPiece } from './types.ts';
 
 export const STRIP_MAX = 5;
+/** How many raw events the strip remembers: the chips fold repeats of one piece, so it needs more than it shows. */
+export const STRIP_KEEP = 40;
 
 const same = (a: RecentEvent, b: RecentEvent): boolean => a.at === b.at && a.kind === b.kind && a.id === b.id;
 
-/** Folds a push into the strip: the new events go in front (newest first within the push), repeats are dropped, five are kept. */
-export function mergeRecent(strip: readonly RecentEvent[], incoming: readonly RecentEvent[], max = STRIP_MAX): RecentEvent[] {
+/** Folds a push into the strip: the new events go in front (newest first within the push), the same event twice is dropped, the last STRIP_KEEP are kept. */
+export function mergeRecent(strip: readonly RecentEvent[], incoming: readonly RecentEvent[], max = STRIP_KEEP): RecentEvent[] {
   const fresh = [...incoming].sort((a, b) => b.at - a.at).filter((e) => !strip.some((s) => same(s, e)));
   const out: RecentEvent[] = [];
   for (const e of [...fresh, ...strip]) if (!out.some((o) => same(o, e))) out.push(e);
   return out.slice(0, max);
+}
+
+export interface Chip { event: RecentEvent; count: number }
+
+/** One chip per piece (kind and id), newest first, with how many times it happened; at most five. */
+export function chips(strip: readonly RecentEvent[], max = STRIP_MAX): Chip[] {
+  const out: Chip[] = [];
+  for (const e of [...strip].sort((a, b) => b.at - a.at)) {
+    const c = out.find((o) => o.event.kind === e.kind && o.event.id === e.id);
+    if (c) c.count++; else out.push({ event: e, count: 1 });
+  }
+  return out.slice(0, max);
+}
+
+/** The game page's address with this frame's client id on it, keeping any query the address already has. */
+export function frameUrl(gameUrl: string, client: string): string {
+  return `${gameUrl}${gameUrl.includes('?') ? '&' : '?'}hull-client=${encodeURIComponent(client)}`;
 }
 
 /** Game time as m:ss. */

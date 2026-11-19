@@ -46,7 +46,7 @@ export interface ProjectServer {
 }
 
 /** `exp` is set for a game page that belongs to an experiment: it hears only that experiment's edits. */
-interface Client { ws: WebSocket; role: 'studio' | 'game'; id: string; exp?: string }
+interface Client { ws: WebSocket; role: 'studio' | 'game'; id: string; exp?: string; /** A page a tool opened because no app was around; never preferred to a game in a frame. */ headless?: boolean }
 type Handler<M extends MethodName> = (params: Methods[M]['params']) => Promise<Methods[M]['result']> | Methods[M]['result'];
 
 class RpcError extends Error {
@@ -553,9 +553,20 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
   let rpcN = 0;
   const rpcWait = new Map<number, { ok(v: never): void; fail(e: Error): void }>();
 
+  /**
+   * The game a method aims at: the named one, else the first connected game of the project's own (not an experiment's), a game in
+   * a frame before a headless page a tool opened. Without the preference "Something is off" froze the headless game, not the
+   * one the person was looking at.
+   */
+  const pickGame = (client?: string): Client | undefined => {
+    const open = [...clients].filter((c) => c.role === 'game' && c.ws.readyState === WebSocket.OPEN);
+    if (client) return open.find((c) => c.id === client);
+    const own = open.filter((c) => c.exp === undefined);
+    return own.find((c) => !c.headless) ?? own[0];
+  };
+
   const runOnGame: Handler<'game.run'> = (p) => new Promise((ok, fail) => {
-    const candidates = [...clients].filter((c) => c.role === 'game' && c.ws.readyState === WebSocket.OPEN && (p.client ? c.id === p.client : c.exp === undefined));
-    const target = candidates[0];
+    const target = pickGame(p.client);
     if (!target) { fail(new RpcError(-32002, p.client ? `no game "${p.client}" is connected` : 'no game is connected; open the dev page first')); return; }
     const id = ++rpcN;
     const timer = setTimeout(() => { rpcWait.delete(id); fail(new RpcError(-32003, `the game did not answer ${p.control.op} within 30 s`)); }, 30_000);
@@ -659,8 +670,6 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
     if (!f) { f = { events: [], time: 0 }; feeds.set(id, f); }
     return f;
   };
-  /** The game a method without a client aims at: the named one, else the first connected one of the project's own (not an experiment's). */
-  const pickGame = (client?: string): Client | undefined => [...clients].find((c) => c.role === 'game' && c.ws.readyState === WebSocket.OPEN && (client ? c.id === client : c.exp === undefined));
   const recentOf = (client: string | undefined, seconds: number): RecentEvent[] => {
     const g = pickGame(client);
     if (!g) return [];
@@ -845,7 +854,13 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
     'review.list': (p) => listReview(root, p.open === true),
     'review.set': (p) => reviewed(setReview(root, { ...p, author: p.author ?? 'you' })),
     'review.note': (p) => reviewed(noteReview(root, { ...p, author: p.author ?? 'you' })),
-    'game.control': (p: GameControl) => { push('game.control', p, 'game', '*'); return {}; },
+    'game.control': (p: GameControl) => {
+      if (!p.client) { push('game.control', p, 'game', '*'); return {}; }
+      const { client: id, ...op } = p;
+      const g = pickGame(id);
+      if (g) g.ws.send(JSON.stringify({ jsonrpc: '2.0', method: 'game.control', params: op }));
+      return {};
+    },
     'problems.list': () => allProblems(),
     'tool.call': async (p) => {
       // Checks read the history's authorship record, so what is waiting is recorded first.
@@ -873,7 +888,7 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
     wss.handleUpgrade(req, socket, head, (ws) => {
       const exp = role === 'game' ? url.searchParams.get('exp') ?? undefined : undefined;
       const id = url.searchParams.get('client') ?? Math.random().toString(36).slice(2, 8);
-      const client: Client = { ws, role, id: exp ? `${exp}/${id}` : id, ...(exp ? { exp } : {}) };
+      const client: Client = { ws, role, id: exp ? `${exp}/${id}` : id, ...(exp ? { exp } : {}), ...(role === 'game' && url.searchParams.has('headless') ? { headless: true } : {}) };
       clients.add(client);
       if (role === 'game') feeds.delete(client.id);
       ws.on('close', () => { clients.delete(client); feeds.delete(client.id); });
@@ -896,7 +911,7 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
         const f = feedOf(client.id);
         f.events.push(...items);
         if (f.events.length > RECENT_KEEP) f.events.splice(0, f.events.length - RECENT_KEEP);
-        push('game.recent', { items }, 'studio');
+        push('game.recent', { items, client: client.id }, 'studio');
       }
       else if (msg.method === 'game.result') {
         const r = msg.params as { id: number; ok: boolean; result?: never; error?: string };
