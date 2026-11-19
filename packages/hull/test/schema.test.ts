@@ -1,6 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { validateAgainst } from '../src/config/validate.ts';
 import { emitSchemas, kinds, manifestSchema } from '../src/schema/index.ts';
 
 const dir = join(import.meta.dirname, '..', '..', '..', 'schemas');
@@ -19,6 +20,15 @@ describe('schemas', () => {
     expect(game.properties.start.properties.level['x-ref']).toBe('level');
     expect(game.properties.step['x-ui'].widget).toBe('segments');
     expect(JSON.parse(files['material.schema.json']!).properties.texture.properties.scale['x-ui'].widget).toBe('dial');
+  });
+
+  it('lets a game pin its renderer in the manifest, and rejects an unknown one', () => {
+    const base = { kind: 'game', id: 'g', title: 'G', entry: 'src/main.ts' };
+    expect(validateAgainst(manifestSchema, { ...base, render: { backend: 'webgl2' } })).toEqual([]);
+    expect(validateAgainst(manifestSchema, { ...base, render: { backend: 'vulkan' } }).length).toBeGreaterThan(0);
+    expect(validateAgainst(manifestSchema, { ...base, render: { api: 'webgl2' } }).length).toBeGreaterThan(0);
+    const game = JSON.parse(emitSchemas()['game.schema.json']!);
+    expect(game.properties.render.properties.backend.default).toBe('auto');
   });
 
   // Run with HULL_WRITE_SCHEMAS=1 to rewrite /schemas after changing a schema.

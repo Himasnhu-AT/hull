@@ -3,7 +3,10 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { validateAgainst } from '../config/validate.ts';
 import { mixerSchema, soundSchema, type Sound } from '../schema/index.ts';
+import { config } from '../config/index.ts';
 import { makeImpulse, makeNoise } from './dsp.ts';
+import { mountAudio } from './engine.ts';
+import { defineGame, startGame } from '../core/index.ts';
 import { fft } from './fft.ts';
 import { bandEdges, measureChannels, SPECTRUM_BANDS, WAVEFORM_PAIRS } from './measure.ts';
 import { defaultMixer, planMixer } from './mixer-plan.ts';
@@ -284,5 +287,42 @@ describe('house rules', () => {
         expect(line, f).not.toMatch(/Math\.random\(|Date\.now\(|performance\.now\(|setTimeout\(/);
       }
     }
+  });
+});
+
+// A context that accepts any call, so the engine's graph can be built in Node.
+function fakeNode(): unknown {
+  return new Proxy(function () {}, {
+    get: (_t, k) => (k === 'then' ? undefined : fakeNode()),
+    set: () => true,
+    apply: () => fakeNode(),
+  });
+}
+function fakeContext(): AudioContext {
+  const base: Record<string, unknown> = { sampleRate: 44100, state: 'running', currentTime: 0, resume: () => Promise.resolve(), close: () => Promise.resolve() };
+  return new Proxy(base, { get: (t, k) => (k in t ? t[k as string] : fakeNode()) }) as unknown as AudioContext;
+}
+
+describe('mountAudio hands its context and buses to a game that makes its own sound', () => {
+  it('exposes the context and the mixer buses', async () => {
+    config.load([{ path: 'hull.json', text: JSON.stringify({ kind: 'game', id: 'a', title: 'A', entry: 'src/main.ts' }) }]);
+    const g = await startGame(defineGame({ ready() {} }));
+    const ctx = fakeContext();
+    const view = mountAudio(g, { createContext: () => ctx });
+    expect(view.context).toBe(ctx);
+    expect(view.bus()).toBeDefined();
+    expect(view.bus('sfx')).toBeDefined();
+    expect(view.bus('no-such-bus')).toBeUndefined();
+    view.dispose();
+    expect(view.context).toBeNull();
+    g.dispose();
+  });
+
+  it('reads null and no buses when Web Audio is missing', async () => {
+    const g = await startGame(defineGame({ ready() {} }));
+    const view = mountAudio(g, { onError: () => {}, createContext: () => { throw new Error('no audio'); } });
+    expect(view.context).toBeNull();
+    expect(view.bus()).toBeUndefined();
+    g.dispose();
   });
 });

@@ -100,6 +100,7 @@ files (as one recorded change).
   "entry": "src/main.ts",
   "step": 60,
   "features": ["audio", "anim", "ui", "vfx"],
+  "render": { "backend": "auto" },
   "start": { "screen": "ui/title", "level": "level/yard" },
   "systems": ["waves", "score"],
   "targets": {
@@ -125,6 +126,7 @@ Schema (abridged):
     "entry": { "type": "string" },
     "step": { "enum": [30, 60, 120], "default": 60, "x-ui": { "unit": "Hz", "help": "Fixed simulation rate." } },
     "features": { "type": "array", "items": { "enum": ["audio", "anim", "ui", "vfx", "physics", "saves"] } },
+    "render": { "type": "object", "properties": { "backend": { "enum": ["auto", "webgl2", "webgpu"], "default": "auto", "x-ui": { "widget": "select", "help": "Which renderer draws the game. auto tries WebGPU and falls back to WebGL2. A game with GLSL shader code of its own pins webgl2." } } } },
     "start": { "type": "object", "properties": { "screen": { "type": "string", "x-ref": "ui-screen" }, "level": { "type": "string", "x-ref": "level" } } },
     "systems": { "type": "array", "items": { "type": "string" } },
     "targets": { "type": "object" },

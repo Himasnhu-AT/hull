@@ -36,6 +36,13 @@ export interface AudioView {
   setListener(position: Vec3, forward?: Vec3): void;
   /** 'running', 'suspended' (waiting for a gesture), 'unavailable' (no Web Audio). */
   readonly state: 'running' | 'suspended' | 'unavailable';
+  /**
+   * The engine's AudioContext, or null when Web Audio is unavailable. For a game that makes its own sound with Web
+   * Audio (a synth written in code): it shares this context, so there is one clock and one resume-on-gesture.
+   */
+  readonly context: AudioContext | null;
+  /** A mixer bus's input node ('master' by default), so a game's own graph can join the mix; undefined if there is no such bus. */
+  bus(name?: string): AudioNode | undefined;
   dispose(): void;
 }
 
@@ -71,6 +78,8 @@ const noop: AudioView = {
   setBus: () => {},
   setListener: () => {},
   state: 'unavailable',
+  context: null,
+  bus: () => undefined,
   dispose: () => {},
 };
 
@@ -360,6 +369,8 @@ export function mountAudio(game: Game, opts: MountOptions = {}): AudioView {
       if (fwd) forward = fwd;
     },
     get state() { return disposed ? 'unavailable' : ctx.state === 'running' ? 'running' : 'suspended'; },
+    get context() { return disposed ? null : ctx; },
+    bus: (name = 'master') => buses.get(name),
     dispose() {
       if (disposed) return;
       disposed = true;

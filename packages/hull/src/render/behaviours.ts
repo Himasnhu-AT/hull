@@ -11,10 +11,11 @@ import {
   PerspectiveCamera,
   PointLight,
   Quaternion,
+  Scene,
   Vector3,
   type Light as ThreeLight,
 } from 'three';
-import { Behaviour, type Node } from '../core/index.ts';
+import { Behaviour, type Node, type World } from '../core/index.ts';
 import { stateFor } from './interp.ts';
 import { acquireGeometry, acquireMaterial, releaseGeometry, releaseMaterial, type MaterialSpec, type Shape } from './materials.ts';
 
@@ -98,6 +99,52 @@ export class Camera extends Behaviour {
     this.view?.removeFromParent();
     this.view = null;
   }
+}
+
+/**
+ * The escape hatch for content a game builds with three.js itself (procedural meshes, custom shaders): puts the
+ * game-owned `object` under this node, so it moves with the node and is drawn by whichever backend is running. The
+ * object and everything under it stay the game's: Hull never edits them and never disposes their geometry or
+ * materials. Import three from `hull/three` so the object is made by the same copy of three the backend uses. A game
+ * that uses this also takes on what only Hull's own Mesh gets for free: its shader code must suit the backend that
+ * is drawing (pin one in hull.json `render.backend`).
+ */
+export class SceneObject extends Behaviour {
+  /** Set it in `add()`'s init values, or before the first frame; nothing is shown while it is null. */
+  object: Object3D | null = null;
+
+  private held: Object3D | null = null;
+
+  override ready(): void {
+    this.adopt();
+    stateFor(this.world).interp.track(this.node);
+  }
+
+  // A swapped object shows on the next frame.
+  override update(): void {
+    if (this.object !== this.held) this.adopt();
+  }
+
+  override dispose(): void {
+    this.held?.removeFromParent();
+    this.held = null;
+  }
+
+  private adopt(): void {
+    this.held?.removeFromParent();
+    this.held = this.object;
+    if (this.held) this.node.object3d.add(this.held);
+  }
+}
+
+/**
+ * The three.js Scene the running backend draws this world in, or null while none has taken the world (Node tests, the
+ * first frame). A game that owns scene-level state (the fog colour that follows the player, a background) sets it
+ * here; the look sets fog and background only when it changes, so a value written every frame stays.
+ */
+export function backendScene(world: World): Scene | null {
+  for (let o: Object3D | null = world.root.object3d.parent; o !== null; o = o.parent) if (o instanceof Scene) return o;
+  return null;
 }
 
 /** The node of the first active camera in the tree, in tree order, or null. */

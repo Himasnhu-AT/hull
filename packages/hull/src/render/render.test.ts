@@ -2,7 +2,9 @@
 import { describe, expect, it } from 'vitest';
 import { config, startGame, defineGame } from '../index.ts';
 import { lookSchema } from '../schema/look.ts';
-import { Camera, Light, Mesh, activeCamera, instances } from './behaviours.ts';
+import { Group, Mesh as ThreeMesh, Scene } from 'three';
+import * as hullThree from '../three.ts';
+import { Camera, Light, Mesh, SceneObject, activeCamera, backendScene, instances } from './behaviours.ts';
 import { Interp, lerp, stateFor, teleported } from './interp.ts';
 import { defaultLook, resolveLook, sunDirection } from './look.ts';
 import { acquireMaterial, cacheSizes, materialKey, materialParams, releaseMaterial } from './materials.ts';
@@ -181,5 +183,48 @@ describe('behaviours without a renderer', () => {
     expect(inst.count).toBe(1000);
     inst.dispose();
     g.dispose();
+  });
+});
+
+describe('SceneObject, the escape hatch for game-built three.js content', () => {
+  it('puts a game-owned object under its node, follows it, swaps it and leaves it alone on dispose', async () => {
+    const g = await startGame(defineGame({ ready() {} }));
+    const mine = new Group();
+    const part = new ThreeMesh();
+    mine.add(part);
+    const holder = g.world.spawn('holder');
+    holder.position.set(1, 2, 3);
+    const so = holder.add(SceneObject, { object: mine });
+    expect(mine.parent).toBe(holder.object3d);
+    // the node's transform reaches the object's world position
+    holder.object3d.updateMatrixWorld(true);
+    expect(part.getWorldPosition(part.position.clone()).toArray()).toEqual([1, 2, 3]);
+    const other = new Group();
+    so.object = other;
+    g.world.update(0, 0);
+    expect(mine.parent).toBeNull();
+    expect(other.parent).toBe(holder.object3d);
+    // Hull never touches what is inside the object
+    expect(part.parent).toBe(mine);
+    holder.destroy();
+    g.step();
+    expect(other.parent).toBeNull();
+    g.dispose();
+  });
+
+  it('finds the scene a backend drew the world in, and none before', async () => {
+    const g = await startGame(defineGame({ ready() {} }));
+    expect(backendScene(g.world)).toBeNull();
+    const scene = new Scene();
+    scene.add(g.world.root.object3d);
+    expect(backendScene(g.world)).toBe(scene);
+    g.dispose();
+  });
+
+  it('hull/three is the one copy of three the engine uses', () => {
+    expect(hullThree.Group).toBe(Group);
+    expect(hullThree.Scene).toBe(Scene);
+    expect(typeof hullThree.mergeGeometries).toBe('function');
+    expect(typeof new hullThree.ImprovedNoise().noise(0.1, 0.2, 0.3)).toBe('number');
   });
 });

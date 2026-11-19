@@ -24,6 +24,19 @@ importers:
         specifier: 5.1.1
         version: 5.1.1(@types/node@26.6.6)(vite@8.3.8(@types/node@26.6.6)(esbuild@0.28.2)(tsx@4.23.15))
 
+  examples/aott:
+    dependencies:
+      hull:
+        specifier: workspace:*
+        version: link:../../packages/hull
+      three:
+        specifier: 0.187.0
+        version: 0.187.0
+    devDependencies:
+      '@types/three':
+        specifier: 0.187.0
+        version: 0.187.0
+
   packages/cli:
     dependencies:
       commander:
