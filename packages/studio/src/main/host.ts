@@ -3,7 +3,7 @@
 // Nothing here imports electron.
 
 import { existsSync } from 'node:fs';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHub, type Hub } from './agents.ts';
@@ -35,6 +35,10 @@ export interface HostOptions {
   env?: NodeJS.ProcessEnv;
   /** Where the builder's key can be kept safely (Electron's safeStorage). Without it the environment decides. */
   crypto?: KeyCrypto;
+  /** Moves a folder to the system Trash (Electron's shell.trashItem). Without it, moving to the Trash is refused. */
+  trash?: (path: string) => Promise<void>;
+  /** Runs a protocol method on a project (config.set for a rename); defaults to @hull/tools' runTool. Tests pass a fake. */
+  runTool?: (root: string, name: string, input: unknown) => Promise<unknown>;
   /** Runs Claude Code's and Codex's own commands for Settings (tests pass a fake). */
   run?: Runner;
 }
@@ -50,6 +54,9 @@ export interface Host {
   closeProject(): Promise<void>;
   recents(): Promise<RecentProject[]>;
   forgetRecent(root: string): Promise<void>;
+  renameProject(root: string, title: string): Promise<string>;
+  trashProject(root: string): Promise<void>;
+  saveThumb(root: string, jpeg: string): Promise<void>;
   /** Agents (ACP) and the Claude Code terminal, working on the open project. */
   agents: Hub;
   terminals: Terminals;
@@ -65,6 +72,21 @@ export interface Host {
 }
 
 const MAX_RECENTS = 10;
+const COVERS: [string, string][] = [['cover.webp', 'image/webp'], ['cover.jpg', 'image/jpeg'], ['cover.png', 'image/png'], ['.hull/thumb.jpg', 'image/jpeg']];
+/** Covers above this size are skipped: the launcher shows a dozen at once. */
+const MAX_COVER = 1_500_000;
+
+/** A game's picture for the launcher, as a data: URL, or null. */
+export async function coverOf(root: string): Promise<string | null> {
+  for (const [f, mime] of COVERS) {
+    const p = join(root, f);
+    try {
+      if ((await stat(p)).size > MAX_COVER) continue;
+      return `data:${mime};base64,${(await readFile(p)).toString('base64')}`;
+    } catch { /* not there: try the next */ }
+  }
+  return null;
+}
 
 /** "My First Game!" -> "my-first-game": a folder name that works everywhere. */
 export function slug(title: string): string {
@@ -178,7 +200,43 @@ export function createHost(opts: HostOptions): Host {
       if (r) { await r.mcp.close(); await r.mcpServer.close(); await r.server.close(); }
     },
 
-    recents: readRecents,
+    async recents() { return Promise.all((await readRecents()).map(async (r) => ({ ...r, cover: await coverOf(r.root) }))); },
+
+    async renameProject(root, title) {
+      const t = title.trim().replace(/\s+/g, ' ');
+      if (!t) throw new Error('A game needs a name.');
+      if (t.length > 80) throw new Error('Keep the name under 80 characters.');
+      const list = await readRecents();
+      if (!list.some((r) => r.root === root)) throw new Error('That game is not in Recent.');
+      // The title lives in hull.json: the same validated write the editor makes, recorded in the history as yours.
+      const run = opts.runTool ?? (async (r: string, n: string, i: unknown) => (await import('@hull/tools')).runTool(r, n, i, { author: 'you' }));
+      const out = await run(root, 'config.set', { id: 'hull.json', pointer: '/title', value: t, author: 'you' }) as { ok?: boolean; written?: boolean; problems?: { message: string }[] } | null;
+      if (!out || out.ok === false || out.written === false || (out.problems?.length ?? 0) > 0) throw new Error(out?.problems?.map((p) => p.message).join('; ') || `The name was not kept (${JSON.stringify(out).slice(0, 200)}).`);
+      await mkdir(opts.dataDir, { recursive: true });
+      await writeFile(recentsFile, JSON.stringify(list.map((r) => (r.root === root ? { ...r, title: t } : r)), null, 2) + '\n');
+      return t;
+    },
+
+    async trashProject(root) {
+      if (!opts.trash) throw new Error('Moving a game to the Trash works in the Hull app, not in a browser.');
+      const list = await readRecents();
+      if (!list.some((r) => r.root === root)) throw new Error('That game is not in Recent.');
+      if (!existsSync(join(root, 'hull.json'))) throw new Error('That folder is not a Hull game, so it was left alone.');
+      if (running?.root === root) await host.closeProject();
+      await opts.trash(root);
+      await host.forgetRecent(root);
+    },
+
+    async saveThumb(root, jpeg) {
+      const m = /^data:image\/jpeg;base64,([A-Za-z0-9+/=]+)$/.exec(jpeg);
+      if (!m) throw new Error('A thumbnail is a JPEG data: URL.');
+      const bytes = Buffer.from(m[1]!, 'base64');
+      if (bytes.length > 400_000) throw new Error('That thumbnail is too big.');
+      // Only for the game that is open: a page cannot write pictures into any folder it names.
+      if (running?.root !== root) throw new Error('Only the open game keeps a thumbnail.');
+      await mkdir(join(root, '.hull'), { recursive: true });
+      await writeFile(join(root, '.hull', 'thumb.jpg'), bytes);
+    },
 
     async forgetRecent(root) {
       const next = (await readRecents()).filter((r) => r.root !== root);

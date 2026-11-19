@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useMemo, useState, type JSX } from 'react';
 import type { HullApp, OpenedProject } from '../shared/appApi.ts';
 import { CreateShell } from './create/CreateShell.tsx';
+import { HomeBrief } from './launcher/HomeBrief.tsx';
 import { Launcher } from './launcher/Launcher.tsx';
 import { SettingsCtx, type SettingsOpener, type SettingsSection } from './settings/open.tsx';
 import { Settings } from './settings/Settings.tsx';
 
 export function App({ app }: { app: HullApp }): JSX.Element {
   // `idea` is set only for a project made from the idea box: it starts on the Brief step.
-  const [open, setOpen] = useState<{ project: OpenedProject; idea?: string } | null>(null);
+  // A game made from an idea stays on the home page (`phase: 'brief'`) until its brief is done, then opens at Build.
+  const [open, setOpen] = useState<{ project: OpenedProject; idea?: string; phase?: 'brief' | 'shell' } | null>(null);
   const [ready, setReady] = useState(false);
   const [settings, setSettings] = useState<{ section?: SettingsSection | undefined; onKeysSaved?: (() => void) | undefined } | null>(null);
 
@@ -29,9 +31,10 @@ export function App({ app }: { app: HullApp }): JSX.Element {
   if (!ready) return <div className="fatal" aria-busy="true" />;
   return (
     <SettingsCtx.Provider value={opener}>
-      {open
-        ? <CreateShell key={open.project.root} project={open.project} platform={app.platform} idea={open.idea} onClose={close} />
-        : <Launcher app={app} onOpen={(project, idea) => setOpen({ project, ...(idea ? { idea } : {}) })} />}
+      {open && open.phase !== 'brief'
+        ? <CreateShell key={open.project.root} project={open.project} platform={app.platform} idea={open.idea} initialStep={open.idea ? 'build' : undefined} onClose={close} />
+        : <Launcher app={app} onOpen={(project, idea) => setOpen({ project, ...(idea ? { idea, phase: 'brief' as const } : {}) })} onNew={open ? close : undefined}
+            home={open ? <HomeBrief key={open.project.root} project={open.project} idea={open.idea ?? ''} onDone={() => setOpen({ ...open, phase: 'shell' })} onLeave={close} /> : undefined} />}
       {settings && <Settings app={app} project={open?.project ?? null} section={settings.section} onKeysSaved={settings.onKeysSaved} onClose={() => setSettings(null)} />}
     </SettingsCtx.Provider>
   );

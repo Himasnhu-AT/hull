@@ -15,6 +15,7 @@ import { Icon } from '../ui/Icon.tsx';
 import { BuilderSetup, ViaButton } from './BuilderSetup.tsx';
 import { ClaudeChat } from './ClaudeChat.tsx';
 import { Composer } from './Composer.tsx';
+import { ModelPicker } from './ModelPicker.tsx';
 import { clock } from './recentStrip.ts';
 import { builderPill } from './builderState.ts';
 import { TranscriptView } from './TranscriptView.tsx';
@@ -71,7 +72,7 @@ export function BuilderColumn({ attached, onClearAttached, moment = null, onClea
           )}
           <div className="cr-b-dock">
             <Composer value={b.draft} onChange={b.setDraft} onSend={send} label="Your note to the builder" nonce={b.draftNonce} busy={t.running} onStop={b.cancel}
-              placeholder={moment ? 'What felt wrong here?' : one ? `What should change about ${one.name}?` : 'Say what feels wrong'} />
+              footer={<ModelPicker />} placeholder={moment ? 'What felt wrong here?' : one ? `What should change about ${one.name}?` : 'Say what feels wrong'} />
           </div>
         </>
       )}

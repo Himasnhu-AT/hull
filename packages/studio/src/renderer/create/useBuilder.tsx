@@ -51,7 +51,13 @@ export interface Builder {
 
 export type BuilderVia = 'hull' | 'codex' | 'claude';
 const VIA_KEY = 'hull.builderVia';
-const readVia = (): BuilderVia => { try { const v = localStorage.getItem(VIA_KEY); return v === 'codex' || v === 'claude' ? v : 'hull'; } catch { return 'hull'; } };
+export const readVia = (): BuilderVia => { try { const v = localStorage.getItem(VIA_KEY); return v === 'codex' || v === 'claude' ? v : 'hull'; } catch { return 'hull'; } };
+
+/** Changes who builds from anywhere (the home page's picker has no builder above it); every BuilderProvider follows. */
+export function writeVia(v: BuilderVia): void {
+  try { localStorage.setItem(VIA_KEY, v); } catch { /* not remembered */ }
+  window.dispatchEvent(new CustomEvent<BuilderVia>('hull-builder-via', { detail: v }));
+}
 
 const Ctx = createContext<Builder | null>(null);
 export function useBuilder(): Builder {
@@ -73,6 +79,8 @@ export function BuilderProvider({ rpc, project, children }: { rpc: RpcClient; pr
   const started = useRef({ brief: false, build: false });
   const pending = useRef<(() => void) | null>(null);
   const [needs, setNeeds] = useState<string | null>(null);
+  const needsRef = useRef<string | null>(null);
+  needsRef.current = needs;
   const [starting, setStarting] = useState(false);
   const [via, setViaState] = useState<BuilderVia>(readVia);
   const viaRef = useRef(via);
@@ -179,13 +187,19 @@ export function BuilderProvider({ rpc, project, children }: { rpc: RpcClient; pr
     if (p) p(); else void ensure();
   }, [ensure]);
 
-  const setVia = useCallback((v: BuilderVia): void => {
-    try { localStorage.setItem(VIA_KEY, v); } catch { /* not remembered */ }
+  const applyVia = useCallback((v: BuilderVia): void => {
+    if (v === viaRef.current && !needsRef.current) return;
     const old = sid.current;
     sid.current = null; viaRef.current = v; setViaState(v); setNeeds(null);
     if (old) void window.hullApp?.agentStop(old);
     if (v !== 'claude') { const p = pending.current; pending.current = null; if (p) p(); else void ensure(); }
   }, [ensure]);
+  useEffect(() => {
+    const on = (e: Event): void => applyVia((e as CustomEvent<BuilderVia>).detail);
+    window.addEventListener('hull-builder-via', on);
+    return () => window.removeEventListener('hull-builder-via', on);
+  }, [applyVia]);
+  const setVia = useCallback((v: BuilderVia): void => { if (v === viaRef.current) applyVia(v); writeVia(v); }, [applyVia]);
 
   const value = useMemo<Builder>(() => ({
     rpc, project, lanes, needs, starting, running, pieces, send, answer, cancel, startBrief, startBuild, retryStage, prepare: () => { void ensure(); }, openSettings: () => settings.open('builder', saved), via, setVia, draft, setDraft, fillDraft, draftNonce,

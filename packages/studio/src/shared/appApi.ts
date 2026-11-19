@@ -7,7 +7,8 @@ export interface TemplateInfo { name: string; title: string; description: string
 /** A community game: what the launcher shows, and whether this person already has their own copy. */
 export interface CommunityGame { id: string; title: string; note: string; cover: string | null; copy: { root: string; exists: boolean } }
 
-export interface RecentProject { root: string; title: string; openedAt: string }
+/** `cover` is a small data: URL: the game's own cover.{webp,jpg,png}, else the last screenshot Hull kept while it was played (.hull/thumb.jpg), else null. */
+export interface RecentProject { root: string; title: string; openedAt: string; cover?: string | null }
 
 /** A project the main process has started a server for. The renderer talks only to `url` (protocol) and shows `gameUrl`. */
 export interface OpenedProject {
@@ -34,6 +35,12 @@ export interface HullApp extends HullAppAgents {
   openCommunity(id: string, reset?: boolean): Promise<OpenedProject>;
   recents(): Promise<RecentProject[]>;
   forgetRecent(root: string): Promise<void>;
+  /** Renames a recent game: its hull.json title, through config.set (validated, kept in the history as yours). Resolves with the new title. */
+  renameProject(root: string, title: string): Promise<string>;
+  /** Moves a recent game's folder to the Trash (it can be put back from there) and drops it from Recent. Desktop only. */
+  trashProject(root: string): Promise<void>;
+  /** Keeps a small screenshot of the game (a JPEG data: URL) as its thumbnail in .hull/thumb.jpg. */
+  saveThumb(root: string, jpeg: string): Promise<void>;
   /** Shows a file or folder in Finder / Explorer. */
   reveal(path: string): Promise<void>;
   /** Web dev mode: the project to open without asking (`--project <dir>`). */

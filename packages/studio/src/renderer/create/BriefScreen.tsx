@@ -11,19 +11,21 @@ import type { RpcClient } from '../lib/rpc.ts';
 import { BuilderSetup, ViaButton } from './BuilderSetup.tsx';
 import { ClaudeChat } from './ClaudeChat.tsx';
 import { Composer } from './Composer.tsx';
+import { ModelPicker } from './ModelPicker.tsx';
 import { builderPill } from './builderState.ts';
 import { TranscriptView } from './TranscriptView.tsx';
 import { waiting } from './transcript.ts';
 import { useBuilder } from './useBuilder.tsx';
 import { useCreateState } from './useCreate.ts';
 
-export interface BriefScreenProps { rpc: RpcClient; project: OpenedProject; idea: string; onApproved(): void }
+/** `home`: shown on the home page, where the game's name heads the chat and moving on opens the game. */
+export interface BriefScreenProps { rpc: RpcClient; project: OpenedProject; idea: string; onApproved(): void; home?: boolean }
 
 /** What Claude Code is asked first when it is the builder: the same job Hull's builder does in mode brief. */
 export const claudeBriefPrompt = (idea: string): string =>
   `I am making a game in Hull. Use the hull MCP tools for every change, so each one is checked and kept in the history. First write the brief: ask me a few short questions, then write GAME.md.${idea.trim() ? ` The idea: ${idea.trim()}` : ''}`;
 
-export function BriefScreen({ rpc, idea, onApproved }: BriefScreenProps): JSX.Element {
+export function BriefScreen({ rpc, project, idea, onApproved, home = false }: BriefScreenProps): JSX.Element {
   const b = useBuilder();
   const create = useCreateState(rpc);
   const [showEvents, setShowEvents] = useState(false);
@@ -53,17 +55,18 @@ export function BriefScreen({ rpc, idea, onApproved }: BriefScreenProps): JSX.El
   const empty = t.items.length === 0;
   const composer = (
     <Composer value={b.draft} onChange={b.setDraft} onSend={send} label="Your message about the brief" placeholder={empty ? 'Describe the game you want' : 'Ask for a change to the brief'}
-      nonce={b.draftNonce} busy={t.running} onStop={b.cancel} autoFocus={empty} />
+      nonce={b.draftNonce} busy={t.running} onStop={b.cancel} autoFocus={empty} footer={<ModelPicker />} />
   );
 
   return (
     <div className="chat">
       <header className="chat-top">
+        {home && <b className="chat-title" title={project.title}>{project.title}</b>}
         <ViaButton open={setup} onClick={() => setChoosing((c) => !c)} />
         {!setup && b.via !== 'claude' && <span className={`chat-state ${state.cls}`}><i />{state.text}</span>}
         <span style={{ flex: 1 }} />
         {b.via !== 'claude' && !setup && <label className="chat-sw"><input type="checkbox" checked={showEvents} onChange={(e) => setShowEvents(e.target.checked)} />Show events</label>}
-        {create?.briefApproved ? <button className="btn primary" onClick={onApproved}>Go to Build</button> : <button className="btn ghost" onClick={onApproved} title="Skip the brief and go to Build">Skip the brief</button>}
+        {create?.briefApproved ? <button className="btn primary" onClick={onApproved}>Go to Build</button> : <button className="btn ghost" onClick={onApproved} title="Skip the brief and go to Build">{home ? 'Open the game' : 'Skip the brief'}</button>}
       </header>
       {setup && <div className="chat-center"><BuilderSetup onDone={() => setChoosing(false)} /></div>}
       {!setup && b.via === 'claude' && <ClaudeChat prompt={claudeBriefPrompt(idea || create?.idea || '')} />}

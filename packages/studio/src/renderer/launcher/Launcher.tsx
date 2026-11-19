@@ -1,10 +1,12 @@
 // The launcher: one box for the idea first. Under it, quieter choices: start from a template, Community, Recent, Open folder.
 
-import { useEffect, useState, type JSX } from 'react';
+import { useEffect, useState, type JSX, type ReactNode } from 'react';
 import type { CommunityGame, HullApp, OpenedProject, RecentProject, TemplateInfo } from '../../shared/appApi.ts';
 import { useSettings } from '../settings/open.tsx';
 import { Composer } from '../create/Composer.tsx';
+import { ModelPicker } from '../create/ModelPicker.tsx';
 import { Icon } from '../ui/Icon.tsx';
+import { RecentCard } from './RecentCard.tsx';
 
 type Pane = 'idea' | 'recent' | 'new' | 'community';
 
@@ -31,7 +33,8 @@ function Mark(): JSX.Element {
   );
 }
 
-export function Launcher({ app, onOpen, startError }: { app: HullApp; onOpen(p: OpenedProject, idea?: string): void; startError?: string | null }): JSX.Element {
+/** `home`: the brief chat for a game just made from an idea; it takes the main pane, and New game leaves it (`onNew`). */
+export function Launcher({ app, onOpen, startError, home, onNew }: { app: HullApp; onOpen(p: OpenedProject, idea?: string): void; startError?: string | null; home?: ReactNode; onNew?: () => void }): JSX.Element {
   const [recents, setRecents] = useState<RecentProject[] | null>(null);
   const [templates, setTemplates] = useState<TemplateInfo[] | null>(null);
   const [pane, setPane] = useState<Pane>('idea');
@@ -84,7 +87,7 @@ export function Launcher({ app, onOpen, startError }: { app: HullApp; onOpen(p: 
         <div className="mark"><Mark /><h1>Hull</h1></div>
         <p className="tag">Describe a game. The builder makes it. You play it and say what is off.</p>
         <div className="acts">
-          <button className={`act${pane === 'idea' ? ' on' : ''}`} onClick={() => setPane('idea')}>
+          <button className={`act${pane === 'idea' && !home ? ' on' : ''}`} onClick={() => { setPane('idea'); setIdea(''); onNew?.(); }}>
             <span className="ic"><Icon name="plus" /></span><span><b>New game</b><small>Start from an idea</small></span>
           </button>
           <button className={`act${pane === 'new' ? ' on' : ''}`} onClick={() => setPane('new')}>
@@ -104,7 +107,7 @@ export function Launcher({ app, onOpen, startError }: { app: HullApp; onOpen(p: 
         <div className="l-foot">Your games are kept by the app. You never need to pick a folder.</div>
       </div>
 
-      <div className={`l-main drag${pane === 'idea' ? ' center' : ''}`}>
+      {home ? <div className="l-main l-home">{home}</div> : <div className={`l-main drag${pane === 'idea' ? ' center' : ''}`}>
         <div className="l-in nodrag">
           {error && <div className="note-err" role="alert">{error}</div>}
 
@@ -113,7 +116,7 @@ export function Launcher({ app, onOpen, startError }: { app: HullApp; onOpen(p: 
               <h2>What game do you want to make?</h2>
               <p className="sub2">Say it in a sentence or two. The app picks a starting point for you.</p>
               <Composer value={idea} onChange={setIdea} onSend={() => { if (idea.trim() && busy === null) void makeFromIdea(); }} label="Your game idea" autoFocus
-                placeholder="A third-person samurai game on a windy island..." sendLabel={busy === 'Creating' ? 'Making your game...' : 'Make my game'} disabled={busy !== null} busy={busy === 'Creating'} />
+                placeholder="A third-person samurai game on a windy island..." sendLabel={busy === 'Creating' ? 'Making your game...' : 'Make my game'} disabled={busy !== null} busy={busy === 'Creating'} footer={<ModelPicker />} />
               <div className="cr-examples" role="group" aria-label="Examples">
                 {EXAMPLES.map((x) => <button type="button" key={x.label} className="chip" onClick={() => setIdea(x.idea)}>{x.label}</button>)}
               </div>
@@ -123,10 +126,9 @@ export function Launcher({ app, onOpen, startError }: { app: HullApp; onOpen(p: 
                   <div className="l-rh"><b>Pick up where you left off</b>{recents.length > 6 && <button className="btn ghost" onClick={() => setPane('recent')}>All {recents.length}</button>}</div>
                   <div className="l-rgrid">
                     {recents.slice(0, 6).map((r, i) => (
-                      <button key={r.root} className="l-rcard" style={{ animationDelay: `${120 + i * 40}ms` }} disabled={busy !== null} onClick={() => void run('Opening', () => app.openProject(r.root))} title={r.root}>
-                        <span className="l-rmark" aria-hidden="true">{r.title.trim().charAt(0).toUpperCase() || '?'}</span>
-                        <span className="l-rt"><b>{r.title}</b><small>{ago(r.openedAt)}</small></span>
-                      </button>
+                      <RecentCard key={r.root} app={app} r={r} when={ago(r.openedAt)} delay={120 + i * 40} disabled={busy !== null}
+                        onOpen={() => void run('Opening', () => app.openProject(r.root))} onError={setError}
+                        onChange={(n) => setRecents((l) => (l ?? []).flatMap((x) => (x.root !== r.root ? [x] : n ? [n] : [])))} />
                     ))}
                   </div>
                 </section>
@@ -225,7 +227,7 @@ export function Launcher({ app, onOpen, startError }: { app: HullApp; onOpen(p: 
           )}
           {busy === 'Opening' && <p className="sub2">Starting the project server...</p>}
         </div>
-      </div>
+      </div>}
     </div>
   );
 }

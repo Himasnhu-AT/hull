@@ -16,7 +16,7 @@ if (process.env['HULL_USER_DATA']) app.setPath('userData', process.env['HULL_USE
 const here = dirname(fileURLToPath(import.meta.url));
 // The builder's API key is kept encrypted with the OS keychain (safeStorage), as base64 text in userData.
 const host = createHost({
-  dataDir: app.getPath('userData'), log: (l) => console.log(`[hull] ${l}`),
+  dataDir: app.getPath('userData'), log: (l) => console.log(`[hull] ${l}`), trash: (p) => shell.trashItem(p),
   crypto: { available: () => safeStorage.isEncryptionAvailable(), encrypt: (s) => safeStorage.encryptString(s).toString('base64'), decrypt: (b) => safeStorage.decryptString(Buffer.from(b, 'base64')) },
 });
 let win: BrowserWindow | null = null;
@@ -39,6 +39,9 @@ function registerIpc(): void {
   handle('closeProject', () => host.closeProject());
   handle('recents', () => host.recents());
   handle('forgetRecent', (root: string) => host.forgetRecent(root));
+  handle('renameProject', (root: string, title: string) => host.renameProject(root, title));
+  handle('trashProject', (root: string) => host.trashProject(root));
+  handle('saveThumb', (root: string, jpeg: string) => host.saveThumb(root, jpeg));
   handle('agentList', () => host.agents.list());
   handle('agentStart', (id: string) => host.agents.start(id));
   handle('agentPrompt', (sid: string, text: string, options?: PromptOptions) => host.agents.prompt(sid, text, options));

@@ -33,12 +33,14 @@ export interface CreateShellProps {
   platform: string;
   /** What the person typed in the launcher; present only for a project made from an idea. */
   idea?: string | undefined;
+  /** Where to start; by default Brief for a game made from an idea, else Play and fix. */
+  initialStep?: Step | undefined;
   onClose(): void;
 }
 
-export function CreateShell({ project, platform, idea, onClose }: CreateShellProps): JSX.Element {
+export function CreateShell({ project, platform, idea, initialStep, onClose }: CreateShellProps): JSX.Element {
   const [advanced, setAdvanced] = useState(() => readAdvanced(project.root));
-  const [step, setStep] = useState<Step>(idea ? 'brief' : 'play');
+  const [step, setStep] = useState<Step>(initialStep ?? (idea ? 'brief' : 'play'));
   const [tab, setTab] = useState<PlayTab>('play');
   const [attached, setAttached] = useState<AttachedPiece[]>([]);
   const flip = (on: boolean): void => { setAdvanced(on); writeAdvanced(project.root, on); };
@@ -73,6 +75,31 @@ function ShellBody(props: BodyProps): JSX.Element | null {
   return rpc ? <ShellScreens key={rpc.id} rpc={rpc} {...props} /> : null;
 }
 
+/** Once per opening, a few seconds into play, keeps a small picture of the game for the launcher (.hull/thumb.jpg). Best effort. */
+function useThumbnail(rpc: RpcClient, root: string, playing: boolean): void {
+  const done = useRef(false);
+  useEffect(() => {
+    if (!playing || done.current) return;
+    const t = setTimeout(() => {
+      done.current = true;
+      void (async () => {
+        try {
+          const shot = await rpc.call('game.run', { control: { op: 'screenshot' } }) as { png?: string };
+          if (!shot?.png) return;
+          const img = new Image();
+          img.src = shot.png.startsWith('data:') ? shot.png : `data:image/png;base64,${shot.png}`;
+          await img.decode();
+          const w = 480, h = Math.round((w * img.naturalHeight) / Math.max(1, img.naturalWidth));
+          const c = document.createElement('canvas'); c.width = w; c.height = h;
+          c.getContext('2d')!.drawImage(img, 0, 0, w, h);
+          await window.hullApp?.saveThumb(root, c.toDataURL('image/jpeg', 0.82));
+        } catch { /* a game without a picture yet keeps its letter */ }
+      })();
+    }, 6000);
+    return () => clearTimeout(t);
+  }, [rpc, root, playing]);
+}
+
 /** How many changes the main line has, kept fresh as the history grows. */
 function useChangeCount(rpc: RpcClient): number | null {
   const [n, setN] = useState<number | null>(null);
@@ -92,6 +119,7 @@ function ShellScreens({ rpc, project, platform, idea, onClose, step, setStep, ta
   const [sheet, setSheet] = useState<string | null>(null);
   const [moment, setMoment] = useState<GameMoment | null>(null);
   const changeCount = useChangeCount(rpc);
+  useThumbnail(rpc, project.root, step === 'play' && tab === 'play');
   const settings = useSettings();
   const library = p.library;
   const open = library?.find((i) => i.id === sheet) ?? null;
