@@ -16,7 +16,9 @@ export interface OpenedProject {
   mcp: { url: string; launcher: string };
 }
 
-export interface HullApp {
+import type { AgentEvent, AgentInfo, ClaudeCodeInfo, TermInfo } from './agentApi.ts';
+
+export interface HullApp extends HullAppAgents {
   /** 'darwin' | 'win32' | 'linux' | 'web'. The title bar leaves room for traffic lights on darwin only. */
   readonly platform: string;
   listTemplates(): Promise<TemplateInfo[]>;
@@ -34,6 +36,27 @@ export interface HullApp {
   reveal(path: string): Promise<void>;
   /** Web dev mode: the project to open without asking (`--project <dir>`). */
   initialProject(): Promise<OpenedProject | null>;
+}
+
+export interface HullAppAgents {
+  /** The agents found on this Mac, and the ones that are not (with how to install them). Hull's own agent is first. */
+  agentList(): Promise<AgentInfo[]>;
+  /** Starts a session in the open project: the agent is handed Hull's MCP server in session/new. Resolves with the session id. */
+  agentStart(agentId: string): Promise<string>;
+  /** Sends one prompt. Resolves at once; the run streams as events and ends with a 'done' event. */
+  agentPrompt(sid: string, text: string): Promise<void>;
+  agentCancel(sid: string): Promise<void>;
+  agentStop(sid: string): Promise<void>;
+  /** Answers a permission card. `null` denies by cancelling. */
+  agentAnswer(sid: string, reqId: string, optionId: string | null): Promise<void>;
+  claudeInfo(): Promise<ClaudeCodeInfo>;
+  /** Opens `claude` in a terminal in the open project's folder. Output arrives as 'term-data' events. */
+  termOpen(cols: number, rows: number): Promise<TermInfo>;
+  termWrite(tid: string, data: string): Promise<void>;
+  termResize(tid: string, cols: number, rows: number): Promise<void>;
+  termKill(tid: string): Promise<void>;
+  /** Subscribes to agent and terminal events; returns the unsubscribe. */
+  onAgentEvent(cb: (e: AgentEvent) => void): () => void;
 }
 
 declare global {

@@ -637,6 +637,12 @@ An ACP agent (D14, D16) that runs on the user's key: `startHullAgent({ projectRo
 * **Tests**: `fakeProvider` plays a script with no network; `agent.e2e.test.ts` runs prompt, tool calls, edit, check, done, a failing-check
   gate, a permission denial, cancel and compaction over ACP against the arena project.
 
+### The agent panel (ACP client, `packages/studio`)
+
+The app's main process is an ACP client (`src/main/agents.ts`, official `@agentclientprotocol/sdk`). It finds agents on this Mac (Hull agent, `codex-acp`, Gemini CLI, `opencode acp`, plus any in `HULL_ACP_AGENTS`), starts the chosen one as a child process in the project folder, and hands it Hull's MCP server in `session/new` (HTTP with an `x-hull-author` header naming the agent, or the stdio launcher with `HULL_MCP_AUTHOR` when the agent has no HTTP MCP). The MCP server records every change as `ai:<agent name>` in the history. `session/update`, permission requests and the end of a run reach the renderer as plain events (`shared/agentApi.ts`): Electron sends them with `webContents.send`, the web dev mode as a server-sent stream. The panel draws the plan as a checklist, tool calls with line diffs and permission requests as approve or deny cards (`editor/agentView.ts` holds the testable part). Missing agents are listed with the command that installs them.
+
+Claude Code is never started through an SDK. The panel's Claude Code tab runs the person's own `claude` in a pseudo-terminal (`node-pty`, drawn with xterm.js) in the project folder, with their own environment, and shows the `claude mcp add` line to run once. Hull does not offer claude.ai login and never reads or stores Claude credentials (PLAN D15). `src/main/fixtures/fake-acp-agent.mjs` is a scripted ACP agent for tests.
+
 ## 10. Rules the engine enforces
 
 | Rule | How |

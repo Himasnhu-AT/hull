@@ -7,9 +7,9 @@ import { createInterface } from 'node:readline';
 import type { JsonRpcRequest, JsonRpcResponse, McpServer } from './server.ts';
 
 /** Serves one client on a pair of streams until the input closes. */
-export function serveMcpStdio(server: McpServer, input: Readable, output: Writable): Promise<void> {
+export function serveMcpStdio(server: McpServer, input: Readable, output: Writable, o: { author?: string } = {}): Promise<void> {
   const send = (m: JsonRpcResponse): void => { output.write(`${JSON.stringify(m)}\n`); };
-  const session = server.newSession();
+  const session = server.newSession(o.author);
   return new Promise((resolve) => {
     const rl = createInterface({ input });
     const pending = new Set<Promise<void>>();
@@ -73,7 +73,7 @@ export async function startMcpHttp(server: McpServer, o: McpHttpOptions = {}): P
       } catch { return reply(res, 400, { jsonrpc: '2.0', id: null, error: { code: -32700, message: 'parse error' } }); }
       let session = req.headers['mcp-session-id'] as string | undefined;
       const headers: Record<string, string> = {};
-      if (msgs.some((m) => m.method === 'initialize')) { session = server.newSession(); headers['mcp-session-id'] = session; }
+      if (msgs.some((m) => m.method === 'initialize')) { session = server.newSession(typeof req.headers['x-hull-author'] === 'string' ? req.headers['x-hull-author'] : undefined); headers['mcp-session-id'] = session; }
       const out = (await Promise.all(msgs.map((m) => server.handle(m, session)))).filter((r): r is JsonRpcResponse => r !== undefined);
       if (out.length === 0) return reply(res, 202, undefined, headers);
       reply(res, 200, batch ? out : out[0], headers);
