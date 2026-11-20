@@ -27,13 +27,13 @@ const expInfo: Schema = { type: 'object', properties: { name: str(), status: { e
 const empty = obj({});
 const idsHelp = 'Ids, checkpoint names, "main" or an experiment name.';
 const controlOp: Schema = {
-  description: 'One of: {"op":"step","n":60} (pause and run n fixed steps) | {"op":"press","key":"KeyW"} | {"op":"release","key":"KeyW"} | {"op":"state","nodes":["player"]} (tick, time, checksum, the position of the named nodes, and `held`: the keys held down in the game input) | {"op":"screenshot"} (PNG, base64).',
+  description: 'One of: {"op":"step","n":60} (pause and run n fixed steps) | {"op":"press","key":"KeyW"} | {"op":"release","key":"KeyW"} | {"op":"state","nodes":["player"]} (tick, time, checksum, the position of the named nodes, and `held`: the keys held down in the game input) | {"op":"screenshot"} (PNG, base64, the UI layer drawn over the 3D view; "ui":false for the view alone).',
   oneOf: [
     obj({ op: { const: 'step' }, n: num() }, ['op', 'n']),
     obj({ op: { const: 'press' }, key: str('A KeyboardEvent code like KeyW or Space.') }, ['op', 'key']),
     obj({ op: { const: 'release' }, key: str() }, ['op', 'key']),
     obj({ op: { const: 'state' }, nodes: arr(str('A `world.find` path.')) }, ['op']),
-    obj({ op: { const: 'screenshot' } }, ['op']),
+    obj({ op: { const: 'screenshot' }, ui: { type: 'boolean', description: 'false: the 3D view only, without the UI layer (HUD, menus). Default true.' } }, ['op']),
   ],
 };
 
