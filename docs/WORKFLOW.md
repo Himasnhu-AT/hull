@@ -25,7 +25,7 @@ history.
    |---|---|---|
    | 1 | `check` | Type errors, config that does not match its schema, ids that do not exist, banned calls, values of yours it overwrote |
    | 2 | `test` | Wrong behaviour in the simulation: it runs in Node, thousands of frames per second |
-   | 3 | `play` (file `tests/grapple.steps.json`) | What is actually on screen: screenshots the AI reads, golden images that must match |
+   | 3 | `play` (file `tests/grapple.steps.json`) | What is actually on screen, HUD and menus included (the UI layer is painted over the canvas; `game.run {op:"screenshot", ui:false}` gives the canvas alone): screenshots the AI reads, golden images that must match |
    | 4 | Sound measurement (`measureSound`, `checkSound` in `hull/audio`; no tool yet) | Levels and lengths: nothing clips, the new sound sits where it should among the others |
    | 5 | Frame time and draw calls (`render` stats; no tool or budget check yet) | Cost against the budgets in the manifest |
 

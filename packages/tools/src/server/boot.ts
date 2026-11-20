@@ -40,6 +40,8 @@ export function bootSource(o: BootOptions): string {
   const themes = idsOf(o.sources, 'ui-theme');
   const wantAudio = hasModule('audio') && (features.includes('audio') || idsOf(o.sources, 'sound').length > 0);
   const wantUi = hasModule('ui') && (features.includes('ui') || themes.length > 0 || idsOf(o.sources, 'ui-screen').length > 0);
+  // Listed in hull.json, or the project has vfx config: either way the game expects `vfx.burst` to draw.
+  const wantVfx = hasModule('vfx') && (features.includes('vfx') || idsOf(o.sources, 'vfx').length > 0);
   const looks = idsOf(o.sources, 'look');
   const look = looks.includes('look/day') ? 'look/day' : looks[0];
   const wantInput = hasModule('input');
@@ -50,6 +52,7 @@ export function bootSource(o: BootOptions): string {
     ...(wantInput ? [`import { mountInput } from 'hull/input';`] : []),
     ...(wantAudio ? [`import { mountAudio } from 'hull/audio';`] : []),
     ...(wantUi ? [`import { mountUi } from 'hull/ui';`] : []),
+    ...(wantVfx ? [`import { mountVfx } from 'hull/vfx';`] : []),
     ...(o.devUrl ? [`import { connectDev } from 'hull/dev';`] : []),
     `import game from ${JSON.stringify(`/${o.entry.replace(/^\.?\//, '')}`)};`,
   ];
@@ -67,6 +70,8 @@ export function bootSource(o: BootOptions): string {
     ...(wantInput ? [skip('input', `mountInput(g, window${maps[0] ? `, ${JSON.stringify(maps[0])}` : ''})`)] : []),
     ...(wantAudio ? [skip('audio', 'mountAudio(g)')] : []),
     ...(wantUi ? [skip('ui', `mountUi(g, el${themes[0] ? `, ${JSON.stringify(themes[0])}` : ''})`)] : []),
+    // mountVfx gives back the game's own view when it already mounted one, so the dispose below runs once either way.
+    ...(wantVfx ? [skip('vfx', 'mountVfx(g)')] : []),
     ...(o.devUrl ? [`parts.push(connectDev(g, { url: ${JSON.stringify(o.devUrl)} }));`] : []),
     `const stop = () => { for (const p of parts) p.dispose?.(); view.dispose(); g.dispose(); };`,
   ];

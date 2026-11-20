@@ -42,8 +42,8 @@ export class AyaHud extends KitUi {
     foe.show(false);
   }
 
-  override update(): void {
-    super.update();
+  override update(dt: number, alpha: number): void {
+    super.update(dt, alpha);
     const foe = this.foe;
     if (!foe || !this.root) return;
     const t = this.aya.lock?.target ?? null;

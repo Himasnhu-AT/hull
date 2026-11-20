@@ -1,4 +1,4 @@
-// Particle effects driven by `vfx` config. A game calls `mountVfx(game)` once (the dev page does it for you), then
+// Particle effects driven by `vfx` config. A game may call `mountVfx(game)` (the dev page and the build do it when hull.json lists "vfx" or the project has vfx config; calling it again is harmless), then
 // `vfx.burst('dust', at, dir)` for a one-shot and `vfx.trail('gas', node)` for a stream that follows a node.
 import type { Game, Node } from '../core/index.ts';
 import { VfxSystem, type BurstOptions, type TrailHandle, type VfxStats } from './system.ts';
@@ -10,6 +10,7 @@ export type { Compiled } from './emitter.ts';
 export { buildLut, lutAt, parseColor, sampleColorCurve, sampleCurve } from './curves.ts';
 
 let current: VfxSystem | null = null;
+const mounted = new WeakMap<Game, VfxView>();
 let warned = false;
 
 function active(call: string): VfxSystem | null {
@@ -56,15 +57,22 @@ export interface VfxView {
 
 /** Attaches particles to the game's world. They are simulated in the fixed step and drawn by `mountRender`. */
 export function mountVfx(game: Game): VfxView {
+  // Once per game: the dev page mounts vfx when the manifest lists it, and a game may call this itself as well. A
+  // second system on the same world would simulate and draw every particle twice.
+  const had = mounted.get(game);
+  if (had) { current = had.system; return had; }
   const system = new VfxSystem(game.world);
   current = system;
-  return {
+  const view: VfxView = {
     system,
     dispose() {
       system.dispose();
       if (current === system) current = null;
+      if (mounted.get(game) === view) mounted.delete(game);
     },
   };
+  mounted.set(game, view);
+  return view;
 }
 
 /**

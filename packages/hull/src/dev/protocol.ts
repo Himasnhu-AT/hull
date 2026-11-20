@@ -170,8 +170,8 @@ export type ControlOp =
   | { op: 'release'; key: string }
   /** Tick, time, checksum, and the position of the named nodes (`world.find` paths). */
   | { op: 'state'; nodes?: string[] }
-  /** The drawn frame as PNG. */
-  | { op: 'screenshot' };
+  /** The drawn frame as PNG, with the UI layer (`.hull-ui`) painted over it. `ui: false` gives the canvas alone. */
+  | { op: 'screenshot'; ui?: boolean };
 
 export interface NodeState { found: boolean; x: number; y: number; z: number }
 export interface ControlState {

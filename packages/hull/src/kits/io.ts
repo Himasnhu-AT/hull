@@ -4,7 +4,10 @@ import { input, type InputView } from '../input/index.ts';
 import { createSaves, localStore, memoryStore, type Platform, type Saves, type Store } from '../platform/index.ts';
 import type { UiView } from '../ui/index.ts';
 
-export interface PlayOpts { volume?: number; pitch?: number }
+import type { PlayOptions } from '../audio/engine.ts';
+
+/** The same options `audio.play` takes (volume, pitch, `at`, `spatial`, `params`), so spatial sound needs no cast. */
+export type PlayOpts = PlayOptions;
 interface Views { ui?: UiView; audio?: { play(id: string, opts?: PlayOpts): unknown }; platform?: Platform }
 const views = (): Views => (globalThis as { hull?: Views }).hull ?? {};
 

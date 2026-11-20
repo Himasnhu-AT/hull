@@ -6,6 +6,7 @@ import type { Game, Node } from '../core/index.ts';
 import { setTraceSink, type TraceKind } from '../core/trace.ts';
 import { createRecentFeed } from './recent.ts';
 import { input } from '../input/dom.ts';
+import { withUi } from '../ui/capture.ts';
 import type { ControlOp, ControlShot, ControlState, GameControl, GameEvents, GameReport, Pushes } from './protocol.ts';
 
 export interface DevConnection { dispose(): void }
@@ -109,7 +110,9 @@ export function connectDev(game: Game, opts: { url: string; /** Called for `rest
         feed.flush();
         const view = (globalThis as { hull?: { render?: { shot(): Promise<Blob> } } }).hull?.render;
         if (!view) throw new Error('the game has no render view to capture');
-        const blob = await view.shot();
+        let blob = await view.shot();
+        // The canvas holds only the 3D frame; the HUD and menus are DOM, so they are painted on unless asked not to.
+        if (c.ui !== false && typeof document !== 'undefined') blob = await withUi(blob, document);
         const bytes = new Uint8Array(await blob.arrayBuffer());
         let bin = '';
         for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));

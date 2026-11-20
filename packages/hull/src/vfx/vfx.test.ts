@@ -226,6 +226,18 @@ describe('emitter maths', () => {
   });
 });
 
+describe('mountVfx', () => {
+  it('gives the same view for the same game, so the page and the game can both mount it', async () => {
+    const g = await startGame(defineGame({ ready() {} }), { seed: 1 });
+    const a = mountVfx(g);
+    expect(mountVfx(g)).toBe(a);
+    a.dispose();
+    const b = mountVfx(g);
+    expect(b).not.toBe(a);
+    b.dispose();
+  });
+});
+
 describe('vfx system', () => {
   const load = (): void => {
     config.load([...files('vfx'), ...files('look'), ...files('material')]);

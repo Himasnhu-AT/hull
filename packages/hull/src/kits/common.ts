@@ -43,7 +43,8 @@ export const fwdZ = (yaw: number): number => -Math.cos(yaw);
 export abstract class KitUi extends Behaviour {
   private built: UiView | null = null;
   protected abstract build(ui: UiView): void;
-  override update(): void {
+  /** Takes the dt and alpha the world gives every behaviour, so a subclass reads them without a default. */
+  override update(_dt: number, _alpha: number): void {
     const ui = kitIO.ui();
     if (!ui || ui === this.built) return;
     this.built = ui;
