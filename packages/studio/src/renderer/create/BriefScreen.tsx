@@ -21,10 +21,6 @@ import { useCreateState } from './useCreate.ts';
 /** `home`: shown on the home page, where the game's name heads the chat and moving on opens the game. */
 export interface BriefScreenProps { rpc: RpcClient; project: OpenedProject; idea: string; onApproved(): void; home?: boolean }
 
-/** What Claude Code is asked first when it is the builder: the same job Hull's builder does in mode brief. */
-export const claudeBriefPrompt = (idea: string): string =>
-  `I am making a game in Hull. Use the hull MCP tools for every change, so each one is checked and kept in the history. First write the brief: ask me a few short questions, then write GAME.md.${idea.trim() ? ` The idea: ${idea.trim()}` : ''}`;
-
 export function BriefScreen({ rpc, project, idea, onApproved, home = false }: BriefScreenProps): JSX.Element {
   const b = useBuilder();
   const create = useCreateState(rpc);
@@ -46,8 +42,9 @@ export function BriefScreen({ rpc, project, idea, onApproved, home = false }: Br
   useEffect(() => {
     if (!create) return;
     if (wasApproved.current === null) { wasApproved.current = create.briefApproved; return; }
-    if (!wasApproved.current && create.briefApproved) { wasApproved.current = true; onApproved(); }
-  }, [create, onApproved]);
+    // With Claude Code building, the card here follows every stage, so the screen stays until the person presses Play.
+    if (!wasApproved.current && create.briefApproved) { wasApproved.current = true; if (b.via !== 'claude') onApproved(); }
+  }, [create, onApproved, b.via]);
 
   const state = builderPill({ needs: b.needs !== null, waiting: waiting(t).length, working: t.running || b.starting });
   const send = (): void => { const text = b.draft.trim(); if (!text) return; b.setDraft(''); void b.send(text, { mode: 'brief' }); };
@@ -69,7 +66,7 @@ export function BriefScreen({ rpc, project, idea, onApproved, home = false }: Br
         {create?.briefApproved ? <button className="btn primary" onClick={onApproved}>Go to Build</button> : <button className="btn ghost" onClick={onApproved} title="Skip the brief and go to Build">{home ? 'Open the game' : 'Skip the brief'}</button>}
       </header>
       {setup && <div className="chat-center"><BuilderSetup onDone={() => setChoosing(false)} /></div>}
-      {!setup && b.via === 'claude' && <ExternalAgent rpc={rpc} root={project.root} prompt={claudeBriefPrompt(idea || create?.idea || '')} />}
+      {!setup && b.via === 'claude' && <ExternalAgent rpc={rpc} root={project.root} idea={idea || create?.idea || ''} onPlay={onApproved} />}
       {!setup && b.via !== 'claude' && empty && (
         <div className="chat-hero">
           <h2>{idea ? 'Reading your idea...' : 'What are we making?'}</h2>

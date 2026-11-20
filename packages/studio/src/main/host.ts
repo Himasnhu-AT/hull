@@ -17,7 +17,7 @@ import type { CommunityGame, OpenedProject, RecentProject, TemplateInfo } from '
 
 interface ProjectServer { url: string; gameUrl: string; close(): Promise<void> }
 interface McpModule {
-  createMcpServer(root: string, o?: { log?: (line: string) => void }): { close(): Promise<void> };
+  createMcpServer(root: string, o?: { log?: (line: string) => void; onCall?: (e: { tool: string; author: string; phase: 'start' | 'end'; ok?: boolean }) => void }): { close(): Promise<void> };
   startMcpHttp(server: unknown, o?: { port?: number }): Promise<{ url: string; close(): Promise<void> }>;
 }
 interface ServerModule {
@@ -219,7 +219,7 @@ export function createHost(opts: HostOptions): Host {
       const server = await mod.startProjectServer({ root, log });
       // The app hosts the MCP server for the open project, so a local agent works on the project the person has open.
       // A port that depends on the folder keeps `claude mcp add` valid across restarts; if it is taken, any free one will do.
-      const mcpServer = mcpMod.createMcpServer(root, { log });
+      const mcpServer = mcpMod.createMcpServer(root, { log, onCall: (e) => emit({ type: 'mcp-call', ...e }) });
       let preferred = 0; for (const c of root) preferred = (preferred * 31 + c.charCodeAt(0)) % 100;
       const http = await mcpMod.startMcpHttp(mcpServer, { port: 5400 + preferred }).catch(() => mcpMod.startMcpHttp(mcpServer, { port: 0 }));
       running = { root, server, mcp: http, mcpServer };

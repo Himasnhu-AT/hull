@@ -55,7 +55,9 @@ export type AgentEvent =
   | { type: 'permission-done'; sid: string; reqId: string; optionId: string | null }
   | { type: 'done'; sid: string; stopReason: string }
   | { type: 'term-data'; tid: string; data: string }
-  | { type: 'term-exit'; tid: string; code: number | null };
+  | { type: 'term-exit'; tid: string; code: number | null }
+  /** A tool call an outside agent (Claude Code, Codex, any MCP client) made on the open project, as it starts and ends. */
+  | { type: 'mcp-call'; tool: string; author: string; phase: 'start' | 'end'; ok?: boolean };
 
 export interface TermInfo {
   tid: string;

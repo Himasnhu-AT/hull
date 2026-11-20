@@ -20,6 +20,8 @@ export interface McpOptions {
   link?: () => Promise<ProjectLink>;
   /** Where diagnostics go (never the protocol stream). */
   log?: (line: string) => void;
+  /** Each tool call as it starts and ends, with who made it, so an app can show that an agent is at work. */
+  onCall?: (e: { tool: string; author: string; phase: 'start' | 'end'; ok?: boolean }) => void;
 }
 
 export interface JsonRpcRequest { jsonrpc?: string; id?: number | string | null; method?: string; params?: Record<string, unknown> }
@@ -56,6 +58,8 @@ export function createMcpServer(projectRoot: string, o: McpOptions = {}): McpSer
   const callTool = async (name: string, args: unknown, author: string): Promise<object> => {
     const tool = tools.find((t) => t.name === name);
     if (!tool) throw Object.assign(new Error(`unknown tool "${name}" (have: ${tools.map((t) => t.name).join(', ')})`), { code: -32602 });
+    const note = (phase: 'start' | 'end', ok?: boolean): void => { try { o.onCall?.({ tool: name, author, phase, ...(ok === undefined ? {} : { ok }) }); } catch { /* a listener never breaks a call */ } };
+    note('start');
     try {
       const ctx = { root: projectRoot, author, log: (l: string) => log(`[${name}] ${l}`), signal: abort.signal };
       let out: unknown;
@@ -68,8 +72,10 @@ export function createMcpServer(projectRoot: string, o: McpOptions = {}): McpSer
       const problems = (out as { problems?: Problem[] } | null)?.problems ?? [];
       const bad = (out as { ok?: boolean } | null)?.ok === false || problems.length > 0;
       const text = [...problems.map(formatProblem), JSON.stringify(out, null, 2)].join('\n');
+      note('end', !bad);
       return { content: [{ type: 'text', text }], structuredContent: out ?? {}, isError: bad };
     } catch (e) {
+      note('end', false);
       // A tool that throws is a failed call the model can read and fix, not a broken connection.
       return { content: [{ type: 'text', text: `${name}: ${e instanceof Error ? e.message : String(e)}` }], isError: true };
     }
