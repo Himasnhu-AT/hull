@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { formatProblem } from './tool.ts';
-import { scanSource } from './tools/houseRules.ts';
+import { scanSource, scanTunableNames } from './tools/houseRules.ts';
 import { parseTsc } from './tools/types.ts';
 import { problemsFromReport } from './tools/test.ts';
 import { bootModule } from './tools/dev.ts';
@@ -28,6 +28,21 @@ describe('scanSource', () => {
     const p = scanSource('src/a.ts', "import * as T from 'three';\nimport { x } from 'hull/src/core/index.ts';\nimport { ok } from 'hull';\nimport r from 'hull/render';");
     expect(p.map((x) => x.line)).toEqual([1, 2]);
     expect(p[0]!.col).toBe(20);
+  });
+});
+
+describe('scanTunableNames', () => {
+  it('flags a game block that clashes with a kit it imports, at file:line:col', () => {
+    const p = scanTunableNames([{ file: 'src/a.ts', text: "import { Pickup } from 'hull/kits';\n\nconst t = tunables('pickup', { r: 1 });" }]);
+    expect(p).toHaveLength(1);
+    expect(p[0]).toMatchObject({ file: 'src/a.ts', line: 3, col: 11, rule: 'house-rule' });
+    expect(p[0]!.message).toContain('"pickup"');
+  });
+  it('allows the name when the kit is not imported, and flags two game blocks with one name', () => {
+    expect(scanTunableNames([{ file: 'src/a.ts', text: "const t = tunables('pickup', { r: 1 });" }])).toEqual([]);
+    const p = scanTunableNames([{ file: 'src/a.ts', text: "tunables('wave', { a: 1 });" }, { file: 'src/b.ts', text: "\ntunables('wave', { a: 1 });" }]);
+    expect(p).toHaveLength(1);
+    expect(p[0]).toMatchObject({ file: 'src/b.ts', line: 2 });
   });
 });
 

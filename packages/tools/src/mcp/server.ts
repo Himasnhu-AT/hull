@@ -71,7 +71,9 @@ export function createMcpServer(projectRoot: string, o: McpOptions = {}): McpSer
       } else out = await tool.run(ctx, args ?? {});
       const problems = (out as { problems?: Problem[] } | null)?.problems ?? [];
       const bad = (out as { ok?: boolean } | null)?.ok === false || problems.length > 0;
-      const text = [...problems.map(formatProblem), JSON.stringify(out, null, 2)].join('\n');
+      // A document (docs.read) is read as the document, not as a JSON string with its newlines escaped; the object is in structuredContent either way.
+      const body = tool.plainText && tool.format && !bad ? tool.format(out) : [JSON.stringify(out, null, 2)];
+      const text = [...problems.map(formatProblem), ...body].join('\n');
       note('end', !bad);
       return { content: [{ type: 'text', text }], structuredContent: out ?? {}, isError: bad };
     } catch (e) {

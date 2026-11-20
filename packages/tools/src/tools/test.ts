@@ -1,9 +1,10 @@
 import { spawn } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative } from 'node:path';
 import type { Problem } from 'hull';
+import { hullAliases } from '../server/vitePlugins.ts';
 import { defineTool, type ProblemOutput } from '../tool.ts';
 
 interface JsonResult {
@@ -36,7 +37,7 @@ export interface TestOutput extends ProblemOutput { total: number; passed: numbe
 
 export const test = defineTool<Record<string, never>, TestOutput>({
   name: 'test',
-  summary: 'Runs the project tests (src/**/*.test.ts) in Node.',
+  summary: 'Runs the project tests (src/**/*.test.ts) in Node; `hull` and `hull/<module>` imports resolve to the engine.',
   input: { type: 'object', properties: {}, additionalProperties: false },
   output: { type: 'object', required: ['ok', 'problems', 'total', 'passed'] },
   format: (o) => [`${o.passed}/${o.total} tests passed`],
@@ -45,9 +46,13 @@ export const test = defineTool<Record<string, never>, TestOutput>({
     const bin = join(dirname(pkg), 'vitest.mjs');
     const dir = mkdtempSync(join(tmpdir(), 'hull-test-'));
     const outFile = join(dir, 'report.json');
+    // Vitest runs with no project config, so `hull` and `hull/<sub>` are mapped here the way the dev server maps them
+    // (a project made from a template has no node_modules to find the engine in).
+    const configFile = join(dir, 'vitest.config.mjs');
+    writeFileSync(configFile, `export default { resolve: { alias: [${hullAliases().map((a) => `{ find: new RegExp(${JSON.stringify(a.pattern)}), replacement: ${JSON.stringify(a.target)} }`).join(', ')}] } };\n`);
     try {
       const log = await new Promise<string>((done, fail) => {
-        const child = spawn(process.execPath, [bin, 'run', '--root', ctx.root, '--reporter=json', `--outputFile=${outFile}`, 'src/'], { cwd: ctx.root });
+        const child = spawn(process.execPath, [bin, 'run', '--root', ctx.root, '--config', configFile, '--reporter=json', `--outputFile=${outFile}`, 'src/'], { cwd: ctx.root });
         let buf = '';
         child.stdout.on('data', (d) => (buf += d));
         child.stderr.on('data', (d) => (buf += d));

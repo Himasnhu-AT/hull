@@ -7,6 +7,14 @@ import { hullSrc } from './templates.ts';
 
 const hullPkg = JSON.parse(readFileSync(join(hullSrc, '..', 'package.json'), 'utf8')) as { exports: Record<string, string> };
 
+/** Every `hull` import and the engine file it means, as an exact-match pattern: for tools (like the test runner) that have no Vite plugin slot. */
+export function hullAliases(): { pattern: string; target: string }[] {
+  return Object.entries(hullPkg.exports).map(([key, target]) => ({
+    pattern: key === '.' ? '^hull$' : `^hull/${key.slice(2).replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')}$`,
+    target: join(hullSrc, '..', target),
+  }));
+}
+
 /**
  * Finds `hull` and `hull/<module>` from the engine's package exports, wherever the project is. A project made from a
  * template has no node_modules, so a normal lookup from its folder would fail; this is the build-time twin of the

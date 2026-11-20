@@ -272,8 +272,9 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
 
   // ---- Config -----------------------------------------------------------------------------------------------------
   const pathOf = (id: string): string => {
-    if (id === MANIFEST) return MANIFEST;
-    if (!/^[A-Za-z0-9_-]+(\/[A-Za-z0-9_.-]+)+$/.test(id) || id.includes('..')) throw new RpcError(-32602, `"${id}" is not a config id like 'sound/sword/hit'`);
+    // "game" is the id agents guess for the manifest (its kind is 'game'); a real config id always has a folder, so it cannot clash.
+    if (id === MANIFEST || id === 'game') return MANIFEST;
+    if (!/^[A-Za-z0-9_-]+(\/[A-Za-z0-9_.-]+)+$/.test(id) || id.includes('..')) throw new RpcError(-32602, `"${id}" is not a config id like 'sound/sword/hit' (use "game" or "hull.json" for the game manifest)`);
     return `config/${id}.json`;
   };
   const idOf = (path: string): string => (path === MANIFEST ? MANIFEST : path.slice('config/'.length, -'.json'.length));
@@ -551,7 +552,7 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
 
   // Control ops waiting for a game's answer (the control port: `game.run` out, `game.result` back).
   let rpcN = 0;
-  const rpcWait = new Map<number, { ok(v: never): void; fail(e: Error): void }>();
+  const rpcWait = new Map<number, { ok(v: never): void; fail(e: Error): void; owner?: Client }>();
 
   /**
    * The game a method aims at: the named one, else the first connected game of the project's own (not an experiment's), a game in
@@ -565,14 +566,49 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
     return own.find((c) => !c.headless) ?? own[0];
   };
 
-  const runOnGame: Handler<'game.run'> = (p) => new Promise((ok, fail) => {
-    const target = pickGame(p.client);
-    if (!target) { fail(new RpcError(-32002, p.client ? `no game "${p.client}" is connected` : 'no game is connected; open the dev page first')); return; }
+  // A code write reloads the game page: its socket closes and a new one opens a moment later (same client id when the page
+  // was opened with one). These track that, so game.run can wait through a reload instead of failing in the gap.
+  const RELOAD_WAIT_MS = 10_000;
+  let gameConnects = 0;
+  let lastGameGone = 0;
+  const seenGameIds = new Set<string>();
+  /** Fails a control op whose game closed before answering; runOnGame turns it into a wait and a retry. */
+  class GameGone extends Error {}
+
+  const sendToGame = (target: Client, p: Methods['game.run']['params']): Promise<unknown> => new Promise((ok, fail) => {
     const id = ++rpcN;
     const timer = setTimeout(() => { rpcWait.delete(id); fail(new RpcError(-32003, `the game did not answer ${p.control.op} within 30 s`)); }, 30_000);
-    rpcWait.set(id, { ok: (v) => { clearTimeout(timer); ok(v); }, fail: (e) => { clearTimeout(timer); fail(e); } });
+    rpcWait.set(id, { ok: (v) => { clearTimeout(timer); ok(v); }, fail: (e) => { clearTimeout(timer); fail(e); }, owner: target });
     target.ws.send(JSON.stringify({ jsonrpc: '2.0', method: 'game.rpc', params: { id, control: p.control } satisfies Pushes['game.rpc'] }));
   });
+
+  /** The game to run an op on, waiting up to RELOAD_WAIT_MS when one has just gone (a reload) and is expected back. */
+  const gameAfterReload = async (p: Methods['game.run']['params']): Promise<Client | undefined> => {
+    const expected = (): boolean => (p.client ? seenGameIds.has(p.client) : lastGameGone > 0) && Date.now() - lastGameGone < RELOAD_WAIT_MS + 5_000;
+    for (const t0 = Date.now(); ; await new Promise((r) => setTimeout(r, 50))) {
+      const g = pickGame(p.client);
+      if (g) return g;
+      if (!expected() || Date.now() - t0 > RELOAD_WAIT_MS) return undefined;
+    }
+  };
+
+  const runOnGame: Handler<'game.run'> = async (p): Promise<Methods['game.run']['result']> => {
+    const connectsAtStart = gameConnects;
+    let retried = false;
+    for (;;) {
+      const target = pickGame(p.client) ?? await gameAfterReload(p);
+      if (!target) throw new RpcError(-32002, p.client ? `no game "${p.client}" is connected` : 'no game is connected; open the dev page first');
+      try {
+        const result = (await sendToGame(target, p)) as Methods['game.run']['result'];
+        // A game that connected while the op ran means a reload happened: say so, so a reset tick is not read as a normal answer.
+        const reloaded = retried || gameConnects !== connectsAtStart;
+        return (reloaded && result && typeof result === 'object' && !Array.isArray(result) ? { ...result, reloaded: true } : result) as Methods['game.run']['result'];
+      } catch (e) {
+        if (!(e instanceof GameGone) || retried) throw e instanceof GameGone ? new RpcError(-32002, 'the game reloaded again while the op ran; try again') : e;
+        retried = true;
+      }
+    }
+  };
 
   const reviewed = <R extends { entry?: Methods['review.list']['result'][number] }>(r: R): R => {
     if (r.entry) push('review.changed', { entry: r.entry }, 'studio');
@@ -890,8 +926,14 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
       const id = url.searchParams.get('client') ?? Math.random().toString(36).slice(2, 8);
       const client: Client = { ws, role, id: exp ? `${exp}/${id}` : id, ...(exp ? { exp } : {}), ...(role === 'game' && url.searchParams.has('headless') ? { headless: true } : {}) };
       clients.add(client);
-      if (role === 'game') feeds.delete(client.id);
-      ws.on('close', () => { clients.delete(client); feeds.delete(client.id); });
+      if (role === 'game') { feeds.delete(client.id); gameConnects++; seenGameIds.add(client.id); }
+      ws.on('close', () => {
+        clients.delete(client);
+        feeds.delete(client.id);
+        if (role !== 'game') return;
+        lastGameGone = Date.now();
+        for (const [n, w] of rpcWait) if (w.owner === client) { rpcWait.delete(n); w.fail(new GameGone('the game closed')); }
+      });
       ws.on('message', (data) => void onMessage(client, String(data)));
     });
   });

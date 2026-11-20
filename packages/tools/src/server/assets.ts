@@ -250,6 +250,8 @@ export const STARTERS: Readonly<Record<string, unknown>> = {
   sound: { kind: 'sound', bus: 'top', level: -6, source: { type: 'synth', length: 0.2, layers: { tone: { from: { osc: 'sine', freq: 440 }, then: [{ envelope: { attack: 0.002, decay: 0.15 } }, { gain: -6 }] } } } },
   vfx: { kind: 'vfx', emit: { count: [4, 6] }, particle: { life: [0.4, 0.8], speed: [1, 3], size: [[0, 0.2], [1, 0.6]], color: [[0, '#ffd27a'], [1, '#c9523a']], alpha: [[0, 1], [1, 0]], sprite: 'soft' }, budget: { max: 200, fadeNear: 1 } },
   tuning: { kind: 'tuning' },
+  'ui-screen': { kind: 'ui-screen', root: { panel: { align: 'center', gap: 10, width: 360 }, children: [{ title: { text: 'Title' } }, { text: { text: 'Change me' } }] } },
+  'ui-theme': { kind: 'ui-theme', color: { panel: '#10141a', text: '#f4f1ea', accent: '#35e0c2' }, type: { size: 18 }, space: { gutter: 20, radius: 6 } },
   'input-map': { kind: 'input-map', actions: { jump: { type: 'button', keys: ['Space'] } } },
 };
 

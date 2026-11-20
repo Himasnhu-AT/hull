@@ -23,6 +23,8 @@ export interface ToolDef<I, O> {
   output: unknown;
   /** Human-readable lines for output that is not a problem list. */
   format?(out: O): string[];
+  /** MCP only: the text content is the `format` lines as they are (a document to read), not the output as JSON; structuredContent still carries the object. */
+  plainText?: boolean;
   run(ctx: ToolContext, input: I): Promise<O>;
 }
 

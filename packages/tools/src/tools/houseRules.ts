@@ -1,6 +1,8 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Problem } from 'hull';
+import { kitBlocks, kitImports } from '../server/kitTunables.ts';
+import { findTunables } from '../server/tsTunables.ts';
 
 /** Blank out comments (and optionally strings) but keep every offset and newline, so positions stay true. */
 function mask(text: string, strings: boolean): string {
@@ -77,6 +79,30 @@ export function sourceFiles(root: string, dir = 'src'): string[] {
   });
 }
 
+/**
+ * Block names in `tunables(name, ...)` must be unique across the game and the kits it imports: the runtime throws on the
+ * second declaration, which only shows once the game runs. Pure over (file, text) pairs so it is unit-tested directly.
+ */
+export function scanTunableNames(files: { file: string; text: string }[]): Problem[] {
+  const out: Problem[] = [];
+  const kit = new Map<string, string>();
+  for (const f of files) for (const b of kitBlocks(kitImports(f.file, f.text))) if (!kit.has(b.block)) kit.set(b.block, b.file);
+  const seen = new Map<string, string>();
+  for (const f of files) {
+    if (!f.text.includes('tunables')) continue;
+    for (const b of findTunables(f.file, f.text)) {
+      const { line, col } = where(f.text, b.start);
+      const clash = kit.get(b.block);
+      const first = seen.get(b.block);
+      if (clash) out.push({ file: f.file, line, col, message: `tunables block "${b.block}" is also declared by the kit in hull ${clash}; the game would throw at start. Rename this block (for example "game${b.block[0]!.toUpperCase()}${b.block.slice(1)}")`, rule: 'house-rule' });
+      else if (first) out.push({ file: f.file, line, col, message: `tunables block "${b.block}" is already declared at ${first}; block names must be unique`, rule: 'house-rule' });
+      else seen.set(b.block, `${f.file}:${line}:${col}`);
+    }
+  }
+  return out;
+}
+
 export function checkHouseRules(root: string): Problem[] {
-  return sourceFiles(root).flatMap((f) => scanSource(f, readFileSync(join(root, f), 'utf8')));
+  const files = sourceFiles(root).map((f) => ({ file: f, text: readFileSync(join(root, f), 'utf8') }));
+  return [...files.flatMap((f) => scanSource(f.file, f.text)), ...scanTunableNames(files)];
 }

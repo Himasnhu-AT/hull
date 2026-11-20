@@ -59,8 +59,12 @@ const cache = new Map<string, Map<string, string>>();
 /** One program over every entry, built once per hull folder: the checker is the slow part, the text is cheap. */
 function apiText(hull: string, entry: Entry): string {
   let all = cache.get(hull);
-  if (!all) { all = buildApi(hull); cache.set(hull, all); }
-  return all.get(entry.name) ?? `# ${entry.import}\n\n(no summary)\n`;
+  if (!all) {
+    // A program that cannot be built must not turn into an empty document: say what is missing and where to look instead.
+    try { all = buildApi(hull); } catch { all = new Map(); }
+    cache.set(hull, all);
+  }
+  return all.get(entry.name) ?? `# ${entry.import}\n\n(no summary could be generated; read the module's source at ${entry.file})\n`;
 }
 
 const oneLine = (s: string, max: number): string => { const t = s.replace(/\s+/g, ' ').trim(); return t.length > max ? `${t.slice(0, max - 1)}…` : t; };

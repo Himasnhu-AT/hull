@@ -98,6 +98,7 @@ describe('new and duplicate', () => {
       const r = createRegistry().load([{ path: plan.writes[0]!.path, text: plan.writes[0]!.text }]);
       expect(r.problems, kind).toEqual([]);
     }
+    expect(Object.keys(STARTERS)).toEqual(expect.arrayContaining(['ui-screen', 'ui-theme']));
     expect(planNew(src(), 'character', 'character/x').ok).toBe(false);
     expect(planNew(src(), 'material', 'sound/x').ok).toBe(false);
   });

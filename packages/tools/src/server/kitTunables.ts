@@ -53,24 +53,35 @@ export function kitImports(file: string, text: string): string[] {
   return out;
 }
 
+/** Every tunables block (even one with no literal numbers) of the kits that `imported` pulls in, with the kit file that declares it. */
+export function kitBlocks(imported: Iterable<string>): { block: string; file: string }[] {
+  const out: { block: string; file: string }[] = [];
+  walkKits(imported, (abs, p) => { for (const b of p.blocks) out.push({ block: b.block, file: abs.slice(hullSrc.length + 1) }); });
+  return out;
+}
+
 /** Every literal tunable of the kits that `imported` (names from `hull/kits`) pulls in. */
 export function kitTunables(imported: Iterable<string>): KitTunable[] {
+  const out: KitTunable[] = [];
+  walkKits(imported, (abs, p) => { for (const b of p.blocks) for (const t of b.tunables) out.push({ ...t, file: abs.slice(hullSrc.length + 1) }); });
+  return out;
+}
+
+function walkKits(imported: Iterable<string>, visit: (abs: string, p: Parsed) => void): void {
   const index = parse(join(hullSrc, 'kits', 'index.ts'));
-  if (!index) return [];
+  if (!index) return;
   const names = new Set(imported);
   const queue: string[] = [];
   for (const [name, file] of index.exportsFrom) if (names.has('*') || names.has(name)) queue.push(file);
   // Walk the kit files each used kit imports (health under spawner, and so on): the game would load them too.
   const seen = new Set<string>();
-  const out: KitTunable[] = [];
   while (queue.length) {
     const abs = queue.pop()!;
     if (seen.has(abs)) continue;
     seen.add(abs);
     const p = parse(abs);
     if (!p) continue;
-    for (const b of p.blocks) for (const t of b.tunables) out.push({ ...t, file: abs.slice(hullSrc.length + 1) });
+    visit(abs, p);
     for (const i of p.imports) if (i.includes('/kits/')) queue.push(i);
   }
-  return out;
 }

@@ -126,6 +126,16 @@ describe('project server', () => {
     expect(readFileSync(file, 'utf8')).toBe(before);
   });
 
+  it('the id "game" is the manifest, for config.read and config.set', async () => {
+    const r = await studio.call('config.read', { id: 'game' });
+    expect(r.path).toBe('hull.json');
+    expect(r.value.kind).toBe('game');
+    const w = await studio.call('config.set', { id: 'game', pointer: '/version', value: '0.1.1' });
+    expect(w).toEqual({ ok: true, problems: [] });
+    expect(JSON.parse(readFileSync(join(dir, 'hull.json'), 'utf8')).version).toBe('0.1.1');
+    await expect(studio.call('config.read', { id: 'nope' })).rejects.toThrow(/"game" or "hull.json"/);
+  });
+
   it('config.read gives text, value, schema and problems', async () => {
     const r = await studio.call('config.read', { id: 'tuning/cube-look' });
     expect(r.value.spin).toBe(3.5);
