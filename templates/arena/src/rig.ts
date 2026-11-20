@@ -5,7 +5,9 @@ import { input, type InputView } from 'hull/input';
 
 export const rig: { input: InputView } = { input };
 
-export interface PlayOpts { volume?: number; pitch?: number }
+// The same options audio.play takes (volume, pitch, at, spatial, params), so spatial sound needs no cast.
+import type { PlayOptions } from 'hull/audio';
+export type PlayOpts = PlayOptions;
 type Player = { play(id: string, opts?: PlayOpts): unknown };
 
 /** Sounds are effects, not state: they never change what the simulation does. */
