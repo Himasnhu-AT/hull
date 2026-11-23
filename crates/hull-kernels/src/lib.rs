@@ -17,7 +17,9 @@ pub mod dda;
 pub mod math;
 pub mod mem;
 pub mod narrow;
+pub mod rigid;
 pub mod shapes;
+pub mod world;
 
 #[global_allocator]
 static ALLOC: mem::Bump = mem::Bump;
@@ -111,13 +113,25 @@ pub fn c_out() {
     }
 }
 
-/// Points the header at the shape tables again (they may have moved).
+/// Points the header at every array TypeScript reads or writes (they may have moved or grown).
 pub fn publish_shapes() {
     unsafe {
+        let cap = shapes::SH.cap;
+        if world::W.dirty.len() < cap {
+            world::W.dirty.resize(cap + 64, 0);
+        }
         mem::HDR[h::SF] = shapes::SH.sf.as_ptr() as i32;
         mem::HDR[h::SI] = shapes::SH.si.as_ptr() as i32;
-        mem::HDR[h::SCAP] = shapes::SH.cap as i32;
+        mem::HDR[h::SCAP] = cap as i32;
         mem::HDR[h::RES] = core::ptr::addr_of!(RES) as i32;
+        mem::HDR[h::FILT] = core::ptr::addr_of!(world::FILT) as i32;
+        mem::HDR[h::DIRTY] = world::W.dirty.as_ptr() as i32;
+        mem::HDR[h::DIRTYCAP] = world::W.dirty.len() as i32;
+        mem::HDR[h::OUT] = world::W.out.as_ptr() as i32;
+        mem::HDR[h::OUTCAP] = world::W.out.capacity() as i32;
+        mem::HDR[h::BF] = rigid::RB.bf.as_ptr() as i32;
+        mem::HDR[h::BI] = rigid::RB.bi.as_ptr() as i32;
+        mem::HDR[h::BCAP] = (rigid::RB.bi.len() / rigid::BI_STRIDE) as i32;
     }
 }
 
@@ -203,4 +217,143 @@ pub extern "C" fn hk_t_closest(id: i32, px: f64, py: f64, pz: f64) -> f64 {
 #[no_mangle]
 pub extern "C" fn hk_t_ray_aabb(ox: f64, oy: f64, oz: f64, dx: f64, dy: f64, dz: f64, x0: f64, y0: f64, z0: f64, x1: f64, y1: f64, z1: f64, tmax: f64) -> i32 {
     narrow::ray_aabb(ox, oy, oz, dx, dy, dz, x0, y0, z0, x1, y1, z1, tmax) as i32
+}
+
+// ---------------------------------------------------------------- the world (world.ts)
+
+/// Starts the world with its broadphase cell size. One instance, one world.
+#[no_mangle]
+pub extern "C" fn hk_world_init(cell: f64) {
+    unsafe {
+        world::W.cell = cell;
+        world::W.out.reserve(256);
+    }
+    publish_shapes();
+}
+
+/// Files a shape TypeScript has filled in. Returns 0, or 1 when the world can no longer be held here.
+#[no_mangle]
+pub extern "C" fn hk_shape_commit(id: i32) -> i32 {
+    unsafe {
+        world::W.commit(id as usize);
+        publish_shapes();
+        world::W.failed
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn hk_shape_remove(id: i32) {
+    unsafe { world::W.remove(id as usize) };
+}
+
+/// world.ts `cast`: B seeded from RES, the filter from FILT; the best hit back in RES. Returns 0, or 1 on failure.
+#[no_mangle]
+pub extern "C" fn hk_cast(ox: f64, oy: f64, oz: f64, dx: f64, dy: f64, dz: f64, r: f64) -> i32 {
+    unsafe {
+        let w = &mut world::W;
+        w.flush();
+        let fl = world::read_filter();
+        b_in();
+        w.cast(ox, oy, oz, dx, dy, dz, r, &fl);
+        b_out();
+        w.failed
+    }
+}
+
+fn finish_out() -> i32 {
+    publish_shapes();
+    unsafe { world::W.out.len() as i32 }
+}
+
+/// world.ts `gather`: ids into OUT; returns how many (-1 on failure).
+#[no_mangle]
+pub extern "C" fn hk_gather(x0: f64, y0: f64, z0: f64, x1: f64, y1: f64, z1: f64) -> i32 {
+    unsafe {
+        let w = &mut world::W;
+        w.flush();
+        let fl = world::read_filter();
+        w.gather(x0, y0, z0, x1, y1, z1, &fl);
+        if w.failed != 0 { return -1; }
+        w.out.clear();
+        for j in 0..w.cand.len() { let v = w.cand[j]; w.out.push(v); }
+    }
+    finish_out()
+}
+
+/// world.ts `overlapSphere`: ids into OUT.
+#[no_mangle]
+pub extern "C" fn hk_overlap_sphere(cx: f64, cy: f64, cz: f64, radius: f64) -> i32 {
+    unsafe {
+        let w = &mut world::W;
+        w.flush();
+        let fl = world::read_filter();
+        w.gather(cx - radius, cy - radius, cz - radius, cx + radius, cy + radius, cz + radius, &fl);
+        if w.failed != 0 { return -1; }
+        w.out.clear();
+        for j in 0..w.cand.len() {
+            let id = w.cand[j];
+            if narrow::closest_on(id as usize, cx, cy, cz) <= radius { w.out.push(id); }
+        }
+    }
+    finish_out()
+}
+
+/// world.ts `overlapCapsule`, with `n` (spheres along the axis, less one) worked out by TypeScript.
+#[no_mangle]
+pub extern "C" fn hk_overlap_capsule(ax: f64, ay: f64, az: f64, bx: f64, by: f64, bz: f64, radius: f64, n: i32) -> i32 {
+    use math::{max, min};
+    unsafe {
+        let w = &mut world::W;
+        w.flush();
+        let fl = world::read_filter();
+        w.gather(min(ax, bx) - radius, min(ay, by) - radius, min(az, bz) - radius, max(ax, bx) + radius, max(ay, by) + radius, max(az, bz) + radius, &fl);
+        if w.failed != 0 { return -1; }
+        w.out.clear();
+        let rr = radius * 1.03;
+        let nf = n as f64;
+        for j in 0..w.cand.len() {
+            let id = w.cand[j];
+            for k in 0..=n {
+                let u = k as f64 / nf;
+                if narrow::closest_on(id as usize, ax + (bx - ax) * u, ay + (by - ay) * u, az + (bz - az) * u) <= rr {
+                    w.out.push(id);
+                    break;
+                }
+            }
+        }
+    }
+    finish_out()
+}
+
+/// world.ts `distanceTo`: the distance, with the direction away in RES[9..12].
+#[no_mangle]
+pub extern "C" fn hk_closest(id: i32, px: f64, py: f64, pz: f64) -> f64 {
+    unsafe { world::W.flush() };
+    let d = narrow::closest_on(id as usize, px, py, pz);
+    c_out();
+    d
+}
+
+// ---------------------------------------------------------------- rigid bodies (rigid.ts)
+
+#[no_mangle]
+pub extern "C" fn hk_body_add(shape: i32) -> i32 {
+    let b = unsafe { rigid::RB.add(shape as usize) };
+    publish_shapes();
+    b as i32
+}
+
+#[no_mangle]
+pub extern "C" fn hk_body_remove(b: i32) {
+    unsafe { rigid::RB.remove(b as usize) };
+}
+
+/// One step of the rigid solver, after TypeScript has written the bodies in. Returns 0, or 1 on failure.
+#[no_mangle]
+pub extern "C" fn hk_rigid_step(dt: f64, gx: f64, gy: f64, gz: f64, iters: i32) -> i32 {
+    unsafe {
+        world::W.flush();
+        rigid::RB.step(dt, gx, gy, gz, iters);
+        world::W.failed
+    }
 }
