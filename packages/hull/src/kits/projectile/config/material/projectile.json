@@ -1,0 +1,7 @@
+{
+  "kind": "material",
+  "note": "Warm glowing ball for shots.",
+  "color": "#ffb347",
+  "roughness": 0.3,
+  "metalness": 0
+}

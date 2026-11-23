@@ -26,3 +26,8 @@ export * from './combat/index.ts';
 export { PauseMenu } from './pause/pause.ts';
 export { SaveSlots } from './saves/saves.ts';
 export type { SaveData } from './saves/saves.ts';
+export { Interactable, Interactor, InteractPrompt, interactTuning } from './interact/interact.ts';
+export { fire, Launcher, Projectile, ProjectilePool, projectilesOf, projectileTuning } from './projectile/projectile.ts';
+export type { FireOpts } from './projectile/projectile.ts';
+export { Checkpoint, Respawn, checkpointTuning } from './checkpoint/checkpoint.ts';
+export { Inventory } from './inventory/inventory.ts';

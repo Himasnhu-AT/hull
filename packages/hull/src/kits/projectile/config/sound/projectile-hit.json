@@ -1,0 +1,55 @@
+{
+  "kind": "sound",
+  "note": "A dull tick where a shot lands.",
+  "bus": "sfx",
+  "level": -8,
+  "pitch": 1,
+  "limit": {
+    "minGap": 0.05,
+    "voices": 3,
+    "over": "steal-oldest"
+  },
+  "source": {
+    "type": "synth",
+    "length": 0.4,
+    "layers": {
+      "low": {
+        "from": {
+          "osc": "triangle",
+          "freq": 180
+        },
+        "then": [
+          {
+            "envelope": {
+              "attack": 0.002,
+              "decay": 0.06,
+              "curve": "exp"
+            }
+          },
+          {
+            "gain": -3
+          }
+        ]
+      },
+      "high": {
+        "from": {
+          "osc": "sine",
+          "freq": 320
+        },
+        "then": [
+          {
+            "envelope": {
+              "attack": 0.002,
+              "decay": 0.096,
+              "curve": "exp"
+            }
+          },
+          {
+            "gain": -5
+          }
+        ]
+      }
+    },
+    "reverb": 0.1
+  }
+}

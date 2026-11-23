@@ -1,0 +1,55 @@
+{
+  "kind": "sound",
+  "note": "A rising two-note chime when a checkpoint is reached.",
+  "bus": "sfx",
+  "level": -8,
+  "pitch": 1,
+  "limit": {
+    "minGap": 0.05,
+    "voices": 3,
+    "over": "steal-oldest"
+  },
+  "source": {
+    "type": "synth",
+    "length": 0.4,
+    "layers": {
+      "low": {
+        "from": {
+          "osc": "triangle",
+          "freq": 523
+        },
+        "then": [
+          {
+            "envelope": {
+              "attack": 0.002,
+              "decay": 0.25,
+              "curve": "exp"
+            }
+          },
+          {
+            "gain": -3
+          }
+        ]
+      },
+      "high": {
+        "from": {
+          "osc": "sine",
+          "freq": 784
+        },
+        "then": [
+          {
+            "envelope": {
+              "attack": 0.002,
+              "decay": 0.4,
+              "curve": "exp"
+            }
+          },
+          {
+            "gain": -5
+          }
+        ]
+      }
+    },
+    "reverb": 0.1
+  }
+}
