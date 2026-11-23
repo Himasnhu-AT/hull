@@ -190,7 +190,7 @@ export type ControlOp =
   | { op: 'perf'; steps?: number }
   /** Mouse movement as the input layer gets it under pointer lock. Buttons go through press/release with key Mouse0, Mouse1, Mouse2. */
   | { op: 'look'; dx: number; dy: number }
-  /** `count` screenshots (2 to 12), `every` ticks apart, tiled in reading order into one PNG with each tick written in a corner. */
+  /** `count` screenshots (2 to 12), `every` ticks apart, tiled in reading order into one PNG with each tick written in a corner. Tiles are at most 320 px wide; with `width`/`height` each tile is captured at that size and the sheet is scaled down together to fit 1920x1080. */
   | { op: 'frames'; count: number; every: number; width?: number; height?: number };
 
 export type ControlCmp = '<' | '<=' | '>' | '>=' | '==' | '!=';

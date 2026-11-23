@@ -53,7 +53,7 @@ const controlOp: Schema = {
     obj({ op: { const: 'restart' } }, ['op']),
     obj({ op: { const: 'perf' }, steps: num('Steps and frames to time, default 120. Advances the game that many ticks.') }, ['op']),
     obj({ op: { const: 'look' }, dx: num('Mouse movement in pixels, right is positive.'), dy: num('Mouse movement in pixels, down is positive.') }, ['op', 'dx', 'dy']),
-    obj({ op: { const: 'frames' }, count: num('How many pictures, 2 to 12.'), every: num('Ticks to step between pictures.'), width: num('Each picture\'s width in pixels, 16 to 1920 (the page is put back after).'), height: num('Each picture\'s height, 16 to 1080.') }, ['op', 'count', 'every']),
+    obj({ op: { const: 'frames' }, count: num('How many pictures, 2 to 12.'), every: num('Ticks to step between pictures.'), width: num('Each picture is captured this many pixels wide (16 to 1920; the page is put back after), then the whole sheet is scaled down together to fit 1920x1080. Without width and height, tiles are at most 320 px wide.'), height: num('Each picture\'s height before that scaling, 16 to 1080.') }, ['op', 'count', 'every']),
   ],
 };
 // One line per op, in the tool's description (a oneOf branch has no room for prose in most clients).
@@ -68,7 +68,7 @@ export const controlOpHelp = [
   'restart: the game starts again from ready with the same seed, paused at tick 0.',
   'perf {steps?}: ms per step and per frame (avg, p95, max), draw calls, triangles, node count.',
   'look {dx, dy}: mouse movement as under pointer lock.',
-  'frames {count, every}: count screenshots every ticks apart, tiled into one picture with each tick written on it.',
+  'frames {count, every, width?, height?}: count screenshots every ticks apart, tiled into one picture with each tick written on it; tiles are at most 320 px wide, or with width/height each tile is that size and the sheet is scaled down to fit 1920x1080.',
   'screenshot {ui?, width?, height?}: the frame as a picture, with the HUD and menus; width and height (up to 1920x1080) render this one picture at that size and put the page back.',
   'ui: what a person could read on the UI layer now: screens (ids of the ui-screens showing) and items (text, button, bar with value and max, top to bottom, 80 at most).',
   'click {button}: click the button whose text matches (case-insensitive) or the nth (from 0); fires what a person\'s click does. A miss answers with the buttons there are. press / release of Enter, Space, Escape, Tab and the arrows also reach the UI layer: a focused button activates on Enter or Space.',

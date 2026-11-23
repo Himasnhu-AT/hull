@@ -218,11 +218,14 @@ export function connectDev(game: Game, opts: { url: string; /** Called for `rest
       blobs.push(await view.shot());
     }
     const bitmaps = await Promise.all(blobs.map((b) => createImageBitmap(b)));
-    // Small tiles: the point is judging motion cheaply, so each frame is at most 320 px wide.
-    const tw = Math.min(bitmaps[0]!.width, 320);
-    const th = Math.round((tw * bitmaps[0]!.height) / bitmaps[0]!.width);
     const cols = Math.ceil(Math.sqrt(c.count));
     const rows = Math.ceil(c.count / cols);
+    const bw = bitmaps[0]!.width, bh = bitmaps[0]!.height;
+    // With no size asked the point is judging motion cheaply, so each tile is at most 320 px wide. With a width or height each
+    // tile is that size, then the whole sheet is scaled down together so it stays within 1920x1080.
+    const scale = c.width === undefined && c.height === undefined ? Math.min(1, 320 / bw) : Math.min(1, MAX_W / (cols * bw), MAX_H / (rows * bh));
+    const tw = Math.max(1, Math.round(bw * scale));
+    const th = Math.max(1, Math.round(bh * scale));
     const canvas = document.createElement('canvas');
     canvas.width = cols * tw;
     canvas.height = rows * th;

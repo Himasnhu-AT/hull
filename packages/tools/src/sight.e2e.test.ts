@@ -288,7 +288,9 @@ describe.skipIf(!hasBrowser)('reach: UI, picture size, per-frame stats, problems
     expect(dims(await mcp.run({ op: 'screenshot' }))).toEqual([640, 360]);
     expect(dims(await mcp.run({ op: 'screenshot', width: 960, height: 540 }))).toEqual([960, 540]);
     expect(dims(await mcp.run({ op: 'screenshot' }))).toEqual([640, 360]);
-    expect(dims(await mcp.run({ op: 'frames', count: 2, every: 1, width: 1920, height: 1080 })).join('x')).toBe('640x180');
+    // Each tile is the asked size, then the whole sheet is scaled down to fit 1920x1080: 2 tiles of 1280x720 are 960x540 each.
+    expect(dims(await mcp.run({ op: 'frames', count: 2, every: 1, width: 1280, height: 720 })).join('x')).toBe('1920x540');
+    expect(dims(await mcp.run({ op: 'frames', count: 6, every: 1, width: 1280, height: 720 })).join('x')).toBe('1920x720');
     expect((await mcp.run({ op: 'screenshot', width: 5000 })).text).toMatch(/1920/);
     expect(dims(await mcp.run({ op: 'screenshot' }))).toEqual([640, 360]);
   }, 180_000);
