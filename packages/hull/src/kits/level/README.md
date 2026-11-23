@@ -12,3 +12,14 @@ A square arena: floor, four walls and random crates, all solid to the physics (l
 
 For AOTT: replace it with a level of your own; every other kit only asks it for `half` and `freeSpot`, and for
 colliders on the `world` layer.
+
+## Use it
+
+```ts
+const level = w.spawn('level').add(ArenaLevel);   // floor, walls, crates; pass `level` to pickups and the spawner
+```
+
+## Wiring
+
+- Spawn it before everything that stands on it. It installs physics itself.
+- Copy `material/floor`, `material/wall`, `material/crate` and `look/day` into the project's `config/`.

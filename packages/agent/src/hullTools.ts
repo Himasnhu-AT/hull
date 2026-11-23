@@ -67,12 +67,12 @@ export class HullTools {
   }
 
   async call(name: string, input: unknown): Promise<HullToolResult> {
-    const res = (await this.rpc('tools/call', { name, arguments: input ?? {} })) as { content: { text: string }[]; structuredContent?: unknown; isError?: boolean };
-    const images: { mime: string; data: string }[] = [];
+    const res = (await this.rpc('tools/call', { name, arguments: input ?? {} })) as { content: { type: string; text?: string; data?: string; mimeType?: string }[]; structuredContent?: unknown; isError?: boolean };
+    // The server sends each picture as its own image block and leaves "[image]" in the text; any picture still inline is taken out too.
+    const images: { mime: string; data: string }[] = res.content.filter((c) => c.type === 'image' && c.data).map((c) => ({ mime: c.mimeType ?? 'image/png', data: c.data! }));
     const value = stripImages(res.structuredContent, images);
-    const raw = res.content.map((c) => c.text).join('\n');
-    // The server's text repeats the structured JSON; with pictures taken out it is far smaller.
-    const text = images.length ? `${JSON.stringify(value, null, 2)}\n(${images.length} image${images.length === 1 ? '' : 's'} attached)` : raw;
+    const raw = res.content.filter((c) => c.type === 'text').map((c) => c.text ?? '').join('\n');
+    const text = images.length ? `${raw}\n(${images.length} image${images.length === 1 ? '' : 's'} attached)` : raw;
     return { text: text.length > 40_000 ? `${text.slice(0, 40_000)}\n... (cut: ${text.length} characters)` : text, ok: !res.isError, value, images };
   }
 

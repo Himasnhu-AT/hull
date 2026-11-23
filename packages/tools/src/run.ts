@@ -6,6 +6,7 @@ import { formatProblem, type ToolContext, type ToolDef } from './tool.ts';
 import { tools } from './tools/index.ts';
 import { projectTools } from './tools/project.ts';
 import { openProject } from './server/link.ts';
+import { validateInput } from './validate.ts';
 
 /** Nearest folder at or above `from` holding hull.json; `from` itself if none. */
 export function findRoot(from: string): string {
@@ -38,6 +39,7 @@ export function failed(out: unknown): boolean {
 export async function runTool(root: string, name: string, input: unknown = {}, ctx: Partial<ToolContext> = {}): Promise<unknown> {
   const tool = allTools.find((t) => t.name === name);
   if (!tool) throw new Error(`unknown tool "${name}" (have: ${allTools.map((t) => t.name).join(', ')})`);
+  validateInput(name, tool.input, input);
   const base: ToolContext = { root, author: 'you', log: () => {}, signal: new AbortController().signal, ...ctx };
   if (!projectTools.some((t) => t.name === name) || tools.some((t) => t.name === name)) return tool.run(base, input);
   const link = await openProject({ root, log: base.log });

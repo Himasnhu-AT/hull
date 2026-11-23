@@ -426,8 +426,9 @@ export interface CreateMethods {
   'brief.read': { params: Record<string, never>; result: BriefDoc };
   /** Writes GAME.md whole (`text`) or one section (`section`, added in the standard order when new). Recorded with its author. */
   'brief.write': { params: { text?: string; section?: { id: string; title?: string; text: string }; author?: Author }; result: WriteResult & { doc?: BriefDoc } };
-  'docs.list': { params: Record<string, never>; result: { items: DocItem[] } };
-  'docs.read': { params: { id: string }; result: { ok: boolean; problems: Problem[]; id?: string; title?: string; text?: string } };
+  'docs.list': { params: Record<string, never>; result: { items: DocItem[]; notBuilt: string[] } };
+  'docs.read': { params: { id: string; section?: string }; result: { ok: boolean; problems: Problem[]; id?: string; title?: string; text?: string; sections?: string[] } };
+  'docs.search': { params: { query: string }; result: { items: { id: string; section: string; line: string }[] } };
   'explain.list': { params: Record<string, never>; result: { items: ExplainDoc[] } };
   /** Validated against the explain schema before it is kept; an id that exists is replaced. */
   'explain.write': { params: { doc: ExplainDoc; author?: Author }; result: WriteResult };

@@ -10,6 +10,8 @@ export const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../
 export const templatesDir = join(repoRoot, 'templates');
 /** The hull package's source folder. It is not published yet, so a project reaches it by path. */
 export const hullSrc = join(repoRoot, 'packages', 'hull', 'src');
+/** The guide an AI reads first: ENGINE.md in full for docs.read, AGENTS.md (the short cut of it) for every new project. */
+export const hullDocs = join(repoRoot, 'packages', 'hull', 'docs');
 
 export function listTemplates(): { name: string; title: string; description: string }[] {
   let names: string[];
@@ -99,6 +101,10 @@ export function copyProject(opts: { from: string; dir: string; title?: string })
     own = Object.fromEntries(Object.entries(c.compilerOptions ?? {}).filter(([k]) => OWN_OPTIONS.includes(k)));
   } catch { /* no tsconfig: the defaults apply */ }
   writeFileSync(join(to, 'tsconfig.json'), standaloneTsconfig(own));
+  // An AI that opens the folder finds the way in: AGENTS.md (what Hull is and how to verify), and CLAUDE.md pointing at it.
+  // A project that brings its own keeps it.
+  if (!existsSync(join(to, 'AGENTS.md')) && existsSync(join(hullDocs, 'AGENTS.md'))) writeFileSync(join(to, 'AGENTS.md'), readFileSync(join(hullDocs, 'AGENTS.md'), 'utf8'));
+  if (!existsSync(join(to, 'CLAUDE.md')) && existsSync(join(to, 'AGENTS.md'))) writeFileSync(join(to, 'CLAUDE.md'), '@AGENTS.md\n');
   writeFileSync(join(to, 'package.json'), `${JSON.stringify({ name: id || 'game', version: '0.0.0', private: true, type: 'module' }, null, 2)}\n`);
   return { root: to };
 }

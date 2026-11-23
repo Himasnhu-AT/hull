@@ -19,7 +19,7 @@ history.
 ## 2. Making something new
 
 1. You ask for it ("add a grapple hook with a reel sound").
-2. The AI writes the logic and the config, then runs, cheapest first:
+2. The AI reads `docs.read guide/engine` (every new project's `AGENTS.md` is its short form), writes the logic and the config, then runs, cheapest first:
 
    | Step | Tool | Catches |
    |---|---|---|

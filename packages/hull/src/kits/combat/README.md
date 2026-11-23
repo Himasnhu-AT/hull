@@ -1,7 +1,8 @@
 # combat kit
 
-Sword fights: fighters with posture and timed guards, blades traced against hurt shapes, enemies that run patterns from
-config, lock-on and standoffs. Built on the animator (sockets, hurt shapes in `character.hits`), the health kit and the
+Sword fights: fighters with posture and timed guards, blades traced against hurt shapes, and enemies that run patterns from config.
+
+Lock-on and standoffs are in the kit too. Built on the animator (sockets, hurt shapes in `character.hits`), the health kit and the
 follow camera. Its default config uses the materials and sounds of the third-person and health kits.
 
 - **Config kinds**: `move-set` (the weapon line in a socket, and per move: input, stance, damage, posture damage, reach,
@@ -50,3 +51,18 @@ follow camera. Its default config uses the materials and sounds of the third-per
 - **Tunables** (`combat`, `enemyBrain`, `fighter`, `lockOn` blocks): every window and multiplier above.
 - **Bench**: `bench.ts` (a duel with `CombatDebug`: hurt shapes, blade, sweep, a window timeline over each head).
   **Tests**: `combat.test.ts`.
+
+## Use it
+
+```ts
+import { spawnDuelist, spawnEnemy } from 'hull/kits';
+const me = spawnDuelist(w, { name: 'player', character: 'character/duelist', moveSet: 'move-set/duelist' }); // FighterInput, LockOn, camera
+const foe = spawnEnemy(w, 'enemy/duelist', { x: 0, z: -6, target: 'player' }); // Combatant + EnemyBrain
+```
+
+## Wiring
+
+- Spawn the level and pause menu first, then the fighters (a fighter reads `Health`, so the health kit's `ui-theme/hud` and `sound/hit` must exist).
+- Copy the kit's `config/` (move-set, enemy, character, anim-graph/combat) into the project; `check` names a missing id.
+- The player needs the actions `move`, `attack`, `heavy`, `guard`, `dodge`, `stance1-3`, `lock` in its `input-map`.
+- The character's animator graph must have the triggers a move names (see Animator contract).

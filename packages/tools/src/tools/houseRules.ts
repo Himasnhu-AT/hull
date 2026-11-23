@@ -5,7 +5,7 @@ import { kitBlocks, kitImports } from '../server/kitTunables.ts';
 import { findTunables } from '../server/tsTunables.ts';
 
 /** Blank out comments (and optionally strings) but keep every offset and newline, so positions stay true. */
-function mask(text: string, strings: boolean): string {
+export function mask(text: string, strings: boolean): string {
   let out = '';
   let i = 0;
   const blank = (s: string) => s.replace(/[^\n]/g, ' ');
@@ -45,7 +45,7 @@ const banned: [RegExp, string][] = [
 ];
 const importRe = /(?:\bfrom|\bimport|\brequire)\s*\(?\s*(['"])(three(?:\/[^'"]*)?|hull\/src\/[^'"]*)\1/g;
 
-function where(text: string, index: number): { line: number; col: number } {
+export function where(text: string, index: number): { line: number; col: number } {
   const before = text.slice(0, index);
   const line = before.split('\n').length;
   return { line, col: index - before.lastIndexOf('\n') };
