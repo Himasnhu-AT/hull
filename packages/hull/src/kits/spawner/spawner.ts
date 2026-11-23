@@ -7,6 +7,7 @@ import { flagsOf, GROUP, KitUi, LAYER, upFrom, type KitFlags } from '../common.t
 import { Health } from '../health/health.ts';
 import { kitIO } from '../io.ts';
 import type { ArenaLevel } from '../level/level.ts';
+import { followPath, newFollower, NavGrid, type FollowOut, type PathFollower } from '../nav/nav.ts';
 import { newWalk, walk, type WalkState } from '../walker.ts';
 
 export const spawnerTuning = tunables('spawner', {
@@ -34,6 +35,7 @@ const TUNE = { jumpHeight: 0, gravity: 26, coyoteTime: 0, airControl: 0.3 };
 /**
  * A plain enemy: walks at the nearest player and bites when close. A body capsule (zone "body") and a head sphere
  * (zone "head") are the hit zones; both sit on the `enemy` layer and a hit on either hurts this node's Health.
+ * With a NavGrid in the world (a node named 'nav') it walks around walls by path; without one it walks straight.
  * It is only a stand-in for the kit's wave logic: a game with real enemies passes its own `factory` to the Spawner.
  */
 export class Chaser extends Behaviour {
@@ -44,6 +46,10 @@ export class Chaser extends Behaviour {
   cool = 0;
   private col!: Collider;
   private flags!: KitFlags;
+  private nav: NavGrid | null = null;
+  private follower: PathFollower | null = null;
+  private navLook = 0;
+  private readonly steer: FollowOut = { dx: 0, dz: 0, remaining: 0 };
 
   override ready(): void {
     this.flags = flagsOf(this.world);
@@ -51,6 +57,12 @@ export class Chaser extends Behaviour {
     const h = this.node.get(Health);
     h?.damaged.connect(() => kitIO.play('sound/hit'), this.node);
     h?.died.connect(() => this.node.destroy(), this.node);
+  }
+
+  /** The world's NavGrid, looked for again every couple of seconds while there is none. */
+  private navGrid(): NavGrid | null {
+    if (this.nav === null && this.navLook++ % 120 === 0) this.nav = this.world.find('nav')?.get(NavGrid) ?? null;
+    return this.nav;
   }
 
   override fixedUpdate(dt: number): void {
@@ -69,8 +81,21 @@ export class Chaser extends Behaviour {
     if (target !== null) {
       const dx = target.position.x - p.x;
       const dz = target.position.z - p.z;
-      if (best > enemyTuning.reach * 0.8) { wx = dx / best; wz = dz / best; }
-      if (best > 0.01) this.node.rotation.y = Math.atan2(-dx, -dz);
+      let faceX = dx;
+      let faceZ = dz;
+      if (best > enemyTuning.reach * 0.8) {
+        wx = dx / best; wz = dz / best;
+        const grid = this.navGrid();
+        if (grid !== null && !grid.lineClear(p.x, p.z, target.position.x, target.position.z)) {
+          const f = (this.follower ??= newFollower(grid));
+          if (f.grid !== grid) { f.grid = grid; f.planned = false; }
+          f.goalX = target.position.x; f.goalZ = target.position.z;
+          // No route (the player is walled in): stand still rather than push at the wall.
+          if (followPath(f, p, this.speed, dt, this.steer)) { wx = this.steer.dx; wz = this.steer.dz; faceX = wx; faceZ = wz; }
+          else { wx = 0; wz = 0; }
+        }
+      }
+      if (best > 0.01) this.node.rotation.y = Math.atan2(-faceX, -faceZ);
       if (best < enemyTuning.reach && this.cool <= 0) {
         const hp = upFrom(target, Health);
         if (hp && hp.damage(this.damage, '', this.node) > 0) this.cool = enemyTuning.attackInterval;
