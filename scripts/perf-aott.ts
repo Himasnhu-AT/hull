@@ -1,15 +1,19 @@
 /// <reference types="node" />
 // Maintainer script: AOTT's Holdout, headless, timed step by step. It is the measure every engine speed change is
 // judged by: the same seed and inputs give the same run, so two builds of the engine are compared on identical work.
-//   node --import tsx scripts/perf-aott.ts [seconds] [seed] [scale] [--profile]
+//   node --import tsx scripts/perf-aott.ts [seconds] [seed] [scale] [--profile] [--kernels=on|off|fail]
 // Prints one JSON line: ms a step (mean, p50, p95, p99, max) for the whole run and for its last third, where the
-// most titans are alive, and the run's checksum, which must not move when the engine is made faster.
+// most titans are alive, and the run's checksum, which must not move when a kernel is swapped.
 // `scale` (plan-rust.md R0) multiplies titans a wave, comrades and civilians, to find the load at which the frame is
 // lost; the checksum of a scaled run is its own. `--profile` runs once more under V8's sampling profiler over the
 // last third and adds where the step goes: ms a step per subsystem, and the functions that cost the most.
+// `--kernels` starts the game with the WebAssembly kernels on (the default), off, or failing to load; the checksum
+// must be the same in all three.
 import { config, startGame, type Game } from '../packages/hull/src/index.ts';
 import { InputCore, wireInput } from '../packages/hull/src/input/index.ts';
+import { kernelStatus } from '../packages/hull/src/kernel/index.ts';
 import { projectSources } from '../packages/hull/src/kits/testing.ts';
+import { physicsOf } from '../packages/hull/src/physics/index.ts';
 import { Session } from 'node:inspector/promises';
 import { attribute, type CpuProfile } from './perf-where.ts';
 import { fileURLToPath } from 'node:url';
@@ -23,6 +27,7 @@ const profile = process.argv.includes('--profile');
 const seconds = Number(args[0] ?? 95);
 const seed = Number(args[1] ?? 11);
 const scale = Number(args[2] ?? 1);
+const kernels = (process.argv.find((a) => a.startsWith('--kernels='))?.slice(10) ?? 'on') as 'on' | 'off' | 'fail';
 
 const r4 = (v: number): number => Math.round(v * 10000) / 10000;
 
@@ -44,7 +49,7 @@ async function run(withProfile: boolean): Promise<Record<string, unknown>> {
   const core = new InputCore(() => g?.world.tick ?? 0);
   hub.view = core;
   hub.options = { allies: 2, scale };
-  g = await startGame(def, { seed });
+  g = await startGame(def, { seed, kernels });
   core.setMap(config.lookup('input-map', 'play'), 'input-map/play');
   wireInput(g, core);
   const a = aottOf(g);
@@ -71,7 +76,7 @@ async function run(withProfile: boolean): Promise<Record<string, unknown>> {
   const prof = session ? ((await session.post('Profiler.stop')) as { profile: CpuProfile }).profile : null;
   session?.disconnect();
   const out: Record<string, unknown> = {
-    seconds, seed, scale, steps, maxTitans, titans: a.titans?.alive.length ?? 0, comrades: a.allies.length,
+    seconds, seed, scale, kernels: kernelStatus().state, physics: physicsOf(g.world).backend, steps, maxTitans, titans: a.titans?.alive.length ?? 0, comrades: a.allies.length,
     civilians: a.civilians?.list.length ?? 0, playerAlive: a.player.alive, wave: a.flow.wave, checksum: g.world.checksum(),
     all: stats(ms), lastThird: stats(ms.subarray(lastThird)),
   };

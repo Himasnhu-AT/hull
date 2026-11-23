@@ -10,6 +10,7 @@ export interface BuildOutput {
   outDir?: string;
   files?: { path: string; bytes: number; gzip: number }[];
   devFree?: boolean;
+  kernel?: { bytes: number };
 }
 
 export const build = defineTool<BuildInput, BuildOutput>({
@@ -17,7 +18,7 @@ export const build = defineTool<BuildInput, BuildOutput>({
   summary: 'Builds dist/web: game.js (one file, config inside, no dev code) and index.html.',
   input: { type: 'object', properties: { skipCheck: { type: 'boolean', description: 'Skip types, schemas and house rules.' } }, additionalProperties: false },
   output: { type: 'object', required: ['ok', 'problems'] },
-  format: (o) => (o.ok ? [`Built ${o.outDir}`, ...(o.files ?? []).map((f) => `  ${f.path}: ${f.bytes} bytes${f.gzip ? ` (${f.gzip} gzip)` : ''}`)] : []),
+  format: (o) => (o.ok ? [`Built ${o.outDir}`, ...(o.files ?? []).map((f) => `  ${f.path}: ${f.bytes} bytes${f.gzip ? ` (${f.gzip} gzip)` : ''}`), o.kernel ? `  kernel: ${(o.kernel.bytes / 1024).toFixed(1)} kB of WebAssembly inside game.js` : '  kernel: none (the game imports no module that has one)'] : []),
   async run(ctx, input) {
     if (!input.skipCheck) {
       const r = await check.run(ctx, {});

@@ -9,6 +9,7 @@
     "./render": "./src/render/index.ts",
     "./vfx": "./src/vfx/index.ts",
     "./physics": "./src/physics/index.ts",
+    "./kernel": "./src/kernel/index.ts",
     "./schema": "./src/schema/index.ts",
     "./schema/check": "./src/schema/check.ts",
     "./anim": "./src/anim/index.ts",
