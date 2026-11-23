@@ -27,6 +27,9 @@ class GameImpl implements Game {
     if (this.disposed) return;
     for (let i = 0; i < this.beforeFns.length; i++) this.beforeFns[i]!();
     for (let i = 0; i < n; i++) this.world.step();
+    // A stepped game owes the clock nothing: whatever part of a step real time had saved up is dropped, so the next
+    // frame does not run an extra step of its own.
+    this.acc = 0;
   }
 
   /**
@@ -45,7 +48,9 @@ class GameImpl implements Game {
       this.acc -= dt;
     }
     if (this.acc < 0) this.acc = 0;
-    const alpha = Math.min(this.acc / dt, 1);
+    // Paused, the view shows the latest step exactly. The part of a step left over from before the pause depends on
+    // when the pause arrived, so drawing at it made a stepped game's picture differ from run to run.
+    const alpha = this.paused ? 1 : Math.min(this.acc / dt, 1);
     world.update(scaled, alpha);
 
     const fns = this.frameFns;

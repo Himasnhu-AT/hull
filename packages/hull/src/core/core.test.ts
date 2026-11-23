@@ -259,3 +259,41 @@ describe('signal', () => {
     expect(log).toEqual([1, 10, 20]);
   });
 });
+
+describe('a paused game draws its latest step', () => {
+  class Seen extends Behaviour {
+    alpha = -1;
+    override update(_dt: number, alpha: number): void { this.alpha = alpha; }
+  }
+
+  it('paused frames get alpha 1 whatever part of a step was left when the pause arrived', async () => {
+    // Arrange: two games paused at different moments inside a step.
+    const alphas: number[] = [];
+    for (const leftover of [0.004, 0.012]) {
+      const game = await startGame(defineGame({ ready(g) { g.world.spawn('seen').add(Seen); } }), { stepRate: 60 });
+      game.frame(leftover);
+      game.paused = true;
+
+      // Act: a frame while paused.
+      game.frame(0.016);
+
+      // Assert below, on both.
+      alphas.push(game.world.find('seen')!.get(Seen)!.alpha);
+    }
+    expect(alphas).toEqual([1, 1]);
+  });
+
+  it('a stepped game does not keep saved-up time: the frame after step runs no extra step', async () => {
+    // Arrange: almost a whole step of real time saved up.
+    const game = await startGame(defineGame({ ready(g) { g.world.spawn('seen').add(Seen); } }), { stepRate: 60 });
+    game.frame(0.016);
+    const before = game.world.tick;
+
+    // Act: step by hand, then a frame of a millisecond.
+    game.step(3);
+    game.frame(0.001);
+
+    // Assert: exactly the three steps asked for.
+    expect(game.world.tick).toBe(before + 3);
+  });
+});

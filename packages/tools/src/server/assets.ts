@@ -293,7 +293,10 @@ export const NEEDS: Readonly<Record<string, readonly string[]>> = {
 
 const text = (doc: unknown): string => `${JSON.stringify(doc, null, 2)}\n`;
 
-export function planNew(src: Sources, kind: string, id: string): Plan {
+export function planNew(src: Sources, kind: string, given: string): Plan {
+  // 'cellar' with kind 'level' means 'level/cellar': the kind is already said, so a bare name is not an error.
+  // An id that starts with another kind's name ('sound/x' for a material) is still a mistake, not a nested name.
+  const id = given.startsWith(`${kind}/`) || (given.split('/')[0] ?? '') in STARTERS ? given : `${kind}/${given}`;
   const starter = STARTERS[kind];
   if (!starter) return fail(`config/${kind}`, `${kind} is not a config kind (have: ${Object.keys(STARTERS).join(', ')})`);
   if (!ID_RE.test(id) || kindOf(id) !== kind) return fail(pathOfId(id), `${id} must be an id inside ${kind}/, like ${kind}/my-asset`);

@@ -102,6 +102,10 @@ describe('new and duplicate', () => {
     expect(Object.keys(STARTERS)).toEqual(expect.arrayContaining(['ui-screen', 'ui-theme']));
     expect(planNew(src(), 'sprite', 'sprite/x').ok).toBe(false);
     expect(planNew(src(), 'material', 'sound/x').ok).toBe(false);
+    // The kind is already given, so a bare name is taken as an id inside it.
+    const bare = planNew({ configs: [], code: [] }, 'material', 'fresh');
+    expect(bare.ok).toBe(true);
+    expect(bare.created).toContain('material/fresh');
   });
 });
 

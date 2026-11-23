@@ -1,20 +1,22 @@
 {
   "tolerance": {
     "channel": 8,
-    "pixels": 600
+    "pixels": 0
   },
   "steps": [
     {
+      "expectUi": {
+        "text": "Relic Yard"
+      }
+    },
+    {
+      "screenshot": "title"
+    },
+    {
+      "click": "Start"
+    },
+    {
       "step": 2
-    },
-    {
-      "press": "Enter"
-    },
-    {
-      "step": 2
-    },
-    {
-      "release": "Enter"
     },
     {
       "expect": {
@@ -61,6 +63,14 @@
         "cmp": ">=",
         "value": 1
       }
+    },
+    {
+      "expectUi": {
+        "text": "Play again"
+      }
+    },
+    {
+      "screenshot": "result"
     }
   ]
 }
