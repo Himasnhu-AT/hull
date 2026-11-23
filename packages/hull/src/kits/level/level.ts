@@ -2,7 +2,7 @@ import { Behaviour, type Node } from '../../core/index.ts';
 import { num, tunables } from '../../config/index.ts';
 import { Mesh } from '../../render/index.ts';
 import { Collider } from '../../physics/index.ts';
-import { ensurePhysics, LAYER, type LevelBounds, type LevelLike, type LevelMarker } from '../common.ts';
+import { applyLook, ensurePhysics, LAYER, type LevelBounds, type LevelLike, type LevelMarker } from '../common.ts';
 
 // The layout is built once in `ready`, so these take effect on the next start, not live.
 export const levelTuning = tunables('level', {
@@ -31,6 +31,17 @@ export class ArenaLevel extends Behaviour implements LevelLike {
   floorMaterial = 'material/floor';
   wallMaterial = 'material/wall';
   crateMaterial = 'material/crate';
+  /**
+   * The look the arena puts the page in ('look/day' unless you say otherwise): sky, sun, fog and post effects. Use
+   * another id for another time of day, or '' to leave the page's starting look alone. Set it when adding.
+   */
+  look = 'look/day';
+  private lookDone = false;
+
+  /** The renderer mounts after `ready`, so the look is applied on the first frame that finds it. */
+  override update(): void {
+    if (!this.lookDone) this.lookDone = applyLook(this.look);
+  }
 
   override ready(): void {
     const size = levelTuning.size;

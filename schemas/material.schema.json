@@ -42,6 +42,26 @@
         "step": 0.01
       }
     },
+    "emissive": {
+      "type": "string",
+      "pattern": "^#[0-9a-fA-F]{6}$",
+      "default": "#000000",
+      "x-ui": {
+        "widget": "color",
+        "help": "Light the surface gives off (a flame, a lamp). It ignores scene light, so it still shows at night."
+      }
+    },
+    "emissiveIntensity": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 20,
+      "default": 1,
+      "x-ui": {
+        "widget": "slider",
+        "step": 0.05,
+        "help": "How strongly it glows. Above 1 the look's bloom picks it up."
+      }
+    },
     "texture": {
       "type": "object",
       "required": [

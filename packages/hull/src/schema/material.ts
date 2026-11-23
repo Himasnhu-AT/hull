@@ -9,6 +9,8 @@ export const materialSchema = Type.Object(
     color: Type.String({ pattern: colorPattern, default: '#ffffff', ...ui({ widget: 'color' }) }),
     roughness: Type.Optional(Type.Number({ minimum: 0, maximum: 1, default: 0.5, ...ui({ widget: 'slider', step: 0.01 }) })),
     metalness: Type.Optional(Type.Number({ minimum: 0, maximum: 1, default: 0, ...ui({ widget: 'slider', step: 0.01 }) })),
+    emissive: Type.Optional(Type.String({ pattern: colorPattern, default: '#000000', ...ui({ widget: 'color', help: 'Light the surface gives off (a flame, a lamp). It ignores scene light, so it still shows at night.' }) })),
+    emissiveIntensity: Type.Optional(Type.Number({ minimum: 0, maximum: 20, default: 1, ...ui({ widget: 'slider', step: 0.05, help: 'How strongly it glows. Above 1 the look\'s bloom picks it up.' }) })),
     texture: Type.Optional(
       Type.Object(
         {

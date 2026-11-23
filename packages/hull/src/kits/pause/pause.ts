@@ -1,6 +1,6 @@
 import { Behaviour } from '../../core/index.ts';
 import type { UiScreen, UiView } from '../../ui/index.ts';
-import { flagsOf, type KitFlags } from '../common.ts';
+import { flagsOf, setMenuShowing, type KitFlags } from '../common.ts';
 import { kitIO } from '../io.ts';
 import { SaveSlots } from '../saves/saves.ts';
 
@@ -70,6 +70,8 @@ export class PauseMenu extends Behaviour {
       this.open.close();
       this.open = null;
     }
+    // While it is on screen the HUD layers step aside (KitUi, layer 'hud').
+    setMenuShowing(this.world, this, this.open !== null);
   }
 
   private wire(ui: UiView): void {
@@ -92,5 +94,6 @@ export class PauseMenu extends Behaviour {
   override dispose(): void {
     for (const f of this.offs.splice(0)) f();
     this.open?.close();
+    setMenuShowing(this.world, this, false);
   }
 }

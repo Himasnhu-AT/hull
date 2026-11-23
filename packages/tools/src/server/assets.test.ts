@@ -107,6 +107,8 @@ describe('new and duplicate', () => {
 describe('thumbnails', () => {
   it('reads a few numbers or colours per kind', () => {
     expect(thumbOf('m', { kind: 'material', color: '#445566', roughness: 0.5 }, () => null)).toEqual({ type: 'material', color: '#445566', roughness: 0.5, metalness: 0 });
+    expect(thumbOf('m', { kind: 'material', color: '#ff9a3a', emissive: '#ff6a00', emissiveIntensity: 3 }, () => null)).toMatchObject({ emissive: '#ff6a00' });
+    expect(thumbOf('m', { kind: 'material', color: '#ff9a3a', emissive: '#ff6a00', emissiveIntensity: 0 }, () => null)).not.toHaveProperty('emissive');
     expect(thumbOf('l', { kind: 'look', sky: { horizon: '#111', mid: '#222', zenith: '#333' }, fog: { color: '#444' } }, () => null)).toMatchObject({ type: 'look', fog: '#444' });
     expect(thumbOf('v', { kind: 'vfx', particle: { color: [[0, '#ff0000'], [1, '#00ff00']] } }, () => null)).toEqual({ type: 'vfx', colors: ['#ff0000', '#00ff00'] });
     const snd = thumbOf('s', STARTERS['sound'], () => null);

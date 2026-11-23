@@ -60,8 +60,23 @@ describe('materials', () => {
   });
 
   it('fills material defaults', () => {
-    expect(materialParams({ color: '#123456' })).toEqual({ color: '#123456', roughness: 0.5, metalness: 0 });
-    expect(materialParams({ color: '#123456', roughness: 0.1, metalness: 1 })).toEqual({ color: '#123456', roughness: 0.1, metalness: 1 });
+    expect(materialParams({ color: '#123456' })).toEqual({ color: '#123456', roughness: 0.5, metalness: 0, emissive: '#000000', emissiveIntensity: 1 });
+    expect(materialParams({ color: '#123456', roughness: 0.1, metalness: 1 })).toEqual({ color: '#123456', roughness: 0.1, metalness: 1, emissive: '#000000', emissiveIntensity: 1 });
+  });
+
+  it('a material glows: emissive colour and intensity reach the shared material, and follow the file live', () => {
+    config.load([{ path: 'config/material/flame.json', text: '{ "kind": "material", "color": "#ff7a1a", "emissive": "#ff6a00", "emissiveIntensity": 3 }' }]);
+    const m = acquireMaterial({ material: 'material/flame' });
+    expect(m.emissive.getHexString()).toBe('ff6a00');
+    expect(m.emissiveIntensity).toBe(3);
+    config.update({ path: 'config/material/flame.json', text: '{ "kind": "material", "color": "#ff7a1a" }' });
+    expect(m.emissive.getHexString()).toBe('000000');
+    expect(m.emissiveIntensity).toBe(1);
+    releaseMaterial({ material: 'material/flame' });
+    // A plain colour never glows.
+    const plain = acquireMaterial({ color: '#336699' });
+    expect(plain.emissive.getHexString()).toBe('000000');
+    releaseMaterial({ color: '#336699' });
   });
 
   it('shares one material per key and follows config changes live', () => {

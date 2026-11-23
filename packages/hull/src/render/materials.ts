@@ -10,6 +10,9 @@ export interface MaterialParams {
   color: string;
   roughness: number;
   metalness: number;
+  /** The colour the surface gives off; black is none. */
+  emissive: string;
+  emissiveIntensity: number;
 }
 
 /** What a Mesh asks for: a config id, or (when it has none) a plain colour. */
@@ -24,9 +27,15 @@ export function materialKey(spec: MaterialSpec): string {
   return `color:${(spec.color ?? '#cccccc').toLowerCase()}`;
 }
 
-/** The three numbers a material is drawn with, with the schema's defaults filled in. */
+/** What a material is drawn with, with the schema's defaults filled in. */
 export function materialParams(def: Pick<Material, 'color'> & Partial<Material>): MaterialParams {
-  return { color: def.color, roughness: def.roughness ?? 0.5, metalness: def.metalness ?? 0 };
+  return {
+    color: def.color,
+    roughness: def.roughness ?? 0.5,
+    metalness: def.metalness ?? 0,
+    emissive: def.emissive ?? '#000000',
+    emissiveIntensity: def.emissiveIntensity ?? 1,
+  };
 }
 
 interface Entry {
@@ -42,6 +51,10 @@ function apply(m: MeshStandardMaterial, p: MaterialParams): void {
   m.color.set(p.color);
   m.roughness = p.roughness;
   m.metalness = p.metalness;
+  // Both backends draw a three.js standard material, so this is all emissive needs: the glow ignores scene light and
+  // an intensity above 1 goes into the HDR buffer, where the look's bloom picks it up.
+  m.emissive.set(p.emissive);
+  m.emissiveIntensity = p.emissiveIntensity;
 }
 
 function fullId(id: string): string {
@@ -75,7 +88,7 @@ export function acquireMaterial(spec: MaterialSpec): MeshStandardMaterial {
       apply(m, fromConfig);
       entry.unwatch = config.watch(fullId(id), (now) => apply(m, materialParams(now as Material)));
     } else {
-      apply(m, { color: spec.color ?? '#cccccc', roughness: 0.5, metalness: 0 });
+      apply(m, { color: spec.color ?? '#cccccc', roughness: 0.5, metalness: 0, emissive: '#000000', emissiveIntensity: 1 });
     }
     materials.set(key, e);
   }
