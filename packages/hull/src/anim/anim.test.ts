@@ -361,6 +361,20 @@ describe('two-bone IK', () => {
 });
 
 describe('animator', () => {
+  it('draws the same pose however many paused frames come after a step (a frame with no time snaps its smoothing)', async () => {
+    const pose = async (frames: number): Promise<number[]> => {
+      const { game, a } = await start();
+      a.look({ x: 3, y: 1.5, z: -2 });
+      game.step(10);
+      for (let i = 0; i < frames; i++) game.frame(0);
+      const out = [(a as unknown as { lookStrength: number }).lookStrength, ...(a as unknown as { pose: { rot: Float32Array } }).pose.rot.slice(0, 40)];
+      game.dispose();
+      return out;
+    };
+    const once = await pose(1);
+    expect(once[0]).toBe(1);
+    expect(await pose(7)).toEqual(once);
+  });
   it('is deterministic: the same inputs give the same checksum, at any step rate', async () => {
     for (const rate of [30, 60, 120]) {
       const sums: string[] = [];

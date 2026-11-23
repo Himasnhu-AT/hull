@@ -248,6 +248,7 @@ describe.skipIf(!hasBrowser)('reach: UI, picture size, per-frame stats, problems
     await mcp.run({ op: 'release', key: 'Escape' });
     await mcp.run({ op: 'step', n: 2 });
     expect(await buttons()).toContain('Resume');
+    expect((await mcp.run({ op: 'ui' })).screens).toContain('ui-screen/pause');
     const resume = (await mcp.run({ op: 'ui' })).items.find((i: any) => i.text === 'Resume');
     expect(resume.focused).toBe(true);
     const miss = await mcp.run({ op: 'click', button: 'Nope' });
@@ -347,5 +348,32 @@ describe.skipIf(!hasBrowser)('reach: an effect on screen is the same picture eve
       expect(goldens).toHaveLength(2);
       for (const g of goldens) expect(g).toMatchObject({ status: 'match', diffPixels: 0, maxDelta: 0 });
     }
+  }, 300_000);
+});
+
+describe.skipIf(!hasBrowser)('reach: an animated character is drawn the same however many paused frames the page drew', () => {
+  let dir: string;
+  let mcp: Mcp;
+  beforeAll(async () => {
+    dir = join(mkdtempSync(join(tmpdir(), 'hull-reach-anim-')), 'game');
+    await createProject({ template: 'third-person', dir, title: 'Reach anim' });
+    mcp = new Mcp(dir, 'reachanim');
+    await mcp.init();
+  }, 120_000);
+  afterAll(async () => { await mcp.close(); rmSync(join(dir, '..'), { recursive: true, force: true }); });
+
+  it('a screenshot after step is a pure function of the tick: extra paused frames in between change nothing', async () => {
+    const pics: string[] = [];
+    for (let run = 0; run < 3; run++) {
+      await mcp.run({ op: 'restart' });
+      await mcp.run({ op: 'press', key: 'KeyW' });
+      await mcp.run({ op: 'step', n: 40 });
+      // Each ui call draws a paused frame, as the page's own animation callback does between ops.
+      for (let i = 0; i < run * 3; i++) await mcp.run({ op: 'ui' });
+      pics.push((await mcp.run({ op: 'screenshot' })).png);
+      await mcp.run({ op: 'release', key: 'KeyW' });
+    }
+    expect(pics[1]).toBe(pics[0]);
+    expect(pics[2]).toBe(pics[0]);
   }, 300_000);
 });

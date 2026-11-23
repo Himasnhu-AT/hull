@@ -105,7 +105,6 @@ export class Animator extends Behaviour {
   private reaches: Reach[] = [];
   private pelvisDy = 0;
   private liftS = new Float64Array(2);
-  private lastDt = 1 / 60;
   /** The id the "Just now" feed names this character by; empty until the first build found a character. */
   private actorId = '';
 
@@ -405,7 +404,6 @@ export class Animator extends Behaviour {
 
   override fixedUpdate(dt: number): void {
     if (this.dirty) this.build();
-    this.lastDt = dt;
     if (this.frozen || this.preview) return;
     let k = this.timeScale;
     if (this.freezeLeft > 0) {
@@ -462,7 +460,7 @@ export class Animator extends Behaviour {
     const sdt = dt > 0 ? dt * this.speedNow : 0;
     if (this.flinch) this.flinch.update(sdt, pose);
     if (this.springs) this.springs.update(sdt, pose, this.node.object3d);
-    this.solveIk(dt > 0 ? dt : this.lastDt);
+    this.solveIk(dt);
     body.apply(pose);
   }
   private previewPoseV: Pose | null = null;
@@ -479,8 +477,11 @@ export class Animator extends Behaviour {
     let anyReach = false;
     for (let i = 0; i < this.reaches.length; i++) if (this.reaches[i]!.on) anyReach = true;
     const anyGrip = this.grips.length > 0;
-    // Smoothing runs on frame time: it is a presentation detail, not game state.
-    const k = Math.min(1, dt * (lookCfg?.speed ?? 8));
+    // Smoothing runs on frame time: it is a presentation detail, not game state. A frame with no time in it (the game is paused,
+    // or stepped by a script) has nothing to smooth over, so it snaps to the target: the drawn pose is then a function of the
+    // stepped state, not of how many paused frames the page happened to draw since. (It used to advance by the last frame's
+    // time on each one, so two runs of one script differed by a few pixels around the character.)
+    const k = dt > 0 ? Math.min(1, dt * (lookCfg?.speed ?? 8)) : 1;
     this.lookStrength += ((this.lookOn && lookEnabled ? 1 : 0) - this.lookStrength) * k;
     const looking = lookEnabled && this.lookStrength > 0.001;
     if (!feetOn && !looking && !anyReach && !anyGrip) { this.pelvisDy = 0; return; }
@@ -540,7 +541,7 @@ export class Animator extends Behaviour {
     const maxStep = (this.graphRt?.ik.feet?.maxStep ?? 0.35) * sk.scale;
     const floorY = _m.elements[13]!;
     const lifts = this.liftTarget;
-    const k = Math.min(1, dt * 18);
+    const k = dt > 0 ? Math.min(1, dt * 18) : 1;
     let dy = 0;
     for (let li = 0; li < this.legs.length; li++) {
       const c = this.legs[li]![2];
