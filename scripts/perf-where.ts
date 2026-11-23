@@ -23,6 +23,8 @@ function gamePath(url: string): string | undefined {
 export function bucket(url: string, fn: string): string {
   if (fn === '(garbage collector)') return 'garbage collector';
   if (fn === '(program)') return 'browser and natives';
+  // The physics kernel's functions have no file of their own: V8 names them by the module.
+  if (url.startsWith('wasm://') || /^\$?hk_|^\$func\d+|wasm-function/.test(fn)) return 'hull physics (kernel)';
   if (/[/_]three[./_]/.test(url) || url.includes('/three/')) return TRANSFORMS.has(fn) ? 'three.js transforms' : 'three.js, the rest';
   const hull = url.split('/packages/hull/src/')[1];
   if (hull !== undefined) {

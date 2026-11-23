@@ -16,8 +16,11 @@ import { Animator } from '../packages/hull/src/anim/index.ts';
 import { mountVfx, vfx } from '../packages/hull/src/vfx/index.ts';
 
 const HZ = 120;
-const scales = (process.argv[2] ?? '1,4,16').split(',').map(Number);
-const only = process.argv[3]?.split(',');
+const positional = process.argv.slice(2).filter((a) => !a.startsWith('--'));
+const scales = (positional[0] ?? '1,4,16').split(',').map(Number);
+const only = positional[1]?.split(',');
+// --kernels=off times the TypeScript implementation of everything; the default is the WebAssembly kernels.
+const kernels = (process.argv.find((a) => a.startsWith('--kernels='))?.slice(10) ?? 'on') as 'on' | 'off';
 const wanted = (name: string): boolean => !only || only.some((o) => name.startsWith(o));
 
 const v = (x: number, y: number, z: number) => ({ x, y, z });
@@ -57,7 +60,7 @@ const src = (p: string) => fileURLToPath(new URL(p, import.meta.url));
 
 async function boxScene(boxes: number, side: number): Promise<{ game: Game; phys: Physics; rnd: () => number }> {
   let phys!: Physics;
-  const game = await startGame(defineGame({ ready(g) { phys = usePhysics(g.world); } }), { seed: 1, stepRate: HZ });
+  const game = await startGame(defineGame({ ready(g) { phys = usePhysics(g.world); } }), { seed: 1, stepRate: HZ, kernels });
   // The same generator as the 1,000 raycasts / 5,000 boxes test in physics.test.ts.
   const rnd = lcg(12345);
   for (let i = 0; i < boxes; i++) {
@@ -145,7 +148,7 @@ async function rigidRun(scale: number, timed: boolean): Promise<{ ms: number[]; 
         else n.add(Body, { shape: { type: 'box', size: [0.6 + (i % 4) * 0.1, 0.4, 0.5] }, mass: 2 });
       }
     },
-  }), { seed: 7, stepRate: HZ });
+  }), { seed: 7, stepRate: HZ, kernels });
   const ms: number[] = [];
   for (let i = 0; i < 600; i++) {
     const t0 = performance.now();
@@ -180,7 +183,7 @@ async function anim(): Promise<Bench> {
     const anims: Animator[] = [];
     const game = await startGame(defineGame({
       ready(g) { for (let i = 0; i < n; i++) anims.push(g.world.spawn(`c${i}`).add(Animator, { character: 'character/soldier' })); },
-    }), { seed: 3, stepRate: HZ });
+    }), { seed: 3, stepRate: HZ, kernels });
     const ms: number[] = [], rms: number[] = [];
     for (let i = 0; i < 480; i++) {
       for (let k = 0; k < n; k++) anims[k]!.set('speed', 5 + 5 * Math.sin(i * 0.01 + k));
@@ -218,7 +221,7 @@ async function particles(): Promise<Bench> {
   ]);
   if (res.problems.length) throw new Error('vfx config: ' + JSON.stringify(res.problems.slice(0, 2)));
   for (const scale of scales) {
-    const game = await startGame(defineGame({ ready() {} }), { seed: 5, stepRate: HZ });
+    const game = await startGame(defineGame({ ready() {} }), { seed: 5, stepRate: HZ, kernels });
     mountVfx(game);
     const ms: number[] = [];
     for (let i = 0; i < 480; i++) {
@@ -241,15 +244,13 @@ async function particles(): Promise<Bench> {
  * (3 spheres, 10 capsules, 2 boxes) drifting over a town of static boxes, and each step the overlap queries and rays
  * the game issues against them. Timed per step: moving every shape, then the queries.
  *
- * It uses only the public API, so the same file run on the commit before the moving-shape index gives "today";
- * on this commit it runs once per broadphase: 'typescript' (kernels off), 'kernel' (the grid built in WebAssembly,
- * read from TypeScript: what the engine does) and 'kernel-query' (the whole box query inside the module too: a call a
- * query, which the kernel boundary does not allow, timed so the language is given its best case).
+ * It uses only the public API, so the same file run on a commit before the moving-shape index (c49db6d) gives the
+ * old walk ("list"); on this one it gives the TypeScript index (--kernels=off) or the kernel world (the default).
  */
-async function movingRun(scale: number, variant: string): Promise<{ row: Row; sum: number }> {
+async function movingRun(scale: number): Promise<{ row: Row; sum: number }> {
   const titans = 10 * scale, per = 15, queries = 21 * scale, rays = 3 * scale, statics = 4400, side = 400;
   let phys!: Physics;
-  const game = await startGame(defineGame({ ready(g) { phys = usePhysics(g.world, { cell: 16 }); } }), { seed: 9, stepRate: HZ, kernels: variant === 'typescript' ? 'off' : 'on' } as Parameters<typeof startGame>[1]);
+  const game = await startGame(defineGame({ ready(g) { phys = usePhysics(g.world, { cell: 16 }); } }), { seed: 9, stepRate: HZ, kernels });
   const rnd = lcg(4711);
   for (let i = 0; i < statics; i++) {
     const h = 6 + rnd() * 20;
@@ -272,18 +273,8 @@ async function movingRun(scale: number, variant: string): Promise<{ row: Row; su
       else shapes.push(phys.add({ type: 'box', size: [1 + rnd() * 2, 1 + rnd() * 2, 1 + rnd() * 2] }, o));
     }
   }
-  const index = (phys as unknown as { index?: { n: number; found: Int32Array; builds: number; prepare(): void; box(...a: number[]): number; store: { kind: string; out?: Int32Array; query?(n: number, ...a: number[]): number } } }).index;
-  const backend = (phys as unknown as { backend?: string }).backend ?? 'list';
-  if (variant === 'kernel-query') {
-    if (!index || index.store.kind !== 'kernel') throw new Error('kernel-query needs the kernel store');
-    const store = index.store;
-    index.box = (x0, y0, z0, x1, y1, z1) => {
-      if (index.n === 0) return 0;
-      index.prepare();
-      index.found = store.out!;
-      return store.query!(index.n, x0!, y0!, z0!, x1!, y1!, z1!);
-    };
-  }
+  // The index arrived with plan-rust R1; on a commit before it there is no index to count builds on.
+  const index = (phys as unknown as { index?: { builds: number } }).index;
   const q = lcg(31337);
   const o = v(0, 0, 0), d = v(0, 0, 0), mask = { mask: 1 };
   let sum = 0;
@@ -319,58 +310,17 @@ async function movingRun(scale: number, variant: string): Promise<{ row: Row; su
     step();
     ms.push(performance.now() - t0);
   }
-  // Calls into the module a step: one per grid build, plus one per box query in the variant that queries there.
   const builds = ((index?.builds ?? 0) - builds0) / 600;
-  const calls = backend !== 'kernel' ? 0 : variant === 'kernel-query' ? builds + queries + rays : builds;
-  const load = { moving: titans * per, statics, overlaps: queries, rays, buildsAStep: r4(builds), kernelCallsAStep: r4(calls) };
+  const load = { moving: titans * per, statics, overlaps: queries, rays, buildsAStep: r4(builds), answers: sum };
   game.dispose();
-  return { row: { ...row(scale, load, ms, 2), variant: backend === 'list' ? 'list' : variant } as Row, sum };
-}
-
-/** The grid build alone, the one piece both languages implement: microseconds a build of the same bounds. */
-async function buildOnly(scale: number): Promise<Record<string, number> | null> {
-  try {
-    const { ArrayStore, buildGrid } = await import('../packages/hull/src/physics/moving.ts');
-    const { KernelStore } = await import('../packages/hull/src/physics/kernel-store.ts');
-    const { loadKernels, takeKernel } = await import('../packages/hull/src/kernel/index.ts');
-    await loadKernels('on');
-    const k = takeKernel();
-    if (!k) return null;
-    const n = 150 * scale, ts = new ArrayStore(), ks = new KernelStore(k, Math.max(256, n));
-    ts.reserve(Math.max(256, n), 0);
-    const rnd = lcg(5);
-    for (let i = 0; i < n; i++) {
-      const x = rnd() * 400, y = rnd() * 15, z = rnd() * 400, w = 0.5 + rnd() * 3;
-      for (const s of [ts, ks]) { const o = i * 6; s.aabb[o] = x - w; s.aabb[o + 1] = y - w; s.aabb[o + 2] = z - w; s.aabb[o + 3] = x + w; s.aabb[o + 4] = y + w; s.aabb[o + 5] = z + w; }
-    }
-    const time = (f: () => void): number => {
-      for (let i = 0; i < 3000; i++) f();
-      const best: number[] = [];
-      for (let r = 0; r < 15; r++) { const t0 = performance.now(); for (let i = 0; i < 1000; i++) f(); best.push(performance.now() - t0); }
-      return r4(best.sort((a, b) => a - b)[7]!);   // ms a thousand builds is microseconds a build
-    };
-    return { shapes: n, typescriptUs: time(() => buildGrid(ts, n, 16)), kernelUs: time(() => ks.build(n, 16)) };
-  } catch {
-    return null;   // the commit before the index: there is no build to time
-  }
+  return { row: { ...row(scale, load, ms, 2), variant: !index ? 'list' : (phys as unknown as { backend?: string }).backend ?? 'typescript' } as Row, sum };
 }
 
 async function moving(): Promise<Bench> {
-  const b: Bench = { name: 'physics.moving', rows: [], description: '10*scale titans of 15 moving shapes over 4,400 static boxes; a step moves every shape (setPose), then issues 21*scale overlapSphere(2.5 m) and 3*scale raycasts(60 m) next to titans, the mix AOTT issues. msStep is that whole step; msFrame = 2 steps. One row per scale and variant: list (the commit before the index), typescript (kernels off), kernel (grid built in WebAssembly, read from TypeScript), kernel-query (box queries inside the module too). load.kernelCallsAStep counts calls across the boundary. build rows: microseconds for one grid build of 150*scale bounds in each language.' };
+  const b: Bench = { name: 'physics.moving', rows: [], description: '10*scale titans of 15 moving shapes over 4,400 static boxes; a step moves every shape (setPose), then issues 21*scale overlapSphere(2.5 m) and 3*scale raycasts(60 m) next to titans, the mix AOTT issues. msStep is that whole step; msFrame = 2 steps. variant: list (a commit before the moving-shape index) or typescript (the index). load.answers is a sum over every answer, the same for both.' };
   for (const scale of scales) {
-    const probe = await movingRun(scale, 'typescript');
-    const variants = (probe.row as Row & { variant: string }).variant === 'list' ? [] : ['kernel', 'kernel-query'];
-    // Run again after the others have warmed the shared code, so the first variant is not the one that paid for the JIT.
-    const rows = [probe];
-    for (const variant of variants) rows.push(await movingRun(scale, variant));
-    if (variants.length) rows[0] = await movingRun(scale, 'typescript');
-    for (const r of rows) {
-      if (r.sum !== rows[0]!.sum) throw new Error(`physics.moving: the variants disagree at scale ${scale} (${r.sum} against ${rows[0]!.sum})`);
-      (r.row.load as Record<string, number>).answers = r.sum;
-      b.rows.push(r.row);
-    }
-    const bo = await buildOnly(scale);
-    if (bo) b.rows.push({ scale, load: bo, msStep: { best: 0, median: 0, p95: 0 }, msFrame: 0, variant: 'build-only' } as Row);
+    await movingRun(scale);   // JIT warm-up on the same load
+    b.rows.push((await movingRun(scale)).row);
   }
   return b;
 }
@@ -381,4 +331,4 @@ if (wanted('physics.rigid')) benches.push(await rigid());
 if (wanted('anim.graph')) benches.push(await anim());
 if (wanted('vfx.cpu')) benches.push(await particles());
 if (wanted('physics.moving')) benches.push(await moving());
-console.log(JSON.stringify({ scales, benches }));
+console.log(JSON.stringify({ scales, kernels, benches }));
