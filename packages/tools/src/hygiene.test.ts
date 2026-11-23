@@ -103,7 +103,8 @@ describe('docs', () => {
       const t = readFileSync(p, 'utf8');
       expect(firstSentence(t).length, n).toBeGreaterThan(10);
       expect(t, n).toContain('## Use it');
-      expect(t, n).toContain('## Wiring');
+      // A section or a bullet: what else must be in the world for the kit to work.
+      expect(/## Wiring|\*\*Wiring\*\*/.test(t), n).toBe(true);
     }
   });
   it('api/three is a short note, not a dump', () => {
@@ -112,8 +113,7 @@ describe('docs', () => {
     expect(t).toContain('SceneObject');
   });
   it('names the config kinds the schema guide describes but that are not built', () => {
-    expect(notBuiltKinds()).toEqual(expect.arrayContaining(['prefab', 'level', 'strings']));
-    expect(notBuiltKinds()).not.toContain('sound');
+    expect(notBuiltKinds()).toEqual(['strings']);
   });
   it('reads a section, reports unknown ones, and searches', () => {
     const md = '# T\nintro\n## Lifecycle\nready runs once\n### Order\nspawn order\n## State\nfields\n';

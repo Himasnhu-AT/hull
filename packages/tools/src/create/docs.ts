@@ -166,7 +166,8 @@ export function notBuiltKinds(): string[] {
   if (!existsSync(p)) return [];
   const found = new Set<string>();
   for (const line of read(p).split('\n')) {
-    if (!/^##+ /.test(line)) continue;
+    // Only a heading that says so: other headings name things in backticks too (`x-ui`).
+    if (!/^##+ /.test(line) || !/not built/i.test(line)) continue;
     for (const m of line.matchAll(/`([a-z][a-z-]*)`/g)) if (!(m[1]! in kinds)) found.add(m[1]!);
   }
   return [...found].sort();
