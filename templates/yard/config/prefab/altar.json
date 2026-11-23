@@ -1,0 +1,52 @@
+{
+  "kind": "prefab",
+  "note": "The altar the relics are carried to. Solid.",
+  "parts": [
+    {
+      "name": "base",
+      "shape": "box",
+      "at": [
+        0,
+        0.4,
+        0
+      ],
+      "size": [
+        2.4,
+        0.8,
+        1.4
+      ],
+      "material": "material/stone"
+    },
+    {
+      "name": "top",
+      "shape": "sphere",
+      "at": [
+        0,
+        1.05,
+        0
+      ],
+      "size": [
+        0.6,
+        0.6,
+        0.6
+      ],
+      "material": "material/lamp"
+    }
+  ],
+  "collider": {
+    "shape": "box",
+    "at": [
+      0,
+      0.4,
+      0
+    ],
+    "size": [
+      2.4,
+      0.8,
+      1.4
+    ]
+  },
+  "tags": [
+    "altar"
+  ]
+}

@@ -176,6 +176,12 @@ importers:
         specifier: workspace:*
         version: link:../../packages/hull
 
+  templates/yard:
+    dependencies:
+      hull:
+        specifier: workspace:*
+        version: link:../../packages/hull
+
 packages:
 
   '@agentclientprotocol/sdk@2.8.0':

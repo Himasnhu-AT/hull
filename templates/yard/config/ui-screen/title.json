@@ -1,0 +1,35 @@
+{
+  "kind": "ui-screen",
+  "note": "The title screen. Edit the layout freely, keep the action name title.start.",
+  "pausesGame": true,
+  "root": {
+    "panel": {
+      "align": "center",
+      "menu": true,
+      "label": "Title",
+      "gap": 12,
+      "width": 420
+    },
+    "children": [
+      {
+        "title": {
+          "bind": "title"
+        }
+      },
+      {
+        "text": {
+          "bind": "subtitle"
+        }
+      },
+      {
+        "button": {
+          "text": "Start",
+          "primary": true
+        },
+        "on": {
+          "press": "title.start"
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,198 @@
+{
+  "kind": "level",
+  "note": "A walled yard: a ramp up to a platform, a pillar, crates, lamps and boulders. Three relics lie about it, an altar stands at the north wall, and sentries start at the sentry markers.",
+  "look": "look/day",
+  "ground": {
+    "size": [
+      40,
+      40
+    ],
+    "material": "material/floor"
+  },
+  "walls": {
+    "height": 2.5,
+    "material": "material/wall"
+  },
+  "blocks": [
+    {
+      "name": "ramp",
+      "at": [
+        -6,
+        0.62,
+        8
+      ],
+      "size": [
+        6,
+        0.4,
+        4
+      ],
+      "rotDeg": [
+        0,
+        0,
+        12
+      ],
+      "material": "material/crate"
+    },
+    {
+      "name": "platform",
+      "at": [
+        -1.6,
+        0.6,
+        8
+      ],
+      "size": [
+        4,
+        1.2,
+        4
+      ],
+      "material": "material/crate"
+    },
+    {
+      "name": "pillar",
+      "shape": "cylinder",
+      "at": [
+        8,
+        1.5,
+        -6
+      ],
+      "size": [
+        2,
+        3,
+        2
+      ],
+      "material": "material/wall"
+    },
+    {
+      "name": "barrier",
+      "at": [
+        2,
+        1,
+        -3
+      ],
+      "size": [
+        14,
+        2,
+        0.6
+      ],
+      "material": "material/wall"
+    }
+  ],
+  "things": [
+    {
+      "prefab": "prefab/crate",
+      "at": [
+        5,
+        0,
+        4
+      ]
+    },
+    {
+      "prefab": "prefab/crate",
+      "at": [
+        6.4,
+        0,
+        4.4
+      ],
+      "yawDeg": 30
+    },
+    {
+      "prefab": "prefab/lamp",
+      "at": [
+        -4,
+        0,
+        -4
+      ]
+    },
+    {
+      "prefab": "prefab/lamp",
+      "at": [
+        4,
+        0,
+        -10
+      ]
+    },
+    {
+      "prefab": "prefab/relic",
+      "at": [
+        -14,
+        0,
+        10
+      ]
+    },
+    {
+      "prefab": "prefab/relic",
+      "at": [
+        14,
+        0,
+        -8
+      ]
+    },
+    {
+      "prefab": "prefab/relic",
+      "at": [
+        -1.6,
+        1.2,
+        8
+      ]
+    },
+    {
+      "prefab": "prefab/altar",
+      "at": [
+        0,
+        0,
+        -16
+      ]
+    }
+  ],
+  "markers": {
+    "start": {
+      "at": [
+        0,
+        0,
+        14
+      ],
+      "yawDeg": 0
+    },
+    "sentry/west": {
+      "at": [
+        -16,
+        0,
+        -6
+      ],
+      "yawDeg": 90
+    },
+    "sentry/east": {
+      "at": [
+        16,
+        0,
+        4
+      ],
+      "yawDeg": -90
+    },
+    "sentry/north": {
+      "at": [
+        -10,
+        0,
+        -14
+      ]
+    }
+  },
+  "scatter": [
+    {
+      "prefab": "prefab/rock",
+      "count": 6,
+      "area": {
+        "at": [
+          0,
+          0
+        ],
+        "size": [
+          34,
+          34
+        ]
+      },
+      "stream": "level-rocks",
+      "gap": 1.5
+    }
+  ]
+}

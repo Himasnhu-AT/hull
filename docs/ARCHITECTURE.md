@@ -38,7 +38,7 @@ hull/
       bin/hull-mcp.js    stdio launcher, MCP only
     studio/              Hull Studio (Electron app, React inside); benches live in src/renderer/benches
   schemas/               generated JSON Schema files
-  templates/             starting points for the `new` tool: cube, arena, fps, third-person
+  templates/             starting points for the `new` tool: cube, arena, fps, third-person, yard (the worked example: a game on kits and a level file)
   shell/                 desktop shells for games: electron/ (used by `package`), tauri/ (a placeholder)
   examples/              games used as tests of the engine itself (aott)
   scripts/               maintainer scripts (`pnpm project:*`); never ship
