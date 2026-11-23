@@ -10,16 +10,32 @@ import { beforeStart } from '../core/index.ts';
 import { KERNEL_BASE64, KERNEL_BYTES, KERNEL_STAMP } from './wasm.ts';
 
 /** The layout and exports this engine was written against; a module that reports another is refused. */
-export const KERNEL_ABI = 1;
+export const KERNEL_ABI = 2;
 
 /** What the module exports (crates/hull-kernels/src/lib.rs). Numbers and offsets only. */
 export interface KernelExports {
   readonly memory: WebAssembly.Memory;
   hk_abi(): number;
-  hk_mi_reserve(cap: number): number;
-  hk_mi_ptr(field: number): number;
-  hk_mi_build(n: number, cell: number): void;
-  hk_mi_query(n: number, x0: number, y0: number, z0: number, x1: number, y1: number, z1: number): number;
+  /** Address of the header (lib.rs `mod h`) that says where every shared array is. */
+  hk_hdr(): number;
+  hk_world_init(cell: number): void;
+  hk_shape_new(kind: number): number;
+  hk_shape_commit(id: number): number;
+  hk_shape_remove(id: number): void;
+  hk_mesh_data(tris: number, nodes: number): number;
+  hk_hf_data(columns: number, rows: number): number;
+  hk_cast(ox: number, oy: number, oz: number, dx: number, dy: number, dz: number, r: number): number;
+  hk_gather(x0: number, y0: number, z0: number, x1: number, y1: number, z1: number): number;
+  hk_overlap_sphere(x: number, y: number, z: number, radius: number): number;
+  hk_overlap_capsule(ax: number, ay: number, az: number, bx: number, by: number, bz: number, radius: number, n: number): number;
+  hk_closest(id: number, x: number, y: number, z: number): number;
+  hk_body_add(shape: number): number;
+  hk_body_remove(index: number): void;
+  hk_rigid_step(dt: number, gx: number, gy: number, gz: number, iterations: number): number;
+  /** One shape at a time, for the narrow-phase parity test. */
+  hk_t_sweep(id: number, ox: number, oy: number, oz: number, dx: number, dy: number, dz: number, r: number): void;
+  hk_t_closest(id: number, x: number, y: number, z: number): number;
+  hk_t_ray_aabb(ox: number, oy: number, oz: number, dx: number, dy: number, dz: number, x0: number, y0: number, z0: number, x1: number, y1: number, z1: number, tmax: number): number;
 }
 
 export type KernelMode = 'on' | 'off' | 'fail';

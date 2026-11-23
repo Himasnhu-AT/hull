@@ -35,8 +35,9 @@ describe('the committed kernel module', () => {
     expect(WebAssembly.Module.imports(module)).toEqual([]);
     const k = new WebAssembly.Instance(module, {}).exports as unknown as { hk_abi(): number };
     expect(k.hk_abi()).toBe(KERNEL_ABI);
-    // Small enough that no bundle budget notices it; a jump here means the standard library got in.
-    expect(KERNEL_BYTES).toBeLessThan(16 * 1024);
+    // All of physics is about 70 kB (55 kB at opt-level "s", traded for speed); a jump past this means something
+    // large (formatting, the standard library) got in.
+    expect(KERNEL_BYTES).toBeLessThan(96 * 1024);
   });
 });
 

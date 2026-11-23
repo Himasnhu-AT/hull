@@ -109,10 +109,9 @@ export class KernelWorld {
     if (s.mesh !== null) this.uploadMesh(s, id);
     else if (s.hf !== null) this.uploadHeightfield(s, id);
     this.props(s);
+    // The pose joins the dirty list like any other: other shapes moved since the last query are waiting there too,
+    // and the kernel files them all before it next answers.
     this.pose(s);
-    // The pose is filed by the commit itself; nothing is left to flush for it.
-    this.si[id * SI + FLAGS]! &= ~F_DIRTY;
-    this.hdr[H_NDIRTY] = 0;
     const failed = this.k.hk_shape_commit(id);
     this.views();
     return failed === 0;
@@ -150,8 +149,8 @@ export class KernelWorld {
     const id = s._kid;
     if (id < 0) return;
     this.views();
-    // A shape still waiting in the dirty list is dropped from it by the kernel's flush (it skips free shapes),
-    // but its id may be reused before then, so the flush runs first.
+    // If the shape is still waiting in the dirty list, the kernel's flush skips it once it is free; if its id is
+    // reused first, the entry files the new shape, which is harmless.
     this.k.hk_shape_remove(id);
     this.byId[id] = null;
     s._kw = null;

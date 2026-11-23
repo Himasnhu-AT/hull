@@ -2,10 +2,10 @@
 // instead of every one. Until plan-rust.md R0 the world walked the whole moving list for each query, which at about
 // 2,500 moving shapes (160 titans) and 400 queries a step was a million box tests a step.
 //
-// The layout is flat on purpose (plan-rust.md section 4, test 4): numbers in typed arrays, no objects, so the same
-// arrays can live in a WebAssembly kernel's memory and be built there. `MovingStore` is that seam: the TypeScript
-// store below owns plain arrays and builds the grid here; a kernel store hands out views over its own memory and
-// builds the same grid, bit for bit. Everything that reads the grid (this file) is shared by both.
+// The layout is flat on purpose (plan-rust.md section 4, test 4): numbers in typed arrays, no objects. This is the
+// TypeScript implementation; the kernel (crates/hull-kernels/src/world.rs) holds the same index in its own memory,
+// built and read the same way, and the world uses that one when the kernel is running. Both stay current, so the
+// world can fall back to this one at any moment.
 //
 // What a query returns never depends on the grid: candidates come back in the order the shapes were added, exactly
 // the shapes the old walk accepted. The grid only decides how few are looked at.
@@ -27,7 +27,6 @@ export const NI = 0, NK = 1, NITEMS = 2, NOVER = 3, NLOOSE = 4;
 
 /** Where the index's numbers live, and who builds the grid from the bounds. */
 export interface MovingStore {
-  readonly kind: 'typescript' | 'kernel';
   /** Slots the arrays have room for. */
   cap: number;
   /** minx, miny, minz, maxx, maxy, maxz for each slot. */
@@ -45,15 +44,15 @@ export interface MovingStore {
   items: Int32Array;
   headF: Float64Array;
   headI: Int32Array;
-  /** Makes room for `cap` slots, keeping the first `keep` slots' bounds. False when it cannot (the caller falls back). */
-  reserve(cap: number, keep: number): boolean;
+  /** Makes room for `cap` slots, keeping the first `keep` slots' bounds. */
+  reserve(cap: number, keep: number): void;
   /** Files slots 0 to n - 1 into a grid of `cell`-sized cells: fills range, state, over, cellStart, items and the heads. */
   build(n: number, cell: number): void;
 }
 
 /**
- * The grid build, in TypeScript: the fallback, and the oracle the kernel's build is tested against bit for bit.
- * Only add, subtract, multiply, divide, floor and compare on doubles, so the two agree exactly.
+ * The grid build. Only add, subtract, multiply, divide, floor and compare on doubles, which IEEE 754 defines exactly,
+ * so a build in another language can be checked against this one bit for bit (R1's kernel was).
  */
 export function buildGrid(s: MovingStore, n: number, cell: number): void {
   const a = s.aabb, range = s.range, state = s.state, over = s.over, start = s.cellStart, cur = s.cursor, items = s.items;
@@ -103,7 +102,6 @@ export function buildGrid(s: MovingStore, n: number, cell: number): void {
 
 /** The store that is plain TypeScript arrays. */
 export class ArrayStore implements MovingStore {
-  readonly kind = 'typescript' as const;
   cap = 0;
   aabb = new Float64Array(0);
   range = new Int32Array(0);
@@ -116,7 +114,7 @@ export class ArrayStore implements MovingStore {
   readonly headF = new Float64Array(4);
   readonly headI = new Int32Array(8);
 
-  reserve(cap: number, keep: number): boolean {
+  reserve(cap: number, keep: number): void {
     const aabb = new Float64Array(cap * 6);
     aabb.set(this.aabb.subarray(0, keep * 6));
     this.aabb = aabb;
@@ -126,7 +124,6 @@ export class ArrayStore implements MovingStore {
     this.loose = new Int32Array(cap);
     this.items = new Int32Array(cap * MAX_SPAN);
     this.cap = cap;
-    return true;
   }
 
   build(n: number, cell: number): void { buildGrid(this, n, cell); }
@@ -163,8 +160,6 @@ export class MovingIndex {
     this.adopt();
   }
 
-  get kind(): 'typescript' | 'kernel' { return this.store.kind; }
-
   private adopt(): void {
     const s = this.store;
     this.aabb = s.aabb; this.range = s.range; this.state = s.state; this.over = s.over; this.loose = s.loose;
@@ -172,16 +167,9 @@ export class MovingIndex {
     if (this.seen.length < s.cap) { this.seen = new Int32Array(s.cap); this.found = new Int32Array(s.cap); this.stamp = 0; }
   }
 
-  /** Room for one more slot. A kernel store that cannot grow is replaced by arrays: the world keeps working. */
+  /** Room for one more slot: the capacity doubles, so adding shapes one at a time stays cheap. */
   private grow(): void {
-    const cap = Math.max(256, this.store.cap * 2);
-    if (!this.store.reserve(cap, this.n)) {
-      const plain = new ArrayStore();
-      plain.reserve(cap, 0);
-      plain.aabb.set(this.aabb.subarray(0, this.n * 6));
-      console.error('physics: the kernel could not grow its memory; this world continues on the TypeScript broadphase');
-      this.store = plain;
-    }
+    this.store.reserve(Math.max(256, this.store.cap * 2), this.n);
     this.built = false;
     this.adopt();
   }

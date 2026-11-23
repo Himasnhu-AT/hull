@@ -5,10 +5,10 @@
 // The grid is two-dimensional (x and z): cities and arenas are wide and flat, and a column holds a building's
 // whole height, so a ray from a rooftop does not step through empty vertical cells.
 import type { World } from '../core/index.ts';
-import { Dda } from './dda.ts';
 import { takeKernel } from '../kernel/index.ts';
-import { KernelStore } from './kernel-store.ts';
-import { ArrayStore, MovingIndex, type MovingStore } from './moving.ts';
+import { Dda } from './dda.ts';
+import { KernelWorld } from './kernel.ts';
+import { ArrayStore, MovingIndex } from './moving.ts';
 import { B, beginSweep, C, closestOn, rayAabb, sweepShape } from './narrow.ts';
 import { RigidSolver } from './rigid.ts';
 import { Shape } from './shape.ts';
@@ -57,6 +57,11 @@ export class Physics {
   private readonly cand: Shape[] = [];
   /** @internal */
   readonly solver: RigidSolver;
+  /**
+   * @internal The kernel's copy of this world (plan-rust.md R2), when the game started with the kernels: queries and
+   * the rigid solver run there. Null on TypeScript, and after the kernel failed (the world then carries on here).
+   */
+  _kw: KernelWorld | null = null;
 
   constructor(world: World, opts: PhysicsOptions = {}) {
     this.world = world;
@@ -65,15 +70,29 @@ export class Physics {
     const g = opts.gravity ?? [0, -9.81, 0];
     this.gravity = { x: g[0], y: g[1], z: g[2] };
     this.iterations = opts.iterations ?? 8;
-    // The index's numbers live in the kernel's memory when the game started with one, in plain arrays otherwise. A
-    // kernel that cannot give this world memory is a fallback like any other: the world runs on arrays.
-    let store: MovingStore | null = null;
+    this.index = new MovingIndex(new ArrayStore(), this.cell);
+    this.solver = new RigidSolver(this);
     const kernel = takeKernel();
     if (kernel !== null) {
-      try { store = new KernelStore(kernel); } catch (e) { console.error('physics: ' + (e instanceof Error ? e.message : String(e)) + '; this world runs on the TypeScript broadphase'); }
+      try { this._kw = new KernelWorld(kernel, this.cell); } catch (e) { this.dropKernel(e); }
     }
-    this.index = new MovingIndex(store ?? new ArrayStore(), this.cell);
-    this.solver = new RigidSolver(this);
+  }
+
+  /** Which implementation answers this world's queries. Both give the same answers; tests and reports read this. */
+  get backend(): 'kernel' | 'typescript' {
+    return this._kw !== null ? 'kernel' : 'typescript';
+  }
+
+  /**
+   * @internal The kernel stopped (a trap, a world it cannot hold): said once, and this world carries on in
+   * TypeScript, whose grid, index and bodies have been kept current all along.
+   */
+  dropKernel(e: unknown): void {
+    this._kw = null;
+    for (const s of this.moving) { s._kw = null; s._kid = -1; }
+    for (const s of this.statics) { s._kw = null; s._kid = -1; }
+    for (const s of this.bigs) { s._kw = null; s._kid = -1; }
+    console.error('physics: the kernel stopped and this world carries on in TypeScript (same answers, slower): ' + (e instanceof Error ? e.message : String(e)));
   }
 
   // ---- adding shapes ----
@@ -82,6 +101,11 @@ export class Physics {
     const s = new Shape(desc, opts);
     if (s.isStatic) this.insertStatic(s);
     else { this.moving.push(s); this.index.add(s); this.dirty = true; }
+    if (this._kw !== null) {
+      let ok = false;
+      try { ok = this._kw.add(s); } catch (e) { this.dropKernel(e); }
+      if (!ok && this._kw !== null) this.dropKernel(new Error('the world is too wide for the kernel\'s static grid'));
+    }
     return s;
   }
 
@@ -121,6 +145,7 @@ export class Physics {
 
   remove(s: Shape): void {
     if (s._removed) return;
+    if (this._kw !== null) { try { this._kw.remove(s); } catch (e) { this.dropKernel(e); } }
     s._removed = true;
     s.enabled = false;
     if (s._cells !== null) {
@@ -146,11 +171,6 @@ export class Physics {
     for (let i = 0; i < this.statics.length; i++) fn(this.statics[i]!);
     for (let i = 0; i < this.bigs.length; i++) fn(this.bigs[i]!);
     for (let i = 0; i < this.moving.length; i++) fn(this.moving[i]!);
-  }
-
-  /** Which implementation builds the moving-shape grid in this world. Both give the same answers; tests and reports read this. */
-  get backend(): 'kernel' | 'typescript' {
-    return this.index.kind;
   }
 
   get shapeCount(): number {
@@ -198,7 +218,11 @@ export class Physics {
   step(dt: number): void {
     if (this.solver.bodies.length === 0) return;
     this.sync();
-    this.solver.step(dt);
+    let done = false;
+    if (this._kw !== null) {
+      try { done = this._kw.rigidStep(this.solver.bodies, dt, this.gravity, this.iterations); } catch (e) { this.dropKernel(e); }
+    }
+    if (!done) this.solver.step(dt);
     this.sync();
   }
 
@@ -229,6 +253,9 @@ export class Physics {
    */
   cast(ox: number, oy: number, oz: number, dx: number, dy: number, dz: number, r: number, f: QueryFilter | undefined): void {
     this.ensureSynced();
+    if (this._kw !== null) {
+      try { if (this._kw.cast(ox, oy, oz, dx, dy, dz, r, f)) return; } catch (e) { this.dropKernel(e); }
+    }
     const maxT = B.t;
     const stamp = ++this.stamp;
     const c = this.cell;
@@ -359,6 +386,9 @@ export class Physics {
   gather(x0: number, y0: number, z0: number, x1: number, y1: number, z1: number, f: QueryFilter | undefined): Shape[] {
     this.ensureSynced();
     const cand = this.cand;
+    if (this._kw !== null) {
+      try { if (this._kw.gather(x0, y0, z0, x1, y1, z1, f, cand)) return cand; } catch (e) { this.dropKernel(e); }
+    }
     cand.length = 0;
     const stamp = ++this.stamp;
     const c = this.cell;
@@ -398,6 +428,11 @@ export class Physics {
   /** Shapes that touch or overlap the sphere. Fills and returns `out` (default: the world's own list). */
   overlapSphere(center: Vec3Like, radius: number, filter?: QueryFilter, out: Shape[] = this.overlaps): Shape[] {
     out.length = 0;
+    if (this._kw !== null) {
+      this.ensureSynced();
+      try { if (this._kw.overlapSphere(center.x, center.y, center.z, radius, filter, out)) return out; } catch (e) { this.dropKernel(e); }
+      out.length = 0;
+    }
     const cand = this.gather(center.x - radius, center.y - radius, center.z - radius, center.x + radius, center.y + radius, center.z + radius, filter);
     for (let i = 0; i < cand.length; i++) {
       const s = cand[i]!;
@@ -409,11 +444,16 @@ export class Physics {
   /** Shapes that touch or overlap the capsule between end-cap centres `a` and `b`. */
   overlapCapsule(a: Vec3Like, b: Vec3Like, radius: number, filter?: QueryFilter, out: Shape[] = this.overlaps): Shape[] {
     out.length = 0;
+    const len = Math.sqrt((b.x - a.x) ** 2 + (b.y - a.y) ** 2 + (b.z - a.z) ** 2);
+    const n = Math.max(1, Math.ceil(len / (radius * 0.5)));
+    if (this._kw !== null) {
+      this.ensureSynced();
+      try { if (this._kw.overlapCapsule(a.x, a.y, a.z, b.x, b.y, b.z, radius, n, filter, out)) return out; } catch (e) { this.dropKernel(e); }
+      out.length = 0;
+    }
     const cand = this.gather(
       Math.min(a.x, b.x) - radius, Math.min(a.y, b.y) - radius, Math.min(a.z, b.z) - radius,
       Math.max(a.x, b.x) + radius, Math.max(a.y, b.y) + radius, Math.max(a.z, b.z) + radius, filter);
-    const len = Math.sqrt((b.x - a.x) ** 2 + (b.y - a.y) ** 2 + (b.z - a.z) ** 2);
-    const n = Math.max(1, Math.ceil(len / (radius * 0.5)));
     // The spheres leave a gap of about 3% of the radius between them; growing them by that much covers it.
     const rr = radius * 1.03;
     for (let i = 0; i < cand.length; i++) {
@@ -429,7 +469,12 @@ export class Physics {
   /** Distance from a point to a shape (negative inside) and the direction away, for game code that wants them. */
   distanceTo(s: Shape, p: Vec3Like, outDir?: Vec3Like): number {
     this.ensureSynced();
-    const d = closestOn(s, p.x, p.y, p.z);
+    let d = NaN;
+    let done = false;
+    if (this._kw !== null && s._kid >= 0) {
+      try { d = this._kw.closest(s, p.x, p.y, p.z); done = true; } catch (e) { this.dropKernel(e); }
+    }
+    if (!done) d = closestOn(s, p.x, p.y, p.z);
     if (outDir) { outDir.x = C.nx; outDir.y = C.ny; outDir.z = C.nz; }
     return d;
   }

@@ -146,11 +146,18 @@ export class RigidSolver {
     b._index = this.bodies.length;
     b.shape._rb = b;
     this.bodies.push(b);
+    // The kernel keeps its bodies in the same order, so a body's index is the same on both sides.
+    const kw = this.phys._kw;
+    if (kw !== null) { try { kw.bodyAdd(b); } catch (e) { this.phys.dropKernel(e); } }
   }
 
   remove(b: RigidBody): void {
     const i = this.bodies.indexOf(b);
-    if (i >= 0) this.bodies.splice(i, 1);
+    if (i >= 0) {
+      this.bodies.splice(i, 1);
+      const kw = this.phys._kw;
+      if (kw !== null) { try { kw.bodyRemove(i); } catch (e) { this.phys.dropKernel(e); } }
+    }
     b.shape._rb = null;
     for (let k = 0; k < this.bodies.length; k++) this.bodies[k]!._index = k;
   }
