@@ -308,6 +308,10 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		openaiErr(w, 400, "invalid_request_error", err.Error())
 		return
 	}
+	if !s.modelAllowed(a.Model) {
+		openaiErr(w, 400, "invalid_request_error", fmt.Sprintf("The model %q is not available here.", a.Model))
+		return
+	}
 	payload, _ := json.Marshal(a)
 	resp, err := s.upstream(r.Context(), r, "/v1/messages", payload)
 	if err != nil {

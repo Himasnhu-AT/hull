@@ -41,7 +41,7 @@ type communityGame struct {
 // communityLimited wraps a handler with the per-IP limit.
 func (s *Server) communityLimited(h http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if !s.communityLimit.Allow(clientIP(r)) {
+		if !s.communityLimit.Allow(s.clientIP(r)) {
 			w.Header().Set("Retry-After", "30")
 			http.Error(w, "too many requests", http.StatusTooManyRequests)
 			return

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -56,6 +57,26 @@ func (s *Server) aiReady(w http.ResponseWriter, r *http.Request, fail errWriter)
 	if s.cfg.AnthropicKey == "" {
 		fail(w, http.StatusServiceUnavailable, "api_error", "This server has no ANTHROPIC_API_KEY configured, so it cannot reach the AI.")
 		return nil, 0, 0, false
+	}
+	if s.aiLimit != nil && !s.aiLimit.Allow(strconv.FormatInt(userID, 10)) {
+		w.Header().Set("Retry-After", "10")
+		fail(w, http.StatusTooManyRequests, "rate_limit_error", "Too many requests. Slow down and try again in a few seconds.")
+		return nil, 0, 0, false
+	}
+	if b := s.cfg.DailyTokenBudget; b > 0 {
+		now := s.now().UTC()
+		day := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+		u, err := s.st.UsageSince(userID, day)
+		if err != nil {
+			s.log.Error("reading usage", "err", err)
+			fail(w, http.StatusInternalServerError, "api_error", "Could not check the daily token budget.")
+			return nil, 0, 0, false
+		}
+		if u.Input+u.Output >= b {
+			w.Header().Set("Retry-After", strconv.Itoa(int(day.AddDate(0, 0, 1).Sub(now).Seconds())))
+			fail(w, http.StatusTooManyRequests, "rate_limit_error", "The daily token budget is used up. It resets at midnight UTC.")
+			return nil, 0, 0, false
+		}
 	}
 	// Streams outlive the server's short write timeout, so lift it for this request only.
 	rc := http.NewResponseController(w)
@@ -163,6 +184,19 @@ func (s *Server) record(userID, tokenID int64, model string, in, out int64) {
 	}
 }
 
+// modelAllowed reports whether the AI routes may forward this model name: only the configured list, plus the default.
+func (s *Server) modelAllowed(m string) bool {
+	if m == s.cfg.DefaultModel {
+		return true
+	}
+	for _, a := range s.cfg.AllowedModels {
+		if a == m {
+			return true
+		}
+	}
+	return false
+}
+
 func requestModel(body []byte) string {
 	var m struct {
 		Model string `json:"model"`
@@ -184,6 +218,10 @@ func (s *Server) handleCountTokens(w http.ResponseWriter, r *http.Request) {
 func (s *Server) passthrough(w http.ResponseWriter, r *http.Request, path string, bill bool) {
 	body, uid, tid, ok := s.aiReady(w, r, anthropicErr)
 	if !ok {
+		return
+	}
+	if m := requestModel(body); !s.modelAllowed(m) {
+		anthropicErr(w, http.StatusBadRequest, "invalid_request_error", fmt.Sprintf("The model %q is not available here.", m))
 		return
 	}
 	resp, err := s.upstream(r.Context(), r, path, body)
