@@ -68,9 +68,11 @@ export function createErrorRing(): ErrorRing {
         if (!Array.isArray(list)) return;
         for (const it of list.slice(-ERROR_RING)) {
           if (!it || typeof it.message !== 'string' || (it.level !== 'error' && it.level !== 'warn')) continue;
+          // add() counts this as one occurrence; the carried item already says how many there were.
           add(it.level, it.message, it.stack, it.tick, it.time);
-          const last = items[items.length - 1]!;
-          last.count = it.count;
+          const extra = Math.max(0, (Number(it.count) || 1) - 1);
+          const key = keyOf(it.level, it.message.length > MAX_MESSAGE ? `${it.message.slice(0, MAX_MESSAGE)}...` : it.message, frameLines(it.stack));
+          for (let i = items.length - 1; i >= 0; i--) if (keys.get(items[i]!) === key) { items[i]!.count += extra; break; }
         }
         unread = 0;
       } catch { /* a bad dump is just forgotten */ }

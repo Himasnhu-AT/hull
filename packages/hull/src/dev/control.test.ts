@@ -20,16 +20,16 @@ class FakeSocket {
 }
 
 class Walker extends Behaviour {
-  static state = ['steps', 'mood'];
+  static override state = ['steps', 'mood'];
   steps = 0;
   mood = 'calm';
   speed = 2.123456;
   hidden = { a: 1 };
-  fixedUpdate(): void { this.steps++; if (this.steps === 3) this.node.position.x = 5; }
+  override fixedUpdate(): void { this.steps++; if (this.steps === 3) this.node.position.x = 5; }
 }
 class Bomb extends Behaviour {
   armed = false;
-  fixedUpdate(): void { if (this.armed) throw new Error('boom'); }
+  override fixedUpdate(): void { if (this.armed) throw new Error('boom'); }
 }
 
 let id = 0;

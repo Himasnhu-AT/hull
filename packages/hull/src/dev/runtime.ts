@@ -6,7 +6,7 @@ import type { Game, Node } from '../core/index.ts';
 import { setTraceSink, type TraceKind } from '../core/trace.ts';
 import { clearProbes } from '../core/probes.ts';
 import { createRecentFeed } from './recent.ts';
-import { createErrorRing } from './errors.ts';
+import { ensureCapture } from './capture.ts';
 import { checkCond, holds, inspectNode, probeValues, treeLines } from './inspect.ts';
 import { input } from '../input/dom.ts';
 import { withUi } from '../ui/capture.ts';
@@ -36,12 +36,6 @@ const stats = (xs: number[]): { avg: number; p95: number; max: number } => {
 
 const countNodes = (n: Node): number => { let c = 1; for (const k of n.children) c += countNodes(k); return c; };
 
-/** One console argument as the line a person would read. */
-const show = (a: unknown): string => {
-  if (typeof a === 'string') return a;
-  if (a instanceof Error) return `${a.name}: ${a.message}`;
-  try { return JSON.stringify(a) ?? String(a); } catch { return String(a); }
-};
 
 const REPORT_MS = 250;
 const RECONNECT_MS = [250, 500, 1000, 2000];
@@ -71,44 +65,23 @@ export function connectDev(game: Game, opts: { url: string; /** Called for `rest
     if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ jsonrpc: '2.0', method, params }));
   };
 
-  // The error ring. A page restarted through the control port hands over what it had (sessionStorage), and starts paused.
-  const ring = createErrorRing();
+  // The error ring lives in capture.ts, which started listening when the module loaded (before `ready`). A page restarted
+  // through the control port hands over what it had (sessionStorage), and starts paused.
+  const cap = ensureCapture();
+  const ring = cap.ring;
+  cap.clock = () => [game.world.tick, game.world.time];
+  cap.onNew = (level, message) => send('log', { level, message, source: 'game' } satisfies Pushes['log']);
   let restarted = false;
   try {
     const carried = sessionStorage.getItem(RESTART_KEY);
     if (carried !== null) { sessionStorage.removeItem(RESTART_KEY); ring.load(carried); restarted = true; }
   } catch { /* no sessionStorage here */ }
-
-  // Console and the original console functions, so our own lines are not captured as the game's.
-  const realConsole = { error: console.error, warn: console.warn, info: console.info };
-  const record = (level: 'error' | 'warn', message: string, stack?: string, announce = true): void => {
-    const fresh = ring.add(level, message, stack, game.world.tick, game.world.time);
-    if (fresh && announce) send('log', { level, message, source: 'game' } satisfies Pushes['log']);
-  };
+  const record = cap.record;
+  const realConsole = cap.real;
   const log = (level: 'info' | 'warn' | 'error', message: string): void => {
     send('log', { level, message, source: 'game' } satisfies Pushes['log']);
     if (level !== 'info') record(level, message, undefined, false);
     (level === 'error' ? realConsole.error : level === 'warn' ? realConsole.warn : realConsole.info).call(console, `[hull dev] ${message}`);
-  };
-  const capture = (level: 'error' | 'warn') => function (this: unknown, ...args: unknown[]): void {
-    try {
-      const withStack = args.find((a): a is Error => a instanceof Error);
-      record(level, args.map(show).join(' '), withStack?.stack ?? new Error().stack?.split('\n').filter((l) => !l.includes('/dev/runtime.ts')).join('\n'));
-    } catch { /* capturing must never break the game's own logging */ }
-    realConsole[level].apply(console, args);
-  };
-  const patched = { error: capture('error'), warn: capture('warn') };
-  console.error = patched.error;
-  console.warn = patched.warn;
-  const onWindowError = (e: ErrorEvent): void => {
-    // A cross-origin "Script error." carries nothing to act on.
-    if (e.error === undefined && e.message === 'Script error.') return;
-    const err = e.error as Error | undefined;
-    record('error', err instanceof Error ? `${err.name}: ${err.message}` : e.message, err instanceof Error ? err.stack : `at ${e.filename}:${e.lineno}:${e.colno}`);
-  };
-  const onRejection = (e: PromiseRejectionEvent): void => {
-    const r = e.reason as unknown;
-    record('error', r instanceof Error ? `${r.name}: ${r.message}` : `Unhandled rejection: ${show(r)}`, r instanceof Error ? r.stack : undefined);
   };
 
   // The "Just now" feed: the engine's trace calls land in a ring stamped with game time (so a paused game stamps nothing new
@@ -384,14 +357,17 @@ export function connectDev(game: Game, opts: { url: string; /** Called for `rest
   if (win && win.parent && win.parent !== win) win.addEventListener('keydown', noteKey);
   // A page opened with ?hull-paused starts frozen at tick 0, before its first frame, so a script begins from the same state every time.
   if (new URLSearchParams(location.search).has('hull-paused') || restarted) game.paused = true;
-  win?.addEventListener('error', onWindowError);
-  win?.addEventListener('unhandledrejection', onRejection);
+
   const reporter = setInterval(report, REPORT_MS);
 
   const open = (): void => {
     if (disposed) return;
     ws = new WebSocket(url);
-    ws.onopen = () => { attempt = 0; feed.clear(); announceActors(); report(); reportTuning(); };
+    ws.onopen = () => {
+      attempt = 0; feed.clear(); announceActors(); report(); reportTuning();
+      // What the page already said (a warning while `ready` ran) reaches the studios once the socket is up.
+      for (const it of ring.peek()) send('log', { level: it.level, message: it.message, source: 'game' } satisfies Pushes['log']);
+    };
     ws.onmessage = (e) => {
       try { handle(JSON.parse(String(e.data)) as Note); } catch (err) { log('error', `dev message failed: ${(err as Error).message}`); }
     };
@@ -412,10 +388,8 @@ export function connectDev(game: Game, opts: { url: string; /** Called for `rest
       setTraceSink(null);
       clearTimeout(timer);
       win?.removeEventListener('keydown', noteKey);
-      win?.removeEventListener('error', onWindowError);
-      win?.removeEventListener('unhandledrejection', onRejection);
-      if (console.error === patched.error) console.error = realConsole.error;
-      if (console.warn === patched.warn) console.warn = realConsole.warn;
+      cap.onNew = null;
+      cap.uninstall();
       offFrame();
       ws?.close();
     },

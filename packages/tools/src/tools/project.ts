@@ -26,16 +26,49 @@ const historyChange: Schema = { type: 'object', description: 'A change in the ti
 const expInfo: Schema = { type: 'object', properties: { name: str(), status: { enum: ['active', 'adopted', 'discarded'] }, from: str(), tip: str(), changes: num(), createdAt: str(), by: str(), gameUrl: str() }, required: ['name', 'status', 'from', 'tip', 'changes', 'createdAt', 'by'], additionalProperties: true };
 const empty = obj({});
 const idsHelp = 'Ids, checkpoint names, "main" or an experiment name.';
-const controlOp: Schema = {
-  description: 'One of: {"op":"step","n":60} (pause and run n fixed steps) | {"op":"press","key":"KeyW"} | {"op":"release","key":"KeyW"} | {"op":"state","nodes":["player"]} (tick, time, checksum, the position of the named nodes, and `held`: the keys held down in the game input) | {"op":"screenshot"} (PNG, base64, the UI layer drawn over the 3D view; "ui":false for the view alone).',
+const cmpSchema: Schema = { enum: ['<', '<=', '>', '>=', '==', '!='] };
+const cmpValue: Schema = { type: ['number', 'string', 'boolean'] };
+const condSchema: Schema = {
+  description: 'What until waits for: {node, field, cmp, value} (field is "x", "y", "z" or "<BehaviourName>.<field>") | {probe, cmp, value} | {event: "<trace id>"} (an id the recent feed shows, like sound/thud).',
   oneOf: [
-    obj({ op: { const: 'step' }, n: num() }, ['op', 'n']),
-    obj({ op: { const: 'press' }, key: str('A KeyboardEvent code like KeyW or Space.') }, ['op', 'key']),
-    obj({ op: { const: 'release' }, key: str() }, ['op', 'key']),
-    obj({ op: { const: 'state' }, nodes: arr(str('A `world.find` path.')) }, ['op']),
-    obj({ op: { const: 'screenshot' }, ui: { type: 'boolean', description: 'false: the 3D view only, without the UI layer (HUD, menus). Default true.' } }, ['op']),
+    obj({ node: str('A world.find path.'), field: str('x, y, z or <BehaviourName>.<field>.'), cmp: cmpSchema, value: cmpValue }, ['node', 'field', 'cmp', 'value']),
+    obj({ probe: str('A name the game registered with probe(name, read).'), cmp: cmpSchema, value: cmpValue }, ['probe', 'cmp', 'value']),
+    obj({ event: str('A trace id like sound/thud.') }, ['event']),
   ],
 };
+const controlOp: Schema = {
+  description: 'One control op. Time moves only by step/until/perf/frames, so a run is the same every time. A step that makes game code throw fails with "file:line:col: Error: message", the mapped stack and a note that the world may be part-stepped: restart before trusting state.',
+  oneOf: [
+    obj({ op: { const: 'step' }, n: num('Fixed steps to run (pauses the game).') }, ['op', 'n']),
+    obj({ op: { const: 'press' }, key: str('A KeyboardEvent code like KeyW or Space, or Mouse0 / Mouse1 / Mouse2 for a mouse button.') }, ['op', 'key']),
+    obj({ op: { const: 'release' }, key: str('The same key code as press.') }, ['op', 'key']),
+    obj({ op: { const: 'state' }, nodes: arr(str('A world.find path.')) }, ['op']),
+    obj({ op: { const: 'screenshot' }, ui: { type: 'boolean', description: 'false: the 3D view only, without the UI layer (HUD, menus). Default true.' } }, ['op']),
+    obj({ op: { const: 'inspect' }, node: str('A world.find path.') }, ['op', 'node']),
+    obj({ op: { const: 'tree' }, root: str('A world.find path to start at; default the whole world.'), depth: num('Levels below the root, default 3.') }, ['op']),
+    obj({ op: { const: 'until' }, when: condSchema, max: num('Most ticks to step before giving up.') }, ['op', 'when', 'max']),
+    obj({ op: { const: 'errors' }, clear: { type: 'boolean', description: 'true: empty the ring after reading it.' } }, ['op']),
+    obj({ op: { const: 'restart' } }, ['op']),
+    obj({ op: { const: 'perf' }, steps: num('Steps and frames to time, default 120. Advances the game that many ticks.') }, ['op']),
+    obj({ op: { const: 'look' }, dx: num('Mouse movement in pixels, right is positive.'), dy: num('Mouse movement in pixels, down is positive.') }, ['op', 'dx', 'dy']),
+    obj({ op: { const: 'frames' }, count: num('How many pictures, 2 to 12.'), every: num('Ticks to step between pictures.') }, ['op', 'count', 'every']),
+  ],
+};
+// One line per op, in the tool's description (a oneOf branch has no room for prose in most clients).
+export const controlOpHelp = [
+  'step {n}: run n fixed steps, paused after.',
+  'press / release {key}: hold or let go of a key (KeyW, Space) or a mouse button (Mouse0..2).',
+  'state {nodes?}: tick, time, checksum, positions of the named nodes, held keys, probes (what the game registered with probe(name, read)), errors (unread count).',
+  'inspect {node}: transform, groups, children and each behaviour\'s state fields.',
+  'tree {root?, depth?}: node paths with behaviour names, 200 lines at most.',
+  'until {when, max}: step one tick at a time until the condition holds; answers state plus met and steps.',
+  'errors {clear?}: exceptions, window errors, console.error/warn from the page, with file:line:col in the TypeScript source; ring of 50, repeats counted.',
+  'restart: the game starts again from ready with the same seed, paused at tick 0.',
+  'perf {steps?}: ms per step and per frame (avg, p95, max), draw calls, triangles, node count.',
+  'look {dx, dy}: mouse movement as under pointer lock.',
+  'frames {count, every}: count screenshots every ticks apart, tiled into one picture with each tick written on it.',
+  'screenshot {ui?}: the frame as a picture.',
+].join(' ');
 
 const explainInput: Schema = JSON.parse(JSON.stringify(explainSchema)) as Schema;
 const recentEvent: Schema = obj({ at: num('Game time in seconds.'), kind: { enum: ['sound', 'anim', 'vfx', 'actor'] }, id: str(), label: str(), node: str() }, ['at', 'kind', 'id', 'label']);
@@ -118,7 +151,7 @@ const SPECS: Spec[] = [
   { method: 'exp.adopt', summary: 'Three-way merge an experiment into the project. With conflicts nothing is written: call again with `resolve` ("ours" | "theirs" per "target#path").', input: obj({ name: str(), author, resolve: { type: 'object', additionalProperties: { enum: ['ours', 'theirs'] } } }, ['name']), output: obj({ ok: { type: 'boolean' }, conflicts: arr({ type: 'object', additionalProperties: true }), problems, change: historyChange }, ['ok', 'conflicts', 'problems']), },
   { method: 'exp.discard', summary: 'Close an experiment. Its changes stay in the timeline.', input: obj({ name: str() }, ['name']), output: obj({ ok: { type: 'boolean' } }, ['ok']), },
   { method: 'game.control', summary: 'Pause, resume, step, scale time or restart every connected game.', input: obj({ paused: { type: 'boolean' }, step: num('Run exactly n fixed steps (pauses afterwards).'), timeScale: num(), restart: { type: 'boolean' } }), output: empty },
-  { method: 'game.run', summary: 'Run one control op on the running game and return its answer. Time moves only by `step`, so a script gives the same run every time. With no app open, a headless game page is opened for you. After a code change the page reloads: the op waits up to 10 s for it to reconnect, and the answer has reloaded: true when a reload happened during the call (its tick then restarted).', input: obj({ control: controlOp, client: str('A specific game client; default is the project\'s first.') }, ['control']), output: { description: 'step/state: {tick,time,checksum,paused,nodes}; screenshot: {png (base64),width,height}; press/release: {}.', type: 'object', additionalProperties: true },
+  { method: 'game.run', summary: 'Run one control op on the running game and return its answer. Time moves only by step, so a script gives the same run every time. Ops: ' + controlOpHelp + ' With no app open, a headless game page is opened for you. After a code change the page reloads: the op waits up to 10 s for it to reconnect, and the answer has reloaded: true when a reload happened during the call (its tick then restarted).', input: obj({ control: controlOp, client: str('A specific game client; default is the project\'s first.') }, ['control']), output: { description: 'step/state/until: {tick,time,checksum,paused,nodes,held,probes,errors} (until adds met, steps); screenshot/frames: {png (base64),width,height}; inspect, tree, errors, perf: as listed; press/release/look: {}.', type: 'object', additionalProperties: true },
  },
   { method: 'problems.list', summary: 'Config problems and authorship problems (AI changes over values you set), as the app shows them.', input: empty, output: obj({ ok: { type: 'boolean' }, problems }, ['ok', 'problems']) },
   { method: 'review.list', summary: 'Review notes: what has been checked and what needs a change.', input: obj({ open: { type: 'boolean' } }), key: 'entries', output: list({ type: 'object', properties: { key: str(), state: str(), note: str() }, required: ['key', 'state'], additionalProperties: true }, 'entries'), },

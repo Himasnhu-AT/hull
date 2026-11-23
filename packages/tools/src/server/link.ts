@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { promisify } from 'node:util';
 import type { MethodName, Methods } from 'hull/dev/protocol';
 import { connectProject, type ProjectClient } from '../control/client.ts';
+import { closeOnExit, reapDeadSessions, type SessionGuard } from '../play/session.ts';
 
 const exec = promisify(execFile);
 
@@ -79,16 +80,20 @@ export async function openProject(o: LinkOptions): Promise<ProjectLink> {
   const session = `hull-link-${process.pid}`;
   const browser = o.browser ?? 'agent-browser';
   let launching: Promise<void> | undefined;
-  let launched = false;
+  let guard: SessionGuard | undefined;
   let gameId: string | undefined;
 
   // The game runs in a page. When nobody has one open (no app), open a headless one, once. It stays until the link closes (a
   // later call reuses it); it says ?hull-headless, so the server never prefers it to a game in the app's frame.
   const launchGame = (): Promise<void> => (launching ??= (async () => {
     const id = `link${process.pid}`;
+    // A session a dead process left behind keeps a page rendering for nobody: close it before opening ours.
+    for (const name of await reapDeadSessions(browser)) log(`closed the leftover browser session ${name}`);
+    // The session exists from the first command, so it is guarded from here: if this process ends while the page is still
+    // loading (or the launch below fails), the session still closes.
+    guard = closeOnExit(browser, session);
     await exec(browser, ['--session', session, 'set', 'viewport', '640', '360'], { timeout: 60_000 });
     await exec(browser, ['--session', session, 'open', `${server.gameUrl}?hull-paused&hull-headless&hull-client=${id}`], { timeout: 60_000 });
-    launched = true;
     for (const t0 = Date.now(); ; await new Promise((r) => setTimeout(r, 200))) {
       try { await client.call('game.run', { control: { op: 'state' }, client: id }); break; } catch (e) {
         if (Date.now() - t0 > 60_000) throw new Error(`the game did not connect within 60 s (${(e as Error).message})`);
@@ -114,7 +119,9 @@ export async function openProject(o: LinkOptions): Promise<ProjectLink> {
     },
     async close() {
       client.close();
-      if (launched) await exec(browser, ['--session', session, 'close'], { timeout: 20_000 }).catch(() => {});
+      // A launch still in progress holds the session open: let it finish (or fail) before closing, or the page leaks.
+      await launching?.catch(() => {});
+      guard?.close();
       await own?.close();
     },
   };
