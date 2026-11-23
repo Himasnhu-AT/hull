@@ -15,6 +15,26 @@ export interface PlayInput {
   browser?: string;
 }
 
+const cmp = { enum: ['<', '<=', '>', '>=', '==', '!='] };
+const val = { description: 'A number, string or boolean.', type: ['number', 'string', 'boolean'] };
+const step = (key: string, schema: Record<string, unknown>, description: string, extra: Record<string, unknown> = {}, required: string[] = [key]): Record<string, unknown> => ({
+  type: 'object', description, properties: { [key]: schema, ...extra }, required, additionalProperties: false,
+});
+const cond = { description: '{node, field, cmp, value} (field is x, y, z or "<BehaviourName>.<field>") | {probe, cmp, value} | {event: "<trace id like sound/thud>"}', type: 'object', additionalProperties: true };
+const STEP_SHAPES: Record<string, unknown>[] = [
+  step('step', { type: 'number' }, 'Run n fixed ticks: {"step": 60}.'),
+  step('press', { type: 'string' }, 'Hold a key (a KeyboardEvent code, or Mouse0/Mouse1/Mouse2) until released: {"press": "KeyW"}.'),
+  step('release', { type: 'string' }, 'Let go of a key: {"release": "KeyW"}.'),
+  step('hold', { type: 'string' }, 'Hold a key for some ticks, then release: {"hold": "KeyW", "steps": 30}.', { steps: { type: 'number' } }, ['hold', 'steps']),
+  step('read', { type: 'array', items: { type: 'string' } }, 'Read the positions of named nodes into the report: {"read": ["player"]}.'),
+  step('check', { type: 'object', properties: { node: { type: 'string' }, axis: { enum: ['x', 'y', 'z'] }, min: { type: 'number' }, max: { type: 'number' } }, required: ['node', 'axis'] }, 'Fail unless a node coordinate is within min/max: {"check": {"node": "player", "axis": "z", "max": -2}}.'),
+  step('screenshot', { type: 'string' }, 'Compare the frame with tests/golden/<name>.png (written on first run): {"screenshot": "start"}.', { channel: { type: 'number' }, pixels: { type: 'number' } }),
+  step('until', cond, 'Step one tick at a time until the condition holds; fails when it does not within max ticks: {"until": {"probe": "score", "cmp": ">=", "value": 3}, "max": 600}.', { max: { type: 'number' } }, ['until', 'max']),
+  step('expect', { type: 'object', description: '{node, field, cmp, value} | {probe, cmp, value}', properties: { node: { type: 'string' }, field: { type: 'string' }, probe: { type: 'string' }, cmp, value: val }, required: ['cmp', 'value'] }, 'Fail unless a field or probe compares true now: {"expect": {"node": "player", "field": "Health.hp", "cmp": ">", "value": 0}}.'),
+  step('look', { type: 'array', items: { type: 'number' }, minItems: 2, maxItems: 2 }, 'Move the mouse as under pointer lock: {"look": [40, 0]}.'),
+  step('inspect', { type: 'string' }, 'Read one node in full (transform, groups, each behaviour\'s state) into the report: {"inspect": "player"}.'),
+];
+
 export const play = defineTool<PlayInput, PlayReport>({
   name: 'play',
   summary: 'Runs a step script in a headless browser: press keys, step game ticks, read state, compare screenshots to golden images.',
@@ -23,17 +43,14 @@ export const play = defineTool<PlayInput, PlayReport>({
     properties: {
       script: {
         type: 'object',
-        description: 'Steps run in order, by game ticks (never real time). A failed step stops the script. Screenshots are compared with tests/golden/<name>.png (written on first run).',
+        description: 'Steps run in order, by game ticks (never real time). A failed step stops the script, and so does an error the game logs (unless allowErrors). Screenshots are compared with tests/golden/<name>.png (written on first run).',
         properties: {
           viewport: { type: 'object', properties: { width: { type: 'number' }, height: { type: 'number' } }, required: ['width', 'height'] },
           tolerance: { type: 'object', properties: { channel: { type: 'number', description: 'Largest per-channel difference (0-255) still counted as the same pixel. Default 8.' }, pixels: { type: 'number', description: 'How many pixels may differ more than that. Default 0.' } } },
+          allowErrors: { type: 'boolean', description: 'By default a script fails when the game logs an error while it runs (a throw, console.error, an unhandled rejection), naming the file:line:col. true lets errors through.' },
           steps: {
             type: 'array',
-            items: {
-              type: 'object',
-              description: 'One of {step:n} | {press:"KeyW"} | {release:"KeyW"} | {hold:"KeyW", steps:n} | {read:["player"]} | {check:{node,axis,min?,max?}} | {screenshot:"name", channel?, pixels?}',
-              additionalProperties: true,
-            },
+            items: { oneOf: STEP_SHAPES },
           },
         },
         required: ['steps'],
@@ -47,6 +64,7 @@ export const play = defineTool<PlayInput, PlayReport>({
   output: { type: 'object', required: ['ok', 'steps'] },
   format: (o) => [
     ...o.steps.map((s) => `${s.ok ? 'ok  ' : 'FAIL'} ${s.index} ${JSON.stringify(s.step)} @tick ${s.tick}${s.detail ? `  ${s.detail}` : ''}`),
+    ...(o.warnings?.length ? [`warnings: ${o.warnings.join(' | ')}`] : []),
     `${o.ok ? 'played' : 'failed'}: tick ${o.tick}, checksum ${o.checksum}`,
   ],
   async run(ctx, input) {

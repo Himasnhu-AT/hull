@@ -672,12 +672,35 @@ values. Their rules, in `server/code.ts` (pure, unit-tested) and the project ser
 * **Scenario tests** (Node): `hull/kits/testing` starts a game with a headless input and counted sounds
   (`startRig` gives a `Rig` with `g`, `core`, `sounds` and `step(n)`; `runScenario` records and replays a run). This is the harness the kits' own tests use.
 * **Control port.** In a dev build the game connects to the project server (`connectDev`, `dev/protocol.ts`). The server sends
-  `game.rpc` and the game answers `game.result`; the `game.run` method is the way in. Ops: `step`, `press`, `release`,
-  `state`, `screenshot`. A page opened with `?hull-paused&hull-client=<id>` starts frozen at tick 0 and can be aimed at by
-  id (the tool's page also says `hull-headless`), so a script starts from the same state every time. Time moves only by `step`. Not built: `set`, `spawn`, `teleport`,
-  `errors`, `perf`, `waitUntil`.
-* **Step scripts** (`play`): a JSON list of `step`, `press`, `release`, `hold`, `read`, `check` and `screenshot` steps, run in a
-  headless browser (agent-browser). Each screenshot is compared with `tests/golden/<name>.png` per channel and per pixel
+  `game.rpc` and the game answers `game.result`; the `game.run` method is the way in. A page opened with
+  `?hull-paused&hull-client=<id>` starts frozen at tick 0 and can be aimed at by id (the tool's page also says `hull-headless`),
+  so a script starts from the same state every time. Time moves only by `step`, `until`, `perf` and `frames`. Ops:
+  * `step`, `press`, `release` (keys, and `Mouse0`..`Mouse2` for buttons), `look` (mouse movement as under pointer lock),
+    `screenshot`, and `frames` (several screenshots tiled into one PNG with the tick written on each).
+  * `state` (tick, time, checksum, named nodes, held keys, **probes**, unread error count), `inspect` (one node: transform, groups,
+    children, each behaviour's state), `tree`, `until` (step a tick at a time until a condition on a node field, a probe or a
+    trace event holds), `perf` (ms per step and per frame, draw calls, triangles, nodes), `restart` (ready again, same seed,
+    paused at tick 0; the page reloads and the server waits for it to come back).
+  * `errors`: a ring of 50 (repeats counted) of what the page raised: an exception in a step or a frame, `window.onerror`,
+    unhandled rejections, `console.error` and `console.warn`. `dev/capture.ts` installs the capture when the dev module loads,
+    before `ready`, so a warning printed while the game is built (a material that does not exist) is kept. The page sends the
+    browser's own stack text; the project server maps it through the inline source maps Vite serves (`server/stackmap.ts`,
+    `node:module` `SourceMap`) to `file:line:col` in the original TypeScript, project-relative (`src/player.ts`) or
+    engine-relative, at most six frames, the control port's own frames cut.
+  * A step or `until` in which game code throws fails with `src/player.ts:40:5: Error: boom`, the mapped stack and the line
+    "The world may be part-stepped: run {op:"restart"} before trusting state."; the error is also in the ring.
+  * **Probes**: `probe(name, read)` (`core/probes.ts`) names a reading a game cares about (`score`, `gemsLeft`). They show in
+    `state` and can be waited on by `until`. In a ship build nothing reads them: one Map entry each.
+  * The sounds a game asks for are traced even when the audio context cannot run (a headless page never gets the gesture that
+    starts audio), so `game.recent` and `until {event}` work there.
+  * The headless page a tool opens closes when the process that opened it ends for any reason (stdin end, SIGTERM, SIGINT, SIGHUP,
+    exit); a session left by a dead pid (`hull-link-<pid>`, `hull-play<pid>x<n>`) is closed on the next start (`play/session.ts`).
+    Not built: `set`, `spawn`, `teleport`.
+* **Step scripts** (`play`): a JSON list of steps run in a headless browser (agent-browser): `step`, `press`, `release`, `hold`,
+  `read`, `check`, `screenshot`, and `until {when, max}` (fails when the condition does not hold in time), `expect {node, field |
+  probe, cmp, value}`, `look [dx, dy]`, `inspect "node"`. A script fails when the game logs an error while it runs (a throw,
+  `console.error`, a rejection), naming `file:line:col`, unless it says `"allowErrors": true`; warnings do not fail it and are listed
+  in the report. Each screenshot is compared with `tests/golden/<name>.png` per channel and per pixel
   (default: 8 of 255 per channel, 0 pixels allowed). A missing golden is written; `update` rewrites them; a mismatch stops the
   script and leaves `.hull/play/<name>.actual.png` and `.diff.png`. Not built: a perceptual compare.
 * **Sound measurement**: `renderSound`, `measureSound` and `checkSound` in `hull/audio` give peak, loudness, length and spectral

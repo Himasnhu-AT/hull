@@ -29,7 +29,7 @@ describe('connectDev: the frame', () => {
   const setup = async (embedded: boolean, search = ''): Promise<{ conn: ReturnType<typeof connectDev>; fire(e: Partial<KeyboardEvent>): void; posted: unknown[]; game: Awaited<ReturnType<typeof startGame>> }> => {
     const listeners: ((e: KeyboardEvent) => void)[] = [];
     const posted: unknown[] = [];
-    const win: any = { addEventListener: (_t: string, f: any) => listeners.push(f), removeEventListener: (_t: string, f: any) => { listeners.splice(listeners.indexOf(f), 1); } };
+    const win: any = { addEventListener: (t: string, f: any) => { if (t === 'keydown') listeners.push(f); }, removeEventListener: (t: string, f: any) => { if (t === 'keydown') listeners.splice(listeners.indexOf(f), 1); } };
     win.parent = embedded ? { postMessage: (m: unknown) => posted.push(m) } : win;
     vi.stubGlobal('window', win);
     vi.stubGlobal('location', { search });

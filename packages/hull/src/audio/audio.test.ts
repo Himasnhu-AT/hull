@@ -327,6 +327,24 @@ describe('mountAudio hands its context and buses to a game that makes its own so
     g.dispose();
   });
 
+  it('traces a sound the game asked for even when the context is suspended or missing', async () => {
+    const { setTraceSink } = await import('../core/trace.ts');
+    const heard: string[] = [];
+    setTraceSink((_k, id) => { heard.push(id); });
+    try {
+      const g = await startGame(defineGame({ ready() {} }));
+      const suspended = fakeContext();
+      (suspended as unknown as { state: string }).state = 'suspended';
+      const live = mountAudio(g, { createContext: () => suspended });
+      expect(live.play('sound/thud')).toBeUndefined();
+      const none = mountAudio(g, { onError: () => {}, createContext: () => { throw new Error('no audio'); } });
+      expect(none.play('footstep')).toBeUndefined();
+      expect(heard).toEqual(['sound/thud', 'sound/footstep']);
+      live.dispose();
+      g.dispose();
+    } finally { setTraceSink(null); }
+  });
+
   it('reads null and no buses when Web Audio is missing', async () => {
     const g = await startGame(defineGame({ ready() {} }));
     const view = mountAudio(g, { onError: () => {}, createContext: () => { throw new Error('no audio'); } });

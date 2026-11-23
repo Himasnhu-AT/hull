@@ -3,9 +3,10 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import type { Problem } from 'hull';
-import type { ControlOp, ControlShot, ControlState, NodeState } from 'hull/dev/protocol';
+import type { ControlCmp, ControlCond, ControlErrors, ControlInspect, ControlOp, ControlShot, ControlState, ControlUntil, NodeState } from 'hull/dev/protocol';
 import { connectProject, type ProjectClient } from '../control/client.ts';
 import { checkGolden, type Tolerance } from './golden.ts';
+import { closeOnExit, reapDeadSessions } from './session.ts';
 
 const exec = promisify(execFile);
 
@@ -16,12 +17,26 @@ export type PlayStep =
   | { hold: string; steps: number }
   | { read: string[] }
   | { check: { node: string; axis: 'x' | 'y' | 'z'; min?: number; max?: number } }
-  | { screenshot: string; channel?: number; pixels?: number };
+  | { screenshot: string; channel?: number; pixels?: number }
+  /** Step one tick at a time until the condition holds; fails when it does not within `max` ticks. */
+  | { until: ControlCond; max: number }
+  /** Fails unless the node's field (x, y, z or "Behaviour.field") or the probe compares true. */
+  | { expect: ExpectCond }
+  /** Mouse movement, as under pointer lock. */
+  | { look: [number, number] }
+  /** Reads one node in full (transform, groups, behaviour state) into the report. */
+  | { inspect: string };
+
+export type ExpectCond =
+  | { node: string; field: string; cmp: ControlCmp; value: number | string | boolean }
+  | { probe: string; cmp: ControlCmp; value: number | string | boolean };
 
 export interface PlayScript {
   viewport?: { width: number; height: number };
   /** Default tolerance for every screenshot in the script. */
   tolerance?: Partial<Tolerance>;
+  /** Errors the game logs during the script fail it, unless this is true. */
+  allowErrors?: boolean;
   steps: PlayStep[];
 }
 
@@ -33,12 +48,18 @@ export interface StepReport {
   tick: number;
   detail?: string;
   state?: Record<string, NodeState>;
+  inspect?: ControlInspect;
   golden?: { name: string; status: string; path: string; diffPixels?: number; maxDelta?: number; actual?: string; diff?: string };
 }
 
-export interface PlayReport { ok: boolean; problems: Problem[]; steps: StepReport[]; tick: number; checksum: string }
+export interface PlayReport {
+  ok: boolean; problems: Problem[]; steps: StepReport[]; tick: number; checksum: string;
+  /** Warnings the game logged during the script (they do not fail it). */
+  warnings?: string[];
+}
 
 const KEYS = /^[A-Za-z0-9]+$/;
+const CMPS = ['<', '<=', '>', '>=', '==', '!='];
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 
 /** Problems with the script itself, named by pointer, before any browser starts. */
@@ -46,6 +67,7 @@ export function validateScript(file: string, s: unknown): Problem[] {
   const out: Problem[] = [];
   const bad = (pointer: string, message: string): void => { out.push({ file, pointer, rule: 'play', message }); };
   if (!isObj(s) || !Array.isArray(s['steps'])) return [{ file, pointer: '', rule: 'play', message: 'a play script is an object with a "steps" array' }];
+  if (s['allowErrors'] !== undefined && typeof s['allowErrors'] !== 'boolean') bad('/allowErrors', 'allowErrors is true or false');
   s['steps'].forEach((st: unknown, i) => {
     const at = `/steps/${i}`;
     if (!isObj(st)) return bad(at, 'a step is an object like {"step": 60} or {"press": "KeyW"}');
@@ -60,7 +82,18 @@ export function validateScript(file: string, s: unknown): Problem[] {
       const c = st['check'];
       if (!isObj(c) || typeof c['node'] !== 'string' || !['x', 'y', 'z'].includes(c['axis'] as string) || (c['min'] === undefined && c['max'] === undefined)) bad(`${at}/check`, 'check needs {"node", "axis": "x"|"y"|"z", "min" and/or "max"}');
     } else if ('screenshot' in st) { if (typeof st['screenshot'] !== 'string' || !st['screenshot']) bad(`${at}/screenshot`, 'screenshot needs the golden image name'); }
-    else bad(at, `unknown step; use one of step, press, release, hold, read, check, screenshot (got keys: ${Object.keys(st).join(', ') || 'none'})`);
+    else if ('until' in st) {
+      const c = st['until'];
+      if (!isObj(c) || !(typeof c['event'] === 'string' || typeof c['probe'] === 'string' || (typeof c['node'] === 'string' && typeof c['field'] === 'string')) || (!('event' in c) && (!CMPS.includes(c['cmp'] as string) || c['value'] === undefined))) bad(`${at}/until`, 'until needs {"node","field","cmp","value"} | {"probe","cmp","value"} | {"event"}, and "cmp" is one of < <= > >= == !=');
+      if (!n('max')) bad(`${at}/max`, 'until needs "max": the most ticks to wait');
+    } else if ('expect' in st) {
+      const c = st['expect'];
+      if (!isObj(c) || !(typeof c['probe'] === 'string' || (typeof c['node'] === 'string' && typeof c['field'] === 'string')) || !CMPS.includes(c['cmp'] as string) || c['value'] === undefined) bad(`${at}/expect`, 'expect needs {"node","field","cmp","value"} | {"probe","cmp","value"}, and "cmp" is one of < <= > >= == !=');
+    } else if ('look' in st) {
+      const l = st['look'];
+      if (!Array.isArray(l) || l.length !== 2 || !l.every((x) => typeof x === 'number' && Number.isFinite(x))) bad(`${at}/look`, 'look needs [dx, dy]: mouse movement in pixels');
+    } else if ('inspect' in st) { if (typeof st['inspect'] !== 'string' || !st['inspect']) bad(`${at}/inspect`, 'inspect needs a node name'); }
+    else bad(at, `unknown step; use one of step, press, release, hold, read, check, screenshot, until, expect, look, inspect (got keys: ${Object.keys(st).join(', ') || 'none'})`);
   });
   return out;
 }
@@ -79,6 +112,17 @@ export interface RunOptions {
 
 let sessions = 0;
 
+const compares = (a: unknown, cmp: ControlCmp, b: unknown): boolean => {
+  if (cmp === '==') return a === b;
+  if (cmp === '!=') return a !== b;
+  if (typeof a !== typeof b || (typeof a !== 'number' && typeof a !== 'string')) return false;
+  const x = a as number, y = b as number;
+  return cmp === '<' ? x < y : cmp === '<=' ? x <= y : cmp === '>' ? x > y : x >= y;
+};
+
+/** "src/player.ts:40:5: " for an error the server could place, else nothing. */
+const placeOf = (e: { file?: string; line?: number; col?: number }): string => (e.file ? `${e.file}:${e.line ?? 0}:${e.col ?? 0}: ` : '');
+
 export async function runScript(o: RunOptions): Promise<PlayReport> {
   const id = `play${process.pid}x${++sessions}`;
   const session = `hull-${id}`;
@@ -88,9 +132,14 @@ export async function runScript(o: RunOptions): Promise<PlayReport> {
   const steps: StepReport[] = [];
   const problems: Problem[] = [];
   let client: ProjectClient | undefined;
-  let last: ControlState = { tick: 0, time: 0, checksum: '', paused: true, nodes: {}, held: [] };
+  let last: ControlState = { tick: 0, time: 0, checksum: '', paused: true, nodes: {}, held: [], probes: {}, errors: 0 };
+  const warnings: string[] = [];
+  let guard: ReturnType<typeof closeOnExit> | undefined;
   try {
     client = await connectProject(o.server.url);
+    // The session exists from the first browser command: guard it from here, and clear what a dead process left behind.
+    await reapDeadSessions(o.browser);
+    guard = closeOnExit(o.browser, session);
     // Viewport first, then the page: the canvas sizes itself once, at its final size.
     await ab('set', 'viewport', String(vp.width), String(vp.height));
     await ab('open', `${o.server.gameUrl}?hull-paused&hull-client=${id}`);
@@ -132,6 +181,41 @@ export async function runScript(o: RunOptions): Promise<PlayReport> {
             else if (c.max !== undefined && v > c.max) fail(`${c.node}.${c.axis} is ${v.toFixed(3)}, above the maximum ${c.max} at tick ${last.tick}`);
             else rep.detail = `${c.node}.${c.axis} = ${v.toFixed(3)}`;
           }
+        } else if ('until' in step) {
+          const u = await run<ControlUntil>({ op: 'until', when: step.until, max: step.max });
+          last = u;
+          if (!u.met) fail(`${JSON.stringify(step.until)} did not hold within ${step.max} ticks (stopped at tick ${u.tick})`);
+          else rep.detail = `held after ${u.steps} ticks`;
+        } else if ('expect' in step) {
+          const c = step.expect;
+          let got: unknown;
+          if ('probe' in c) {
+            last = await run<ControlState>({ op: 'state' });
+            got = last.probes[c.probe];
+            if (got === undefined) fail(`there is no probe "${c.probe}" (probes: ${Object.keys(last.probes).join(', ') || 'none'})`);
+          } else {
+            const ins = await run<ControlInspect>({ op: 'inspect', node: c.node });
+            last = await run<ControlState>({ op: 'state' });
+            if (!ins.found) fail(`there is no node "${c.node}"`);
+            else if (c.field === 'x' || c.field === 'y' || c.field === 'z') got = ins.position![c.field === 'x' ? 0 : c.field === 'y' ? 1 : 2];
+            else {
+              const [bname, ...rest] = c.field.split('.');
+              const b = ins.behaviours!.find((x) => x.name === bname);
+              got = b?.state[rest.join('.')];
+              if (got === undefined) fail(`"${c.node}" has no field "${c.field}" (behaviours: ${ins.behaviours!.map((x) => x.name).join(', ') || 'none'}; use inspect to see their fields)`);
+            }
+          }
+          if (rep.ok) {
+            const name = 'probe' in c ? `probe ${c.probe}` : `${c.node}.${c.field}`;
+            if (!compares(got, c.cmp, c.value)) fail(`expected ${name} ${c.cmp} ${JSON.stringify(c.value)}, but it is ${JSON.stringify(got)} at tick ${last.tick}`);
+            else rep.detail = `${name} = ${JSON.stringify(got)}`;
+          }
+        } else if ('look' in step) {
+          await run({ op: 'look', dx: step.look[0], dy: step.look[1] });
+        } else if ('inspect' in step) {
+          rep.inspect = await run<ControlInspect>({ op: 'inspect', node: step.inspect });
+          if (!rep.inspect.found) fail(`there is no node "${step.inspect}"`);
+          else rep.detail = JSON.stringify({ position: rep.inspect.position, behaviours: rep.inspect.behaviours });
         } else {
           const shot = await run<ControlShot>({ op: 'screenshot' });
           const png = Buffer.from(shot.png, 'base64');
@@ -150,6 +234,16 @@ export async function runScript(o: RunOptions): Promise<PlayReport> {
           else rep.detail = `${g.status === 'new' ? 'saved new' : 'updated'} golden ${g.path}`;
         }
       } catch (e) { fail((e as Error).message); }
+      // An error the game logged while the step ran fails the script, naming where it came from (a throw inside the step
+      // already failed it above, and the script stops there, so it is not reported twice).
+      if (rep.ok) {
+        try {
+          const logged = ((await run<ControlErrors>({ op: 'errors', clear: true })).items);
+          for (const w of logged.filter((x) => x.level === 'warn')) warnings.push(`${placeOf(w)}${w.message}${w.count > 1 ? ` (x${w.count})` : ''}`);
+          const errs = logged.filter((x) => x.level === 'error');
+          if (errs.length && !o.script.allowErrors) fail(`the game logged ${errs.length === 1 ? 'an error' : `${errs.length} errors`}: ${errs.map((x) => `${placeOf(x)}${x.message}${x.count > 1 ? ` (x${x.count})` : ''}`).join('; ')}. Set "allowErrors": true on the script if this is expected.`);
+        } catch (e) { fail(`could not read the game's errors: ${(e as Error).message}`); }
+      }
       rep.tick = last.tick;
       steps.push(rep);
       // A failed step stops the script: the steps after it would run from a state the author did not plan for.
@@ -160,6 +254,7 @@ export async function runScript(o: RunOptions): Promise<PlayReport> {
   } finally {
     client?.close();
     await ab('close').catch(() => {});
+    guard?.close();
   }
-  return { ok: problems.length === 0, problems, steps, tick: last.tick, checksum: last.checksum };
+  return { ok: problems.length === 0, problems, steps, tick: last.tick, checksum: last.checksum, ...(warnings.length ? { warnings } : {}) };
 }

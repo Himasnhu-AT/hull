@@ -4,14 +4,38 @@
 import { config, setTunable, tuningProblems } from '../config/index.ts';
 import type { Game, Node } from '../core/index.ts';
 import { setTraceSink, type TraceKind } from '../core/trace.ts';
+import { clearProbes } from '../core/probes.ts';
 import { createRecentFeed } from './recent.ts';
+import { ensureCapture } from './capture.ts';
+import { checkCond, holds, inspectNode, probeValues, treeLines } from './inspect.ts';
 import { input } from '../input/dom.ts';
 import { withUi } from '../ui/capture.ts';
-import type { ControlOp, ControlShot, ControlState, GameControl, GameEvents, GameReport, Pushes } from './protocol.ts';
+import type { ControlErrors, ControlFrames, ControlInspect, ControlOp, ControlPerf, ControlShot, ControlState, ControlTree, ControlUntil, GameControl, GameEvents, GameReport, Pushes } from './protocol.ts';
 
 export interface DevConnection { dispose(): void }
 
 interface Note { method: string; params?: unknown }
+
+/** A step that threw game code. Carries the browser's stack so the project server can map it to the sources. */
+class StepFailure extends Error {
+  constructor(message: string, readonly raw: string | undefined) { super(message); }
+}
+
+type ControlResult = ControlState | ControlShot | ControlUntil | ControlInspect | ControlTree | ControlErrors | ControlPerf | ControlFrames | Record<string, never>;
+
+/** Handed from a page that is restarting to the one that replaces it (sessionStorage survives a reload, and only that). */
+const RESTART_KEY = 'hull-restart';
+/** An `until` that has run this long in wall time stops and says so, so the answer comes back before the server's 30 s limit. */
+const UNTIL_WALL_MS = 20_000;
+
+const stats = (xs: number[]): { avg: number; p95: number; max: number } => {
+  const s = [...xs].sort((a, b) => a - b);
+  const r = (n: number): number => Math.round(n * 1000) / 1000;
+  return { avg: r(xs.reduce((a, b) => a + b, 0) / Math.max(1, xs.length)), p95: r(s[Math.min(s.length - 1, Math.floor(s.length * 0.95))] ?? 0), max: r(s[s.length - 1] ?? 0) };
+};
+
+const countNodes = (n: Node): number => { let c = 1; for (const k of n.children) c += countNodes(k); return c; };
+
 
 const REPORT_MS = 250;
 const RECONNECT_MS = [250, 500, 1000, 2000];
@@ -41,9 +65,23 @@ export function connectDev(game: Game, opts: { url: string; /** Called for `rest
     if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ jsonrpc: '2.0', method, params }));
   };
 
+  // The error ring lives in capture.ts, which started listening when the module loaded (before `ready`). A page restarted
+  // through the control port hands over what it had (sessionStorage), and starts paused.
+  const cap = ensureCapture();
+  const ring = cap.ring;
+  cap.clock = () => [game.world.tick, game.world.time];
+  cap.onNew = (level, message) => send('log', { level, message, source: 'game' } satisfies Pushes['log']);
+  let restarted = false;
+  try {
+    const carried = sessionStorage.getItem(RESTART_KEY);
+    if (carried !== null) { sessionStorage.removeItem(RESTART_KEY); ring.load(carried); restarted = true; }
+  } catch { /* no sessionStorage here */ }
+  const record = cap.record;
+  const realConsole = cap.real;
   const log = (level: 'info' | 'warn' | 'error', message: string): void => {
     send('log', { level, message, source: 'game' } satisfies Pushes['log']);
-    (level === 'error' ? console.error : level === 'warn' ? console.warn : console.info)(`[hull dev] ${message}`);
+    if (level !== 'info') record(level, message, undefined, false);
+    (level === 'error' ? realConsole.error : level === 'warn' ? realConsole.warn : realConsole.info).call(console, `[hull dev] ${message}`);
   };
 
   // The "Just now" feed: the engine's trace calls land in a ring stamped with game time (so a paused game stamps nothing new
@@ -61,7 +99,10 @@ export function connectDev(game: Game, opts: { url: string; /** Called for `rest
     },
     send: (items) => send('game.events', { items } satisfies GameEvents),
   });
-  setTraceSink(feed.add);
+  // `until` can wait for a trace event: the sink notes a hit on the one id being watched, then hands on to the feed.
+  let watching: string | null = null;
+  let watchHit = false;
+  setTraceSink((kind, id, node) => { feed.add(kind, id, node); if (watching !== null && id === watching) watchHit = true; });
   const feeder = setInterval(() => { feed.flush(); }, FEED_MS);
 
   // Characters built before this connection existed (connectDev runs after the game's ready, and a studio can connect any time later)
@@ -84,7 +125,15 @@ export function connectDev(game: Game, opts: { url: string; /** Called for `rest
   };
 
   // The control port. Keys go through real KeyboardEvents so the input map and the latched edges behave as for a player.
+  // A mouse button ("Mouse0".."Mouse4") goes through the mouse events the input layer listens to.
   const key = (type: 'keydown' | 'keyup', code: string): void => {
+    const m = /^Mouse([0-4])$/.exec(code);
+    if (m) {
+      const button = Number(m[1]);
+      if (type === 'keydown') document.documentElement.dispatchEvent(new MouseEvent('mousedown', { button, bubbles: true, cancelable: true }));
+      else window.dispatchEvent(new MouseEvent('mouseup', { button, bubbles: true }));
+      return;
+    }
     window.dispatchEvent(new KeyboardEvent(type, { code, bubbles: true, cancelable: true }));
   };
   const stateOf = (names: readonly string[] = []): ControlState => {
@@ -93,33 +142,148 @@ export function connectDev(game: Game, opts: { url: string; /** Called for `rest
       const n = game.world.find(name);
       nodes[name] = n ? { found: true, x: n.position.x, y: n.position.y, z: n.position.z } : { found: false, x: 0, y: 0, z: 0 };
     }
-    return { tick: game.world.tick, time: game.world.time, checksum: game.world.checksum(), paused: game.paused, nodes, held: input.heldSources() };
+    return { tick: game.world.tick, time: game.world.time, checksum: game.world.checksum(), paused: game.paused, nodes, held: input.heldSources(), probes: probeValues(), errors: ring.unread() };
   };
-  const runControl = async (c: ControlOp): Promise<ControlState | ControlShot | Record<string, never>> => {
+  // Steps through here so a throw in game code is recorded and comes back as a failure that names the place, not as a bare message.
+  const stepSafely = (n: number): void => {
+    try { game.step(n); } catch (e) {
+      const err = e instanceof Error ? e : new Error(String(e));
+      const message = `${err.name}: ${err.message}`;
+      record('error', message, err.stack);
+      throw new StepFailure(message, err.stack);
+    }
+  };
+  const asPng = async (blob: Blob): Promise<ControlShot> => {
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    let bin = '';
+    for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+    const bmp = await createImageBitmap(blob);
+    const shot = { png: btoa(bin), width: bmp.width, height: bmp.height };
+    bmp.close();
+    return shot;
+  };
+  const renderView = (): { shot(): Promise<Blob>; stats?(): { drawCalls: number; triangles: number } } => {
+    const view = (globalThis as { hull?: { render?: { shot(): Promise<Blob>; stats?(): { drawCalls: number; triangles: number } } } }).hull?.render;
+    if (!view) throw new Error('the game has no render view to capture');
+    return view;
+  };
+  const tileFrames = async (c: Extract<ControlOp, { op: 'frames' }>): Promise<ControlFrames> => {
+    if (!Number.isInteger(c.count) || c.count < 2 || c.count > 12) throw new Error(`frames needs "count" from 2 to 12, got ${String(c.count)}`);
+    if (!Number.isInteger(c.every) || c.every < 1) throw new Error(`frames needs "every": ticks between captures, 1 or more, got ${String(c.every)}`);
+    const view = renderView();
+    game.paused = true;
+    const blobs: Blob[] = [];
+    const ticks: number[] = [];
+    for (let i = 0; i < c.count; i++) {
+      if (i > 0) stepSafely(c.every);
+      feed.flush();
+      ticks.push(game.world.tick);
+      blobs.push(await view.shot());
+    }
+    const bitmaps = await Promise.all(blobs.map((b) => createImageBitmap(b)));
+    // Small tiles: the point is judging motion cheaply, so each frame is at most 320 px wide.
+    const tw = Math.min(bitmaps[0]!.width, 320);
+    const th = Math.round((tw * bitmaps[0]!.height) / bitmaps[0]!.width);
+    const cols = Math.ceil(Math.sqrt(c.count));
+    const rows = Math.ceil(c.count / cols);
+    const canvas = document.createElement('canvas');
+    canvas.width = cols * tw;
+    canvas.height = rows * th;
+    const cx = canvas.getContext('2d');
+    if (!cx) throw new Error('frames: the browser gave no 2D canvas to tile the pictures on');
+    cx.font = 'bold 13px monospace';
+    cx.textBaseline = 'top';
+    bitmaps.forEach((bmp, i) => {
+      const x = (i % cols) * tw, y = Math.floor(i / cols) * th;
+      cx.drawImage(bmp, x, y, tw, th);
+      const label = `tick ${ticks[i]}`;
+      cx.fillStyle = 'rgba(0,0,0,0.7)';
+      cx.fillRect(x + 3, y + 3, cx.measureText(label).width + 8, 18);
+      cx.fillStyle = '#fff';
+      cx.fillText(label, x + 7, y + 6);
+      bmp.close();
+    });
+    const out = await new Promise<Blob | null>((r) => canvas.toBlob(r, 'image/png'));
+    if (!out) throw new Error('frames: the tiled picture could not be encoded');
+    return { ...(await asPng(out)), ticks };
+  };
+  const perf = async (c: Extract<ControlOp, { op: 'perf' }>): Promise<ControlPerf> => {
+    const n = c.steps ?? 120;
+    if (!Number.isInteger(n) || n < 1 || n > 5000) throw new Error(`perf needs "steps" from 1 to 5000, got ${String(c.steps)}`);
+    game.paused = true;
+    // A page that has not drawn yet (headless, nobody looking) has no camera view or draw counts: draw once so the numbers mean something.
+    try { await renderView().shot(); } catch { /* no render view: frame times then cover the update alone */ }
+    const st: number[] = [];
+    const fr: number[] = [];
+    // Wall time is right here: this measures the machine, and nothing the simulation does reads it.
+    for (let i = 0; i < n; i++) { const t = performance.now(); stepSafely(1); st.push(performance.now() - t); }
+    // Paused, a frame runs no steps but still updates and draws: that is the cost of showing the game.
+    for (let i = 0; i < n; i++) { const t = performance.now(); game.frame(0); fr.push(performance.now() - t); }
+    feed.flush();
+    const s = (globalThis as { hull?: { render?: { stats?(): { drawCalls: number; triangles: number } } } }).hull?.render?.stats?.();
+    return { stepMs: stats(st), frameMs: stats(fr), drawCalls: s?.drawCalls ?? 0, triangles: s?.triangles ?? 0, nodes: countNodes(game.world.root) };
+  };
+  const until = (c: Extract<ControlOp, { op: 'until' }>): ControlUntil => {
+    const when = checkCond(c.when);
+    if (!Number.isFinite(c.max) || c.max < 0) throw new Error(`until needs "max": how many ticks to try at most, zero or more, got ${String(c.max)}`);
+    game.paused = true;
+    watching = 'event' in when ? when.event : null;
+    watchHit = false;
+    let steps = 0;
+    let met = holds(game.world, when, false);
+    const start = performance.now();
+    try {
+      while (!met && steps < c.max) {
+        stepSafely(1);
+        steps++;
+        met = holds(game.world, when, watchHit);
+        if ((steps & 255) === 0 && performance.now() - start > UNTIL_WALL_MS) break;
+      }
+    } finally { watching = null; }
+    feed.flush();
+    return { ...stateOf(), met, steps };
+  };
+  const runControl = async (c: ControlOp): Promise<ControlResult> => {
     switch (c.op) {
       case 'step':
         if (!Number.isFinite(c.n) || c.n < 0) throw new Error(`step needs a count of zero or more, got ${String(c.n)}`);
         game.paused = true;
-        game.step(Math.floor(c.n));
+        stepSafely(Math.floor(c.n));
         feed.flush();
         return stateOf();
       case 'press': key('keydown', c.key); return {};
       case 'release': key('keyup', c.key); return {};
       case 'state': feed.flush(); return stateOf(c.nodes);
+      case 'inspect':
+        if (typeof c.node !== 'string' || c.node === '') throw new Error('inspect needs "node": a world.find path like "player" or "squad/ana"');
+        return inspectNode(game.world, c.node);
+      case 'tree': return treeLines(game.world, c.root, Number.isInteger(c.depth) && (c.depth as number) >= 0 ? (c.depth as number) : 3);
+      case 'until': return until(c);
+      case 'errors': return { items: ring.take(c.clear === true) } as ControlErrors;
+      case 'perf': return perf(c);
+      case 'frames': return tileFrames(c);
+      case 'look': {
+        if (!Number.isFinite(c.dx) || !Number.isFinite(c.dy)) throw new Error('look needs "dx" and "dy": mouse movement in pixels');
+        // The input layer counts movement only under pointer lock or freeLook; a page nobody clicked in has neither, so borrow freeLook for this one event.
+        const was = input.freeLook;
+        input.freeLook = true;
+        try { window.dispatchEvent(new MouseEvent('mousemove', { movementX: c.dx, movementY: c.dy, bubbles: true })); } finally { input.freeLook = was; }
+        return {};
+      }
+      case 'restart':
+        // The page reloads (that is what runs `ready` again with the same seed) a moment after this answer leaves; the project
+        // server waits for the game to come back. The error ring crosses the reload, and the new page starts paused at tick 0.
+        clearProbes();
+        if (!opts.onRestart) { try { sessionStorage.setItem(RESTART_KEY, ring.dump()); } catch { /* the reload still restarts the game */ } }
+        setTimeout(() => (opts.onRestart ?? (() => location.reload()))(), 30);
+        return {};
       case 'screenshot': {
         feed.flush();
-        const view = (globalThis as { hull?: { render?: { shot(): Promise<Blob> } } }).hull?.render;
-        if (!view) throw new Error('the game has no render view to capture');
+        const view = renderView();
         let blob = await view.shot();
         // The canvas holds only the 3D frame; the HUD and menus are DOM, so they are painted on unless asked not to.
         if (c.ui !== false && typeof document !== 'undefined') blob = await withUi(blob, document);
-        const bytes = new Uint8Array(await blob.arrayBuffer());
-        let bin = '';
-        for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-        const bmp = await createImageBitmap(blob);
-        const shot = { png: btoa(bin), width: bmp.width, height: bmp.height };
-        bmp.close();
-        return shot;
+        return asPng(blob);
       }
     }
   };
@@ -158,7 +322,9 @@ export function connectDev(game: Game, opts: { url: string; /** Called for `rest
         const p = n.params as Pushes['game.rpc'];
         runControl(p.control).then(
           (result) => send('game.result', { id: p.id, ok: true, result }),
-          (err: unknown) => send('game.result', { id: p.id, ok: false, error: err instanceof Error ? err.message : String(err) }),
+          (err: unknown) => send('game.result', err instanceof StepFailure
+            ? { id: p.id, ok: false, error: err.message, ...(err.raw ? { stack: err.raw } : {}), partStepped: true }
+            : { id: p.id, ok: false, error: err instanceof Error ? err.message : String(err) }),
         );
         break;
       }
@@ -192,13 +358,18 @@ export function connectDev(game: Game, opts: { url: string; /** Called for `rest
   };
   if (win && win.parent && win.parent !== win) win.addEventListener('keydown', noteKey);
   // A page opened with ?hull-paused starts frozen at tick 0, before its first frame, so a script begins from the same state every time.
-  if (new URLSearchParams(location.search).has('hull-paused')) game.paused = true;
+  if (new URLSearchParams(location.search).has('hull-paused') || restarted) game.paused = true;
+
   const reporter = setInterval(report, REPORT_MS);
 
   const open = (): void => {
     if (disposed) return;
     ws = new WebSocket(url);
-    ws.onopen = () => { attempt = 0; feed.clear(); announceActors(); report(); reportTuning(); };
+    ws.onopen = () => {
+      attempt = 0; feed.clear(); announceActors(); report(); reportTuning();
+      // What the page already said (a warning while `ready` ran) reaches the studios once the socket is up.
+      for (const it of ring.peek()) send('log', { level: it.level, message: it.message, source: 'game' } satisfies Pushes['log']);
+    };
     ws.onmessage = (e) => {
       try { handle(JSON.parse(String(e.data)) as Note); } catch (err) { log('error', `dev message failed: ${(err as Error).message}`); }
     };
@@ -219,6 +390,8 @@ export function connectDev(game: Game, opts: { url: string; /** Called for `rest
       setTraceSink(null);
       clearTimeout(timer);
       win?.removeEventListener('keydown', noteKey);
+      cap.onNew = null;
+      cap.uninstall();
       offFrame();
       ws?.close();
     },

@@ -89,7 +89,8 @@ const REVERB_SECONDS = 1.4;
 const LOOKAHEAD = 0.15;
 
 const noop: AudioView = {
-  play: () => undefined,
+  // No Web Audio, but the game still asked for the sound: say so to the "Just now" feed, like the live engine does.
+  play: (id) => { if (isTracing()) trace('sound', `sound/${id.startsWith('sound/') ? id.slice(6) : id}`); return undefined; },
   setBus: () => {},
   duck: () => {},
   setBusLowpass: () => {},
@@ -244,12 +245,15 @@ export function mountAudio(game: Game, opts: MountOptions = {}): AudioView {
   };
 
   const play = (id: string, o: PlayOptions = {}, depth = 0): SoundHandle | undefined => {
-    if (disposed || ctx.state !== 'running') return undefined;
+    if (disposed) return undefined;
+    // The hook for the "Just now" feed: once per play the game asked for (a pick's chosen child is the same play, so depth 0 only).
+    // Before the context check on purpose: a headless page never gets the gesture that starts audio, and a sound the game asked
+    // for still happened as far as the game is concerned, so tools that ask "what just played" must see it.
+    if (depth === 0 && isTracing()) trace('sound', `sound/${idOf(id)}`);
+    if (ctx.state !== 'running') return undefined;
     const e = entryFor(id);
     const s = e.sound;
     if (!s) { report(`unknown:${e.id}`, `sound/${e.id} does not exist (expected config/sound/${e.id}.json)`); return undefined; }
-    // The hook for the "Just now" feed: here, once per play the game asked for (a pick's chosen child is the same play, so depth 0 only).
-    if (depth === 0 && isTracing()) trace('sound', `sound/${e.id}`);
     const level = dbToLinear(s.level ?? 0) * (o.volume ?? 1);
 
     if (s.source.type === 'pick') {

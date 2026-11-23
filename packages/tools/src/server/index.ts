@@ -8,7 +8,7 @@ import type { IncomingMessage } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { dirname, join, relative, resolve } from 'node:path';
 import type { ConfigSource, Problem } from 'hull';
-import type { AssetResult, Author, BriefDoc, Change, GameControl, GameEvents, GameMoment, RecentEvent, LibraryItem, MethodName, Methods, ProjectInfo, PushName, Pushes, TunableWire, WriteResult } from 'hull/dev/protocol';
+import type { AssetResult, Author, BriefDoc, Change, ControlErrors, GameControl, GameEvents, GameMoment, RecentEvent, LibraryItem, MethodName, Methods, ProjectInfo, PushName, Pushes, TunableWire, WriteResult } from 'hull/dev/protocol';
 import { createServer, type ViteDevServer } from 'vite';
 import { WebSocket, WebSocketServer } from 'ws';
 import { loadManifest, readConfigFiles, readManifest, writeIds } from '../tools/config.ts';
@@ -26,6 +26,7 @@ import { engineAliases, hullResolve, virtualModule } from './vitePlugins.ts';
 import { buildBenchAudio, buildBenchModels } from './bench.ts';
 import { findRefs, FOLDER_RE, ID_RE, planDelete, planDuplicate, planMoves, planNew, STARTERS, usesOf, type Plan, type Sources } from './assets.ts';
 import { thumbOf } from './thumbs.ts';
+import { createStackMapper, type MappedStack } from './stackmap.ts';
 import { applyEdit, importersOf, listCode, MAX_BYTES, resolveCodePath, searchCode } from './code.ts';
 import { runTsc } from '../tools/types.ts';
 import { readBrief, writeSection } from '../create/brief.ts';
@@ -590,6 +591,30 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
   /** Fails a control op whose game closed before answering; runOnGame turns it into a wait and a retry. */
   class GameGone extends Error {}
 
+  // The page's stacks name lines of Vite's output; this maps them back to the project's own TypeScript (stackmap.ts).
+  const stacks = createStackMapper({ root, origin: () => urls.http });
+  const RESTART_WAIT_MS = 20_000;
+  const PART_STEPPED = 'The world may be part-stepped: run {op:"restart"} before trusting state.';
+  /** What a failed control op says: the place first ("src/player.ts:40:5: Error: boom"), the mapped stack, then the warning. */
+  const failureText = async (r: { error?: string; stack?: string; partStepped?: boolean }): Promise<string> => {
+    const head = r.error ?? 'the game failed the control op';
+    let mapped: MappedStack | undefined;
+    if (r.stack) { try { mapped = await stacks.map(r.stack); } catch { /* an unmapped stack is still worth showing */ } }
+    const lines = [mapped?.place ? `${mapped.place.file}:${mapped.place.line}:${mapped.place.col}: ${head}` : head];
+    for (const f of mapped?.frames ?? []) lines.push(`  at ${f.text}`);
+    if (r.partStepped) lines.push(PART_STEPPED);
+    return lines.join('\n');
+  };
+  /** The ring the game kept, with each stack mapped to file:line:col in the original source and cut to six project-relative frames. */
+  const mapErrors = async (res: ControlErrors): Promise<ControlErrors> => ({
+    items: await Promise.all(res.items.map(async (it) => {
+      if (typeof it.stack !== 'string') return it;
+      const m = await stacks.map(it.stack);
+      const { stack: _raw, ...rest } = it;
+      return { ...rest, ...(m.place ? { file: m.place.file, line: m.place.line, col: m.place.col } : {}), ...(m.frames.length ? { stack: m.frames.map((f) => f.text) } : {}) };
+    })),
+  });
+
   const sendToGame = (target: Client, p: Methods['game.run']['params']): Promise<unknown> => new Promise((ok, fail) => {
     const id = ++rpcN;
     const timer = setTimeout(() => { rpcWait.delete(id); fail(new RpcError(-32003, `the game did not answer ${p.control.op} within 30 s`)); }, 30_000);
@@ -607,14 +632,40 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
     }
   };
 
+  /**
+   * `restart`: the game answers and reloads its page, which runs `ready` again with the same seed. Wait for a game to be back
+   * (the same client id when the page named itself, else any other game) and answer with its state, so the caller reads a
+   * tick-0 state, not the old one.
+   */
+  const restartGame = async (p: Methods['game.run']['params']): Promise<Methods['game.run']['result']> => {
+    const target = pickGame(p.client) ?? await gameAfterReload(p);
+    if (!target) throw new RpcError(-32002, p.client ? `no game "${p.client}" is connected` : 'no game is connected; open the dev page first');
+    await sendToGame(target, p);
+    for (const t0 = Date.now(); ; await new Promise((r) => setTimeout(r, 50))) {
+      const back = [...clients].find((c) => c.role === 'game' && c.ws.readyState === WebSocket.OPEN && c !== target && (c.id === target.id || (!p.client && c.exp === undefined)));
+      if (back) {
+        // The new page answers once its modules have loaded; the first state it gives is the tick-0 one.
+        for (;;) {
+          try { return (await sendToGame(back, { control: { op: 'state' }, client: back.id })) as Methods['game.run']['result']; } catch (e) {
+            if (Date.now() - t0 > RESTART_WAIT_MS) throw e;
+            await new Promise((r) => setTimeout(r, 100));
+          }
+        }
+      }
+      if (Date.now() - t0 > RESTART_WAIT_MS) throw new RpcError(-32003, 'the game did not come back within 20 s of the restart');
+    }
+  };
+
   const runOnGame: Handler<'game.run'> = async (p): Promise<Methods['game.run']['result']> => {
+    if (p.control.op === 'restart') return restartGame(p);
     const connectsAtStart = gameConnects;
     let retried = false;
     for (;;) {
       const target = pickGame(p.client) ?? await gameAfterReload(p);
       if (!target) throw new RpcError(-32002, p.client ? `no game "${p.client}" is connected` : 'no game is connected; open the dev page first');
       try {
-        const result = (await sendToGame(target, p)) as Methods['game.run']['result'];
+        let result = (await sendToGame(target, p)) as Methods['game.run']['result'];
+        if (p.control.op === 'errors') result = await mapErrors(result as ControlErrors);
         // A game that connected while the op ran means a reload happened: say so, so a reset tick is not read as a normal answer.
         const reloaded = retried || gameConnects !== connectsAtStart;
         return (reloaded && result && typeof result === 'object' && !Array.isArray(result) ? { ...result, reloaded: true } : result) as Methods['game.run']['result'];
@@ -977,10 +1028,10 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
         push('game.recent', { items, client: client.id }, 'studio');
       }
       else if (msg.method === 'game.result') {
-        const r = msg.params as { id: number; ok: boolean; result?: never; error?: string };
+        const r = msg.params as Pushes['game.result'] & { result?: never };
         const w = rpcWait.get(r.id);
         rpcWait.delete(r.id);
-        if (r.ok) w?.ok(r.result as never); else w?.fail(new RpcError(-32004, r.error ?? 'the game failed the control op'));
+        if (r.ok) w?.ok(r.result as never); else w?.fail(new RpcError(-32004, await failureText(r)));
       } else if (msg.method === 'log') push('log', msg.params as Pushes['log'], 'studio');
       return;
     }
