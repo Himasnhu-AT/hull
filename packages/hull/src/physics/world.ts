@@ -6,7 +6,9 @@
 // whole height, so a ray from a rooftop does not step through empty vertical cells.
 import type { World } from '../core/index.ts';
 import { Dda } from './dda.ts';
-import { ArrayStore, MovingIndex } from './moving.ts';
+import { takeKernel } from '../kernel/index.ts';
+import { KernelStore } from './kernel-store.ts';
+import { ArrayStore, MovingIndex, type MovingStore } from './moving.ts';
 import { B, beginSweep, C, closestOn, rayAabb, sweepShape } from './narrow.ts';
 import { RigidSolver } from './rigid.ts';
 import { Shape } from './shape.ts';
@@ -63,7 +65,14 @@ export class Physics {
     const g = opts.gravity ?? [0, -9.81, 0];
     this.gravity = { x: g[0], y: g[1], z: g[2] };
     this.iterations = opts.iterations ?? 8;
-    this.index = new MovingIndex(new ArrayStore(), this.cell);
+    // The index's numbers live in the kernel's memory when the game started with one, in plain arrays otherwise. A
+    // kernel that cannot give this world memory is a fallback like any other: the world runs on arrays.
+    let store: MovingStore | null = null;
+    const kernel = takeKernel();
+    if (kernel !== null) {
+      try { store = new KernelStore(kernel); } catch (e) { console.error('physics: ' + (e instanceof Error ? e.message : String(e)) + '; this world runs on the TypeScript broadphase'); }
+    }
+    this.index = new MovingIndex(store ?? new ArrayStore(), this.cell);
     this.solver = new RigidSolver(this);
   }
 
@@ -137,6 +146,11 @@ export class Physics {
     for (let i = 0; i < this.statics.length; i++) fn(this.statics[i]!);
     for (let i = 0; i < this.bigs.length; i++) fn(this.bigs[i]!);
     for (let i = 0; i < this.moving.length; i++) fn(this.moving[i]!);
+  }
+
+  /** Which implementation builds the moving-shape grid in this world. Both give the same answers; tests and reports read this. */
+  get backend(): 'kernel' | 'typescript' {
+    return this.index.kind;
   }
 
   get shapeCount(): number {

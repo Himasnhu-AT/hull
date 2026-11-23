@@ -11,6 +11,9 @@ dist
 .hull/
 .claude/worktrees/
 
+# Rust build output (crates/hull-kernels). The built module itself is committed as packages/hull/src/kernel/wasm.ts.
+/target/
+
 # Hull backend: local database. Real settings live in the root .env (pnpm dev reads it).
 backend/data/
 .env

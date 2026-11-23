@@ -1,4 +1,5 @@
-import type { Game, GameDef } from './types.ts';
+import { runPreloads } from './preload.ts';
+import type { Game, GameDef, StartOptions } from './types.ts';
 import { World } from './world.ts';
 
 // Real frames longer than this (a tab in the background, a debugger stop) are cut, so the game never tries to
@@ -117,7 +118,8 @@ export function defineGame(def: {
 }
 
 /** Builds a game from its definition and runs `ready`. Tests, the dev page and the Studio all start games this way. */
-export async function startGame(def: GameDef, opts: { seed?: number; stepRate?: number } = {}): Promise<Game> {
+export async function startGame(def: GameDef, opts: StartOptions = {}): Promise<Game> {
+  await runPreloads(opts);
   const world = new World({
     seed: opts.seed ?? def.seed,
     stepRate: opts.stepRate ?? def.stepRate,
