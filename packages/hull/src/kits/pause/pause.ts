@@ -11,7 +11,9 @@ import { SaveSlots } from '../saves/saves.ts';
  * Add it before the gameplay behaviours so a step sees the flag before anything acts on it.
  */
 export class PauseMenu extends Behaviour {
-  static override state = ['paused'];
+  static override state = ['paused', 'mine'];
+  /** True while this menu is what paused the game. A title or a result screen holds the same flag, and is not ours to draw over or to dismiss. */
+  mine = false;
   screen = 'ui-screen/pause';
   readonly vm: Record<string, unknown> = { slot: {}, message: '' };
   private flags!: KitFlags;
@@ -33,11 +35,17 @@ export class PauseMenu extends Behaviour {
 
   set(on: boolean): void {
     if (on === this.flags.paused) return;
+    // Someone else's pause (the title, the result): leave it alone.
+    if (!on && !this.mine) return;
     this.flags.paused = on;
+    this.mine = on;
     if (on) { kitIO.input.unlockPointer(); this.message = ''; this.refresh(); }
   }
 
-  toggle(): void { this.set(!this.flags.paused); }
+  toggle(): void {
+    if (this.flags.paused && !this.mine) return;
+    this.set(!this.flags.paused);
+  }
 
   private saves(): SaveSlots | null { return this.world.find('saves')?.get(SaveSlots) ?? null; }
 
@@ -62,11 +70,13 @@ export class PauseMenu extends Behaviour {
       this.ui = ui;
       if (ui) this.wire(ui);
     }
+    if (!this.flags.paused) this.mine = false;
     if (!ui) return;
-    if (this.flags.paused && !this.open) {
+    const showing = this.flags.paused && this.mine;
+    if (showing && !this.open) {
       this.open = ui.screen(this.screen, this.vm);
       this.open.focusFirst();
-    } else if (!this.flags.paused && this.open) {
+    } else if (!showing && this.open) {
       this.open.close();
       this.open = null;
     }

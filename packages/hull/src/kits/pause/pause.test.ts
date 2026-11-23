@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ALL_KITS, kitSources, startRig } from '../testing.ts';
+import { flagsOf } from '../common.ts';
 import type { StepSnapshot } from '../../input/index.ts';
 import { FirstPerson } from '../fps/fps.ts';
 import { Health } from '../health/health.ts';
@@ -32,6 +33,29 @@ describe('pause kit', () => {
     expect(menu.paused).toBe(false);
     r.step(30, { move: { y: -1 } });
     expect(me.position.z).toBeLessThan(z1 - 1);
+  });
+
+  it('leaves a pause that is not its own alone: a title or a result holds the same flag', async () => {
+    const r = await startRig(bench, sources, 'fps');
+    const w = r.g.world;
+    const menu = w.find('pause')!.get(PauseMenu)!;
+    const flags = flagsOf(w);
+    r.step(5);
+    // Another screen pauses the game. The pause action must not dismiss it, and the menu must not claim it.
+    flags.paused = true;
+    r.step(1, press);
+    expect(flags.paused).toBe(true);
+    expect(menu.mine).toBe(false);
+    menu.set(false);
+    expect(flags.paused).toBe(true);
+    // Once that screen lets go, the pause action is the menu's again.
+    flags.paused = false;
+    r.step(1);
+    r.step(1, press);
+    expect(flags.paused).toBe(true);
+    expect(menu.mine).toBe(true);
+    r.step(1, press);
+    expect(flags.paused).toBe(false);
   });
 
   it('the pause state is part of the checksum', async () => {

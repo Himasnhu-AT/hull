@@ -107,6 +107,9 @@ describe('Level behaviour', () => {
     expect(lv.things('lamp')).toHaveLength(2);
     expect(lv.things('prefab/rock')).toHaveLength(6);
     expect(lv.things('prefab/none')).toHaveLength(0);
+    // Each thing has its own name, so a save, world.find and the tree can tell them apart.
+    expect(lv.things('prefab/rock').map((n) => n.name)).toEqual(['rock0', 'rock1', 'rock2', 'rock3', 'rock4', 'rock5']);
+    expect(w.find('level/crate1')).toBe(lv.things('prefab/crate')[1]);
     expect(w.group('crate')).toHaveLength(2);
     expect(w.group('rock')).toHaveLength(6);
     expect(lv.bounds).toEqual({ minX: -20, maxX: 20, minZ: -20, maxZ: 20 });

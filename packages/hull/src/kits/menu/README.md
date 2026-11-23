@@ -14,7 +14,7 @@ A title screen that holds the game until Start, and a result screen with a stats
 - **Stat rows**: `show(won, stats)` lists every entry it is given, up to 8 (a value of 0 is a row). The panel is laid out at 1280x720 and scaled, so
   all rows fit a 640x360 window.
 - **Tunables**: none.
-- **Wiring**: spawn the TitleScreen first. Do not add a PauseMenu that should open over the title: the title wins.
+- **Wiring**: spawn the TitleScreen first, then the PauseMenu, then the world. A PauseMenu never opens over the title or the result, and its pause action cannot dismiss them: it only draws and lifts a pause it made itself.
   Connect `again` to the game's restart (`world.reset`-style code of your own).
 - **Bench**: `bench.ts`. **Test**: `menu.test.ts`.
 

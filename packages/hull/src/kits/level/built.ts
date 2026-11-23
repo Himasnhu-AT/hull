@@ -167,7 +167,8 @@ export class Level extends Behaviour implements LevelLike {
 
   private addThing(prefabId: string, x: number, y: number, z: number, yaw: number, scale: number): void {
     const p = config.lookup('prefab', bare(prefabId)) as Prefab;
-    const n = this.world.spawn(bare(prefabId), this.node);
+    // crate0, crate1, ...: a save matches nodes by name, and world.find('level/crate1') should mean one thing.
+    const n = this.world.spawn(bare(prefabId) + (this.made.get(`prefab/${bare(prefabId)}`)?.length ?? 0), this.node);
     n.position.set(x, y, z);
     n.rotation.y = yaw;
     for (const tag of p.tags ?? []) n.addTo(tag);

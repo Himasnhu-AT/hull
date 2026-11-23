@@ -82,8 +82,13 @@ export class ArenaLevel extends Behaviour implements LevelLike {
     }
   }
 
+  private readonly named = new Map<string, number>();
+
   private addBlock(name: string, x: number, z: number, w: number, d: number, h: number, material: string): Node {
-    const n = this.world.spawn(name, this.node);
+    // wall0..wall3, crate0, crate1, ...: one name each, so a find, a save and the tree can tell them apart.
+    const k = this.named.get(name) ?? 0;
+    this.named.set(name, k + 1);
+    const n = this.world.spawn(name + k, this.node);
     n.position.set(x, h / 2, z);
     n.add(Collider, { shape: { type: 'box', size: [w, h, d] }, static: true, layer: LAYER.world });
     const look = this.world.spawn('mesh', n);

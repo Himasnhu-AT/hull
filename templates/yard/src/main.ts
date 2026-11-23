@@ -14,6 +14,13 @@ class Relic extends Behaviour {
   override fixedUpdate(): void { this.node.object3d.visible = this.node.get(Interactable)!.enabled; }
 }
 
+/** What one run remembers, as state so a save and a replay carry it: when it began, and which run a waiting sentry belongs to. */
+class Run extends Behaviour {
+  static override state = ['t0', 'epoch'];
+  t0 = 0;
+  epoch = 0;
+}
+
 function spawnPlayer(w: World, at: LevelMarker): Node {
   const me = w.spawn('player');
   me.position.set(at.x, 0, at.z);
@@ -50,15 +57,13 @@ export default defineGame({
     const openGoals = (): void => { goals.add('relics', 'Carry the relics home', { count: HOME }); };
     openGoals();
     const home = (): number => goals.get('relics')?.have ?? 0;
-    let t0 = 0;
-    let epoch = 0; // a sentry waiting to come back belongs to one run; Play again starts a new one
+    const run = w.spawn('run').addTo(GROUP.save).add(Run);
     const hud = w.spawn('hud').add(Hud);
     const score = (): number => home() * 100 + bag.count('relic') * 25;
-    hud.score(score).timer(() => w.time - t0, { countDown: false }).bar('Health', () => hp.hp, hp.max);
+    hud.score(score).timer(() => w.time - run.t0, { countDown: false }).bar('Health', () => hp.hp, hp.max);
 
     const relics = level.things('prefab/relic');
-    relics.forEach((n, i) => {
-      n.name = 'relic' + i; // saves match nodes by name
+    relics.forEach((n) => {
       n.add(Relic);
       const it = n.add(Interactable, { prompt: 'Take the relic', once: true, radius: 1.8, height: 0.7 });
       it.used.connect(() => { if (bag.add('relic') > 0) hud.message('Now reach the altar', 2); else it.enabled = true; });
@@ -68,18 +73,18 @@ export default defineGame({
 
     const sentries = level.markers('sentry/');
     const sendSentry = (m: LevelMarker): void => {
-      const run = epoch;
+      const mine = run.epoch; // a sentry waiting to come back belongs to one run; Play again starts a new one
       const s = spawnGrunt(w, m.x, m.z, 1); // a Chaser: it walks the NavGrid's paths around the yard
-      s.get(Health)!.died.connect(() => w.after(RESPAWN, () => { if (run === epoch) sendSentry(m); }));
+      s.get(Health)!.died.connect(() => w.after(RESPAWN, () => { if (mine === run.epoch) sendSentry(m); }));
     };
     sentries.forEach(sendSentry);
 
-    const finish = (won: boolean): void => { results.show(won, { Time: Math.round(w.time - t0), Relics: home(), Health: Math.round(hp.hp) }); };
+    const finish = (won: boolean): void => { results.show(won, { Time: Math.round(w.time - run.t0), Relics: home(), Health: Math.round(hp.hp) }); };
     goals.allDone.connect(() => finish(true));
     hp.died.connect(() => finish(false));
-    title.begun.connect(() => { t0 = w.time; hud.message('Find the relics', 3); });
+    title.begun.connect(() => { run.t0 = w.time; hud.message('Find the relics', 3); });
     results.again.connect(() => {
-      epoch++;
+      run.epoch++;
       me.position.set(start.x, 0, start.z);
       teleported(me);
       hp.revive();
@@ -89,7 +94,7 @@ export default defineGame({
       openGoals();
       for (const e of [...w.group(GROUP.enemy)]) e.destroy();
       sentries.forEach(sendSentry);
-      t0 = w.time;
+      run.t0 = w.time;
     });
 
     probe('score', score);
