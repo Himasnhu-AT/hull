@@ -229,6 +229,11 @@ export class MovingIndex {
     this.headI[NLOOSE]!++;
   }
 
+  /** Builds the grid if shapes were added or removed, or too many have left their cells. Every query starts here. */
+  prepare(): void {
+    if (!this.built || this.headI[NLOOSE]! > this.limit) this.rebuild();
+  }
+
   private rebuild(): void {
     this.store.build(this.n, this.cell);
     this.built = true;
@@ -255,7 +260,7 @@ export class MovingIndex {
   box(x0: number, y0: number, z0: number, x1: number, y1: number, z1: number): number {
     const n = this.n;
     if (n === 0) return 0;
-    if (!this.built || this.headI[NLOOSE]! > this.limit) this.rebuild();
+    this.prepare();
     // A box with an edge that is not a number has no cells; the plain walk gives the old answer for it.
     if (x0 !== x0 || x1 !== x1 || z0 !== z0 || z1 !== z1) return this.linear(x0, y0, z0, x1, y1, z1);
     const hf = this.headF, hi = this.headI;
