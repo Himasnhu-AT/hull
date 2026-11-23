@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -40,7 +40,7 @@ class Rpc {
 
 const connect = (url: string, role: string, origin?: string): Promise<Rpc> =>
   new Promise((res, rej) => {
-    const ws = new WebSocket(`${url}?role=${role}`, origin ? { origin } : undefined);
+    const ws = new WebSocket(`${url}${url.includes('?') ? '&' : '?'}role=${role}`, origin ? { origin } : undefined);
     ws.on('open', () => res(new Rpc(ws)));
     ws.on('error', rej);
     ws.on('unexpected-response', (_q, r) => rej(new Error(`refused: ${r.statusCode}`)));
@@ -98,8 +98,46 @@ describe('project server', () => {
     await expect(connect(server.url, 'studio', 'https://evil.example')).rejects.toThrow(/403|refused/);
   });
 
+  describe('tokens', () => {
+    const bare = (): string => server.url.replace(/\?token=.*/, '');
+    it('refuses Origin "null" without a token, and with a wrong one', async () => {
+      await expect(connect(bare(), 'studio', 'null')).rejects.toThrow(/403|refused/);
+      await expect(connect(bare(), 'studio')).rejects.toThrow(/403|refused/);
+      await expect(connect(`${bare()}?token=nope`, 'studio', 'http://127.0.0.1:5000')).rejects.toThrow(/403|refused/);
+      // The game's token is not the studio's: a page that has only the game token cannot be a studio.
+      await expect(connect(server.gameWsUrl.replace('gt=', 'token='), 'studio')).rejects.toThrow(/403|refused/);
+      // Even a valid token does not make Origin "null" welcome: it is not an origin the app uses.
+      await expect(connect(server.url, 'studio', 'null')).rejects.toThrow(/403|refused/);
+    });
+    it('lets a studio socket with the token in, from no origin or a loopback one', async () => {
+      const a = await connect(server.url, 'studio');
+      expect(await a.call('project.info')).toMatchObject({ title: 'E2E cube' });
+      a.ws.close();
+      const b = await connect(server.url, 'studio', 'http://localhost:5305');
+      b.ws.close();
+    });
+    it('writes the token to .hull/server.json, readable only by its owner', () => {
+      const f = join(dir, '.hull', 'server.json');
+      expect(JSON.parse(readFileSync(f, 'utf8')).token).toBe(server.token);
+      expect(statSync(f).mode & 0o777).toBe(0o600);
+    });
+    it('a game socket cannot call methods: config.set from a game changes nothing and gets no answer', async () => {
+      const file = join(dir, 'config/tuning/cube-look.json');
+      const before = readFileSync(file, 'utf8');
+      const game = await connect(server.gameWsUrl, 'game');
+      const replies: string[] = [];
+      game.ws.on('message', (d) => replies.push(String(d)));
+      game.ws.send(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'config.set', params: { id: 'tuning/cube-look', pointer: '/spin', value: 9 } }));
+      // A call that is answered on the same socket afterwards would show the first one was handled; neither is.
+      await new Promise((r) => setTimeout(r, 300));
+      expect(replies.filter((m) => m.includes('"id"'))).toEqual([]);
+      expect(readFileSync(file, 'utf8')).toBe(before);
+      game.ws.close();
+    });
+  });
+
   it('config.set changes the file, keeps its formatting, journals it and pushes it to games', async () => {
-    const game = await connect(server.url, 'game');
+    const game = await connect(server.gameWsUrl, 'game');
     const file = join(dir, 'config/tuning/cube-look.json');
     const before = readFileSync(file, 'utf8');
     const r = await studio.call('config.set', { id: 'tuning/cube-look', pointer: '/spin', value: 3.5, author: 'ai:test' });
@@ -153,7 +191,7 @@ describe('project server', () => {
   });
 
   it('tunables.set rewrites the literal, journals it and tells games', async () => {
-    const game = await connect(server.url, 'game');
+    const game = await connect(server.gameWsUrl, 'game');
     const file = join(dir, 'src/tuning.ts');
     const before = readFileSync(file, 'utf8');
     const r = await studio.call('tunables.set', { block: 'cube', key: 'spin', value: 6 });
@@ -196,7 +234,7 @@ describe('project server', () => {
   });
 
   it('forwards game.control to games and relays reports to studios', async () => {
-    const game = await connect(server.url, 'game');
+    const game = await connect(server.gameWsUrl, 'game');
     await studio.call('game.control', { paused: true, timeScale: 0.5 });
     expect(await game.until('game.control')).toEqual({ paused: true, timeScale: 0.5 });
     game.ws.send(JSON.stringify({ jsonrpc: '2.0', method: 'game.report', params: { tick: 5, time: 0.08, paused: true, timeScale: 0.5, fps: 60 } }));

@@ -1,21 +1,26 @@
 // How a process finds the project's server. One server per project: the app (or the first tool to need one) starts it
 // and writes .hull/server.json; everyone after attaches. Two servers would fight over writes and file watchers.
 import { execFile } from 'node:child_process';
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import type { MethodName, Methods } from 'hull/dev/protocol';
-import { connectProject, type ProjectClient } from '../control/client.ts';
+import { connectProject, withToken, type ProjectClient } from '../control/client.ts';
 
 const exec = promisify(execFile);
 
-export interface ServerFile { url: string; gameUrl: string; pid: number }
+/** What .hull/server.json holds. `token` is the studio token: whoever can read the file (mode 0600, the owner) may drive the project. */
+export interface ServerFile { url: string; gameUrl: string; pid: number; token?: string }
 
 const fileOf = (root: string): string => join(root, '.hull', 'server.json');
 
 export function writeServerFile(root: string, info: ServerFile): void {
   mkdirSync(join(root, '.hull'), { recursive: true });
-  writeFileSync(fileOf(root), `${JSON.stringify(info, null, 2)}\n`);
+  // The token is in this file, so it is private to the owner from the first byte: mode at creation, then renamed into place.
+  const tmp = `${fileOf(root)}.${process.pid}.tmp`;
+  writeFileSync(tmp, `${JSON.stringify(info, null, 2)}\n`, { mode: 0o600 });
+  chmodSync(tmp, 0o600);
+  renameSync(tmp, fileOf(root));
 }
 
 /** Only the process that wrote the file removes it: a newer server's file must survive an older one closing late. */
@@ -35,11 +40,12 @@ const alive = (pid: number): boolean => {
  * behind) or when nothing answers at its address (the pid was reused); a stale file is removed.
  */
 export async function findServer(root: string): Promise<ServerFile | undefined> {
+  // The returned `url` carries the token, so it can be handed straight to connectProject.
   let f: ServerFile;
   try { f = JSON.parse(readFileSync(fileOf(root), 'utf8')) as ServerFile; } catch { return undefined; }
   if (typeof f.url !== 'string' || typeof f.pid !== 'number') { rmSync(fileOf(root), { force: true }); return undefined; }
   if (alive(f.pid)) {
-    try { (await connectProject(f.url, 3000)).close(); return f; } catch { /* nothing answers there */ }
+    try { const url = withToken(f.url, f.token); (await connectProject(url, 3000)).close(); return { ...f, url }; } catch { /* nothing answers there */ }
   }
   rmSync(fileOf(root), { force: true });
   return undefined;
@@ -71,7 +77,7 @@ export async function openProject(o: LinkOptions): Promise<ProjectLink> {
     const { startProjectServer } = await import('./index.ts');
     const s = await startProjectServer({ root: o.root, port: 0, log });
     own = s;
-    found = { url: s.url, gameUrl: s.gameUrl, pid: process.pid };
+    found = { url: s.url, gameUrl: s.gameUrl, pid: process.pid, token: s.token };
     attached = false;
   }
   const server = found;

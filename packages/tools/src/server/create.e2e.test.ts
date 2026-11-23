@@ -45,7 +45,7 @@ class Rpc {
   }
 }
 
-const open = (url: string, role: string): Promise<WebSocket> => new Promise((res, rej) => { const ws = new WebSocket(`${url}?role=${role}&client=g1`); ws.on('open', () => res(ws)); ws.on('error', rej); });
+const open = (url: string, role: string): Promise<WebSocket> => new Promise((res, rej) => { const ws = new WebSocket(`${url}&role=${role}&client=g1`); ws.on('open', () => res(ws)); ws.on('error', rej); });
 
 beforeAll(async () => {
   dir = join(mkdtempSync(join(tmpdir(), 'hull-create-')), 'game');
@@ -53,7 +53,7 @@ beforeAll(async () => {
   server = await startProjectServer({ root: dir, port: 0, historyQuietMs: 0 });
   studio = new Rpc(await open(server.url, 'studio'));
   // A game that answers the control port the way the dev runtime does, with a fixed frame.
-  game = await open(server.url, 'game');
+  game = await open(server.gameWsUrl, "game");
   game.on('message', (d) => {
     const m = JSON.parse(String(d));
     if (m.method === 'game.control') {

@@ -115,7 +115,7 @@ export function createAccounts(o: { project(): AgentProject | null; env?: NodeJS
       await exec(path, remove, p.root);
       let add: string[];
       // Each says who it is, so the history names Claude Code or Codex rather than a generic builder.
-      if (id === 'claude') add = ['mcp', 'add', '--transport', 'http', 'hull', p.mcp.url, '--header', 'x-hull-author: Claude Code'];
+      if (id === 'claude') add = ['mcp', 'add', '--transport', 'http', 'hull', p.mcp.url, '--header', 'x-hull-author: Claude Code', ...(p.mcp.token ? ['--header', `Authorization: Bearer ${p.mcp.token}`] : [])];
       else {
         // Codex starts Hull's tools itself (stdio), so they work while the app is closed too.
         const node = find('node');

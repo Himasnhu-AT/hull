@@ -6,11 +6,12 @@ import type { OpenedProject } from '../../shared/appApi.ts';
 export interface McpLine { id: string; label: string; text: string; note?: string }
 
 export function mcpLines(m: OpenedProject['mcp'], root: string): McpLine[] {
+  const auth = Boolean(m.token);
   return [
-    { id: 'url', label: 'Address (streamable HTTP)', text: m.url, note: 'While Hull has this project open.' },
-    { id: 'claude', label: 'Claude Code', text: `claude mcp add --transport http hull ${m.url}`, note: 'Run in the project folder.' },
+    { id: 'url', label: 'Address (streamable HTTP)', text: m.url, note: auth ? 'While Hull has this project open. Send the header "Authorization: Bearer <token>"; the lines below include it.' : 'While Hull has this project open.' },
+    { id: 'claude', label: 'Claude Code', text: `claude mcp add --transport http hull ${m.url}${auth ? ` --header "Authorization: Bearer ${m.token}"` : ''}`, note: 'Run in the project folder.' },
     { id: 'codex', label: 'Codex (~/.codex/config.toml)', text: `[mcp_servers.hull]\ncommand = "node"\nargs = [${JSON.stringify(m.launcher)}, ${JSON.stringify(root)}]`, note: 'Starts the tools itself, so it works with Hull closed.' },
-    { id: 'json', label: 'Cursor, Windsurf and other JSON configs', text: JSON.stringify({ mcpServers: { hull: { url: m.url } } }, null, 2) },
+    { id: 'json', label: 'Cursor, Windsurf and other JSON configs', text: JSON.stringify({ mcpServers: { hull: { url: m.url, ...(auth ? { headers: { Authorization: `Bearer ${m.token}` } } : {}) } } }, null, 2) },
     { id: 'stdio', label: 'Any client that starts a command (stdio)', text: `node ${JSON.stringify(m.launcher)} ${JSON.stringify(root)}` },
   ];
 }

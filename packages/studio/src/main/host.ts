@@ -18,7 +18,7 @@ import type { CommunityGame, OpenedProject, RecentProject, TemplateInfo } from '
 interface ProjectServer { url: string; gameUrl: string; close(): Promise<void> }
 interface McpModule {
   createMcpServer(root: string, o?: { log?: (line: string) => void; onCall?: (e: { tool: string; author: string; phase: 'start' | 'end'; ok?: boolean }) => void }): { close(): Promise<void> };
-  startMcpHttp(server: unknown, o?: { port?: number }): Promise<{ url: string; close(): Promise<void> }>;
+  startMcpHttp(server: unknown, o?: { port?: number }): Promise<{ url: string; token: string; close(): Promise<void> }>;
 }
 interface ServerModule {
   startProjectServer(opts: { root: string; port?: number; log?: (line: string) => void }): Promise<ProjectServer>;
@@ -109,12 +109,12 @@ export function createHost(opts: HostOptions): Host {
   const projectsDir = join(opts.dataDir, 'projects');
   const recentsFile = join(opts.dataDir, 'recents.json');
   let loaded: { mod: ServerModule; mcp: McpModule; kind: 'real' } | null = null;
-  let running: { root: string; server: ProjectServer; mcp: { url: string; close(): Promise<void> }; mcpServer: { close(): Promise<void> } } | null = null;
+  let running: { root: string; server: ProjectServer; mcp: { url: string; token: string; close(): Promise<void> }; mcpServer: { close(): Promise<void> } } | null = null;
 
   const listeners = new Set<(e: AgentEvent) => void>();
   const emit = (e: AgentEvent): void => { for (const l of listeners) { try { l(e); } catch { /* a dead window must not stop the others */ } } };
-  const current = (): { root: string; mcp: { url: string; launcher: string } } | null =>
-    running ? { root: running.root, mcp: { url: running.mcp.url, launcher: fileURLToPath(new URL('../../../tools/bin/hull-mcp.js', import.meta.url)) } } : null;
+  const current = (): { root: string; mcp: { url: string; launcher: string; token?: string } } | null =>
+    running ? { root: running.root, mcp: { url: running.mcp.url, token: running.mcp.token, launcher: fileURLToPath(new URL('../../../tools/bin/hull-mcp.js', import.meta.url)) } } : null;
   let signIn: SignIn | null = null;
   const settings = createSettingsStore({ dataDir: opts.dataDir, crypto: opts.crypto, env: opts.env });
   const hub = createHub({ project: current, emit, log, settings, ...(opts.env ? { env: opts.env } : {}) });
@@ -225,7 +225,7 @@ export function createHost(opts: HostOptions): Host {
       running = { root, server, mcp: http, mcpServer };
       const launcher = fileURLToPath(new URL('../../../tools/bin/hull-mcp.js', import.meta.url));
       log(`MCP for agents: ${http.url}`);
-      const opened: OpenedProject = { root, title: await titleOf(root), url: server.url, gameUrl: server.gameUrl, mcp: { url: http.url, launcher } };
+      const opened: OpenedProject = { root, title: await titleOf(root), url: server.url, gameUrl: server.gameUrl, mcp: { url: http.url, token: http.token, launcher } };
       await remember(opened);
       return opened;
     },

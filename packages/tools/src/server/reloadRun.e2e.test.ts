@@ -14,7 +14,7 @@ const wsOpen = (url: string): Promise<WebSocket> => new Promise((res, rej) => { 
 
 /** A game answering every op with tick 60 unless `dropFirst`, which closes the socket on the first op without answering (a reload mid-request). */
 async function fakeGame(client: string, dropFirst = false): Promise<WebSocket> {
-  const ws = await wsOpen(`${server.url}?role=game&client=${client}`);
+  const ws = await wsOpen(`${server.gameWsUrl}&role=game&client=${client}`);
   let dropped = !dropFirst;
   ws.on('message', (d) => {
     const m = JSON.parse(String(d));
@@ -41,7 +41,7 @@ beforeAll(async () => {
   dir = join(mkdtempSync(join(tmpdir(), 'hull-reloadrun-')), 'game');
   await createProject({ template: 'cube', dir, title: 'Reload run' });
   server = await startProjectServer({ root: dir, port: 0, historyQuietMs: 0 });
-  studio = new Studio(await wsOpen(`${server.url}?role=studio`));
+  studio = new Studio(await wsOpen(`${server.url}&role=studio`));
 }, 60_000);
 
 afterAll(async () => {
