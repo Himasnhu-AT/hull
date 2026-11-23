@@ -104,7 +104,11 @@ function transcript(messages: readonly Msg[]): string {
   return lines.join('\n');
 }
 
-export interface CompactOptions { provider: Provider; system: string; messages: Msg[]; signal: AbortSignal; ratio?: number }
+export interface CompactOptions {
+  provider: Provider; system: string; messages: Msg[]; signal: AbortSignal; ratio?: number;
+  /** Tokens the provider reported for this conversation (its last answer's input count, plus a guess for what came after). Used in place of the guess for all of it. */
+  reportedTokens?: number;
+}
 
 /**
  * Compacts in place when the conversation is over `ratio` of the window. Returns the summary written, or undefined when
@@ -112,9 +116,12 @@ export interface CompactOptions { provider: Provider; system: string; messages: 
  */
 export async function compactIfNeeded(o: CompactOptions, onStart?: () => void): Promise<string | undefined> {
   const limit = o.provider.contextWindow * (o.ratio ?? 0.7);
-  if (estimateTokens(o.system, o.messages) <= limit) return undefined;
+  const before = estimateTokens(o.system, o.messages);
+  if ((o.reportedTokens ?? before) <= limit) return undefined;
   prune(o.messages);
-  if (estimateTokens(o.system, o.messages) <= limit) return undefined;
+  // What pruning saved comes off the reported count by the same guess that measured it.
+  const after = estimateTokens(o.system, o.messages);
+  if ((o.reportedTokens === undefined ? after : o.reportedTokens - (before - after)) <= limit) return undefined;
 
   const starts = o.messages.map((m, i) => (isCut(m) ? i : -1)).filter((i) => i > 0);
   // The oldest turn start whose tail fits in 30% of the window; with none, split at the last one.

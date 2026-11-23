@@ -195,13 +195,19 @@ describe('the scripted flow on the arena template', () => {
     };
     try {
       const fixtures = JSON.parse(readFileSync(join(FIXTURES, 'build.json'), 'utf8')) as Record<string, FakeScript>;
-      // world never writes its map: it fails after the fix rounds, and nothing after it runs.
+      // world never writes its map: it fails after the fix rounds and once more on its retry. The stages that build on the world wait;
+      // sounds, effects and screens do not need it, so they still run, and every failure is reported together.
       const bad = { ...fixtures, world: [{ text: 'Done, with no map.' }] };
       const first = await run(bad as unknown as FakeScript, { maxFixRounds: 1 });
       expect((first.res._meta as { outcome: string }).outcome).toBe('failed');
       expect((first.res._meta as { failed: { stage: string } }).failed.stage).toBe('world');
       const s1 = (await runTool(dir2, 'create.get', {})) as CreateState;
-      expect(s1.stages.map((s) => s.status)).toEqual(['failed', ...Array(6).fill('waiting')]);
+      expect(s1.stages.map((s) => s.status)).toEqual(['failed', 'waiting', 'waiting', 'waiting', 'ready', 'ready', 'ready']);
+      expect((first.res._meta as { failures: { stage: string }[] }).failures.map((f) => f.stage)).toEqual(['world']);
+      expect((first.res._meta as { built: string[] }).built).toEqual(['sounds', 'effects', 'screens']);
+      const said = first.seen.updates.map((u) => (u.sessionUpdate === 'agent_message_chunk' && u.content.type === 'text' ? u.content.text : '')).join('');
+      expect(said).toContain('Trying once more');
+      expect(said).toMatch(/Failed: world \(/);
       expect(s1.stages[0]!.summary).toContain('explain document');
       expect(existsSync(join(dir2, '.hull', 'explain', 'arena-map.json'))).toBe(false);
       // The next build prompt resumes at world (the first stage that is not ready) and goes on to the end.

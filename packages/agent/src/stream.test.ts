@@ -104,7 +104,7 @@ describe('the stream parsers', () => {
     }
   });
 
-  it('reads an Anthropic stream that ends on max_tokens, and turns a half-sent tool input into {} rather than throwing', () => {
+  it('reads an Anthropic stream that ends on max_tokens, and marks a half-sent tool input as cut (input {}) rather than throwing', () => {
     const raw = [
       'data: {"type":"message_start","message":{"usage":{"input_tokens":3,"output_tokens":1}}}', '',
       'data: {"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"t","name":"code_write"}}', '',
@@ -112,7 +112,8 @@ describe('the stream parsers', () => {
       'data: {"type":"message_delta","delta":{"stop_reason":"max_tokens"},"usage":{"output_tokens":9}}', '', '',
     ].join('\n');
     const c = replay(new AnthropicStream(), raw);
-    expect(c.toolCalls).toEqual([{ id: 't', name: 'code_write', input: {} }]);
+    expect(c.toolCalls).toEqual([{ id: 't', name: 'code_write', input: {}, cut: true }]);
+    expect(c.stop).toBe('max_tokens');
     expect(c.usage).toEqual({ input: 3, output: 9 });
   });
 

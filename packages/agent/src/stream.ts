@@ -54,6 +54,12 @@ export async function readSse(body: ReadableStream<Uint8Array>, onEvent: (e: Sse
 
 const asRec = (v: unknown): Record<string, any> => (v && typeof v === 'object' ? (v as Record<string, any>) : {});
 
+/** Whether a tool call's streamed arguments are a whole JSON text (an empty one counts: a call with no arguments). */
+const jsonWhole = (json: string): boolean => {
+  if (!json.trim()) return true;
+  try { JSON.parse(json); return true; } catch { return false; }
+};
+
 const parseInput = (json: string): unknown => {
   if (!json.trim()) return {};
   try { return JSON.parse(json); } catch { return {}; }
@@ -66,6 +72,7 @@ export class AnthropicStream {
   private inputTokens = 0;
   private outputTokens = 0;
   private stopReason: string | undefined;
+  private stopped = false;
 
   constructor(private onDelta?: (t: string) => void, private secret = '') {}
 
@@ -74,6 +81,7 @@ export class AnthropicStream {
     let d: Record<string, any>;
     try { d = asRec(JSON.parse(e.data)); } catch { return; }
     switch (d['type'] ?? e.event) {
+      case 'message_stop': this.stopped = true; return;
       case 'message_start': {
         const u = asRec(asRec(d['message'])['usage']);
         this.inputTokens = (u['input_tokens'] ?? 0) + (u['cache_read_input_tokens'] ?? 0) + (u['cache_creation_input_tokens'] ?? 0);
@@ -107,11 +115,15 @@ export class AnthropicStream {
     }
   }
 
+  /** The stream ended with no stop reason: the connection dropped before the answer was done. */
+  incomplete(): boolean { return this.stopReason === undefined && !this.stopped; }
+
   result(): Completion {
-    const toolCalls = [...this.blocks.entries()].sort((a, b) => a[0] - b[0]).map(([, b]) => b).filter((b) => b.type === 'tool_use').map((b) => ({ id: b.id, name: b.name, input: parseInput(b.json) }));
+    const cutOff = this.stopReason === 'max_tokens';
+    const toolCalls = [...this.blocks.entries()].sort((a, b) => a[0] - b[0]).map(([, b]) => b).filter((b) => b.type === 'tool_use').map((b) => ({ id: b.id, name: b.name, input: parseInput(b.json), ...(cutOff && !jsonWhole(b.json) ? { cut: true } : {}) }));
     return {
       text: this.text, toolCalls,
-      stop: toolCalls.length ? 'tool_use' : this.stopReason === 'max_tokens' ? 'max_tokens' : 'end',
+      stop: cutOff ? 'max_tokens' : toolCalls.length ? 'tool_use' : 'end',
       usage: { input: this.inputTokens, output: this.outputTokens },
     };
   }
@@ -151,8 +163,9 @@ export class OpenAIStream {
   }
 
   result(): Completion {
-    const toolCalls = [...this.calls.entries()].sort((a, b) => a[0] - b[0]).map(([i, c]) => ({ id: c.id || `call_${i}`, name: c.name, input: parseInput(c.args) }));
-    return { text: this.text, toolCalls, stop: toolCalls.length ? 'tool_use' : this.finish === 'length' ? 'max_tokens' : 'end', usage: this.usage };
+    const cutOff = this.finish === 'length';
+    const toolCalls = [...this.calls.entries()].sort((a, b) => a[0] - b[0]).map(([i, c]) => ({ id: c.id || `call_${i}`, name: c.name, input: parseInput(c.args), ...(cutOff && !jsonWhole(c.args) ? { cut: true } : {}) }));
+    return { text: this.text, toolCalls, stop: cutOff ? 'max_tokens' : toolCalls.length ? 'tool_use' : 'end', usage: this.usage };
   }
 }
 

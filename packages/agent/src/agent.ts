@@ -171,7 +171,7 @@ export function startHullAgent(o: HullAgentOptions): HullAgent {
           const note = parts.filter((p) => p.type === 'text').map((p) => (p as { text: string }).text).join('\n').trim();
           const built = await runBuild({ state: live.state, io: hostIo, signal, stageSteps, ...(stage ? { only: stage, ...(note ? { note } : {}) } : {}), log });
           await queue;
-          return { stopReason: (built.outcome === 'cancelled' ? 'cancelled' : 'end_turn') as acp.StopReason, _meta: { mode, built: built.built, outcome: built.outcome, ...(built.failed ? { failed: built.failed } : {}), model: provider.model, provider: provider.name } };
+          return { stopReason: (built.outcome === 'cancelled' ? 'cancelled' : 'end_turn') as acp.StopReason, _meta: { mode, built: built.built, outcome: built.outcome, ...(built.failed ? { failed: built.failed } : {}), ...(built.failures ? { failures: built.failures } : {}), model: provider.model, provider: provider.name } };
         }
         const result = await run(live.state, parts.length ? parts : [{ type: 'text', text: '(empty prompt)' }], hostIo, signal);
         await queue;

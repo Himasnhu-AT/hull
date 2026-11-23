@@ -10,6 +10,8 @@ const WRITES = new Set(['config.set', 'tunables.set', 'asset.new', 'asset.duplic
 const FLOW_WRITES = new Set(['brief.write', 'explain.write', 'create.set']);
 /** Writes that are hard to see through or to undo by hand: they ask the person first. */
 const RISKY = new Set(['code.delete', 'asset.rename', 'asset.move', 'asset.delete', 'history.restore', 'history.revert', 'exp.adopt']);
+/** Reads that the name pattern in kind() does not catch. */
+const READ_ONLY = new Set(['code.search', 'docs.search', 'review.list']);
 /** The tools the model is told about: no new/dev (hidden by the MCP server already) and nothing that only the person should do. */
 const WITHHELD = new Set(['exp.discard', 'community.open']);
 
@@ -57,6 +59,8 @@ export class HullTools {
   /** A write that changes the game (config, tunables, code, assets), as opposed to the brief, an explain document or the flow state. */
   changesGame(name: string): boolean { return WRITES.has(name) && !FLOW_WRITES.has(name); }
   isRisky(name: string): boolean { return RISKY.has(name); }
+  /** Safe to run beside other read-only calls of the same model turn: it changes nothing and does not depend on what ran before it (a game step does). */
+  isReadOnly(name: string): boolean { return !WRITES.has(name) && (this.kind(name) === 'read' || READ_ONLY.has(name)); }
   kind(name: string): ToolKind {
     if (name === 'asset.delete' || name === 'code.delete') return 'delete';
     if (name === 'asset.rename' || name === 'asset.move') return 'move';
