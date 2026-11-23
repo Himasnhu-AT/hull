@@ -1,3 +1,4 @@
+// hull:optional-actions: the actions read here do nothing until the game's input map defines them, so check does not demand them.
 import { Behaviour } from '../../core/index.ts';
 import { num, tunables } from '../../config/index.ts';
 import { flagsOf, fwdX, fwdZ, type KitFlags } from '../common.ts';

@@ -1,6 +1,6 @@
 // kit.list and kit.add through a real project server, the helpful answers for a config file that is not there and for
 // code.write under config/, and a wrong import in a test file being found by check (it used to pass check and fail in test).
-import { mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -60,6 +60,22 @@ describe('kit tools', () => {
     expect(bad.ok).toBe(false);
     expect(bad.problems[0].message).toContain('kit.list');
   });
+
+  it('kit.add on a stale input map adds the missing actions, says the file differs and records it', async () => {
+    const stale = { kind: 'input-map', actions: { move: { type: 'axis2', keys: { up: ['Z'], down: ['S'], left: ['A'], right: ['D'] } }, jump: { type: 'button', keys: ['Enter'] } } };
+    mkdirSync(join(dir, 'config/input-map'), { recursive: true });
+    writeFileSync(join(dir, 'config/input-map/fps.json'), JSON.stringify(stale));
+    await new Promise((r) => setTimeout(r, 400));
+    const r = await call('kit.add', { kit: 'fps', author: 'ai:test' });
+    expect(r).toMatchObject({ ok: true, differs: ['input-map/fps'] });
+    expect(r.merged['input-map/fps']).toContain('interact');
+    const after = JSON.parse(readFileSync(join(dir, 'config/input-map/fps.json'), 'utf8'));
+    expect(after.actions.interact.keys).toEqual(['E']);
+    expect(after.actions.jump.keys).toEqual(['Enter']);
+    expect(after.actions.move.keys.up).toEqual(['Z']);
+    const journal = await call('journal.list', {});
+    expect(journal.some((c: { path: string; by: string }) => c.path === '/actions/interact' && c.by === 'ai:test')).toBe(true);
+  }, 30_000);
 
   it('check names the kit to add when it is imported without its config', async () => {
     writeFileSync(join(dir, 'src', 'screens.ts'), "import { PauseMenu } from 'hull/kits';\nexport const p = PauseMenu;\n");
