@@ -59,14 +59,15 @@ export function createStackMapper(o: { root: string; origin: () => string; fetch
     return p;
   };
 
-  const nameOf = (source: string, urlPath: string): { file: string; project: boolean } => {
+  /** `dir` is the folder of the module the source map belongs to, absolute: a relative source is relative to it. */
+  const nameOf = (source: string, dir: string, urlPath: string): { file: string; project: boolean } => {
     let abs = source.startsWith('file://') ? decodeURIComponent(new URL(source).pathname) : source;
     // Vite writes the source as its bare file name, relative to the module it came from: 'player.ts' for /src/player.ts.
-    if (!abs.startsWith('/')) abs = resolve(root, dirname(urlPath.startsWith('/') ? urlPath : `/${urlPath}`).replace(/^\//, ''), abs);
+    if (!abs.startsWith('/')) abs = resolve(dir, abs);
     const rel = relative(root, abs).split(sep).join('/');
     if (!rel.startsWith('..')) return { file: rel, project: rel.startsWith('src/') || rel.startsWith('config/') };
-    const at = abs.indexOf('/packages/');
-    if (at >= 0) return { file: abs.slice(at + 1), project: false };
+    const engine = /\/(packages\/[^/]+\/src\/.*)$/.exec(abs);
+    if (engine) return { file: engine[1]!, project: false };
     return { file: abs.includes('/node_modules/') ? abs.slice(abs.lastIndexOf('/node_modules/') + 1) : urlPath, project: false };
   };
 
@@ -78,18 +79,21 @@ export function createStackMapper(o: { root: string; origin: () => string; fetch
     let line1 = Number(m[3]), col1 = Number(m[4]);
     let url: URL;
     try { url = new URL(rawUrl); } catch { return undefined; }
-    let urlPath = decodeURIComponent(url.pathname).replace(/^\//, '');
-    if (urlPath.startsWith('@fs/')) urlPath = urlPath.slice(3);
+    const pathname = decodeURIComponent(url.pathname);
+    // /@fs/<absolute path> is a file outside the project root (the engine); anything else is under the root.
+    const fsPath = pathname.startsWith('/@fs/') ? pathname.slice(4) : undefined;
+    const urlPath = fsPath ?? pathname.replace(/^\//, '');
+    const dir = fsPath ? dirname(fsPath) : resolve(root, dirname(urlPath));
     let file = urlPath;
     let project = urlPath.startsWith('src/');
     const sm = await mapFor(new URL(url.pathname + url.search, o.origin()).href);
     const hit = sm?.findEntry(line1 - 1, col1 - 1) as { originalSource?: string; originalLine?: number; originalColumn?: number } | undefined;
     if (hit && typeof hit.originalSource === 'string' && typeof hit.originalLine === 'number') {
-      ({ file, project } = nameOf(hit.originalSource, urlPath));
+      ({ file, project } = nameOf(hit.originalSource, dir, urlPath));
       line1 = hit.originalLine + 1;
       col1 = (hit.originalColumn ?? 0) + 1;
-    } else if (urlPath.startsWith('/')) {
-      ({ file, project } = nameOf(urlPath, urlPath));
+    } else if (fsPath) {
+      ({ file, project } = nameOf(fsPath, dir, urlPath));
     }
     const where = `${file}:${line1}:${col1}`;
     return { file, line: line1, col: col1, ...(fn ? { fn } : {}), text: fn ? `${fn} (${where})` : where, project };

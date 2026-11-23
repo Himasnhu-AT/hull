@@ -207,10 +207,12 @@ export function connectDev(game: Game, opts: { url: string; /** Called for `rest
     if (!out) throw new Error('frames: the tiled picture could not be encoded');
     return { ...(await asPng(out)), ticks };
   };
-  const perf = (c: Extract<ControlOp, { op: 'perf' }>): ControlPerf => {
+  const perf = async (c: Extract<ControlOp, { op: 'perf' }>): Promise<ControlPerf> => {
     const n = c.steps ?? 120;
     if (!Number.isInteger(n) || n < 1 || n > 5000) throw new Error(`perf needs "steps" from 1 to 5000, got ${String(c.steps)}`);
     game.paused = true;
+    // A page that has not drawn yet (headless, nobody looking) has no camera view or draw counts: draw once so the numbers mean something.
+    try { await renderView().shot(); } catch { /* no render view: frame times then cover the update alone */ }
     const st: number[] = [];
     const fr: number[] = [];
     // Wall time is right here: this measures the machine, and nothing the simulation does reads it.
