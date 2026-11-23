@@ -460,6 +460,8 @@ export class Game {
   _spawnSome(area: SpawnArea, count: number, sizes: readonly number[], abnormals: number, box: { zMin: number; zMax: number; xMax: number } | null = null): void {
     const g = this.g;
     if (!g.titans?.spawn || count <= 0) return;
+    // a stress run (Game.load) sends that many times the titans; at 1 both counts are unchanged
+    count = Math.round(count * g.load); abnormals = Math.round(abnormals * g.load);
     const zones = (g.world?.titanSpawns || []).filter((z) => z.area === area);
     const FALLBACK: Record<SpawnArea, { center: THREE.Vector3; radius: number }> = { field: { center: new THREE.Vector3(0, 0, 100), radius: 70 }, forest: { center: new THREE.Vector3(0, 0, 260), radius: 120 }, town: { center: new THREE.Vector3(0, 0, -80), radius: 40 } };
     const fallback = FALLBACK[area];
@@ -639,7 +641,8 @@ export class Game {
       // the wave clock is hull/kits' stepWaves over the `waves` tunables: a cleared field waits clearPause, then the next
       // wave; endless, the next wave also marches on a clock and stragglers walk in, up to a cap that grows with the wave
       const queued = this._spawnQ?.length || 0;
-      const code = stepWaves(this, dt, alive, queued, this.behemothSpawned && behemothUp, WV);
+      // counted in units of the stress scale, so the cap on stragglers and clock waves grows with it
+      const code = stepWaves(this, dt, alive / g.load, queued / g.load, this.behemothSpawned && behemothUp, WV);
       if (code === WAVE_NEXT) this._nextWave();
       else if (code === WAVE_CLEARED) g.hud?.message?.(`WAVE ${this.wave} CLEARED`, 2.5, 'info');
       else if (code === WAVE_TRICKLE) {

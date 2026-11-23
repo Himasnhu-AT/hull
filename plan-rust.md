@@ -4,7 +4,7 @@ How Rust enters Hull, where it is allowed, and the measured gates each step must
 `PLAN.md` stays the plan for the engine; this file is the plan for one track of it, and changes `PLAN.md` only where
 section 11 below says so.
 
-**Status: R0 has started (the AOTT baseline is measured). Nothing is ported.**
+**Status: R0 is done (section 12): at 16 times AOTT's load the frame is lost and Hull's physics loses it. R1 is in progress.**
 
 ## 1. What this is for
 
@@ -179,3 +179,107 @@ desktop".
   Physics is Hull's own TypeScript. The row should say so.
 * `docs/ARCHITECTURE.md`, with R1: a section on the kernel boundary, loading and fallback.
 * `CLAUDE.md`, with R1: the kernel rules in "Rules of the code", and `pnpm kernels:build`.
+
+## 12. R0 results: where the limit is
+
+Measured 23 Nov 2026 on the Apple M5 Pro. The scripts are in the repo, so every number can be taken again:
+`pnpm perf:aott 95 11 <scale> --profile` (headless step and where it goes), `scripts/perf-frame.ts` (the frame in a
+browser, also throttled), `pnpm perf:engine` (Hull's own subsystems away from any game).
+
+The stress scene is AOTT's Holdout with `scale` (`?scale=4` in the page): titans a wave, comrades and civilians are
+multiplied by it. Read at 95 s of game time, wave 2, the soldier alive on the wall. At scale 1 the run and its checksum
+(`a45ff85a5ba1346a`) are the ones section 2 reports.
+
+### The step, headless (Node)
+
+| Scale | Titans, comrades, civilians | ms a step (mean, p95) | ms a frame (2 steps) |
+|---|---|---|---|
+| 1 | 11, 2, 7 | 0.30, 0.41 | 0.6 |
+| 4 | 48, 8, 28 | 1.07, 1.94 | 2.1 |
+| 16 | 164, 32, 111 | 3.93, 9.14 | 7.9 |
+
+Where it goes, ms a frame (2 steps), from V8's sampling profile over the last third of the run:
+
+| Subsystem | 1 | 4 | 16 |
+|---|---|---|---|
+| Hull physics | 0.05 | 0.45 | **2.84** |
+| three.js transform matrices | 0.24 | 0.86 | 2.49 |
+| Game: soldier, comrades, horses (pose code) | 0.15 | 0.32 | 1.15 |
+| Game: titans | 0.03 | 0.15 | 0.47 |
+| three.js, the rest | 0.02 | 0.10 | 0.33 |
+| Game: collision wrapper | 0.02 | 0.07 | 0.18 |
+| Game: civilians | 0.00 | 0.02 | 0.12 |
+| Game: the rest | 0.04 | 0.06 | 0.10 |
+| Hull core, kits, vfx, audio | 0.00 | 0.01 | 0.01 |
+
+### The frame, in a browser
+
+The dev page in headless Chrome at 1280 x 720, the game stepped to the same point, then timed: single steps, paused
+frames (update and draw, no steps), and 5 s running free. "Needs" is 2 steps and a draw, the main thread's bill for one
+60 fps frame. The free-running rate reads 55 to 60 when the frame is held (the harness's own jitter, the same at scale
+1 and 4), so it is read as "held" or "lost", not as a number. Once a frame is lost the loop runs catch-up steps and the
+rate collapses, which is why "lost" is far below 60.
+
+| Scale | CPU | ms a step | ms a draw | Needs (of 16.7) | Draw calls, triangles | Frame |
+|---|---|---|---|---|---|---|
+| 1 | as is | 0.38 | 1.32 | 2.1 | 293, 0.98 M | held |
+| 4 | as is | 1.27 | 2.21 | 4.7 | 551, 1.36 M | held |
+| 16 | as is | 8.74 | 7.67 | 25.1 | 1,926, 3.16 M | **lost** (3.6 a second) |
+| 1 | throttled 4 times | 1.66 | 5.18 | 8.5 | | held |
+| 4 | throttled 4 times | 4.77 | 7.72 | 17.3 | | **lost** (16.5 a second) |
+| 16 | throttled 4 times | 36.6 | 31.5 | 105 | | lost (0.9 a second) |
+
+Where the unthrottled frame goes, ms a frame (2 steps and a draw), from Chrome's profile:
+
+| Subsystem | 1 | 4 | 16 |
+|---|---|---|---|
+| Hull physics | 0.02 | 0.43 | **8.53** |
+| three.js transform matrices | 0.17 | 0.67 | 5.03 |
+| Browser and natives (GPU commands, style, no JavaScript frame) | 1.30 | 2.43 | 4.69 |
+| three.js draw (render lists, bindings, the rest) | 0.47 | 0.77 | 4.13 |
+| Game: titans | 0.02 | 0.11 | 0.97 |
+| Game: soldier, comrades, horses | 0.05 | 0.13 | 0.67 |
+| Game: civilians | 0.00 | 0.03 | 0.35 |
+| Game: collision wrapper | 0.01 | 0.05 | 0.34 |
+| Game: the rest, hud, effects | 0.02 | 0.08 | 0.27 |
+| Hull vfx, render, core | 0.01 | 0.03 | 0.10 |
+
+The page's step at scale 16 costs more than Node's (8.7 ms against 3.9), nearly all of it in physics. The page runs
+code the headless run skips (camera, markers); I did not chase the difference further, because both runs name the same
+function.
+
+### Hull's own subsystems (`pnpm perf:engine`), median ms a frame
+
+| Bench, load at scale 1 | 1 | 4 | 16 |
+|---|---|---|---|
+| Ray casts: 1,000 rays, 5,000 static boxes | 0.46 | 2.8 | 11.9 |
+| Ray casts: 1,000 rays, 5,000 boxes times scale | 0.53 | 0.75 | 1.31 |
+| Sphere casts: 1,000 casts, radius 0.5, 5,000 boxes | 3.6 | 15.0 | 60.6 |
+| Sphere overlaps: 1,000, radius 3, 5,000 boxes | 0.20 | 0.88 | 4.1 |
+| Rigid bodies: a pile of 100 (2 steps) | 0.38 | 5.3 | 98 |
+| Animation graphs: 10 characters (2 steps and a pose) | 0.04 | 0.15 | 0.67 |
+| CPU particles: 2,000 live (2 steps) | 0.03 | 0.12 | 0.50 |
+
+### What the table says
+
+* **The frame is lost between scale 4 and 16 on this Mac, and between 1 and 4 when it is throttled 4 times.**
+* **At scale 16 it is Hull's physics that loses it**: 8.5 ms of the 25 the frame needs, and one function,
+  `Physics.gather`. The world keeps moving shapes in a list and every query walks all of it: 340 overlap queries and
+  53 rays a step against 2,515 moving shapes (a titan is about 15 of them) is about a million box tests a step, for
+  fewer than one candidate a query. Static shapes are in a grid and cost almost nothing.
+* Throttled at scale 4 nothing of Hull's is the limit: the 17 ms is drawing (three.js and the browser) and the
+  transform matrices. A kernel does not reach those (section 7).
+* Animation graphs and CPU particles stay under 1 ms at 16 times their load. They are closed as candidates.
+* Rigid bodies pass 2 ms at 400 bodies and grow with the square of the count, but no game asks for a pile that size
+  yet. The cost is the same walk over the moving list, so R1's fix reaches it; it is measured again after R1.
+* A sphere cast costs 8 times a ray on the same scene. That is a TypeScript matter (how many grid cells a short fat
+  cast visits), not a language one; it is noted for R2.
+
+**Gate.** Physics passes test 1 of section 4 at scale 16 (8.5 ms of the frame in the page, 2.8 headless) and not at
+scale 4 (0.4). Which load Hull must hold is RQ1 and still the owner's. R1 goes ahead on the assumption that scale 16
+(about 160 titans, 30 comrades, 110 civilians) is a load the owner wants, because the owner asked on 23 Nov for the
+whole plan to be carried out; if the target is scale 4 or less, R1's flat TypeScript layout is still a gain and the
+kernel question closes with "not needed".
+
+**The candidate R0 names** is not the one section 6 expected (casts against static shapes, which are cheap). It is
+the broadphase over moving shapes: where their bounds live, and how a query finds the few near it.

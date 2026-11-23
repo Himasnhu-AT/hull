@@ -171,6 +171,11 @@ export interface Game {
   training: TrainingCourse | null;
   trainingActive: boolean;
   allies: Ally[];
+  /**
+   * The stress scale of a perf run (`?scale=4`, plan-rust.md R0): titans a wave, comrades and civilians are multiplied
+   * by it, to find the load at which the frame is lost. 1 is the game as it ships.
+   */
+  load: number;
   herd: Herd | null;
   /** Civilians to save (npc/civilians.ts); null if the module failed to load. */
   civilians?: Civilians | null;

@@ -49,6 +49,8 @@ export interface BootOptions {
   noCivilians?: boolean;
   /** How many comrades (0 to 5). */
   allies?: number;
+  /** Stress scale for perf runs (`?scale=4`): multiplies titans a wave, comrades and civilians. Absent or 1: the game as it ships. */
+  scale?: number;
   /** Mouse sensitivity multiplier. */
   sens?: number;
 }
@@ -64,6 +66,7 @@ function queryOptions(): BootOptions {
     ...(p.has('fx') ? { fx: p.get('fx') ?? '' } : {}),
     noTitans: p.has('notitans'), noAllies: p.has('noallies'), noHorses: p.has('nohorses'), noCivilians: p.has('nocivilians'),
     ...(p.has('allies') ? { allies: +(p.get('allies') ?? 5) } : {}),
+    ...(p.has('scale') ? { scale: +(p.get('scale') ?? 1) } : {}),
     sens: +(p.get('sens') || 1),
   };
 }
@@ -122,7 +125,7 @@ export class AottHost extends Behaviour {
       scene, camera, hull, events: new Events(), time: 0, mode: 'menu', hitstop: 0,
       collision: new CollisionWorld(hull.world), settings: { sens: opts.sens || 1, invertY: false },
       fx: null, impactFrame: null, audio: null, hud: null, titans: null, training: null,
-      trainingActive: false, allies: [], herd: null, quality: 2,
+      trainingActive: false, allies: [], herd: null, quality: 2, load: Math.max(1, opts.scale || 1),
     } as unknown as Game;
     this.g = game;
     game.input = new Input(hub.view ?? hullInput);
@@ -215,7 +218,14 @@ export class AottHost extends Behaviour {
     if (!opts.noAllies) await load(() => import('./player/ally'), async (am) => {
       const mm = await import('./player/model');
       const starts: [number, number, number][] = [[-40, 55, 150], [30, 70, 230], [-80, 45, 300], [90, 60, 190], [0, 80, 360]];
-      starts.slice(0, opts.allies ?? 5).forEach(([x, y, z], i) => {
+      // A stress run asks for more comrades than there are starts: the extra ones take a start again, moved out on a
+      // spiral so no two begin inside each other.
+      const count = Math.round(Math.min(starts.length, opts.allies ?? 5) * game.load);
+      for (let i = starts.length; i < count; i++) {
+        const [x, y, z] = starts[i % 5]!, k = Math.floor(i / 5), a = k * 2.399963, r = 12 * Math.sqrt(k);
+        starts.push([x + Math.cos(a) * r, y, z + Math.sin(a) * r]);
+      }
+      starts.slice(0, count).forEach(([x, y, z], i) => {
         const model = new mm.PlayerModel(game);
         model.autoGas = false;
         if (model.root && !model.root.parent) scene.add(model.root);
