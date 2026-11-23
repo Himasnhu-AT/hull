@@ -28,3 +28,7 @@ export type { NavBounds, PathFollower, FollowOut } from './nav/nav.ts';
 export { PauseMenu } from './pause/pause.ts';
 export { SaveSlots } from './saves/saves.ts';
 export type { SaveData } from './saves/saves.ts';
+export { Hud, hudTuning } from './hud/hud.ts';
+export { TitleScreen, ResultScreen } from './menu/menu.ts';
+export { Objectives } from './objectives/objectives.ts';
+export type { Goal } from './objectives/objectives.ts';
