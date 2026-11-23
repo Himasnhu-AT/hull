@@ -10,4 +10,5 @@ export { Node } from './node.ts';
 export { Behaviour } from './behaviour.ts';
 export { signal } from './signal.ts';
 export { scratch } from './scratch.ts';
+export { probe, clearProbes, type ProbeValue } from './probes.ts';
 export { trace, setTraceSink, isTracing, type TraceKind, type TraceSink } from './trace.ts';

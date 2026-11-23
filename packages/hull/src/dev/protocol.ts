@@ -168,18 +168,67 @@ export type ControlOp =
   /** Hold a key (a KeyboardEvent `code`, like 'KeyW' or 'Space') until released. It reaches the game through the input map. */
   | { op: 'press'; key: string }
   | { op: 'release'; key: string }
-  /** Tick, time, checksum, and the position of the named nodes (`world.find` paths). */
+  /** Tick, time, checksum, the position of the named nodes (`world.find` paths), the game's probes and how many errors are unread. */
   | { op: 'state'; nodes?: string[] }
   /** The drawn frame as PNG, with the UI layer (`.hull-ui`) painted over it. `ui: false` gives the canvas alone. */
-  | { op: 'screenshot'; ui?: boolean };
+  | { op: 'screenshot'; ui?: boolean }
+  /** One node in full: transform, groups, children, and each behaviour's state. */
+  | { op: 'inspect'; node: string }
+  /** The node paths under `root` (default: the whole world) with their behaviour names, `depth` levels deep (default 3). */
+  | { op: 'tree'; root?: string; depth?: number }
+  /** Step one tick at a time until `when` holds or `max` ticks have passed. */
+  | { op: 'until'; when: ControlCond; max: number }
+  /** The errors and warnings the game raised (ring of 50, repeats counted). `clear` empties the ring. */
+  | { op: 'errors'; clear?: boolean }
+  /** Start the game again from `ready` with the same seed, paused at tick 0. */
+  | { op: 'restart' }
+  /** Step `steps` ticks (default 120) and time them, then time as many drawn frames. Advances the game. */
+  | { op: 'perf'; steps?: number }
+  /** Mouse movement as the input layer gets it under pointer lock. Buttons go through press/release with key Mouse0, Mouse1, Mouse2. */
+  | { op: 'look'; dx: number; dy: number }
+  /** `count` screenshots (2 to 12), `every` ticks apart, tiled in reading order into one PNG with each tick written in a corner. */
+  | { op: 'frames'; count: number; every: number };
+
+export type ControlCmp = '<' | '<=' | '>' | '>=' | '==' | '!=';
+/** What `until` waits for. `field` is "x" | "y" | "z" or "<BehaviourName>.<field>"; `event` is a trace id the recent feed would show, like "sound/thud". */
+export type ControlCond =
+  | { node: string; field: string; cmp: ControlCmp; value: number | string | boolean }
+  | { probe: string; cmp: ControlCmp; value: number | string | boolean }
+  | { event: string };
 
 export interface NodeState { found: boolean; x: number; y: number; z: number }
 export interface ControlState {
   tick: number; time: number; checksum: string; paused: boolean; nodes: Record<string, NodeState>;
   /** Keys and buttons the game's input holds down now, so a script can tell a key that reached the game from one that did not. */
   held: string[];
+  /** What the game's `probe(name, read)` calls report now. */
+  probes: Record<string, number | string | boolean>;
+  /** Errors and warnings raised since the last `errors` op. */
+  errors: number;
 }
 export interface ControlShot { png: string; width: number; height: number }
+export interface ControlUntil extends ControlState { met: boolean; steps: number }
+export interface ControlInspect {
+  found: boolean; path: string;
+  position?: [number, number, number]; rotation?: [number, number, number]; scale?: [number, number, number];
+  groups?: string[]; children?: string[];
+  behaviours?: { name: string; state: Record<string, unknown> }[];
+}
+export interface ControlTree { lines: string[]; more: number }
+/** One error or warning. file, line and col point into the project's src/ (or the engine source) in the original TypeScript. */
+export interface GameError {
+  level: 'error' | 'warn'; message: string; tick: number; time: number; count: number;
+  file?: string; line?: number; col?: number;
+  /** At most 6 frames, project-relative. The game sends the browser's own text; the project server maps it to the sources. */
+  stack?: string | string[];
+}
+export interface ControlErrors { items: GameError[] }
+export interface ControlPerf {
+  stepMs: { avg: number; p95: number; max: number };
+  frameMs: { avg: number; p95: number; max: number };
+  drawCalls: number; triangles: number; nodes: number;
+}
+export interface ControlFrames extends ControlShot { ticks: number[] }
 
 /** Game to server: what the engine's trace hook heard since the last batch (dev/recent.ts), oldest first. */
 export interface GameEvents { items: RecentEvent[] }
@@ -274,7 +323,7 @@ export interface Methods extends CreateMethods {
   /** Forwarded to every connected game. */
   'game.control': { params: GameControl; result: Record<string, never> };
   /** Runs one control op on a connected game and returns its answer. `client` names the game (the app's frame loads the game page with ?hull-client=<id>); without it, the first game in a frame, and a headless page a tool opened only when no other is connected. */
-  'game.run': { params: { control: ControlOp; client?: string }; result: ControlState | ControlShot | Record<string, never> };
+  'game.run': { params: { control: ControlOp; client?: string }; result: ControlState | ControlShot | ControlUntil | ControlInspect | ControlTree | ControlErrors | ControlPerf | ControlFrames | Record<string, never> };
   /** Review notes (.hull/review.json): what has been checked, what needs a change. */
   'review.list': { params: { open?: boolean }; result: ReviewEntry[] };
   'review.set': { params: { key: string; state: ReviewState; note?: string; author?: Author }; result: { ok: boolean; problems: Problem[]; entry?: ReviewEntry } };
@@ -345,6 +394,8 @@ export interface Pushes extends CreatePushes {
   'exp.changed': { name: string; change: 'started' | 'edited' | 'adopted' | 'discarded'; exp: ExpInfo };
   /** To games only: a control op to run, answered by the game's `game.result`. */
   'game.rpc': { id: number; control: ControlOp };
+  /** From games only: the answer to `game.rpc`. On failure `stack` is the browser's stack text and `partStepped` says a step threw midway. */
+  'game.result': { id: number; ok: boolean; result?: unknown; error?: string; stack?: string; partStepped?: boolean };
   'review.changed': { entry: ReviewEntry };
   'problems': { problems: Problem[] };
   'log': { level: 'info' | 'warn' | 'error'; message: string; source: 'server' | 'game' | 'tool' };
