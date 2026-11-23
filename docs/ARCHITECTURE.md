@@ -589,8 +589,8 @@ The registry (`tools`) holds files-and-processes tools. Each takes a project roo
 
 | Tool | Does |
 |---|---|
-| `check` | Types, config against schemas, references, house rules (no `Math.random`, `Date.now`, `performance.now` in game code); writes `.hull/gen/ids.ts` |
-| `test` | Runs the project's `src/**/*.test.ts` in Node (Vitest) and reports each failure at its file and line |
+| `check` | Types, config against schemas, references, house rules (no `Math.random`, `Date.now`, `performance.now` in game code), and `"<kind>/<id>"` string literals in `src/` that no config answers to (`tools/refCheck.ts`: reported at `file:line:col` with the nearest real id; a literal that continues into an expression, ends in a separator, or is the argument of `has(` / `watch(` is not flagged); writes `.hull/gen/ids.ts` |
+| `test` | Runs the project's `src/**/*.test.ts` in Node (Vitest) and reports each failure at the deepest frame inside the project's `src/` (else the test's own line), with the assertion's message |
 | `build` | `dist/web/game.js`, `index.html`, `build.json` (section 6) |
 | `package` | Builds, then an Electron app in `dist/desktop/` (`targets`, `smoke`) |
 | `dev` | Serves the game in a browser, reloading on change. Hidden from MCP: it never returns |
@@ -602,12 +602,30 @@ The **project methods** (`projectTools`) go through the project's server, so an 
 `library.list`, `config.read`, `config.set`, `tunables.list`, `tunables.set`, `journal.list`, `history.list`, `history.diff`,
 `history.restore`, `history.checkpoint`, `exp.start`, `exp.list`, `exp.compare`, `exp.adopt`, `exp.discard`, `game.control`,
 `game.run`, `problems.list`, the review methods, the idea-to-play methods (`brief.read`, `brief.write`, `docs.list`, `docs.read`,
-`explain.list`, `explain.write`, `create.get`, `create.set`, `game.recent`, `game.moment`), and the code methods below. `openProject` attaches to the server the app started (it writes
+`docs.search`, `explain.list`, `explain.write`, `create.get`, `create.set`, `game.recent`, `game.moment`), and the code methods below. `openProject` attaches to the server the app started (it writes
 `.hull/server.json`) or starts one in process, so two servers never fight over one project. `allTools` is the union;
 where a name is in both lists the method wins.
 
 **MCP** (`mcp/`) is JSON-RPC 2.0 written by hand: `initialize`, `tools/list`, `tools/call`, `ping`, over newline-delimited stdio
 (`serveMcpStdio`) or streamable HTTP bound to loopback only (`startMcpHttp`). The package has no MCP SDK dependency.
+
+**What a tool call returns over MCP** (`mcp/server.ts`):
+
+* Every input is checked against the tool's own input schema before the tool runs, on every front (`validate.ts`, used by the MCP
+  server and by `runTool`; Hull's agent goes through the MCP server). A hand-written checker (type, required, properties,
+  additionalProperties, enum, const, oneOf, items): `config.set: unknown field "path" (fields: id, pointer, value, author, exp)`,
+  `config.set: "pointer" is required`.
+* A picture is a field named `png` (or a `data:image/...;base64` string). The result has one `{type:"image", data, mimeType}` block
+  per picture, and the text and `structuredContent` carry the output with each replaced by `"[image]"`. Text is compact JSON; a
+  document (`docs.read`) is the document.
+* `tools/list` carries no `outputSchema`; a tool says what it returns in its description when that is not obvious.
+* `config.read` leaves the JSON Schema out unless `schema: true` (it was 45 KB next to a 1 KB sound). The project server's own
+  answer still has it, so the app is unchanged.
+* **Docs**: `docs.list` puts `guide/engine` (`packages/hull/docs/ENGINE.md`) first and names the config kinds that
+  docs/SCHEMAS.md describes but that have no schema (`notBuilt`). `docs.read {id, section?}` returns one section by heading;
+  `docs.search {query}` finds sections. `kit/index` is generated from the kit folders (name from the folder, one sentence from
+  the first paragraph of its README), so a kit cannot be left out. `api/three` is a short note on when to use `hull/three`.
+  Every new project gets `AGENTS.md` (`packages/hull/docs/AGENTS.md`, the short cut of the guide) and a `CLAUDE.md` holding `@AGENTS.md`.
 
 **Maintainer scripts** (`scripts/project.ts`, never shipped) call a tool as a function: `pnpm project:check|build|dev <dir>`, and
 `pnpm project:run <tool> <dir> [json]`. `pnpm mcp [dir]` starts the stdio server.
@@ -638,7 +656,8 @@ values. Their rules, in `server/code.ts` (pure, unit-tested) and the project ser
 ### What the tools give an agent
 
 * **Errors are located.** `path:line:col: message` for code, `path#/json/pointer: message` for config, and every tool
-  returns the same problems as data (`formatProblem`).
+  returns the same problems as data (`formatProblem`). A failing test is placed at the deepest frame of its stack inside `src/`; a wrong
+  tool input names the field (see "What a tool call returns over MCP").
 * **Scenario tests** (Node): `hull/kits/testing` starts a game with a headless input and counted sounds
   (`startRig` gives a `Rig` with `g`, `core`, `sounds` and `step(n)`; `runScenario` records and replays a run). This is the harness the kits' own tests use.
 * **Control port.** In a dev build the game connects to the project server (`connectDev`, `dev/protocol.ts`). The server sends

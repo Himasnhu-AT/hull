@@ -12,3 +12,16 @@ A third-person body with three gears: run, sprint, and boost (fast; it spends th
   `airControl`, `jumpHeight`, `gravity`, `coyoteTime`, `turnRate`, `radius`, `height`, `modelYaw`, `strideLength`.
 - **Config**: `input-map/third-person`, `character/soldier`, `anim-set/humanoid`, `anim-graph/locomotion`, materials, sounds.
 - **Bench**: `bench.ts`. **Test**: `third-person.test.ts`.
+
+## Use it
+
+```ts
+const level = w.spawn('level').add(ArenaLevel);
+spawnThirdPerson(w);   // body, Health, gas Stock, follow camera, melee, HUD; node name "player"
+```
+
+## Wiring
+
+- Spawn the pause menu first and the level before the player.
+- Copy the kit's `config/` into the project: `input-map/third-person`, `character/soldier`, `anim-set/humanoid`, `anim-graph/locomotion`, materials and sounds, plus the health kit's `ui-theme/hud`.
+- Gas pickups (`scatterPickups(..., 'gas', ...)`) fill the `gas` Stock this body makes.

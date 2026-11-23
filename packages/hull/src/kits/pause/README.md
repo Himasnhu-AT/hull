@@ -10,3 +10,15 @@ A pause menu.
 - **Saves**: Save and Load buttons use the `SaveSlots` on the node named `saves`, if there is one.
 - **Bench**: `bench.ts`. **Test**: `pause.test.ts`.
 - For a game of your own: check `flagsOf(world).paused` at the top of your `fixedUpdate`.
+
+## Use it
+
+```ts
+w.spawn('pause').add(PauseMenu);   // the first spawn, so a step sees the pause flag before anything acts
+```
+
+## Wiring
+
+- Needs the action `pause` in the input map and `config/ui-screen/pause.json` (copy it from the kit).
+- Save and Load buttons need a node named `saves` with `SaveSlots`.
+- Your own behaviours check `flagsOf(world).paused` at the top of `fixedUpdate`.

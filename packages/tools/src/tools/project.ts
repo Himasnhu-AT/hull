@@ -54,6 +54,8 @@ interface Spec {
   format?(out: unknown): string[];
   /** See ToolDef.plainText. */
   plainText?: boolean;
+  /** Shapes what the server answered before the tool returns it (the server's own answer stays whole for the app). */
+  shape?(out: unknown, input: Record<string, unknown>): unknown;
 }
 
 const assetRef: Schema = obj({ kind: { enum: ['config', 'code'] }, file: str(), id: str(), pointer: str(), line: num(), col: num() }, ['kind', 'file', 'line', 'col']);
@@ -75,7 +77,8 @@ const SPECS: Spec[] = [
   { method: 'project.launch', summary: "The page options the game opens with, like start=camp&look=night (no leading ?). With no query it reads the kept options; with one it keeps them for this project (the Studio's Game view applies them) and returns the game page URL with them.", input: obj({ query: str('Like start=camp&look=night. An empty string clears them.') }), output: obj({ query: str(), url: str() }, ['query', 'url']), format: (o) => [(o as { url: string }).url] },
   { method: 'library.list', summary: 'Every config file and tunables block in the project, with its problem count.', input: empty, output: list(obj({ id: str(), kind: str(), path: str(), title: str(), note: str(), problems: num() }, ['id', 'kind', 'path', 'title', 'problems'])),
     format: (o) => (o as { items: { id: string; kind: string; problems: number }[] }).items.map((i) => `${i.id}  ${i.kind}${i.problems ? `  ${i.problems} problems` : ''}`) },
-  { method: 'config.read', summary: 'A config file: its text, parsed value, JSON Schema and current problems.', input: obj({ id: str("Config id like 'sound/sword/hit'; 'game' (or 'hull.json') is the game manifest.") }, ['id']), output: obj({ id: str(), path: str(), text: str(), value: {}, schema: {}, problems }, ['id', 'path', 'text', 'problems']),
+  { method: 'config.read', summary: 'A config file: its text, parsed value and current problems. The JSON Schema is left out unless schema is true (it is many times the size of the file).', input: obj({ id: str("Config id like 'sound/sword/hit'; 'game' (or 'hull.json') is the game manifest."), schema: { type: 'boolean', description: 'Also return the kind\'s JSON Schema.' } }, ['id']), output: obj({ id: str(), path: str(), text: str(), value: {}, schema: {}, problems }, ['id', 'path', 'text', 'problems']),
+  shape: (out, input) => { if (input['schema'] === true || !out || typeof out !== 'object') return out; const { schema: _s, ...rest } = out as Record<string, unknown>; return rest; },
   format: (o) => [(o as { text: string }).text] },
   { method: 'config.set', summary: "Set one field of a config file; id 'game' (or 'hull.json') edits the game manifest. Validated first (a write may not add a problem), formatting kept, recorded in the history with its author.", input: obj({ id: str("Config id like 'sound/sword/hit'; 'game' (or 'hull.json') is the game manifest."), pointer: str('JSON pointer of the field, like /height.'), value: anyValue('The new JSON value.'), author, exp }, ['id', 'pointer', 'value']), output: writeResult,
  },
@@ -127,9 +130,11 @@ const SPECS: Spec[] = [
   // ---- M11: idea to play (docs/IDEA-TO-PLAY.md section 4) --------------------------------------------------------------
   { method: 'brief.read', summary: 'The game brief: GAME.md at the project root, split into its "## " sections (premise, what-you-do, controls, cast, world, rules, look-and-sound, first-playable, not-in-the-first-version). exists is false before the first write.', input: empty, output: briefDoc, format: (o) => [(o as { text: string }).text || '(no brief yet)'] },
   { method: 'brief.write', summary: 'Write the brief. Pass "section" ({id, text}; id is the title in kebab case like "what-you-do"; a new section goes in the standard order, other sections stay as they are) or "text" for the whole file. Written atomically, recorded in the history under your name, and shown live in the app. Write one section at a time so the person can read the brief fill in.', input: obj({ text: str('The whole GAME.md. Starts with "# Title".'), section: obj({ id: str(), title: str('Only for a new section whose title is not the standard one.'), text: str('The section body, without its "## " heading.') }, ['id', 'text']), author }), output: obj({ ok: { type: 'boolean' }, problems, doc: briefDoc }, ['ok', 'problems']) },
-  { method: 'docs.list', summary: 'The documents that teach Hull: one per kit ("kit/combat"), the kit catalogue ("kit/index"), the config formats ("guide/schemas"), the workflow ("guide/workflow"), and a generated list of each module\'s exports ("api/core", "api/audio", ...). Read one with docs.read.', input: empty, output: list(obj({ id: str(), title: str(), kind: { enum: ['kit', 'guide', 'api'] }, bytes: num() }, ['id', 'title', 'kind', 'bytes'])),
-    format: (o) => (o as { items: { id: string; title: string; bytes: number }[] }).items.map((i) => i.id + '  ' + i.title + '  (' + i.bytes + ' bytes)') },
-  { method: 'docs.read', summary: 'Read one document from docs.list, as markdown text: a kit README, a guide, or the generated list of a module\'s exports.', input: obj({ id: str('An id from docs.list, like kit/combat or api/audio.') }, ['id']), output: obj({ ok: { type: 'boolean' }, problems, id: str(), title: str(), text: str() }, ['ok', 'problems']), format: (o) => [(o as { text?: string }).text ?? ''], plainText: true },
+    { method: 'docs.list', summary: 'The documents that teach Hull, guide/engine first (read it before writing code): the kit catalogue ("kit/index") and one per kit ("kit/combat"), the config formats ("guide/schemas"), the workflow ("guide/workflow"), and each module\'s exports ("api/core", ...). notBuilt names the config kinds the schema guide describes that have no schema yet. Read one with docs.read, find one with docs.search.', input: empty, output: obj({ ok: { type: 'boolean' }, problems, items: arr(obj({ id: str(), title: str(), kind: { enum: ['kit', 'guide', 'api'] }, bytes: num() }, ['id', 'title', 'kind', 'bytes'])), notBuilt: arr(str()) }, ['items']),
+    format: (o) => [...(o as { items: { id: string; title: string; bytes: number }[] }).items.map((i) => i.id + '  ' + i.title + '  (' + i.bytes + ' bytes)'), ...((o as { notBuilt?: string[] }).notBuilt?.length ? ['not built (documented, no schema): ' + (o as { notBuilt: string[] }).notBuilt.join(', ')] : [])] },
+  { method: 'docs.read', summary: 'Read one document from docs.list as markdown. Pass section (a heading, like "Lifecycle") to get just that part; a document is long, a section is what you need.', input: obj({ id: str('An id from docs.list, like guide/engine, kit/combat or api/audio.'), section: str('A heading of the document, in any case; a start of it is enough. Unknown: the answer lists the sections.') }, ['id']), output: obj({ ok: { type: 'boolean' }, problems, id: str(), title: str(), text: str(), sections: arr(str()) }, ['ok', 'problems']), format: (o) => [(o as { text?: string }).text ?? ''], plainText: true },
+  { method: 'docs.search', summary: 'Find where the documents talk about something: words in the query must all appear in a section. Returns {id, section, line}; open it with docs.read {id, section}.', input: obj({ query: str('Words, like "pickup respawn" or "tunables block".') }, ['query']), output: list(obj({ id: str(), section: str(), line: str() }, ['id', 'section', 'line'])),
+    format: (o) => (o as { items: { id: string; section: string; line: string }[] }).items.map((h) => h.id + (h.section ? '#' + h.section : '') + '  ' + h.line) },
   { method: 'explain.list', summary: 'The explain documents: drawings (flowchart, map with marks, table, picture) of pieces the person cannot judge by looking or listening, each with a plain sentence on what was decided.', input: empty, output: list(explainInput),
     format: (o) => (o as { items: { id: string; stage: string; title: string }[] }).items.map((d) => d.id + '  ' + d.stage + '  ' + d.title) },
   { method: 'explain.write', summary: 'Keep an explain document (a flow of nodes and edges, a map with marks, a table or a picture) for a rule, enemy behaviour, world layout or balance the person cannot see. Validated first: an edge must name nodes the flow has. An existing id is replaced and its review resets (review key "explain:<id>"). Stored in .hull/explain/<id>.json with your name.', input: obj({ doc: explainInput, author }, ['doc']), output: writeResult },
@@ -151,11 +156,13 @@ export const projectTools: readonly ToolDef<unknown, unknown>[] = SPECS.map((s) 
   async run(ctx, input) {
     if (!ctx.project) throw new Error(`${s.method} needs the project server`);
     let params: Record<string, unknown> = { ...input };
+    if (s.method === 'config.read') delete params['schema'];
     // Whoever calls is the author, unless the caller names one.
     if ((s.input['properties'] as Schema)['author'] && params['author'] === undefined) params = { ...params, author: ctx.author };
     const out = await ctx.project.call(s.method, params);
     const o = out as { ok?: boolean; problems?: Problem[] } | null;
     if (s.method === 'problems.list') return { ok: (out as Problem[]).length === 0, problems: out };
-    return Array.isArray(out) ? { ok: true, problems: [], [s.key ?? 'items']: out } : o;
+    const shaped = s.shape ? s.shape(out, input) : out;
+    return Array.isArray(shaped) ? { ok: true, problems: [], [s.key ?? 'items']: shaped } : (shaped as typeof o);
   },
 })) as unknown as readonly ToolDef<unknown, unknown>[];

@@ -58,7 +58,7 @@ describe('project methods over MCP, no server running', () => {
       expect(names).toEqual(expect.arrayContaining(['check', 'config.read', 'config.set', 'tunables.list', 'tunables.set', 'library.list', 'history.list', 'history.diff', 'history.restore', 'exp.start', 'exp.adopt', 'game.run', 'game.control', 'problems.list']));
       for (const t of list) expect(t.inputSchema.type, t.name).toBe('object');
       expect(list.find((t) => t.name === 'tunables.set')!.inputSchema.required).toEqual(['block', 'key', 'value']);
-      expect(list.find((t) => t.name === 'game.run')!.outputSchema.type).toBe('object');
+      expect(list.find((t) => t.name === 'game.run')!.outputSchema).toBeUndefined();
       expect(existsSync(join(dir, '.hull', 'server.json'))).toBe(false); // nothing started yet: the server starts on first use
 
       const set = await mcp.tool('tunables.set', { block: 'player', key: 'runSpeed', value: 12 });

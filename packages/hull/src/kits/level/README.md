@@ -23,3 +23,9 @@ scatterPickups(g.world, level, 'health', 4);
 g.world.spawn('spawner').add(Spawner, { level });
 for (const crate of level.things('prefab/crate')) crate.add(Breakable); // game code adds behaviours to what the level built
 ```
+
+## Wiring
+
+- Spawn it before everything that stands on it. It installs physics itself.
+- `Level`: copy the level file, the prefabs it names and their materials into the project's `config/`. `ArenaLevel`: copy `material/floor`, `material/wall`, `material/crate` and `look/day`.
+- Behaviours are not named in a level file: game code adds them to `level.things(prefab)` and places actors at `level.marker(name)`.

@@ -11,3 +11,16 @@ coyote time, footsteps and landing sounds.
 - **Config**: `input-map/fps`, `material/gun`, `sound/footstep`, `sound/thud`, `sound/shot`.
 - **Bench**: `bench.ts`. **Test**: `fps.test.ts` (walk, sprint, walls, look, jump, same checksum twice).
 - Stops while the pause menu is open. The body is in the `player` and `save` groups.
+
+## Use it
+
+```ts
+const level = w.spawn('level').add(ArenaLevel);
+spawnFirstPerson(w);   // body, eye camera, gun, health bar, crosshair; node name "player"
+```
+
+## Wiring
+
+- Spawn the pause menu first, the level before the player (the body stands on its `world` layer).
+- Copy the kit's `config/` into the project: `input-map/fps`, `material/gun`, `sound/footstep`, `sound/thud`, `sound/shot`, plus the health kit's `ui-theme/hud` and `sound/hit`.
+- Enemies find the player through the `player` group, which `spawnFirstPerson` sets.

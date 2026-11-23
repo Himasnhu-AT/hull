@@ -3,11 +3,12 @@ import { defineTool, type ProblemOutput } from '../tool.ts';
 import { checkAuthorship } from '../history/authors.ts';
 import { checkConfig } from './config.ts';
 import { checkHouseRules } from './houseRules.ts';
+import { checkConfigRefs } from './refCheck.ts';
 import { runTsc } from './types.ts';
 
 export const check = defineTool<Record<string, never>, ProblemOutput>({
   name: 'check',
-  summary: 'Types, config against schemas, references, house rules.',
+  summary: 'Types, config against schemas, references, house rules, and "<kind>/<id>" names in src/ that no config answers to.',
   input: { type: 'object', properties: {}, additionalProperties: false },
   output: { type: 'object', required: ['ok', 'problems'] },
   async run(ctx) {
@@ -15,6 +16,7 @@ export const check = defineTool<Record<string, never>, ProblemOutput>({
     const problems: Problem[] = [];
     problems.push(...(await checkConfig(ctx.root)));
     problems.push(...checkHouseRules(ctx.root));
+    problems.push(...(await checkConfigRefs(ctx.root)));
     // An AI change over a value you set is flagged (ARCHITECTURE section 7, authorship per value).
     problems.push(...(await checkAuthorship(ctx.root)));
     problems.push(...(await runTsc(ctx.root)));

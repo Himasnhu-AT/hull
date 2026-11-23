@@ -28,7 +28,7 @@ import { thumbOf } from './thumbs.ts';
 import { applyEdit, importersOf, listCode, MAX_BYTES, resolveCodePath, searchCode } from './code.ts';
 import { runTsc } from '../tools/types.ts';
 import { readBrief, writeSection } from '../create/brief.ts';
-import { listDocs, readDoc } from '../create/docs.ts';
+import { listDocs, notBuiltKinds, readDoc, searchDocs } from '../create/docs.ts';
 import { listExplain, writeExplain } from '../create/explain.ts';
 import { readCreate, setCreate } from '../create/state.ts';
 
@@ -869,12 +869,14 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
     },
     'brief.read': (): BriefDoc => readBrief(briefText()),
     'brief.write': writeBrief,
-    'docs.list': () => ({ items: listDocs() }),
+    'docs.list': () => ({ items: listDocs(), notBuilt: notBuiltKinds() }),
     'docs.read': (p) => {
-      const d = typeof p.id === 'string' ? readDoc(p.id) : null;
+      const d = typeof p.id === 'string' ? readDoc(p.id, p.section) : null;
       if (!d) return { ok: false, problems: [{ file: String(p.id), rule: 'docs', message: `there is no document "${String(p.id)}" (docs.list shows the ids)` }] };
-      return { ok: true, problems: [], id: d.id, title: d.title, text: d.text };
+      if (d.missing) return { ok: false, problems: [{ file: d.id, rule: 'docs', message: `there is no section "${String(p.section)}" in ${d.id} (sections: ${d.sections?.join(', ') || 'none'})` }] };
+      return { ok: true, problems: [], id: d.id, title: d.title, text: d.text, ...(d.sections?.length ? { sections: d.sections } : {}) };
     },
+    'docs.search': (p) => ({ items: searchDocs(p.query) }),
     'explain.list': () => ({ items: listExplain(root) }),
     'explain.write': async (p) => {
       const r = writeExplain(root, p.doc, p.author ?? 'you');

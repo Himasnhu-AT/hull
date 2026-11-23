@@ -36,6 +36,14 @@ export async function loadManifest(root: string): Promise<{ value?: ManifestInfo
   return checkManifest(manifest);
 }
 
+/** The ids of every config kind (relative to the kind), or null with no manifest. Used to check names written in code. */
+export async function checkConfigIds(root: string): Promise<Record<string, string[]> | null> {
+  const { createRegistry } = await import('hull');
+  const manifest = readManifest(root);
+  if (!manifest) return null;
+  return createRegistry().load([manifest, ...readConfigFiles(root)]).ids;
+}
+
 /** Reads the project's config and manifest, validates them, and refreshes the generated ids. */
 export async function checkConfig(root: string): Promise<Problem[]> {
   // Imported late so the pure parts of this package can be tested without the engine behind them.

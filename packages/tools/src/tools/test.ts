@@ -17,15 +17,33 @@ interface JsonResult {
   }[];
 }
 
-/** Turns Vitest's JSON report into problems: one per failed test, placed at its file and line. */
+/**
+ * The innermost frame of a stack that is in the project's own src/ (not node_modules, not the engine): where the game or its
+ * test actually broke. Vitest's own `location` is where the test starts, which for an assertion deep in a helper is no help.
+ */
+export function ownFrame(stack: string, root: string): { file: string; line: number; col: number } | undefined {
+  const base = root.replace(/\\/g, '/').replace(/\/$/, '');
+  for (const l of stack.split('\n')) {
+    const m = /\(?(?:file:\/\/)?([^\s()]+?):(\d+):(\d+)\)?\s*$/.exec(l.trim());
+    if (!m || !/^\s*at /.test(l)) continue;
+    const abs = decodeURIComponent(m[1]!).replace(/\\/g, '/');
+    if (!abs.startsWith(base + '/src/') || abs.includes('/node_modules/')) continue;
+    return { file: abs.slice(base.length + 1), line: Number(m[2]), col: Number(m[3]) };
+  }
+  return undefined;
+}
+
+/** Turns Vitest's JSON report into problems: one per failed test, placed at the deepest frame inside src/ (else the test's own line). */
 export function problemsFromReport(report: JsonResult, root: string): Problem[] {
   const out: Problem[] = [];
   for (const f of report.testResults) {
     const file = relative(root, f.name);
     const failed = f.assertionResults.filter((a) => a.status === 'failed');
     for (const a of failed) {
-      const first = (a.failureMessages?.[0] ?? 'failed').split('\n')[0]!;
-      out.push({ file, line: a.location?.line, col: a.location?.column, message: `${a.fullName}: ${first}`, rule: 'test' });
+      const raw = a.failureMessages?.[0] ?? 'failed';
+      const first = raw.split('\n')[0]!;
+      const at = ownFrame(raw, root);
+      out.push({ file: at?.file ?? file, line: at?.line ?? a.location?.line, col: at?.col ?? a.location?.column, message: `${a.fullName}: ${first}`, rule: 'test' });
     }
     // A file that fails to load has no assertions, only a message.
     if (failed.length === 0 && f.message) out.push({ file, message: f.message.split('\n')[0]!, rule: 'test' });

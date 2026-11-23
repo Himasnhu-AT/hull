@@ -4,6 +4,7 @@
 import { randomUUID } from 'node:crypto';
 import type { Problem } from 'hull';
 import { formatProblem, type ToolDef } from '../tool.ts';
+import { validateInput } from '../validate.ts';
 import { openProject, type ProjectLink } from '../server/link.ts';
 import { tools as baseTools } from '../tools/index.ts';
 import { projectTools } from '../tools/project.ts';
@@ -38,7 +39,35 @@ export interface McpServer {
 }
 
 
-const isObjectSchema = (s: unknown): boolean => typeof s === 'object' && s !== null && (s as { type?: unknown }).type === 'object';
+/** What tools/list says about a tool: its summary, then what it returns when the output schema has a clause for it. */
+const describe = (t: ToolDef<unknown, unknown>): string => {
+  const ret = (t.output as { description?: unknown } | null)?.description;
+  return typeof ret === 'string' && ret ? `${t.summary} Returns: ${ret}` : t.summary;
+};
+
+/** The input schema as listed: an empty `required` says nothing, so it is left out. */
+const leanSchema = (input: unknown): object => JSON.parse(JSON.stringify(input && typeof input === 'object' ? { type: 'object', ...(input as object) } : { type: 'object' }), (k, v) => (k === 'required' && Array.isArray(v) && v.length === 0 ? undefined : v)) as object;
+
+const DATA_IMAGE = /^data:(image\/[a-z]+);base64,(.+)$/s;
+
+/**
+ * Takes the pictures out of a tool's output: a field named png (base64 PNG) or a data:image/...;base64 string. Returns the
+ * output with each replaced by "[image]" and the pictures as MCP image blocks, so a client sees a picture, not 30 KB of text.
+ */
+export function splitImages(v: unknown, images: { type: 'image'; data: string; mimeType: string }[] = []): { value: unknown; images: { type: 'image'; data: string; mimeType: string }[] } {
+  const walk = (x: unknown, key?: string): unknown => {
+    if (typeof x === 'string') {
+      const m = DATA_IMAGE.exec(x);
+      if (m) { images.push({ type: 'image', data: m[2]!, mimeType: m[1]! }); return '[image]'; }
+      if (key === 'png' && x.length > 0) { images.push({ type: 'image', data: x, mimeType: 'image/png' }); return '[image]'; }
+      return x;
+    }
+    if (Array.isArray(x)) return x.map((y) => walk(y));
+    if (x && typeof x === 'object') return Object.fromEntries(Object.entries(x).map(([k, y]) => [k, walk(y, k)]));
+    return x;
+  };
+  return { value: walk(v), images };
+}
 
 /** The registry as one MCP server for the project at `projectRoot`. */
 export function createMcpServer(projectRoot: string, o: McpOptions = {}): McpServer {
@@ -62,6 +91,7 @@ export function createMcpServer(projectRoot: string, o: McpOptions = {}): McpSer
     note('start');
     try {
       const ctx = { root: projectRoot, author, log: (l: string) => log(`[${name}] ${l}`), signal: abort.signal };
+      validateInput(name, tool.input, args);
       let out: unknown;
       if (methodNames.has(name) || name === 'play' || viaServer.has(name)) {
         const link = await linked();
@@ -72,14 +102,15 @@ export function createMcpServer(projectRoot: string, o: McpOptions = {}): McpSer
       const problems = (out as { problems?: Problem[] } | null)?.problems ?? [];
       const bad = (out as { ok?: boolean } | null)?.ok === false || problems.length > 0;
       // A document (docs.read) is read as the document, not as a JSON string with its newlines escaped; the object is in structuredContent either way.
-      const body = tool.plainText && tool.format && !bad ? tool.format(out) : [JSON.stringify(out, null, 2)];
+      const { value, images } = splitImages(out ?? {});
+      const body = tool.plainText && tool.format && !bad ? tool.format(out) : [JSON.stringify(value)];
       const text = [...problems.map(formatProblem), ...body].join('\n');
       note('end', !bad);
-      return { content: [{ type: 'text', text }], structuredContent: out ?? {}, isError: bad };
+      return { content: [{ type: 'text', text }, ...images], structuredContent: value, isError: bad };
     } catch (e) {
       note('end', false);
       // A tool that throws is a failed call the model can read and fix, not a broken connection.
-      return { content: [{ type: 'text', text: `${name}: ${e instanceof Error ? e.message : String(e)}` }], isError: true };
+      return { content: [{ type: 'text', text: ((m) => (m.startsWith(`${name}: `) ? m : `${name}: ${m}`))(e instanceof Error ? e.message : String(e)) }], isError: true };
     }
   };
 
@@ -111,7 +142,7 @@ export function createMcpServer(projectRoot: string, o: McpOptions = {}): McpSer
           }
           case 'ping': return { jsonrpc: '2.0', id: id ?? null, result: {} };
           case 'tools/list':
-            return { jsonrpc: '2.0', id: id ?? null, result: { tools: tools.map((t) => ({ name: t.name, description: t.summary, inputSchema: t.input && typeof t.input === 'object' ? { type: 'object', ...(t.input as object) } : { type: 'object' }, ...(isObjectSchema(t.output) ? { outputSchema: t.output } : {}) })) } };
+            return { jsonrpc: '2.0', id: id ?? null, result: { tools: tools.map((t) => ({ name: t.name, description: describe(t), inputSchema: leanSchema(t.input) })) } };
           case 'tools/call': return { jsonrpc: '2.0', id: id ?? null, result: await callTool(String(r.params?.['name'] ?? ''), r.params?.['arguments'], author) };
           default:
             if (isNote) return undefined; // notifications/initialized, notifications/cancelled: nothing to do
