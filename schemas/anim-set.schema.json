@@ -397,7 +397,7 @@
             "clip": {
               "type": "string",
               "x-ui": {
-                "help": "gltf only."
+                "help": "gltf only: the name of an animation in the character's glTF body file. Defaults to the clip's own name."
               }
             }
           },

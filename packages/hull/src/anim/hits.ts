@@ -1,6 +1,7 @@
 // Hit and collider shapes of a character: the `hits` list, checked against the body's bones and returned with each
 // shape's bone index, so a game can follow the shape with the bone's world transform.
 import type { Character, CharacterHit } from '../schema/character.ts';
+import { buildGltfBody } from './gltf.ts';
 import { buildBody } from './skeleton.ts';
 
 export interface ResolvedHit {
@@ -11,7 +12,7 @@ export interface ResolvedHit {
 
 /** Throws a sentence naming the pointer if a shape has no bone, or lacks the numbers its kind needs. */
 export function characterHits(def: Character, at = 'character'): ResolvedHit[] {
-  const { skeleton } = buildBody(def.body, `${at}#/body`);
+  const { skeleton } = def.body.type === 'gltf' ? buildGltfBody(def.body, `${at}#/body`) : buildBody(def.body, `${at}#/body`);
   const out: ResolvedHit[] = [];
   (def.hits ?? []).forEach((hit, i) => {
     const where = `${at}#/hits/${i}`;

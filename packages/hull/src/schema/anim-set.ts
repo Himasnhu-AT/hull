@@ -56,7 +56,7 @@ const clip = Type.Object(
     events: Type.Optional(
       Type.Record(Type.String(), Type.Union([Type.Number({ minimum: 0 }), Type.Array(Type.Number({ minimum: 0 }), { minItems: 1 })]), ui({ help: '0 to 1 of the loop for looping clips, seconds otherwise.' })),
     ),
-    clip: Type.Optional(Type.String({ ...ui({ help: 'gltf only.' }) })),
+    clip: Type.Optional(Type.String({ ...ui({ help: 'gltf only: the name of an animation in the character\'s glTF body file. Defaults to the clip\'s own name.' }) })),
   },
   { additionalProperties: false },
 );

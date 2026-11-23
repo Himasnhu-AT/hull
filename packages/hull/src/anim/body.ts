@@ -47,7 +47,17 @@ interface PartRec { bone: number; mesh: ThreeMesh; release: () => void }
 /** What a cut-off branch hands to the node that carries it: the objects and the way to let go of what they share. */
 export interface Branch { object: Object3D; release: (() => void)[] }
 
-export class Body {
+/** What the Animator needs of a drawn body: rigid parts on generated bones (Body) or a skinned model (GltfBodyView). */
+export interface BodyView {
+  readonly bones: Object3D[];
+  /** 1 for a bone whose Object3D now belongs to a cut-off branch. */
+  readonly gone: Uint8Array;
+  apply(pose: Pose): void;
+  cut(bone: number): Branch | null;
+  dispose(): void;
+}
+
+export class Body implements BodyView {
   readonly bones: Object3D[] = [];
   /** 1 for a bone whose Object3D now belongs to a cut-off branch. */
   readonly gone: Uint8Array;
