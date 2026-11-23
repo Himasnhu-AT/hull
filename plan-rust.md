@@ -307,7 +307,8 @@ compared, loading before `ready` in Node and the browser, `"kernels": false` in 
 the dev page, a failure reported once with the TypeScript path running on, and the module's bytes in the build
 report. 3,000 seeded grids built by the module were the same bits as the TypeScript build; 10,000 queries answered
 inside the module matched. The cube and AOTT built and ran in the browser and in Node with the kernel on, off and
-failing to load; AOTT's checksum was the same in all three; `game.js` carried 4.4 kB more for it (2,794,719 bytes).
+failing to load; AOTT's checksum was the same in all three. `game.js` was 2,794,719 bytes with the kernel and 2,785,683 without: 9.0 kB
+for a 4.4 kB module (base64 and its loader).
 
 **3. The bench** (`pnpm perf:engine 1,4,16 physics.moving`): 10 times scale titans of 15 moving shapes over 4,400
 static boxes, each step moving every shape and issuing the overlaps and rays AOTT issues. Median ms a frame (2 steps):

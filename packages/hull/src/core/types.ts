@@ -11,18 +11,6 @@ export interface GameDef {
   readonly seed?: number;
 }
 
-/** What a start may override; tests, the dev page and a build all pass these to `startGame`. */
-export interface StartOptions {
-  seed?: number;
-  stepRate?: number;
-  /**
-   * Whether the engine's WebAssembly kernels run (ARCHITECTURE section 10). 'on' is the default. 'off' runs the
-   * TypeScript implementation of everything, which gives the same answers (hull.json `"kernels": false`, or
-   * `?kernels=off` on the dev page). 'fail' is for testing the fallback: the kernel module is made to fail to compile.
-   */
-  kernels?: 'on' | 'off' | 'fail';
-}
-
 export interface Game {
   readonly world: World;
   /** Exactly n fixed steps (default 1), no real time involved. Runs no `update` and no `onFrame` callbacks. */

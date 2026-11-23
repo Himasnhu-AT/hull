@@ -1,3 +1,0 @@
-# A small stack: the kernels keep nothing on it but locals. Without this the linker reserves 1 MB.
-[target.wasm32-unknown-unknown]
-rustflags = ["-C", "link-arg=-zstack-size=16384"]

@@ -5,7 +5,6 @@ export interface HullEvents {}
 
 export type * from './types.ts';
 export { defineGame, startGame } from './game.ts';
-export { beforeStart } from './preload.ts';
 export { World } from './world.ts';
 export { Node } from './node.ts';
 export { Behaviour } from './behaviour.ts';

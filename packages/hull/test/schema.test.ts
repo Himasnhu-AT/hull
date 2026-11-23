@@ -31,14 +31,6 @@ describe('schemas', () => {
     expect(game.properties.render.properties.backend.default).toBe('auto');
   });
 
-  it('lets a game turn the WebAssembly kernels off in the manifest, and rejects a non-boolean', () => {
-    const base = { kind: 'game', id: 'g', title: 'G', entry: 'src/main.ts' };
-    expect(validateAgainst(manifestSchema, { ...base, kernels: false })).toEqual([]);
-    expect(validateAgainst(manifestSchema, { ...base, kernels: 'no' }).length).toBeGreaterThan(0);
-    const game = JSON.parse(emitSchemas()['game.schema.json']!);
-    expect(game.properties.kernels.default).toBe(true);
-  });
-
   // Run with HULL_WRITE_SCHEMAS=1 to rewrite /schemas after changing a schema.
   it('matches the files in /schemas (run with HULL_WRITE_SCHEMAS=1 to update them)', () => {
     const files = emitSchemas();

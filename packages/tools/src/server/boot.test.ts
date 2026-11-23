@@ -21,25 +21,3 @@ describe('bootSource vfx', () => {
     expect(bootSource({ ...base, features: ['vfx'], build: true })).toContain('mountVfx(g)');
   });
 });
-
-describe('bootSource kernels', () => {
-  const manifest = (extra: object): { path: string; text: string }[] => [{ path: 'hull.json', text: JSON.stringify({ kind: 'game', id: 'g', title: 'G', entry: 'src/main.ts', ...extra }) }];
-  it('starts the game with no option by default, and never imports the kernel module', () => {
-    for (const s of [bootSource({ ...base, sources: manifest({}), build: true }), bootSource({ ...base, sources: manifest({ kernels: true }), build: true })]) {
-      expect(s).toContain('await startGame(game);');
-      expect(s).not.toContain('hull/kernel');
-    }
-  });
-  it("passes kernels: 'off' to startGame when hull.json says kernels false", () => {
-    const s = bootSource({ ...base, sources: manifest({ kernels: false }), build: true });
-    expect(s).toContain("await startGame(game, { kernels: 'off' });");
-    expect(s).not.toContain('hull/kernel');
-  });
-  it('reads the ?kernels= flag only on the dev page, where it wins over hull.json', () => {
-    const dev = bootSource({ ...base, sources: manifest({ kernels: false }), devUrl: 'ws://x' });
-    expect(dev).toContain("get('kernels')");
-    expect(dev).toContain("kq === 'off' || kq === 'fail' ? kq : 'off'");
-    expect(bootSource({ ...base, devUrl: 'ws://x' })).toContain("kq : 'on'");
-    expect(bootSource({ ...base, sources: manifest({}), build: true })).not.toContain('kernels');
-  });
-});

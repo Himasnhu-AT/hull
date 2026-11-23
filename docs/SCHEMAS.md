@@ -104,7 +104,6 @@ repository's templates and kits are rewritten with it.
   "step": 60,
   "features": ["audio", "anim", "ui", "vfx"],
   "render": { "backend": "auto" },
-  "kernels": true,
   "start": { "screen": "ui-screen/title", "level": "level/yard" },
   "systems": ["waves", "score"],
   "targets": {
@@ -133,7 +132,6 @@ Schema (abridged):
     "step": { "enum": [30, 60, 120], "default": 60, "x-ui": { "unit": "Hz", "help": "Fixed simulation rate." } },
     "features": { "type": "array", "items": { "enum": ["audio", "anim", "ui", "vfx", "physics", "saves"] } },
     "render": { "type": "object", "properties": { "backend": { "enum": ["auto", "webgl2", "webgpu"], "default": "auto", "x-ui": { "widget": "select", "help": "Which renderer draws the game. auto tries WebGPU and falls back to WebGL2. A game with GLSL shader code of its own pins webgl2." } } } },
-    "kernels": { "type": "boolean", "default": true, "x-ui": { "help": "false runs the TypeScript implementation of everything instead of the engine's WebAssembly kernels: same answers. For comparing the two, or for a host that forbids WebAssembly." } },
     "start": { "type": "object", "properties": { "screen": { "type": "string", "x-ref": "ui-screen" }, "level": { "type": "string", "x-ref": "level" } } },
     "systems": { "type": "array", "items": { "type": "string" } },
     "targets": { "type": "object" },

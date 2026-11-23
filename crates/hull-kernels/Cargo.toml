@@ -1,9 +1,0 @@
-[package]
-name = "hull-kernels"
-version = "0.1.0"
-edition = "2021"
-publish = false
-description = "Hull's kernels: batch arithmetic over flat arrays, compiled to one WebAssembly module (plan-rust.md)."
-
-[lib]
-crate-type = ["cdylib"]

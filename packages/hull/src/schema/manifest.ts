@@ -22,7 +22,6 @@ export const manifestSchema = Type.Object(
         { additionalProperties: false },
       ),
     ),
-    kernels: Type.Optional(Type.Boolean({ default: true, ...ui({ help: "false runs the TypeScript implementation of everything instead of the engine's WebAssembly kernels: same answers. For comparing the two, or for a host that forbids WebAssembly." }) })),
     start: Type.Optional(
       Type.Object(
         { screen: Type.Optional(Type.String(ref('ui-screen'))), level: Type.Optional(Type.String(ref('level'))) },
