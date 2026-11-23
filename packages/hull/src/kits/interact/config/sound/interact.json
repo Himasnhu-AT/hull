@@ -1,0 +1,55 @@
+{
+  "kind": "sound",
+  "note": "A short click-and-chime when something is used.",
+  "bus": "sfx",
+  "level": -8,
+  "pitch": 1,
+  "limit": {
+    "minGap": 0.05,
+    "voices": 3,
+    "over": "steal-oldest"
+  },
+  "source": {
+    "type": "synth",
+    "length": 0.4,
+    "layers": {
+      "low": {
+        "from": {
+          "osc": "triangle",
+          "freq": 440
+        },
+        "then": [
+          {
+            "envelope": {
+              "attack": 0.002,
+              "decay": 0.1,
+              "curve": "exp"
+            }
+          },
+          {
+            "gain": -3
+          }
+        ]
+      },
+      "high": {
+        "from": {
+          "osc": "sine",
+          "freq": 880
+        },
+        "then": [
+          {
+            "envelope": {
+              "attack": 0.002,
+              "decay": 0.16000000000000003,
+              "curve": "exp"
+            }
+          },
+          {
+            "gain": -5
+          }
+        ]
+      }
+    },
+    "reverb": 0.1
+  }
+}

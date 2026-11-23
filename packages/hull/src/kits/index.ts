@@ -34,3 +34,8 @@ export { Hud, hudTuning } from './hud/hud.ts';
 export { TitleScreen, ResultScreen } from './menu/menu.ts';
 export { Objectives } from './objectives/objectives.ts';
 export type { Goal } from './objectives/objectives.ts';
+export { Interactable, Interactor, InteractPrompt, interactTuning } from './interact/interact.ts';
+export { fire, Launcher, Projectile, ProjectilePool, projectilesOf, projectileTuning } from './projectile/projectile.ts';
+export type { FireOpts } from './projectile/projectile.ts';
+export { Checkpoint, Respawn, checkpointTuning } from './checkpoint/checkpoint.ts';
+export { Inventory } from './inventory/inventory.ts';
