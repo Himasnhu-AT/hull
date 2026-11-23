@@ -440,7 +440,9 @@ export class Civilians {
   }
   private _strand(count: number, areas: Area[], quiet: boolean): number {
     let made = 0;
-    const cap0 = quiet ? Math.max(this.opts.max, count + this.stranded) : this.opts.max;
+    // a stress run (Game.load) strands that many times the people, under a cap grown the same way
+    count = Math.round(count * this.game.load);
+    const cap0 = quiet ? Math.max(this.opts.max, count + this.stranded) : this.opts.max * this.game.load;
     for (let i = 0; i < count && this.stranded < cap0; i++) {
       const spot = this._findSpot(areas[(RND.sim() * areas.length) | 0]);
       if (!spot) continue;

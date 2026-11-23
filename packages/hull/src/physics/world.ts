@@ -1,9 +1,12 @@
 // The physics world: shapes, a uniform-grid broadphase, and the queries. Static shapes go into the grid once.
-// Moving shapes (a titan's limbs, the bodies of debris) sit in a short list that is checked by bounding box.
+// Moving shapes (a titan's limbs, the bodies of debris) keep their bounds in a flat index with a grid of its own
+// that is rebuilt as they move (moving.ts); a query asks it for the few near and tests those in the order they
+// were added.
 // The grid is two-dimensional (x and z): cities and arenas are wide and flat, and a column holds a building's
 // whole height, so a ray from a rooftop does not step through empty vertical cells.
 import type { World } from '../core/index.ts';
 import { Dda } from './dda.ts';
+import { ArrayStore, MovingIndex } from './moving.ts';
 import { B, beginSweep, C, closestOn, rayAabb, sweepShape } from './narrow.ts';
 import { RigidSolver } from './rigid.ts';
 import { Shape } from './shape.ts';
@@ -42,6 +45,8 @@ export class Physics {
   private readonly bigs: Shape[] = [];
   /** Every shape that is not static, in the order added. */
   readonly moving: Shape[] = [];
+  /** Where the moving shapes are: slot i is `moving[i]`. @internal */
+  readonly index: MovingIndex;
   private readonly statics: Shape[] = [];
   private stamp = 0;
   private syncedTick = -1;
@@ -58,6 +63,7 @@ export class Physics {
     const g = opts.gravity ?? [0, -9.81, 0];
     this.gravity = { x: g[0], y: g[1], z: g[2] };
     this.iterations = opts.iterations ?? 8;
+    this.index = new MovingIndex(new ArrayStore(), this.cell);
     this.solver = new RigidSolver(this);
   }
 
@@ -66,7 +72,7 @@ export class Physics {
   add(desc: ShapeDesc, opts: ShapeOptions = {}): Shape {
     const s = new Shape(desc, opts);
     if (s.isStatic) this.insertStatic(s);
-    else { this.moving.push(s); this.dirty = true; }
+    else { this.moving.push(s); this.index.add(s); this.dirty = true; }
     return s;
   }
 
@@ -121,7 +127,7 @@ export class Physics {
     let k = this.bigs.indexOf(s);
     if (k >= 0) this.bigs.splice(k, 1);
     k = this.moving.indexOf(s);
-    if (k >= 0) this.moving.splice(k, 1);
+    if (k >= 0) { this.moving.splice(k, 1); this.index.remove(k, s, this.moving); }
     k = this.statics.indexOf(s);
     if (k >= 0) this.statics.splice(k, 1);
   }
@@ -256,9 +262,17 @@ export class Physics {
       if (!rayAabb(ox, oy, oz, dx, dy, dz, s.minx - r, s.miny - r, s.minz - r, s.maxx + r, s.maxy + r, s.maxz + r, B.t)) continue;
       sweepShape(s, ox, oy, oz, dx, dy, dz, r);
     }
-    const mv = this.moving;
-    for (let i = 0; i < mv.length; i++) {
-      const s = mv[i]!;
+    // Moving shapes: the index gives those whose bounds meet the box around what is left of the sweep, padded a
+    // little so rounding can only add a shape; the exact test below is the one that was made against every one.
+    const mv = this.moving, index = this.index;
+    const tx = ox + dx * B.t, ty = oy + dy * B.t, tz = oz + dz * B.t;
+    const pad = r + 1e-3 + 1e-9 * (Math.abs(ox) + Math.abs(oy) + Math.abs(oz) + Math.abs(tx) + Math.abs(ty) + Math.abs(tz));
+    const m = index.box(
+      (ox < tx ? ox : tx) - pad, (oy < ty ? oy : ty) - pad, (oz < tz ? oz : tz) - pad,
+      (ox > tx ? ox : tx) + pad, (oy > ty ? oy : ty) + pad, (oz > tz ? oz : tz) + pad);
+    const found = index.found;
+    for (let i = 0; i < m; i++) {
+      const s = mv[found[i]!]!;
       if (!this.pass(s, f)) continue;
       if (!rayAabb(ox, oy, oz, dx, dy, dz, s.minx - r, s.miny - r, s.minz - r, s.maxx + r, s.maxy + r, s.maxz + r, B.t)) continue;
       sweepShape(s, ox, oy, oz, dx, dy, dz, r);
@@ -349,8 +363,13 @@ export class Physics {
     }
     const bigs = this.bigs;
     for (let n = 0; n < bigs.length; n++) this.take(bigs[n]!, stamp, x0, y0, z0, x1, y1, z1, f);
-    const mv = this.moving;
-    for (let n = 0; n < mv.length; n++) this.take(mv[n]!, stamp, x0, y0, z0, x1, y1, z1, f);
+    const mv = this.moving, index = this.index;
+    const m = index.box(x0, y0, z0, x1, y1, z1);
+    const found = index.found;
+    for (let n = 0; n < m; n++) {
+      const s = mv[found[n]!]!;
+      if (this.pass(s, f)) cand.push(s);
+    }
     return cand;
   }
 

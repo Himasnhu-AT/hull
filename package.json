@@ -18,6 +18,7 @@
     "project:dev": "tsx scripts/project.ts dev",
     "project:run": "tsx scripts/project.ts",
     "perf:aott": "node --import tsx scripts/perf-aott.ts",
+    "perf:engine": "node --import tsx scripts/perf-engine.ts",
     "mcp": "node packages/tools/bin/hull-mcp.js"
   },
   "devDependencies": {

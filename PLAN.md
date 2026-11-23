@@ -233,7 +233,7 @@ checking the current release.
 | Schemas | TypeBox (the `typebox` package, 1.x; schemas are JSON Schema, types are inferred), Ajv to validate | One source for types, checks and forms. |
 | History storage | git objects through isomorphic-git, in a private repository under `.hull/` | A proven store and merge base with no dependency on git being installed; Hull adds the diff that understands JSON and tunables. |
 | Source edits | TypeScript 6's compiler API (`typescript@6`) | Rewrites one literal in place without touching the rest of the file. TypeScript 7 is a native compiler whose JavaScript API is still marked unstable, so tools parse with 6 while `check` type-checks with 7's `tsc`. |
-| Rigid bodies (optional) | Rapier (WASM, inlined into the bundle) | Fast, deterministic; only loaded by games that ask for it. |
+| Rigid bodies (optional) | Hull's own solver in TypeScript (`hull/physics`, `rigid.ts`) | Deterministic and in the same world as the queries; only bundled by games that import it. Rapier was the first choice and was never added. |
 | Tests | Vitest in Node; Playwright with headless Chromium for the browser | Logic without a browser; screenshots with one pinned Chromium. |
 | Studio | Electron * app; React + Vite inside | Its own window, direct file access, the same Chromium the games ship in. Only the Studio uses React. |
 | Desktop shell for games | Electron * + electron-builder * by default; Tauri as an experimental option | See 6.2. |

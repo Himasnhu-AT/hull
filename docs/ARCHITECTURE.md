@@ -395,6 +395,12 @@ sound (recipe, code or sample) ─► voice ─► bus (sfx / ui / voice / music
 * `usePhysics(world, opts)` makes a `Physics` world (a broadphase grid; `cell`, `gravity`, `iterations`); `physicsOf(world)`
   finds it. Shapes: sphere, capsule, box, static triangle mesh (with a bounding-volume tree), infinite plane and height field.
   Layers are bits with a mask; a shape can carry a `tag` (queries match it exactly or by prefix) and can be a trigger.
+* **Broadphase.** Static shapes go into a 2D grid (x and z) once. Moving shapes (they follow a node or a bone, or are
+  rigid bodies) keep their bounds in one flat `Float64Array` with a grid of its own (`physics/moving.ts`), rebuilt when
+  shapes are added or removed or too many have left the cells they were filed under; the ones that left sit in a short
+  list every query checks until then. Candidates come back in the order the shapes were added, so the grid changes how
+  many shapes a query looks at and never what it answers (`moving.parity.test.ts` holds that to the bit). Before it,
+  every query walked every moving shape, which lost the frame at 10 times AOTT's load (`plan-rust.md` sections 12-13).
 * **Queries**: `raycast`, `spherecast`, `capsulecast`, `overlapSphere`, `overlapCapsule`, `distanceTo`. They fill a `Hit` the
   world owns and reuses, so they allocate nothing.
 * **Movement**: `slideMove` (a swept sphere or capsule that slides along surfaces and fills a `MoveResult`: contacts with a walkable flag, grounded, stepped up)
