@@ -79,7 +79,8 @@ func newEnv(t *testing.T, mut func(*config.Config)) *env {
 	}))
 	t.Cleanup(upS.Close)
 	cfg := config.Config{AnthropicKey: testKey, Addr: "127.0.0.1:0", PublicURL: "http://127.0.0.1:8787", AnthropicBaseURL: upS.URL,
-		AllowSignup: true, DefaultModel: "claude-opus-5-5"}
+		AllowSignup: true, DefaultModel: "claude-opus-5-5",
+		AllowedModels: []string{"claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"}}
 	if mut != nil {
 		mut(&cfg)
 	}

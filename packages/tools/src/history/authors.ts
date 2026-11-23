@@ -1,12 +1,12 @@
 // Who last set each value (ARCHITECTURE section 7, "Authorship per value"). Config and tunables are compared by path, so
 // every change says which values it set and who set them. The record lives in .hull/authors.json and is only a cache of
 // the history: when it is missing or does not match the newest change, it is rebuilt by walking the history again.
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Problem } from 'hull';
 import type { ChangeDelta, HistoryAuthor } from 'hull/dev/protocol';
 import { diffFiles, showValue } from './diff.ts';
-import { Store, type CommitInfo } from './store.ts';
+import { atomicWrite, Store, type CommitInfo } from './store.ts';
 
 export interface AuthorEntry {
   by: HistoryAuthor;
@@ -103,8 +103,7 @@ export async function rebuild(store: Store, tip: string | undefined): Promise<En
 const bookPath = (root: string): string => join(root, '.hull', 'authors.json');
 
 export function saveBook(root: string, head: string | undefined, entries: Entries): void {
-  mkdirSync(join(root, '.hull'), { recursive: true });
-  writeFileSync(bookPath(root), `${JSON.stringify({ head: head ?? null, entries } satisfies BookFile, null, 2)}\n`);
+  atomicWrite(bookPath(root), `${JSON.stringify({ head: head ?? null, entries } satisfies BookFile, null, 2)}\n`, join(root, '.hull', 'tmp'));
 }
 
 /** authors.json, trusted only while it matches the newest change on the main line; otherwise rebuilt from history. */

@@ -2,10 +2,11 @@
 // dev server in development (HULL_APP_URL) and the built files in out/renderer otherwise.
 
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, safeStorage, shell } from 'electron';
-import { dirname, join } from 'node:path';
+import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { AgentSettingsInput, CliAction, CliId, PromptOptions, TermProgram } from '../shared/agentApi.ts';
 import { createHost } from './host.ts';
+import { isAppPage, isWebLink, type AppPages } from './ipcGuard.ts';
 
 // Dev only: lets a test driver (agent-browser) attach to the window.
 if (process.env['HULL_CDP_PORT'] && !app.isPackaged) app.commandLine.appendSwitch('remote-debugging-port', process.env['HULL_CDP_PORT']);
@@ -24,10 +25,15 @@ const host = createHost({
   },
 });
 let win: BrowserWindow | null = null;
+const pages = (): AppPages => ({ ...(process.env['HULL_APP_URL'] ? { appUrl: process.env['HULL_APP_URL'] } : {}), rendererDir: join(here, '../../out/renderer') });
+// Folders the person chose in the system dialog this session: the only paths, besides Recent, openProject will start a server for.
+const picked = new Set<string>();
 
 // A bad id from the page must not crash the process; the renderer shows the message.
 const handle = (channel: string, fn: (...a: never[]) => unknown): void => {
-  ipcMain.handle(`hull:${channel}`, async (_e, ...args) => {
+  ipcMain.handle(`hull:${channel}`, async (e, ...args) => {
+    // Only the app's own top-level page may call in: not the game's iframe, not a page that navigated the window away.
+    if (!win || e.senderFrame !== win.webContents.mainFrame || !isAppPage(e.senderFrame.url, pages())) throw new Error(`${channel}: refused, the caller is not the Hull app page`);
     try { return await (fn as (...a: unknown[]) => unknown)(...args); }
     catch (e) { throw new Error(e instanceof Error ? e.message : String(e)); }
   });
@@ -39,7 +45,13 @@ function registerIpc(): void {
   handle('openCommunity', (id: string, reset?: boolean, update?: boolean) => host.openCommunity(id, reset, update));
   handle('createProject', (opts: { template: string; title: string; parentDir: string }) => host.createProject(opts));
   handle('createFromIdea', (opts: { idea: string }) => host.createFromIdea(opts.idea));
-  handle('openProject', (root: string) => host.openProject(root));
+  // The page names a path, so it may only name one the person has opened before or just picked in the folder dialog.
+  handle('openProject', async (root: string) => {
+    if (typeof root !== 'string' || !isAbsolute(root)) throw new Error('openProject: a project folder is an absolute path');
+    const path = resolve(root);
+    if (!picked.has(path) && !(await host.recents()).some((r) => resolve(r.root) === path)) throw new Error(`openProject: ${path} is not in Recent and was not chosen in the folder dialog`);
+    return host.openProject(path);
+  });
   handle('closeProject', () => host.closeProject());
   handle('recents', () => host.recents());
   handle('forgetRecent', (root: string) => host.forgetRecent(root));
@@ -74,7 +86,9 @@ function registerIpc(): void {
       properties: purpose === 'open' ? ['openDirectory'] : ['openDirectory', 'createDirectory'],
       buttonLabel: purpose === 'open' ? 'Open' : 'Choose',
     });
-    return r.canceled ? null : (r.filePaths[0] ?? null);
+    const chosen = r.canceled ? null : (r.filePaths[0] ?? null);
+    if (chosen) picked.add(resolve(chosen));
+    return chosen;
   });
 }
 
@@ -102,7 +116,12 @@ async function createWindow(): Promise<void> {
   });
   win.once('ready-to-show', () => win?.show());
   // Links that leave the app open in the browser, never in a window with our preload.
-  win.webContents.setWindowOpenHandler(({ url }) => { void shell.openExternal(url); return { action: 'deny' }; });
+  win.webContents.setWindowOpenHandler(({ url }) => { if (isWebLink(url)) void shell.openExternal(url); return { action: 'deny' }; });
+  // The window never leaves the app's page: a link or a script that tries goes to the browser instead (web links only).
+  const stay = (e: { preventDefault(): void }, url: string): void => { if (isAppPage(url, pages())) return; e.preventDefault(); if (isWebLink(url)) void shell.openExternal(url); };
+  win.webContents.on('will-navigate', (e, url) => stay(e, url));
+  win.webContents.on('will-redirect', (e, url) => stay(e, url));
+  win.webContents.on('will-attach-webview', (e) => e.preventDefault());
   win.on('closed', () => { win = null; void host.closeProject(); });
 
   const dev = process.env['HULL_APP_URL'];

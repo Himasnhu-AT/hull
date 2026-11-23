@@ -29,7 +29,7 @@ class Studio {
 
 /** A game that says its time is `time`, and that records the controls it hears. */
 async function fakeGame(client: string, time: number, headless: boolean): Promise<WebSocket> {
-  const ws = await wsOpen(`${server.url}?role=game&client=${client}${headless ? '&headless=1' : ''}`);
+  const ws = await wsOpen(`${server.gameWsUrl}&role=game&client=${client}${headless ? '&headless=1' : ''}`);
   heard.set(client, []);
   ws.on('message', (d) => {
     const m = JSON.parse(String(d));
@@ -48,7 +48,7 @@ beforeAll(async () => {
   dir = join(mkdtempSync(join(tmpdir(), 'hull-pick-')), 'game');
   await createProject({ template: 'cube', dir, title: 'Pick' });
   server = await startProjectServer({ root: dir, port: 0, historyQuietMs: 0 });
-  studio = new Studio(await wsOpen(`${server.url}?role=studio`));
+  studio = new Studio(await wsOpen(`${server.url}&role=studio`));
 }, 60_000);
 
 afterAll(async () => {

@@ -1,7 +1,7 @@
 // History and experiments for one project (PLAN section 5, ARCHITECTURE section 7). The main line is the project folder;
 // each experiment is a branch with its own working copy under .hull/exp/<name>/. Every change is a commit made after a
 // burst of edits goes quiet, with the author who made it and a plain-words description from the diff.
-import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Problem } from 'hull';
 import type { ChangeDelta, ExpAdoptResult, ExpInfo, HistoryAuthor, HistoryChange, MergeConflict } from 'hull/dev/protocol';
@@ -12,7 +12,7 @@ import { diffFiles, isConfigPath, summarize, type FileMap } from './diff.ts';
 import { patchLines, type PatchLine } from './lines.ts';
 import { mergeFiles } from './merge.ts';
 import { replayJournal } from './replay.ts';
-import { readTracked, Store, writeTracked, type CommitInfo } from './store.ts';
+import { atomicWrite, readTracked, Store, writeTracked, type CommitInfo } from './store.ts';
 
 export interface ExpGames {
   /** Starts the experiment's own game page and returns its URL. */
@@ -115,7 +115,7 @@ export class History {
 
   private saveMeta(): void {
     mkdirSync(join(this.root, '.hull'), { recursive: true });
-    writeFileSync(this.metaPath(), `${JSON.stringify(this.exps, null, 2)}\n`);
+    atomicWrite(this.metaPath(), `${JSON.stringify(this.exps, null, 2)}\n`, join(this.root, '.hull', 'tmp'));
   }
 
   // ---- Recording changes ---------------------------------------------------------------------------------------------

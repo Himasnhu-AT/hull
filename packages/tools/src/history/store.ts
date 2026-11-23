@@ -2,7 +2,7 @@
 // needed and the project's own .git is never touched. The repository has no index and no work tree of its own: a state of
 // the project is read from disk into a FileMap, written as blobs and trees, and committed directly. That is what lets the
 // project folder and each experiment's folder share one repository.
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import git from 'isomorphic-git';
 import * as nodeFs from 'node:fs';
@@ -39,6 +39,20 @@ export function readTracked(dir: string): FileMap {
   return out;
 }
 
+let tmpN = 0;
+/**
+ * Writes `data` to `abs` so a reader (a file watcher, a crash, a second process) sees the old file or the whole new one,
+ * never half of it: the bytes go to a temp file under `tmpDir` (same volume as the target, outside src/ and config/ so no
+ * watcher takes it for a project file) and are renamed into place.
+ */
+export function atomicWrite(abs: string, data: string | Buffer, tmpDir: string): void {
+  mkdirSync(dirname(abs), { recursive: true });
+  mkdirSync(tmpDir, { recursive: true });
+  const tmp = join(tmpDir, `write-${process.pid}-${tmpN++}`);
+  writeFileSync(tmp, data);
+  renameSync(tmp, abs);
+}
+
 /** Makes the tracked files of `dir` equal `files`: writes what differs, removes what is not in the map. */
 export function writeTracked(dir: string, files: FileMap): { written: string[]; removed: string[] } {
   const current = readTracked(dir);
@@ -47,8 +61,7 @@ export function writeTracked(dir: string, files: FileMap): { written: string[]; 
   for (const [p, data] of files) {
     const c = current.get(p);
     if (c && c.equals(data)) continue;
-    mkdirSync(dirname(join(dir, p)), { recursive: true });
-    writeFileSync(join(dir, p), data);
+    atomicWrite(join(dir, p), data, join(dir, '.hull', 'tmp'));
     written.push(p);
   }
   for (const p of current.keys()) if (!files.has(p)) { rmSync(join(dir, p), { force: true }); removed.push(p); }

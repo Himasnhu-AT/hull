@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"strings"
 	"sync"
@@ -42,6 +43,7 @@ type Server struct {
 	google *http.Client       // to Google's token endpoint; a short timeout because a person is waiting
 
 	communityLimit *ratelimit.Limiter // public catalog reads, per IP
+	aiLimit        *ratelimit.Limiter // AI requests, per user; nil when the cap is off
 
 	dummyOnce sync.Once
 	dummyHash string
@@ -51,9 +53,13 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger) *Server {
 	tr := http.DefaultTransport.(*http.Transport).Clone()
 	// Models can think a long time before the first byte, but a dead upstream should not hold a request forever.
 	tr.ResponseHeaderTimeout = 10 * time.Minute
-	return &Server{cfg: cfg, st: st, log: log, now: time.Now, params: passwords.Default,
+	s := &Server{cfg: cfg, st: st, log: log, now: time.Now, params: passwords.Default,
 		limit: ratelimit.New(10), client: &http.Client{Transport: tr},
 		google: &http.Client{Timeout: 10 * time.Second}, communityLimit: ratelimit.New(communityRate)}
+	if cfg.AIRequestsPerMinute > 0 {
+		s.aiLimit = ratelimit.New(cfg.AIRequestsPerMinute)
+	}
+	return s
 }
 
 func (s *Server) Handler() http.Handler {
@@ -119,18 +125,48 @@ func (s *Server) middleware(next http.Handler) http.Handler {
 				}
 			}
 			s.log.Info("request", "method", r.Method, "path", r.URL.Path, "status", sw.status,
-				"ms", time.Since(start).Milliseconds(), "ip", clientIP(r))
+				"ms", time.Since(start).Milliseconds(), "ip", s.clientIP(r))
 		}()
 		next.ServeHTTP(sw, r)
 	})
 }
 
-func clientIP(r *http.Request) string {
+// clientIP is the connection's address, unless that address is a trusted proxy: then the nearest address in
+// X-Forwarded-For that is not itself a trusted proxy. Reading the header's first entry would let any caller pick
+// its own address, so the list is walked from the right, where only our own proxies have written.
+func (s *Server) clientIP(r *http.Request) string {
 	h, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
-		return r.RemoteAddr
+		h = r.RemoteAddr
+	}
+	if len(s.cfg.TrustedProxies) == 0 || !s.trusted(h) {
+		return h
+	}
+	parts := strings.Split(strings.Join(r.Header.Values("X-Forwarded-For"), ","), ",")
+	for i := len(parts) - 1; i >= 0; i-- {
+		p := strings.TrimSpace(parts[i])
+		if _, err := netip.ParseAddr(p); err != nil {
+			return h // a malformed entry: do not guess
+		}
+		if !s.trusted(p) {
+			return p
+		}
 	}
 	return h
+}
+
+func (s *Server) trusted(ip string) bool {
+	a, err := netip.ParseAddr(ip)
+	if err != nil {
+		return false
+	}
+	a = a.Unmap()
+	for _, p := range s.cfg.TrustedProxies {
+		if p.Contains(a) {
+			return true
+		}
+	}
+	return false
 }
 
 // ---- small helpers ----

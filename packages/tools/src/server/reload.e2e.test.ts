@@ -24,10 +24,10 @@ describe('tunable writes do not reload the game page', () => {
     const client = await (await fetch(new URL('/@vite/client', srv.gameUrl))).text();
     const token = /wsToken\s*=\s*"([^"]+)"/.exec(client)?.[1];
     const origin = new URL(srv.gameUrl).origin;
-    const hmr = new WebSocket(`${srv.url}?token=${token}`, 'vite-hmr', { origin });
+    const hmr = new WebSocket(`${srv.url.replace(/\?.*/, '')}?token=${token}`, 'vite-hmr', { origin });
     hmr.on('message', (d) => vite.push(String(d)));
     await new Promise((r) => hmr.on('open', r));
-    rpc = new WebSocket(`${srv.url}?role=studio`, { origin });
+    rpc = new WebSocket(`${srv.url}&role=studio`, { origin });
     await new Promise((r) => rpc.on('open', r));
   }, 60_000);
   afterAll(async () => { rpc?.close(); await srv?.close(); });

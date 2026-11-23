@@ -33,7 +33,7 @@ beforeAll(async () => {
   writeFileSync(join(dir, 'config/material/cloth.json'), '{"kind":"material","color":"#445566","roughness":0.5,"metalness":0}');
   writeFileSync(join(dir, 'src/ids.ts'), "export const CLICK = 'sound/click';\n");
   server = await startProjectServer({ root: dir, port: 0, historyQuietMs: 0 });
-  ws = new WebSocket(server.url + '?role=studio');
+  ws = new WebSocket(server.url + "&role=studio");
   ws.on('message', (d) => { const m = JSON.parse(String(d)); if (m.id !== undefined) waiting.get(m.id)?.(m); else pushes.push(m); });
   await new Promise((r) => ws.on('open', r));
 }, 60_000);

@@ -15,7 +15,7 @@ export interface RecentProject { root: string; title: string; openedAt: string; 
 export interface OpenedProject {
   root: string; title: string; url: string; gameUrl: string;
   /** How a local agent (Claude Code, Codex, any MCP client) reaches this project: the app's MCP endpoint, and the stdio launcher for when the app is closed. */
-  mcp: { url: string; launcher: string };
+  mcp: { url: string; launcher: string; /** The bearer token the HTTP endpoint requires; the stdio launcher needs none. */ token?: string };
 }
 
 import type { AgentEvent, AgentInfo, AgentSettings, AgentSettingsInput, ClaudeCodeInfo, CliAction, CliId, CliStatus, EnsureResult, PromptOptions, TermInfo, TermProgram } from './agentApi.ts';

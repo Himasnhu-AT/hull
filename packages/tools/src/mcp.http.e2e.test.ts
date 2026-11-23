@@ -18,7 +18,7 @@ describe('MCP over streamable HTTP', () => {
   afterAll(async () => { await http.close(); await server.close(); });
 
   const post = (body: unknown, headers: Record<string, string> = {}): Promise<Response> =>
-    fetch(http.url, { method: 'POST', headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream', ...headers }, body: JSON.stringify(body) });
+    fetch(http.url, { method: 'POST', headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream', authorization: `Bearer ${http.token}`, ...headers }, body: JSON.stringify(body) });
 
   it('binds to loopback', () => { expect(http.url).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/mcp$/); });
 
@@ -45,7 +45,18 @@ describe('MCP over streamable HTTP', () => {
 
   it('refuses a web page from another origin and a GET', async () => {
     expect((await post({ jsonrpc: '2.0', id: 1, method: 'ping' }, { origin: 'https://evil.example' })).status).toBe(403);
-    expect((await fetch(http.url)).status).toBe(405);
+    expect((await fetch(http.url, { headers: { authorization: `Bearer ${http.token}` } })).status).toBe(405);
+  });
+
+  it('needs the bearer token: none or a wrong one is a 401 and runs nothing', async () => {
+    const ping = JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'ping' });
+    const raw = (authorization?: string): Promise<Response> => fetch(http.url, { method: 'POST', headers: { 'content-type': 'application/json', ...(authorization ? { authorization } : {}) }, body: ping });
+    expect((await raw()).status).toBe(401);
+    expect((await raw('Bearer nope')).status).toBe(401);
+    expect((await raw(http.token)).status).toBe(401); // the scheme is part of it
+    expect((await raw(`Bearer ${http.token}`)).status).toBe(200);
+    // A loopback page that has no token (a web page the person visits) is refused too.
+    expect((await fetch(http.url, { method: 'POST', headers: { origin: 'http://localhost:3000', 'content-type': 'application/json' }, body: ping })).status).toBe(401);
   });
 });
 

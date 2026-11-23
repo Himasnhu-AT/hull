@@ -9,7 +9,7 @@ import { createHost, type Host } from './host.ts';
 // The agent hub against a scripted ACP agent (fixtures/fake-acp-agent.mjs) and a real project: the agent is started as a
 // child process, handed Hull's MCP server in session/new, and its change comes back authored by it in the history.
 const fixture = join(import.meta.dirname, 'fixtures', 'fake-acp-agent.mjs');
-let dir = ''; let data = ''; let host: Host; let root = ''; let mcpUrl = '';
+let dir = ''; let data = ''; let host: Host; let root = ''; let mcpUrl = ''; let mcpToken = '';
 const events: AgentEvent[] = [];
 
 beforeAll(async () => {
@@ -25,13 +25,14 @@ beforeAll(async () => {
   ]));
   host = createHost({ dataDir: data, env: { ...process.env, HULL_AGENT_FAKE: fake, HULL_ACP_AGENTS: JSON.stringify([{ id: 'fake', name: 'Fake agent', command: process.execPath, args: [fixture] }]) } });
   host.onAgentEvent((e) => events.push(e));
-  mcpUrl = (await host.openProject(root)).mcp.url;
+  const opened = await host.openProject(root);
+  mcpUrl = opened.mcp.url; mcpToken = opened.mcp.token ?? '';
 }, 120_000);
 afterAll(async () => { await host.closeProject(); rmSync(dir, { recursive: true, force: true }); });
 
 const waitFor = async (pred: () => boolean, ms = 60_000): Promise<void> => { const t = Date.now(); while (!pred()) { if (Date.now() - t > ms) throw new Error('timed out waiting for events: ' + JSON.stringify(events.slice(-6))); await new Promise((r) => setTimeout(r, 40)); } };
 async function mcpCall(name: string, args: unknown): Promise<{ structuredContent: unknown }> {
-  const post = (body: unknown, h: Record<string, string> = {}): Promise<Response> => fetch(mcpUrl, { method: 'POST', headers: { 'content-type': 'application/json', ...h }, body: JSON.stringify(body) });
+  const post = (body: unknown, h: Record<string, string> = {}): Promise<Response> => fetch(mcpUrl, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${mcpToken}`, ...h }, body: JSON.stringify(body) });
   const init = await post({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'test', version: '1' } } });
   const session = init.headers.get('mcp-session-id')!;
   return ((await (await post({ jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name, arguments: args } }, { 'mcp-session-id': session })).json()) as { result: { structuredContent: unknown } }).result;

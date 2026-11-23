@@ -3,6 +3,7 @@
 // touches the project's files (CLAUDE.md: the Studio never touches the disk).
 import { cleanLaunchQuery } from './launch.ts';
 import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmdirSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
+import { randomBytes, timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { dirname, join, relative, resolve } from 'node:path';
@@ -38,8 +39,12 @@ export type { CommunityGame } from './community.ts';
 export { buildProject } from './build.ts';
 
 export interface ProjectServer {
-  /** ws:// URL of the protocol. */
+  /** ws:// URL of the protocol, with the studio token in its query (`?token=`); add `&role=studio` to connect. */
   url: string;
+  /** The same URL for a game page (`?gt=`, the game token); add `&role=game`. Game sockets can only send the game's own notifications. */
+  gameWsUrl: string;
+  /** The token studio sockets and the MCP-over-HTTP front present. Also in .hull/server.json (mode 0600). */
+  token: string;
   /** http:// URL of the game's dev page. */
   gameUrl: string;
   close(): Promise<void>;
@@ -137,7 +142,14 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
 
   let hist!: History;
   let urls = { http: '', ws: '' };
-  const games = expGames(root, () => urls.ws);
+  // One random token per run for studio sockets, another for game pages: the page that runs the game can only report,
+  // so a game's code (or a page that learned its token) never gets the tools' write access.
+  const token = randomBytes(24).toString('hex');
+  const gameToken = randomBytes(24).toString('hex');
+  const gameWs = (): string => `${urls.ws}?gt=${gameToken}`;
+  const studioWs = (): string => `${urls.ws}?token=${token}`;
+  const same = (a: string | null, b: string): boolean => a !== null && a.length === b.length && timingSafeEqual(Buffer.from(a), Buffer.from(b));
+  const games = expGames(root, gameWs);
 
   /** Validates everything (a fresh registry each time: it is cheap, and it keeps the answers free of old state). */
   // Set once the kit scan below exists; judges tuning files against the kit tunables they name.
@@ -205,7 +217,7 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
     cacheDir: join(root, '.hull', 'cache', 'vite'),
     plugins: [
       hullResolve(),
-      virtualModule(BOOT_ID, () => bootSource({ entry: manifestInfo.value!.entry, sources: configFiles(), devUrl: urls.ws, features: (JSON.parse(readManifest(root)!.text) as { features?: string[] }).features })),
+      virtualModule(BOOT_ID, () => bootSource({ entry: manifestInfo.value!.entry, sources: configFiles(), devUrl: gameWs(), features: (JSON.parse(readManifest(root)!.text) as { features?: string[] }).features })),
       {
         name: 'hull-project-server',
         // A tunable write is already applied to the running game through `tunable.changed`. Letting Vite hot-update the
@@ -905,7 +917,7 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
       await hist.flush();
       const tool = tools.find((t) => t.name === p.name && t.name !== 'dev');
       if (!tool) throw new RpcError(-32602, `there is no tool "${p.name}" (have: ${tools.filter((t) => t.name !== 'dev').map((t) => t.name).join(', ')})`);
-      const out = await tool.run({ root, author: 'you', project: { call: (m, params) => Promise.resolve((methods[m as MethodName] as (x: unknown) => unknown)(params)) }, server: { url: urls.ws, gameUrl: urls.http }, log: (line) => push('log', { level: 'info', message: line, source: 'tool' }, 'studio'), signal: new AbortController().signal }, p.input ?? {});
+      const out = await tool.run({ root, author: 'you', project: { call: (m, params) => Promise.resolve((methods[m as MethodName] as (x: unknown) => unknown)(params)) }, server: { url: studioWs(), gameUrl: urls.http }, log: (line) => push('log', { level: 'info', message: line, source: 'tool' }, 'studio'), signal: new AbortController().signal }, p.input ?? {});
       const probs = (out as { problems?: Problem[] } | null)?.problems ?? [];
       return { ok: (out as { ok?: boolean } | null)?.ok ?? probs.length === 0, output: out, problems: probs };
     },
@@ -916,13 +928,17 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
   vite.httpServer!.on('upgrade', (req: IncomingMessage, socket, head) => {
     // Vite's own hot-reload socket announces its protocol; everything else with a role is ours.
     if (String(req.headers['sec-websocket-protocol'] ?? '').includes('vite-')) return;
-    const url = new URL(req.url ?? '/', 'http://x');
+    let url: URL;
+    try { url = new URL(req.url ?? '/', 'http://x'); } catch { socket.write('HTTP/1.1 400 Bad Request\r\n\r\n'); socket.destroy(); return; }
     const role = url.searchParams.get('role');
-    // Any web page can open a socket to localhost, and this one can write files. Only the app's own origins get in.
+    // Any web page can open a socket to localhost, and this one can write files. Two checks: the origin must be the app's
+    // own or loopback (Origin "null" is a sandboxed iframe or a data: page, so it gets nothing special), and the socket
+    // must present its token, which only a process that can read .hull/server.json or the dev page knows.
     const origin = req.headers.origin;
-    let allowed = origin === undefined || origin === 'null' || origin.startsWith('file:') || origin.startsWith('app:');
+    let allowed = origin === undefined || origin.startsWith('file:') || origin.startsWith('app:');
     if (!allowed && origin) { try { allowed = isLoopback(new URL(origin).hostname === '::1' ? '[::1]' : new URL(origin).hostname); } catch { allowed = false; } }
-    if (!allowed || (role !== 'studio' && role !== 'game')) { socket.write('HTTP/1.1 403 Forbidden\r\n\r\n'); socket.destroy(); return; }
+    const tokenOk = role === 'studio' ? same(url.searchParams.get('token'), token) : role === 'game' ? same(url.searchParams.get('gt'), gameToken) : false;
+    if (!allowed || !tokenOk || (role !== 'studio' && role !== 'game')) { socket.write('HTTP/1.1 403 Forbidden\r\n\r\n'); socket.destroy(); return; }
     wss.handleUpgrade(req, socket, head, (ws) => {
       const exp = role === 'game' ? url.searchParams.get('exp') ?? undefined : undefined;
       const id = url.searchParams.get('client') ?? Math.random().toString(36).slice(2, 8);
@@ -1026,10 +1042,12 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
   log(`project server for ${root}: ${urls.http}`);
   // Anything else that wants this project (mcp, the command line, a second app window) attaches to this server
   // rather than starting another: two servers would fight over writes and watchers.
-  writeServerFile(root, { url: urls.ws, gameUrl: urls.http, pid: process.pid });
+  writeServerFile(root, { url: urls.ws, gameUrl: urls.http, pid: process.pid, token });
 
   return {
-    url: urls.ws,
+    url: studioWs(),
+    gameWsUrl: gameWs(),
+    token,
     gameUrl: urls.http,
     async close() {
       removeServerFile(root, process.pid);

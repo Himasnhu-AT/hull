@@ -27,10 +27,14 @@ Without `ANTHROPIC_API_KEY` the server still starts: sign-in works and the AI ro
 | `ANTHROPIC_BASE_URL` | `https://api.anthropic.com` | Where requests are forwarded. |
 | `ALLOW_SIGNUP` | `true` | Set `false` to close sign-up. |
 | `DEFAULT_MODEL` | `claude-opus-5-5` | Used by `/v1/chat/completions` when the model is not a `claude-*` name. |
+| `ALLOWED_MODELS` | `claude-opus-5-5,claude-sonnet-5-5,claude-haiku-5-5` | The `claude-*` names the AI routes forward (the default model is always allowed). Anything else answers 400. |
+| `DAILY_TOKEN_BUDGET` | `2000000` | Input plus output tokens one user may use per UTC day; past it the AI routes answer 429. `0` turns the cap off. |
+| `AI_REQUESTS_PER_MINUTE` | `30` | AI requests per user per minute (burst the same). `0` turns the cap off. |
+| `TRUSTED_PROXIES` | none | Comma-separated IPs or CIDRs of your reverse proxy. Only from these is `X-Forwarded-For` believed (read from the right). |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | none | Turn on "Continue with Google". Set both or neither; one alone stops the server at startup. |
 
-Test: `go vet ./... && go test ./...`. Behind a reverse proxy, note that the per-IP limit on login and sign-up uses the
-connection's address, not `X-Forwarded-For`.
+Test: `go vet ./... && go test ./...`. Behind a reverse proxy, set `TRUSTED_PROXIES`: the per-IP limits on login, sign-up and the catalog use the
+connection's address unless it is a trusted proxy, then the nearest `X-Forwarded-For` address that is not one.
 
 ## Google sign-in
 

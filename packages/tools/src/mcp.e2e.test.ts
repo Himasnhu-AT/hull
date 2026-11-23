@@ -111,12 +111,12 @@ describe('attaching to a running server', () => {
   it('uses the server that is already running, and its edits reach that server\'s clients live', async () => {
     const server = await startProjectServer({ root: dir, port: 0, historyQuietMs: 60_000 });
     const file = JSON.parse(readFileSync(join(dir, '.hull', 'server.json'), 'utf8')) as { pid: number; url: string; gameUrl: string };
-    expect(file).toMatchObject({ pid: process.pid, url: server.url, gameUrl: server.gameUrl });
+    expect(file).toMatchObject({ pid: process.pid, url: server.url.replace(/\?token=.*/, ''), token: server.token, gameUrl: server.gameUrl });
     const app = await connectProject(server.url);
     const pushes: unknown[] = [];
     // A second studio-role socket, to see what the MCP edit pushes to the app.
     const { WebSocket } = await import('ws');
-    const ws = new WebSocket(`${server.url}?role=studio`);
+    const ws = new WebSocket(`${server.url}&role=studio`);
     await new Promise((r) => ws.on('open', r));
     ws.on('message', (d) => { const m = JSON.parse(String(d)); if (m.method) pushes.push(m); });
     const mcp = new Mcp(dir, 'claude-code');
@@ -155,7 +155,7 @@ describe('attaching to a running server', () => {
   it('pushes authorship problems with the problem state, without a `check`', async () => {
     const server = await startProjectServer({ root: dir, port: 0, historyQuietMs: 0 });
     const { WebSocket } = await import('ws');
-    const ws = new WebSocket(`${server.url}?role=studio`);
+    const ws = new WebSocket(`${server.url}&role=studio`);
     await new Promise((r) => ws.on('open', r));
     const problemPushes: { problems: { rule: string }[] }[] = [];
     ws.on('message', (d) => { const m = JSON.parse(String(d)); if (m.method === 'problems') problemPushes.push(m.params); });

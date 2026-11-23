@@ -8,6 +8,9 @@ export interface ProjectClient {
   close(): void;
 }
 
+/** The URL with the studio token in its query. The token is read from .hull/server.json (see findServer in server/link.ts); the server's own url already carries it. */
+export const withToken = (wsUrl: string, token: string | undefined): string => (token && !/[?&]token=/.test(wsUrl) ? `${wsUrl.includes('?') ? `${wsUrl}&` : `${wsUrl.replace(/\/?$/, '/')}?`}token=${token}` : wsUrl);
+
 export function connectProject(wsUrl: string, timeoutMs = 60_000): Promise<ProjectClient> {
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(`${wsUrl}${wsUrl.includes('?') ? '&' : '?'}role=studio`);

@@ -33,7 +33,7 @@ beforeAll(async () => {
   writeFileSync(join(dir, 'src', 'rules.ts'), 'export const LIMIT = 3;\nexport const NAME = "rules";\nexport const LIMIT2 = 3;\n');
   writeFileSync(join(dir, 'src', 'user.ts'), "import { LIMIT } from './rules.ts';\nexport const twice = LIMIT * 2;\n");
   server = await startProjectServer({ root: dir, port: 0, historyQuietMs: 0 });
-  ws = new WebSocket(server.url + '?role=studio');
+  ws = new WebSocket(server.url + "&role=studio");
   ws.on('message', (d) => { const m = JSON.parse(String(d)); if (m.id !== undefined) waiting.get(m.id)?.(m); else pushes.push(m); });
   await new Promise((r) => ws.on('open', r));
 }, 90_000);

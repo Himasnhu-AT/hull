@@ -562,6 +562,17 @@ Hull Studio (Electron window)          project server (inside the app)          
   **Which game.** Every game connection has a client id: the page's `?hull-client=<id>` (the app puts one on its Play frame), else a random one. `game.run`, `game.recent`, `game.moment` and `game.control` take an optional `client`; without one the server picks the first game of the project's own that is not headless, and a headless page (one a tool opened with `?hull-headless` because no app was around; the runtime adds `headless=1` to its socket) only when nothing else is connected. A headless page opens once per link, is reused by later calls and closed with the link; it is never preferred to a game in a frame. The `game.recent` push carries the `client` that did it, so a studio keeps only its own frame's events. **Keys from the frame.** The frame is another origin and keeps the keys while the person plays, so when embedded the runtime posts `{ hull: 'note' }` (N, no modifier, not in a text field) and `{ hull: 'resume' }` (Escape) to `window.parent`; the Play screen accepts them only from its own frame. This is dev code and never reaches a build (the build checks for `hull-client`). Labels are made by one pure function (`dev/labels.ts`): a config `title` when it has one (no schema has one yet),
   else the id in words ('vfx/clash-sparks' is 'Clash sparks', 'sound/sword/hit' is 'Sword hit', an anim state 'light-attack' is
   'Light attack', a character is its id's last part, or its node's name when inline).
+* **Who may connect.** The server makes one random token per run and writes it to `.hull/server.json` (mode 0600, written
+  by temp file and rename). A `role=studio` socket must present it (`?token=`) or the upgrade is refused with 403, whatever
+  its Origin; the Origin must also be absent, `file:`/`app:` or loopback, and Origin `null` has no special standing. The
+  url the server hands out (`ProjectServer.url`, `OpenedProject.url`, `findServer`) already carries the token, so `connectProject`
+  and the renderer's `studioUrl` need nothing more. A `role=game` socket presents a second token (`?gt=`) that only the dev
+  page's boot module holds; it may send only the game's notifications (`game.report`, `game.events`, `game.result`, `log`) and
+  never a method call. MCP over HTTP needs `Authorization: Bearer <token>` (its own token, `McpHttp.token`, shown in the app's
+  connect lines and passed to ACP agents) on top of the loopback Origin check; stdio needs none. In the Electron app every
+  IPC handler checks that the caller is the window's top frame and the app's own page (`main/ipcGuard.ts`), `openProject`
+  accepts only a folder from Recent or the folder dialog, the window cannot navigate away from the app, and links open in
+  the browser only as http(s). Web mode's `/__hull` API answers only its own Host and Origin.
 * **Measurements** come from the same tool code the MCP server calls, so the Studio and the AI see the same numbers.
 * **Hosted** (PLAN section 8): the project server runs on Marl's machines and holds the code; the Studio's front
   end is served to the customer's browser; `GameView` switches to a remote source (a video stream, or a

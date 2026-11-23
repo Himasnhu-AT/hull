@@ -25,7 +25,7 @@ const META_MODE = 'hull.mode';
 const META_STAGE = 'hull.stage';
 
 /** The open project, as far as an agent needs it. */
-export interface AgentProject { root: string; mcp: { url: string; launcher: string } }
+export interface AgentProject { root: string; mcp: { url: string; launcher: string; token?: string } }
 
 export interface HubOptions {
   /** The project agents work on; null when none is open. */
@@ -287,7 +287,7 @@ export function createHub(o: HubOptions): Hub {
       const init = await Promise.race([conn.agent.request(methods.agent.initialize, { protocolVersion: PROTOCOL_VERSION, clientCapabilities: {}, clientInfo: { name: 'hull-studio', title: 'Hull', version: '0.0.0' } }), exited]);
       // The author header tells Hull's MCP server who made each change, so the history names the agent, not "mcp".
       const mcp: McpServer = init.agentCapabilities?.mcpCapabilities?.http
-        ? { type: 'http', name: 'hull', url: project.mcp.url, headers: [{ name: 'x-hull-author', value: spec.name }] }
+        ? { type: 'http', name: 'hull', url: project.mcp.url, headers: [{ name: 'x-hull-author', value: spec.name }, ...(project.mcp.token ? [{ name: 'authorization', value: `Bearer ${project.mcp.token}` }] : [])] }
         : { name: 'hull', command: process.execPath, args: [project.mcp.launcher, project.root], env: [{ name: 'HULL_MCP_AUTHOR', value: spec.name }, { name: 'ELECTRON_RUN_AS_NODE', value: '1' }] };
       const created = await Promise.race([conn.agent.request(methods.agent.session.new, { cwd: project.root, mcpServers: [mcp] }), exited]);
       s = { sid: created.sessionId, agent: spec, child, conn, tools: new Map(), perms: new Map(), running: false, closed: false, stderr };

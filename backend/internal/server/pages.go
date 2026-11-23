@@ -52,7 +52,7 @@ func (s *Server) signupPage(w http.ResponseWriter, r *http.Request) {
 
 // tooMany applies the per-IP limit shared by login and signup.
 func (s *Server) tooMany(w http.ResponseWriter, r *http.Request) bool {
-	if s.limit.Allow(clientIP(r)) {
+	if s.limit.Allow(s.clientIP(r)) {
 		return false
 	}
 	w.Header().Set("Retry-After", "60")

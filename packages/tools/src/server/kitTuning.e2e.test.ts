@@ -33,7 +33,7 @@ beforeAll(async () => {
   await createProject({ template: 'third-person', dir, title: 'Kit tuning' });
   server = await startProjectServer({ root: dir, port: 0 });
   ws = await new Promise<WebSocket>((res, rej) => {
-    const s = new WebSocket(`${server.url}?role=studio`);
+    const s = new WebSocket(`${server.url}&role=studio`);
     s.on('open', () => res(s));
     s.on('error', rej);
   });

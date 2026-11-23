@@ -13,6 +13,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createRequire } from 'node:module';
 import { createServer } from 'vite';
 import { createHost } from '../main/host.ts';
+import { isOwnWebRequest } from '../main/ipcGuard.ts';
 import type { AgentSettingsInput, CliAction, CliId, PromptOptions, TermProgram } from '../shared/agentApi.ts';
 import type { OpenedProject } from '../shared/appApi.ts';
 
@@ -82,6 +83,13 @@ const server = await createServer({
   plugins: [{
     name: 'hull-web-api',
     configureServer(s) {
+      // Any web page can send a request to 127.0.0.1; only this server's own page may use the API.
+      const guard = (req: import('node:http').IncomingMessage, res: import('node:http').ServerResponse, next: () => void): void => {
+        if (isOwnWebRequest({ origin: req.headers.origin, host: req.headers.host }, port)) return next();
+        res.statusCode = 403; res.end('forbidden: not the Hull web page');
+      };
+      s.middlewares.use('/__hull', guard);
+      s.middlewares.use('/__hull_events', guard);
       s.middlewares.use('/__hull_events', (req, res) => {
         res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache', connection: 'keep-alive' });
         res.write(': open\n\n');

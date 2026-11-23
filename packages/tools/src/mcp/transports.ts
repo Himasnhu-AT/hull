@@ -1,5 +1,6 @@
 // MCP transports over one McpServer: newline-delimited JSON-RPC on stdio, and streamable HTTP (a POST per message,
 // answered as application/json) bound to loopback. Hand-written, like the server, so the package has no MCP SDK dependency.
+import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import type { Readable, Writable } from 'node:stream';
@@ -27,6 +28,8 @@ export function serveMcpStdio(server: McpServer, input: Readable, output: Writab
 export interface McpHttp {
   /** `http://127.0.0.1:<port>/mcp` */
   url: string;
+  /** Every request must send `Authorization: Bearer <token>`. */
+  token: string;
   port: number;
   close(): Promise<void>;
 }
@@ -37,6 +40,8 @@ export interface McpHttpOptions {
   /** Loopback only: the server can change project files, so it is never offered to the network. */
   host?: '127.0.0.1' | 'localhost' | '::1';
   path?: string;
+  /** The bearer token clients must send; a random one is made when this is left out. */
+  token?: string;
 }
 
 const LOCAL_ORIGIN = /^https?:\/\/(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/;
@@ -52,6 +57,9 @@ const body = (req: IncomingMessage): Promise<string> => new Promise((res, rej) =
 export async function startMcpHttp(server: McpServer, o: McpHttpOptions = {}): Promise<McpHttp> {
   const path = o.path ?? '/mcp';
   const host = o.host ?? '127.0.0.1';
+  const token = o.token ?? randomBytes(24).toString('hex');
+  const want = Buffer.from(`Bearer ${token}`);
+  const authorised = (h: string | undefined): boolean => { const got = Buffer.from(h ?? ''); return got.length === want.length && timingSafeEqual(got, want); };
   const reply = (res: ServerResponse, status: number, data?: unknown, headers: Record<string, string> = {}): void => {
     res.writeHead(status, { ...(data === undefined ? {} : { 'content-type': 'application/json' }), ...headers });
     res.end(data === undefined ? undefined : JSON.stringify(data));
@@ -63,6 +71,7 @@ export async function startMcpHttp(server: McpServer, o: McpHttpOptions = {}): P
       // A web page must not be able to drive the project through the user's browser (DNS rebinding, cross-site POST).
       const origin = req.headers.origin;
       if (origin && !LOCAL_ORIGIN.test(origin)) return reply(res, 403, { error: 'origin not allowed' });
+      if (!authorised(req.headers.authorization)) return reply(res, 401, { error: 'send Authorization: Bearer <token> (the token is in the connect lines the Hull app shows)' }, { 'www-authenticate': 'Bearer' });
       if (req.method === 'DELETE') return reply(res, 200);
       if (req.method !== 'POST') return reply(res, 405, { error: 'POST JSON-RPC messages here' }, { allow: 'POST, DELETE' });
       let msgs: JsonRpcRequest[]; let batch = false;
@@ -83,7 +92,7 @@ export async function startMcpHttp(server: McpServer, o: McpHttpOptions = {}): P
   const port = (http.address() as AddressInfo).port;
   return {
     url: `http://${host === '::1' ? '[::1]' : host}:${port}${path}`,
-    port,
+    token, port,
     close: () => new Promise<void>((resolve) => { http.closeAllConnections(); http.close(() => resolve()); }),
   };
 }

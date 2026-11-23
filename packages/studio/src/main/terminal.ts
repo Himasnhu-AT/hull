@@ -56,7 +56,7 @@ export function createTerminals(o: { project(): AgentProject | null; emit(e: Age
       return {
         installed: p0 !== null, path: p0,
         install: 'Install Claude Code from Anthropic (see claude.com/claude-code), then open this pane again.',
-        mcpAdd: p ? `claude mcp add --transport http hull ${p.mcp.url}` : '',
+        mcpAdd: p ? `claude mcp add --transport http hull ${p.mcp.url}${p.mcp.token ? ` --header "Authorization: Bearer ${p.mcp.token}"` : ''}` : '',
       };
     },
     async open(cols, rows, program = 'claude', prompt) {
