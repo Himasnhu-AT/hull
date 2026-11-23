@@ -171,15 +171,19 @@ export type ControlOp =
   /** Tick, time, checksum, the position of the named nodes (`world.find` paths), the game's probes and how many errors are unread. */
   | { op: 'state'; nodes?: string[] }
   /** The drawn frame as PNG, with the UI layer (`.hull-ui`) painted over it. `ui: false` gives the canvas alone. */
-  | { op: 'screenshot'; ui?: boolean }
+  | { op: 'screenshot'; ui?: boolean; width?: number; height?: number }
+  /** What a person could read on the UI layer now: the ui-screens showing and every text, button and bar, top to bottom (80 at most). */
+  | { op: 'ui' }
+  /** Click the button whose text matches (case-insensitive) or the nth (from 0): it fires what a person's click fires. A miss answers with the buttons there are. */
+  | { op: 'click'; button: string | number }
   /** One node in full: transform, groups, children, and each behaviour's state. */
   | { op: 'inspect'; node: string }
   /** The node paths under `root` (default: the whole world) with their behaviour names, `depth` levels deep (default 3). */
   | { op: 'tree'; root?: string; depth?: number }
   /** Step one tick at a time until `when` holds or `max` ticks have passed. */
   | { op: 'until'; when: ControlCond; max: number }
-  /** The errors and warnings the game raised (ring of 50, repeats counted). `clear` empties the ring. */
-  | { op: 'errors'; clear?: boolean }
+  /** The errors and warnings the game raised (ring of 50, repeats counted). `clear` empties the ring. `unread` answers only those nobody has read yet, and marks nothing read (what problems.list uses). */
+  | { op: 'errors'; clear?: boolean; unread?: boolean }
   /** Start the game again from `ready` with the same seed, paused at tick 0. */
   | { op: 'restart' }
   /** Step `steps` ticks (default 120) and time them, then time as many drawn frames. Advances the game. */
@@ -187,7 +191,7 @@ export type ControlOp =
   /** Mouse movement as the input layer gets it under pointer lock. Buttons go through press/release with key Mouse0, Mouse1, Mouse2. */
   | { op: 'look'; dx: number; dy: number }
   /** `count` screenshots (2 to 12), `every` ticks apart, tiled in reading order into one PNG with each tick written in a corner. */
-  | { op: 'frames'; count: number; every: number };
+  | { op: 'frames'; count: number; every: number; width?: number; height?: number };
 
 export type ControlCmp = '<' | '<=' | '>' | '>=' | '==' | '!=';
 /** What `until` waits for. `field` is "x" | "y" | "z" or "<BehaviourName>.<field>"; `event` is a trace id the recent feed would show, like "sound/thud". */
@@ -228,6 +232,7 @@ export interface ControlPerf {
   frameMs: { avg: number; p95: number; max: number };
   drawCalls: number; triangles: number; nodes: number;
 }
+export type { ControlUi, ControlClick, UiItem } from '../ui/inspect.ts';
 export interface ControlFrames extends ControlShot { ticks: number[] }
 
 /** Game to server: what the engine's trace hook heard since the last batch (dev/recent.ts), oldest first. */

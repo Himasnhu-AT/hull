@@ -21,7 +21,10 @@ guide is `docs.read guide/engine`; `docs.search` finds a section; `kit/index` li
 2. `test` passes (`src/**/*.test.ts`, run in Node; a failure names your file and line).
 3. Run it: `game.run` with `{"op":"step","n":120}`, then `{"op":"state","nodes":["player"]}` or `{"op":"inspect","node":"player"}`,
    then `{"op":"errors"}` (what threw or warned, with file:line:col) and `{"op":"screenshot"}` (a picture you can look at).
-   `until` steps to a condition, `restart` starts over, `perf` measures, `frames` tiles several moments in one picture.
+   `until` steps to a condition, `restart` starts over, `perf` measures (draw calls and triangles are one frame), `frames` tiles several moments in one picture.
+   Menus and HUD: `{"op":"ui"}` lists what a person could read (screens, texts, buttons, bars), `{"op":"click","button":"Start"}` clicks a
+   button by its text, and `press` of `Enter`, `Space`, `Escape`, `Tab` or an arrow reaches the UI like a real key. `screenshot` takes
+   `width` and `height` (up to 1920x1080) for one big picture; the default is 640x360.
 4. Say plainly what you could not judge (how it feels, how it sounds).
 
 ## Where things are

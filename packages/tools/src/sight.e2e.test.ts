@@ -207,3 +207,173 @@ describe.skipIf(!hasBrowser)('the headless page lifetime', () => {
     } finally { await mcp.close(); }
   }, 180_000);
 });
+
+describe.skipIf(!hasBrowser)('reach: UI, picture size, per-frame stats, problems and determinism (fps template)', () => {
+  let dir: string;
+  let mcp: Mcp;
+  beforeAll(async () => {
+    dir = join(mkdtempSync(join(tmpdir(), 'hull-reach-')), 'game');
+    await createProject({ template: 'fps', dir, title: 'Reach fps' });
+    mcp = new Mcp(dir, 'reach');
+    await mcp.init();
+  }, 120_000);
+  afterAll(async () => { await mcp.close(); rmSync(join(dir, '..'), { recursive: true, force: true }); });
+
+  const buttons = async (): Promise<string[]> => ((await mcp.run({ op: 'ui' })).items as { kind: string; text: string }[]).filter((i) => i.kind === 'button').map((i) => i.text);
+
+  it('perf draw calls and triangles are one frame, the same for 1 step and 120 steps of a still scene', async () => {
+    await mcp.run({ op: 'restart' });
+    const one = await mcp.run({ op: 'perf', steps: 1 });
+    await mcp.run({ op: 'restart' });
+    const many = await mcp.run({ op: 'perf', steps: 120 });
+    expect(one.drawCalls).toBeGreaterThan(5);
+    expect(many.drawCalls).toBe(one.drawCalls);
+    expect(many.triangles).toBe(one.triangles);
+  }, 180_000);
+
+  it('tree puts repeated siblings on one line', async () => {
+    await mcp.run({ op: 'restart' });
+    const lines = (await mcp.run({ op: 'tree', depth: 2 })).lines as string[];
+    expect(lines.some((l) => /^level\/crate x\d+  \[/.test(l))).toBe(true);
+    expect(lines.filter((l) => l.startsWith('level/crate')).length).toBe(1);
+  }, 180_000);
+
+  it('ui lists the HUD; a menu opened by Escape lists its buttons; click and Enter activate them; a miss names the buttons', async () => {
+    await mcp.run({ op: 'restart' });
+    await mcp.run({ op: 'step', n: 5 });
+    const hud = await mcp.run({ op: 'ui' });
+    expect(hud.items.some((i: any) => i.kind === 'bar')).toBe(true);
+    expect(await buttons()).toEqual([]);
+    await mcp.run({ op: 'press', key: 'Escape' });
+    await mcp.run({ op: 'release', key: 'Escape' });
+    await mcp.run({ op: 'step', n: 2 });
+    expect(await buttons()).toContain('Resume');
+    expect((await mcp.run({ op: 'ui' })).screens).toContain('ui-screen/pause');
+    const resume = (await mcp.run({ op: 'ui' })).items.find((i: any) => i.text === 'Resume');
+    expect(resume.focused).toBe(true);
+    const miss = await mcp.run({ op: 'click', button: 'Nope' });
+    expect(miss.failed).toBe(true);
+    expect(miss.text).toMatch(/no button says "Nope"; the buttons showing are "Resume"/);
+    // Enter on the focused button is a key a person presses.
+    await mcp.run({ op: 'press', key: 'Enter' });
+    await mcp.run({ op: 'release', key: 'Enter' });
+    expect(await buttons()).not.toContain('Resume');
+    // And again by clicking.
+    await mcp.run({ op: 'press', key: 'Escape' });
+    await mcp.run({ op: 'release', key: 'Escape' });
+    await mcp.run({ op: 'step', n: 2 });
+    expect(await buttons()).toContain('Resume');
+    expect(await mcp.run({ op: 'click', button: 'resume' })).toMatchObject({ clicked: 'Resume' });
+    expect(await buttons()).not.toContain('Resume');
+  }, 180_000);
+
+  it('play has click, expectUi and ui steps', async () => {
+    const r = (await mcp.tool('play', { script: { steps: [
+      { press: 'Escape' }, { release: 'Escape' }, { step: 2 },
+      { expectUi: { text: 'resume', kind: 'button' } },
+      { ui: true },
+      { click: 'Resume' },
+      { expectUi: { text: 'Health' } },
+    ] } })).structuredContent;
+    expect(r.problems).toEqual([]);
+    expect(r.ok).toBe(true);
+    expect(r.steps[4].ui.items.some((i: any) => i.text === 'Resume')).toBe(true);
+    const miss = (await mcp.tool('play', { script: { steps: [{ expectUi: { text: 'Victory' } }] } })).structuredContent;
+    expect(miss.ok).toBe(false);
+    expect(miss.problems[0].message).toMatch(/shows no item containing "Victory"/);
+  }, 240_000);
+
+  it('screenshot takes a width and height for one picture and puts the page back', async () => {
+    const dims = (s: any): number[] => [s.width, s.height];
+    expect(dims(await mcp.run({ op: 'screenshot' }))).toEqual([640, 360]);
+    expect(dims(await mcp.run({ op: 'screenshot', width: 960, height: 540 }))).toEqual([960, 540]);
+    expect(dims(await mcp.run({ op: 'screenshot' }))).toEqual([640, 360]);
+    expect(dims(await mcp.run({ op: 'frames', count: 2, every: 1, width: 1920, height: 1080 })).join('x')).toBe('640x180');
+    expect((await mcp.run({ op: 'screenshot', width: 5000 })).text).toMatch(/1920/);
+    expect(dims(await mcp.run({ op: 'screenshot' }))).toEqual([640, 360]);
+  }, 180_000);
+
+  it('problems.list carries the game\'s unread errors and warnings with their place, and does not mark them read', async () => {
+    await mcp.run({ op: 'restart' });
+    const edit = await mcp.tool('code.edit', { path: 'src/main.ts', old: 'ready(game) {', new: "ready(game) {\n    game.world.after(0.01, () => console.warn('reach-test-warning'));" });
+    expect(edit.structuredContent.written).toBe(true);
+    await mcp.run({ op: 'restart' });
+    await mcp.run({ op: 'step', n: 3 });
+    const list = (await mcp.tool('problems.list')).structuredContent;
+    const items = (Array.isArray(list) ? list : list.result ?? list.problems ?? []) as { rule: string; message: string }[];
+    expect(items.some((p) => p.rule === 'runtime' && p.message.includes('reach-test-warning'))).toBe(true);
+    expect((await mcp.run({ op: 'state' })).errors).toBeGreaterThan(0);
+    await mcp.run({ op: 'errors' });
+    const after = (await mcp.tool('problems.list')).structuredContent;
+    expect(JSON.stringify(after)).not.toContain('reach-test-warning');
+  }, 180_000);
+});
+
+describe.skipIf(!hasBrowser)('reach: an effect on screen is the same picture every run', () => {
+  let dir: string;
+  let mcp: Mcp;
+  beforeAll(async () => {
+    dir = join(mkdtempSync(join(tmpdir(), 'hull-reach-fx-')), 'game');
+    await createProject({ template: 'arena', dir, title: 'Reach fx' });
+    mcp = new Mcp(dir, 'reachfx');
+    await mcp.init();
+    const a = await mcp.tool('code.edit', { path: 'src/main.ts', old: "import { defineGame } from 'hull';", new: "import { defineGame, probe } from 'hull';\nimport { vfx } from 'hull/vfx';" });
+    expect(a.structuredContent.written).toBe(true);
+    const b = await mcp.tool('code.edit', { path: 'src/main.ts', old: "    const eye = w.spawn('camera');", new: "    w.after(0.2, () => vfx.burst('vfx/sparks', { x: 0, y: 1.2, z: 0 }, undefined, { count: 400, size: 3 }));\n    probe('fx', () => vfx.stats().live);\n    const eye = w.spawn('camera');" });
+    expect(b.structuredContent.written).toBe(true);
+  }, 120_000);
+  afterAll(async () => { await mcp.close(); rmSync(join(dir, '..'), { recursive: true, force: true }); });
+
+  it('stepping right after a restart, before the renderer has started, gives the same picture each time', async () => {
+    const pics: string[] = [];
+    for (let run = 0; run < 3; run++) {
+      await mcp.run({ op: 'restart' });
+      await mcp.run({ op: 'press', key: 'KeyW' });
+      expect((await mcp.run({ op: 'step', n: 30 })).probes.fx).toBeGreaterThan(0);
+      pics.push((await mcp.run({ op: 'screenshot' })).png);
+      await mcp.run({ op: 'release', key: 'KeyW' });
+    }
+    expect(pics[1]).toBe(pics[0]);
+    expect(pics[2]).toBe(pics[0]);
+  }, 300_000);
+
+  it('the same play script three times matches one golden with no pixel allowed to differ', async () => {
+    const steps = [{ press: 'KeyW' }, { step: 30 }, { expect: { probe: 'fx', cmp: '>', value: 0 } }, { screenshot: 'sparks' }, { step: 2 }, { screenshot: 'sparks-later' }, { release: 'KeyW' }];
+    const first = (await mcp.tool('play', { script: { steps }, update: true })).structuredContent;
+    expect(first.problems).toEqual([]);
+    for (let run = 0; run < 3; run++) {
+      const r = (await mcp.tool('play', { script: { steps } })).structuredContent;
+      expect(r.problems).toEqual([]);
+      const goldens = r.steps.filter((s: any) => s.golden).map((s: any) => s.golden);
+      expect(goldens).toHaveLength(2);
+      for (const g of goldens) expect(g).toMatchObject({ status: 'match', diffPixels: 0, maxDelta: 0 });
+    }
+  }, 300_000);
+});
+
+describe.skipIf(!hasBrowser)('reach: an animated character is drawn the same however many paused frames the page drew', () => {
+  let dir: string;
+  let mcp: Mcp;
+  beforeAll(async () => {
+    dir = join(mkdtempSync(join(tmpdir(), 'hull-reach-anim-')), 'game');
+    await createProject({ template: 'third-person', dir, title: 'Reach anim' });
+    mcp = new Mcp(dir, 'reachanim');
+    await mcp.init();
+  }, 120_000);
+  afterAll(async () => { await mcp.close(); rmSync(join(dir, '..'), { recursive: true, force: true }); });
+
+  it('a screenshot after step is a pure function of the tick: extra paused frames in between change nothing', async () => {
+    const pics: string[] = [];
+    for (let run = 0; run < 3; run++) {
+      await mcp.run({ op: 'restart' });
+      await mcp.run({ op: 'press', key: 'KeyW' });
+      await mcp.run({ op: 'step', n: 40 });
+      // Each ui call draws a paused frame, as the page's own animation callback does between ops.
+      for (let i = 0; i < run * 3; i++) await mcp.run({ op: 'ui' });
+      pics.push((await mcp.run({ op: 'screenshot' })).png);
+      await mcp.run({ op: 'release', key: 'KeyW' });
+    }
+    expect(pics[1]).toBe(pics[0]);
+    expect(pics[2]).toBe(pics[0]);
+  }, 300_000);
+});

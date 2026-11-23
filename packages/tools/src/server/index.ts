@@ -965,7 +965,21 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
       if (g) g.ws.send(JSON.stringify({ jsonrpc: '2.0', method: 'game.control', params: op }));
       return {};
     },
-    'problems.list': () => allProblems(),
+    // The place people already look also shows what the running game threw and has not been read yet (rule "runtime").
+    'problems.list': async () => {
+      const out = allProblems();
+      const game = pickGame();
+      if (!game) return out;
+      try {
+        const asked = sendToGame(game, { control: { op: 'errors', unread: true } });
+        const res = await Promise.race([asked, new Promise<never>((_, no) => setTimeout(() => no(new Error('slow')), 2_000))]);
+        const mapped = await mapErrors(res as ControlErrors);
+        for (const e of mapped.items) {
+          out.push({ file: e.file ?? 'game', ...(e.line ? { line: e.line } : {}), ...(e.col ? { col: e.col } : {}), rule: 'runtime', message: `${e.level} at tick ${e.tick}${e.count > 1 ? ` (x${e.count})` : ''}: ${e.message}` });
+        }
+      } catch { /* a game that does not answer adds nothing */ }
+      return out;
+    },
     'tool.call': async (p) => {
       // Checks read the history's authorship record, so what is waiting is recorded first.
       await hist.flush();

@@ -676,11 +676,24 @@ values. Their rules, in `server/code.ts` (pure, unit-tested) and the project ser
   `?hull-paused&hull-client=<id>` starts frozen at tick 0 and can be aimed at by id (the tool's page also says `hull-headless`),
   so a script starts from the same state every time. Time moves only by `step`, `until`, `perf` and `frames`. Ops:
   * `step`, `press`, `release` (keys, and `Mouse0`..`Mouse2` for buttons), `look` (mouse movement as under pointer lock),
-    `screenshot`, and `frames` (several screenshots tiled into one PNG with the tick written on each).
+    `screenshot` (`width`/`height`, to 1920x1080, resize the view's box for that one picture and put it back), and `frames`
+    (several screenshots tiled into one PNG with the tick written on each).
+  * `ui` and `click`: `ui/inspect.ts` reads the DOM the ui module builds (`.hull-text`, `.hull-title`, `.hull-btn`, `.hull-bar` with
+    `aria-valuenow`/`aria-valuemax`/`aria-label`, `.hull-panel[aria-label]`, `[data-hull-screen]`; anything under `.hull-hidden` or
+    `.hull-off` is skipped). `click` calls the button's own `click()`. `press`/`release` of Enter, Space, Escape, Tab and the arrows go
+    to the focused UI element, and the browser defaults a script's untrusted key lacks (Enter/Space activate a button, Tab moves focus) are done in `uiDefault`.
+    A frame (no game time) runs before `ui` and `click` read, because screens are built by `update`, not by steps.
   * `state` (tick, time, checksum, named nodes, held keys, **probes**, unread error count), `inspect` (one node: transform, groups,
     children, each behaviour's state), `tree`, `until` (step a tick at a time until a condition on a node field, a probe or a
     trace event holds), `perf` (ms per step and per frame, draw calls, triangles, nodes), `restart` (ready again, same seed,
-    paused at tick 0; the page reloads and the server waits for it to come back).
+    paused at tick 0; the page reloads and the server waits for it to come back). `perf` reports one frame's draw calls and triangles:
+    the render backends zero three's counters once per `draw()` (three zeroes them per `render()` call, or only in its own animation loop,
+    so they showed the last pass or added up), and the number is read from the first frame after the steps.
+  * **Determinism under stepping.** `step` and `until` end with one paused frame, and `screenshot`/`frames` run one before drawing, so
+    the particle buffers and the UI are current and do not depend on whether the page's animation callback ran between two ops.
+    `step`, `until`, `perf` and `frames` wait for the render backend to start first: a game that steps before it has a renderer
+    puts particles in the CPU pool, which the GPU simulation taking over a moment later (by wall time) never sees.
+  * `problems.list` asks the connected game for `errors {unread: true}` (nothing is marked read) and adds each as a problem with rule `runtime`.
   * `errors`: a ring of 50 (repeats counted) of what the page raised: an exception in a step or a frame, `window.onerror`,
     unhandled rejections, `console.error` and `console.warn`. `dev/capture.ts` installs the capture when the dev module loads,
     before `ready`, so a warning printed while the game is built (a material that does not exist) is kept. The page sends the
@@ -698,7 +711,7 @@ values. Their rules, in `server/code.ts` (pure, unit-tested) and the project ser
     Not built: `set`, `spawn`, `teleport`.
 * **Step scripts** (`play`): a JSON list of steps run in a headless browser (agent-browser): `step`, `press`, `release`, `hold`,
   `read`, `check`, `screenshot`, and `until {when, max}` (fails when the condition does not hold in time), `expect {node, field |
-  probe, cmp, value}`, `look [dx, dy]`, `inspect "node"`. A script fails when the game logs an error while it runs (a throw,
+  probe, cmp, value}`, `look [dx, dy]`, `inspect "node"`, `click "text" | n`, `expectUi {text, kind?}`, `ui true`, and `screenshot` with `width`/`height`. A script fails when the game logs an error while it runs (a throw,
   `console.error`, a rejection), naming `file:line:col`, unless it says `"allowErrors": true`; warnings do not fail it and are listed
   in the report. Each screenshot is compared with `tests/golden/<name>.png` per channel and per pixel
   (default: 8 of 255 per channel, 0 pixels allowed). A missing golden is written; `update` rewrites them; a mismatch stops the

@@ -3,7 +3,7 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import type { Problem } from 'hull';
-import type { ControlCmp, ControlCond, ControlErrors, ControlInspect, ControlOp, ControlShot, ControlState, ControlUntil, NodeState } from 'hull/dev/protocol';
+import type { ControlClick, ControlUi, ControlCmp, ControlCond, ControlErrors, ControlInspect, ControlOp, ControlShot, ControlState, ControlUntil, NodeState } from 'hull/dev/protocol';
 import { connectProject, type ProjectClient } from '../control/client.ts';
 import { checkGolden, type Tolerance } from './golden.ts';
 import { closeOnExit, reapDeadSessions } from './session.ts';
@@ -17,7 +17,13 @@ export type PlayStep =
   | { hold: string; steps: number }
   | { read: string[] }
   | { check: { node: string; axis: 'x' | 'y' | 'z'; min?: number; max?: number } }
-  | { screenshot: string; channel?: number; pixels?: number }
+  | { screenshot: string; channel?: number; pixels?: number; width?: number; height?: number }
+  /** Click the button whose text matches (case-insensitive) or the nth (from 0). Fails, naming the buttons there are, on a miss. */
+  | { click: string | number }
+  /** Fails unless some visible UI item contains this text (case-insensitive) and, when named, is of that kind. */
+  | { expectUi: { text: string; kind?: 'text' | 'button' | 'bar' } }
+  /** Records what the UI shows (screens and items) in the report. */
+  | { ui: true }
   /** Step one tick at a time until the condition holds; fails when it does not within `max` ticks. */
   | { until: ControlCond; max: number }
   /** Fails unless the node's field (x, y, z or "Behaviour.field") or the probe compares true. */
@@ -49,6 +55,7 @@ export interface StepReport {
   detail?: string;
   state?: Record<string, NodeState>;
   inspect?: ControlInspect;
+  ui?: ControlUi;
   golden?: { name: string; status: string; path: string; diffPixels?: number; maxDelta?: number; actual?: string; diff?: string };
 }
 
@@ -81,7 +88,10 @@ export function validateScript(file: string, s: unknown): Problem[] {
     else if ('check' in st) {
       const c = st['check'];
       if (!isObj(c) || typeof c['node'] !== 'string' || !['x', 'y', 'z'].includes(c['axis'] as string) || (c['min'] === undefined && c['max'] === undefined)) bad(`${at}/check`, 'check needs {"node", "axis": "x"|"y"|"z", "min" and/or "max"}');
-    } else if ('screenshot' in st) { if (typeof st['screenshot'] !== 'string' || !st['screenshot']) bad(`${at}/screenshot`, 'screenshot needs the golden image name'); }
+    } else if ('screenshot' in st) {
+      if (typeof st['screenshot'] !== 'string' || !st['screenshot']) bad(`${at}/screenshot`, 'screenshot needs the golden image name');
+      for (const [k, max] of [['width', 1920], ['height', 1080]] as const) if (st[k] !== undefined && !(typeof st[k] === 'number' && Number.isInteger(st[k]) && (st[k] as number) >= 16 && (st[k] as number) <= max)) bad(`${at}/${k}`, `${k} is a whole number of pixels from 16 to ${max}`);
+    }
     else if ('until' in st) {
       const c = st['until'];
       if (!isObj(c) || !(typeof c['event'] === 'string' || typeof c['probe'] === 'string' || (typeof c['node'] === 'string' && typeof c['field'] === 'string')) || (!('event' in c) && (!CMPS.includes(c['cmp'] as string) || c['value'] === undefined))) bad(`${at}/until`, 'until needs {"node","field","cmp","value"} | {"probe","cmp","value"} | {"event"}, and "cmp" is one of < <= > >= == !=');
@@ -92,8 +102,15 @@ export function validateScript(file: string, s: unknown): Problem[] {
     } else if ('look' in st) {
       const l = st['look'];
       if (!Array.isArray(l) || l.length !== 2 || !l.every((x) => typeof x === 'number' && Number.isFinite(x))) bad(`${at}/look`, 'look needs [dx, dy]: mouse movement in pixels');
+    } else if ('click' in st) {
+      if (!(typeof st['click'] === 'string' && st['click'] !== '') && !(typeof st['click'] === 'number' && Number.isInteger(st['click']) && st['click'] >= 0)) bad(`${at}/click`, 'click needs the text of a button, or its number counting from 0: {"click": "Start"}');
+    } else if ('expectUi' in st) {
+      const c = st['expectUi'];
+      if (!isObj(c) || typeof c['text'] !== 'string' || c['text'] === '' || (c['kind'] !== undefined && !['text', 'button', 'bar'].includes(c['kind'] as string))) bad(`${at}/expectUi`, 'expectUi needs {"text": "Victory"} and optionally "kind": "text" | "button" | "bar"');
+    } else if ('ui' in st) {
+      if (st['ui'] !== true) bad(`${at}/ui`, 'ui is true: {"ui": true} records what the UI shows');
     } else if ('inspect' in st) { if (typeof st['inspect'] !== 'string' || !st['inspect']) bad(`${at}/inspect`, 'inspect needs a node name'); }
-    else bad(at, `unknown step; use one of step, press, release, hold, read, check, screenshot, until, expect, look, inspect (got keys: ${Object.keys(st).join(', ') || 'none'})`);
+    else bad(at, `unknown step; use one of step, press, release, hold, read, check, screenshot, until, expect, look, inspect, click, expectUi, ui (got keys: ${Object.keys(st).join(', ') || 'none'})`);
   });
   return out;
 }
@@ -212,12 +229,24 @@ export async function runScript(o: RunOptions): Promise<PlayReport> {
           }
         } else if ('look' in step) {
           await run({ op: 'look', dx: step.look[0], dy: step.look[1] });
+        } else if ('click' in step) {
+          const c = await run<ControlClick>({ op: 'click', button: step.click });
+          rep.detail = `clicked ${JSON.stringify(c.clicked)}`;
+        } else if ('ui' in step) {
+          rep.ui = await run<ControlUi>({ op: 'ui' });
+          rep.detail = `${rep.ui.screens.join(', ') || 'no screen'}: ${rep.ui.items.map((x) => x.text).filter(Boolean).slice(0, 12).join(' | ')}`;
+        } else if ('expectUi' in step) {
+          const u = await run<ControlUi>({ op: 'ui' });
+          const want = step.expectUi.text.toLowerCase();
+          const hit = u.items.find((x) => x.text.toLowerCase().includes(want) && (!step.expectUi.kind || x.kind === step.expectUi.kind));
+          if (hit) rep.detail = `the UI shows ${JSON.stringify(hit.text)}`;
+          else fail(`the UI shows no ${step.expectUi.kind ?? 'item'} containing ${JSON.stringify(step.expectUi.text)} at tick ${last.tick}; it shows ${u.items.length ? u.items.slice(0, 20).map((x) => `${x.kind} ${JSON.stringify(x.text)}`).join(', ') : 'nothing'} (screens: ${u.screens.join(', ') || 'none'})`);
         } else if ('inspect' in step) {
           rep.inspect = await run<ControlInspect>({ op: 'inspect', node: step.inspect });
           if (!rep.inspect.found) fail(`there is no node "${step.inspect}"`);
           else rep.detail = JSON.stringify({ position: rep.inspect.position, behaviours: rep.inspect.behaviours });
         } else {
-          const shot = await run<ControlShot>({ op: 'screenshot' });
+          const shot = await run<ControlShot>({ op: 'screenshot', ...(step.width !== undefined ? { width: step.width } : {}), ...(step.height !== undefined ? { height: step.height } : {}) });
           const png = Buffer.from(shot.png, 'base64');
           const t: Tolerance = { channel: step.channel ?? tol.channel, pixels: step.pixels ?? tol.pixels };
           const g = checkGolden(o.root, step.screenshot, png, t, o.update);
