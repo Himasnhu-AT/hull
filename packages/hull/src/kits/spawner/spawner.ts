@@ -3,10 +3,9 @@ import { num, tunables } from '../../config/index.ts';
 import { Collider } from '../../physics/index.ts';
 import { Mesh, teleported } from '../../render/index.ts';
 import type { UiView } from '../../ui/index.ts';
-import { flagsOf, GROUP, KitUi, LAYER, upFrom, type KitFlags } from '../common.ts';
+import { flagsOf, GROUP, KitUi, LAYER, upFrom, type KitFlags, type LevelLike } from '../common.ts';
 import { Health } from '../health/health.ts';
 import { kitIO } from '../io.ts';
-import type { ArenaLevel } from '../level/level.ts';
 import { newWalk, walk, type WalkState } from '../walker.ts';
 
 export const spawnerTuning = tunables('spawner', {
@@ -112,7 +111,7 @@ export class Spawner extends Behaviour {
   static override state = ['wave', 'left', 'timer', 'phase', 'kills'];
   /** Makes one enemy; it must add it to the `enemy` group. */
   factory: (world: World, x: number, z: number, wave: number) => Node = spawnGrunt;
-  level: ArenaLevel | null = null;
+  level: LevelLike | null = null;
   maxWaves = 0;
   wave = 0;
   left = 0;

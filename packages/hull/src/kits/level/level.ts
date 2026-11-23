@@ -2,7 +2,7 @@ import { Behaviour, type Node } from '../../core/index.ts';
 import { num, tunables } from '../../config/index.ts';
 import { Mesh } from '../../render/index.ts';
 import { Collider } from '../../physics/index.ts';
-import { ensurePhysics, LAYER } from '../common.ts';
+import { ensurePhysics, LAYER, type LevelBounds, type LevelLike, type LevelMarker } from '../common.ts';
 
 // The layout is built once in `ready`, so these take effect on the next start, not live.
 export const levelTuning = tunables('level', {
@@ -14,6 +14,8 @@ export const levelTuning = tunables('level', {
   clearRadius: num(4, { min: 0, max: 20, step: 0.5, unit: 'm', help: 'Free space around the start.' }),
 });
 
+const NONE: readonly never[] = Object.freeze([]);
+
 /** A solid box on the floor: centre, half sizes on the floor plane, and the height of its top. */
 export interface Block { x: number; z: number; hx: number; hz: number; top: number }
 
@@ -22,9 +24,10 @@ export interface Block { x: number; z: number; hx: number; hz: number; top: numb
  * from the world's 'level' random stream, so one seed always gives the same arena. Other kits ask it where there is
  * free floor (`freeSpot`) and how big it is (`half`).
  */
-export class ArenaLevel extends Behaviour {
+export class ArenaLevel extends Behaviour implements LevelLike {
   readonly blocks: Block[] = [];
   half = 0;
+  readonly bounds: LevelBounds = { minX: 0, maxX: 0, minZ: 0, maxZ: 0 };
   floorMaterial = 'material/floor';
   wallMaterial = 'material/wall';
   crateMaterial = 'material/crate';
@@ -32,6 +35,8 @@ export class ArenaLevel extends Behaviour {
   override ready(): void {
     const size = levelTuning.size;
     this.half = size / 2;
+    this.bounds.minX = this.bounds.minZ = -this.half;
+    this.bounds.maxX = this.bounds.maxZ = this.half;
     const w = this.world;
     ensurePhysics(w).addGround(0, { layer: LAYER.world });
 
@@ -76,6 +81,12 @@ export class ArenaLevel extends Behaviour {
     this.blocks.push({ x, z, hx: w / 2, hz: d / 2, top: h });
     return n;
   }
+
+  /** The arena has no named points. */
+  marker(_name: string): LevelMarker | null { return null; }
+  markers(_prefix = ''): readonly LevelMarker[] { return NONE; }
+  /** The arena is made of blocks, not prefabs. */
+  things(_prefab: string): readonly Node[] { return NONE; }
 
   /** True when a box of these half sizes at (x, z) overlaps any block. */
   hits(x: number, z: number, hx: number, hz: number): boolean {

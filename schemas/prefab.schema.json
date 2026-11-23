@@ -1,0 +1,232 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:hull:schema:prefab",
+  "type": "object",
+  "required": [
+    "kind",
+    "parts"
+  ],
+  "properties": {
+    "kind": {
+      "type": "string",
+      "const": "prefab"
+    },
+    "note": {
+      "type": "string"
+    },
+    "parts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "shape",
+          "at",
+          "size",
+          "material"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "x-ui": {
+              "help": "Name of the node; the shape name when left out."
+            }
+          },
+          "shape": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "box"
+              },
+              {
+                "type": "string",
+                "const": "sphere"
+              },
+              {
+                "type": "string",
+                "const": "cylinder"
+              },
+              {
+                "type": "string",
+                "const": "capsule"
+              }
+            ],
+            "default": "box"
+          },
+          "at": {
+            "type": "array",
+            "prefixItems": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "minItems": 3,
+            "maxItems": 3,
+            "items": false,
+            "default": [
+              0,
+              0,
+              0
+            ],
+            "x-ui": {
+              "unit": "m",
+              "help": "Centre of the part, from the prefab origin (on the floor under it)."
+            }
+          },
+          "size": {
+            "type": "array",
+            "prefixItems": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "minItems": 3,
+            "maxItems": 3,
+            "items": false,
+            "default": [
+              1,
+              1,
+              1
+            ],
+            "x-ui": {
+              "unit": "m",
+              "help": "Full width, height and depth."
+            }
+          },
+          "rotDeg": {
+            "type": "array",
+            "prefixItems": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "minItems": 3,
+            "maxItems": 3,
+            "items": false,
+            "x-ui": {
+              "unit": "deg",
+              "help": "Turn about x, y and z, in degrees."
+            }
+          },
+          "material": {
+            "type": "string",
+            "x-ref": "material",
+            "x-ui": {
+              "widget": "ref"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "minItems": 1
+    },
+    "collider": {
+      "type": "object",
+      "required": [
+        "shape",
+        "size"
+      ],
+      "properties": {
+        "shape": {
+          "anyOf": [
+            {
+              "type": "string",
+              "const": "box"
+            },
+            {
+              "type": "string",
+              "const": "sphere"
+            },
+            {
+              "type": "string",
+              "const": "capsule"
+            }
+          ],
+          "default": "box"
+        },
+        "at": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "minItems": 3,
+          "maxItems": 3,
+          "items": false,
+          "x-ui": {
+            "unit": "m",
+            "help": "Centre of the collider, from the prefab origin."
+          }
+        },
+        "size": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "minItems": 3,
+          "maxItems": 3,
+          "items": false,
+          "default": [
+            1,
+            1,
+            1
+          ],
+          "x-ui": {
+            "unit": "m",
+            "help": "Full extent. A sphere uses the first number as its diameter; a capsule uses the first as its diameter and the second as its height."
+          }
+        }
+      },
+      "additionalProperties": false,
+      "x-ui": {
+        "help": "The solid part, on physics layer \"world\", static. Leave it out for decoration that no one bumps into."
+      }
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true,
+      "x-ui": {
+        "help": "Groups the thing joins, so game code finds it with world.group(tag)."
+      }
+    }
+  },
+  "additionalProperties": false,
+  "title": "Hull prefab"
+}
