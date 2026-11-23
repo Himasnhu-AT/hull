@@ -10,7 +10,8 @@ import { ensureCapture } from './capture.ts';
 import { checkCond, holds, inspectNode, probeValues, treeLines } from './inspect.ts';
 import { input } from '../input/dom.ts';
 import { withUi } from '../ui/capture.ts';
-import type { ControlErrors, ControlFrames, ControlInspect, ControlOp, ControlPerf, ControlShot, ControlState, ControlTree, ControlUntil, GameControl, GameEvents, GameReport, Pushes } from './protocol.ts';
+import { clickButton, readUi, uiDefault, uiFocus, uiKeyName, type UiDoc } from '../ui/inspect.ts';
+import type { ControlErrors, ControlFrames, ControlInspect, ControlOp, ControlClick, ControlPerf, ControlShot, ControlUi, ControlState, ControlTree, ControlUntil, GameControl, GameEvents, GameReport, Pushes } from './protocol.ts';
 
 export interface DevConnection { dispose(): void }
 
@@ -21,7 +22,7 @@ class StepFailure extends Error {
   constructor(message: string, readonly raw: string | undefined) { super(message); }
 }
 
-type ControlResult = ControlState | ControlShot | ControlUntil | ControlInspect | ControlTree | ControlErrors | ControlPerf | ControlFrames | Record<string, never>;
+type ControlResult = ControlState | ControlShot | ControlUntil | ControlInspect | ControlTree | ControlErrors | ControlPerf | ControlFrames | ControlUi | ControlClick | Record<string, never>;
 
 /** Handed from a page that is restarting to the one that replaces it (sessionStorage survives a reload, and only that). */
 const RESTART_KEY = 'hull-restart';
@@ -134,7 +135,15 @@ export function connectDev(game: Game, opts: { url: string; /** Called for `rest
       else window.dispatchEvent(new MouseEvent('mouseup', { button, bubbles: true }));
       return;
     }
-    window.dispatchEvent(new KeyboardEvent(type, { code, bubbles: true, cancelable: true }));
+    // Enter, Space, Escape, Tab and the arrows also belong to the UI layer: with a button focused, the key goes to that element (it
+    // bubbles up to the window, so the game still hears it) and the browser's own defaults, which a script's key does not trigger, are done here.
+    const k = uiKeyName(code);
+    const focus = k ? uiFocus(document as unknown as UiDoc) : null;
+    const ev = new KeyboardEvent(type, { code, key: k ?? undefined, bubbles: true, cancelable: true });
+    if (focus) {
+      (focus as unknown as EventTarget).dispatchEvent(ev);
+      if (type === 'keydown' && !ev.defaultPrevented) uiDefault(document as unknown as UiDoc, code);
+    } else window.dispatchEvent(ev);
   };
   const stateOf = (names: readonly string[] = []): ControlState => {
     const nodes: ControlState['nodes'] = {};
@@ -167,9 +176,36 @@ export function connectDev(game: Game, opts: { url: string; /** Called for `rest
     if (!view) throw new Error('the game has no render view to capture');
     return view;
   };
+  // One picture at another size: the view's box is resized for the capture and put back after, so nothing else about the page changes.
+  const MAX_W = 1920, MAX_H = 1080;
+  const nextFrames = (): Promise<void> => new Promise((r) => { const t = setTimeout(r, 150); requestAnimationFrame(() => requestAnimationFrame(() => { clearTimeout(t); r(); })); });
+  const atSize = async <T>(w: number | undefined, h: number | undefined, fn: () => Promise<T>): Promise<T> => {
+    if (w === undefined && h === undefined) return fn();
+    const el = document.querySelector('canvas')?.parentElement;
+    if (!el) throw new Error('the game has no view to resize');
+    const cur = el.getBoundingClientRect();
+    const ok = (v: number | undefined, max: number, name: string): number => {
+      if (v === undefined) return 0;
+      if (!Number.isInteger(v) || v < 16 || v > max) throw new Error(`${name} must be a whole number from 16 to ${max}, got ${String(v)}`);
+      return v;
+    };
+    const W = ok(w, MAX_W, 'width') || Math.round(cur.width), H = ok(h, MAX_H, 'height') || Math.round(cur.height);
+    const before = el.getAttribute('style');
+    el.style.setProperty('width', `${W}px`, 'important');
+    el.style.setProperty('height', `${H}px`, 'important');
+    el.style.setProperty('flex', 'none', 'important');
+    await nextFrames();
+    try { return await fn(); } finally {
+      if (before === null) el.removeAttribute('style'); else el.setAttribute('style', before);
+      await nextFrames();
+    }
+  };
   const tileFrames = async (c: Extract<ControlOp, { op: 'frames' }>): Promise<ControlFrames> => {
     if (!Number.isInteger(c.count) || c.count < 2 || c.count > 12) throw new Error(`frames needs "count" from 2 to 12, got ${String(c.count)}`);
     if (!Number.isInteger(c.every) || c.every < 1) throw new Error(`frames needs "every": ticks between captures, 1 or more, got ${String(c.every)}`);
+    return atSize(c.width, c.height, () => tileAt(c));
+  };
+  const tileAt = async (c: Extract<ControlOp, { op: 'frames' }>): Promise<ControlFrames> => {
     const view = renderView();
     game.paused = true;
     const blobs: Blob[] = [];
@@ -178,6 +214,7 @@ export function connectDev(game: Game, opts: { url: string; /** Called for `rest
       if (i > 0) stepSafely(c.every);
       feed.flush();
       ticks.push(game.world.tick);
+      game.frame(0);
       blobs.push(await view.shot());
     }
     const bitmaps = await Promise.all(blobs.map((b) => createImageBitmap(b)));
@@ -218,9 +255,12 @@ export function connectDev(game: Game, opts: { url: string; /** Called for `rest
     // Wall time is right here: this measures the machine, and nothing the simulation does reads it.
     for (let i = 0; i < n; i++) { const t = performance.now(); stepSafely(1); st.push(performance.now() - t); }
     // Paused, a frame runs no steps but still updates and draws: that is the cost of showing the game.
-    for (let i = 0; i < n; i++) { const t = performance.now(); game.frame(0); fr.push(performance.now() - t); }
+    // Draw counts come from the first frame after the steps: later paused frames find nothing changed and skip work (shadow passes),
+    // so their count would depend on how many frames were timed. One frame's numbers, never a sum over frames.
+    const view = (globalThis as { hull?: { render?: { stats?(): { drawCalls: number; triangles: number } } } }).hull?.render;
+    let s: { drawCalls: number; triangles: number } | undefined;
+    for (let i = 0; i < n; i++) { const t = performance.now(); game.frame(0); fr.push(performance.now() - t); if (i === 0) s = view?.stats?.(); }
     feed.flush();
-    const s = (globalThis as { hull?: { render?: { stats?(): { drawCalls: number; triangles: number } } } }).hull?.render?.stats?.();
     return { stepMs: stats(st), frameMs: stats(fr), drawCalls: s?.drawCalls ?? 0, triangles: s?.triangles ?? 0, nodes: countNodes(game.world.root) };
   };
   const until = (c: Extract<ControlOp, { op: 'until' }>): ControlUntil => {
@@ -240,15 +280,27 @@ export function connectDev(game: Game, opts: { url: string; /** Called for `rest
         if ((steps & 255) === 0 && performance.now() - start > UNTIL_WALL_MS) break;
       }
     } finally { watching = null; }
+    game.frame(0);
     feed.flush();
     return { ...stateOf(), met, steps };
   };
+  // A game that has not met its renderer yet spawns particles into the CPU pool, and the GPU simulation that takes over when the
+  // backend starts (a moment later, by wall time) never sees them. So no time passes until the backend is up: two runs of one
+  // script then see the same particles whatever the machine's speed.
+  const renderReady = async (): Promise<void> => {
+    const ready = (globalThis as { hull?: { render?: { ready?: Promise<unknown> } } }).hull?.render?.ready;
+    if (ready) await ready;
+  };
   const runControl = async (c: ControlOp): Promise<ControlResult> => {
+    if (c.op === 'step' || c.op === 'until' || c.op === 'perf' || c.op === 'frames') await renderReady();
     switch (c.op) {
       case 'step':
         if (!Number.isFinite(c.n) || c.n < 0) throw new Error(`step needs a count of zero or more, got ${String(c.n)}`);
         game.paused = true;
         stepSafely(Math.floor(c.n));
+        // The GPU particle simulation takes its spawns and steps at the next drawn frame and drops spawns past a queue limit. Whether
+        // the page's own animation callback ran between two ops would then decide what survived: flush here, on our own terms.
+        game.frame(0);
         feed.flush();
         return stateOf();
       case 'press': key('keydown', c.key); return {};
@@ -259,7 +311,7 @@ export function connectDev(game: Game, opts: { url: string; /** Called for `rest
         return inspectNode(game.world, c.node);
       case 'tree': return treeLines(game.world, c.root, Number.isInteger(c.depth) && (c.depth as number) >= 0 ? (c.depth as number) : 3);
       case 'until': return until(c);
-      case 'errors': return { items: ring.take(c.clear === true) } as ControlErrors;
+      case 'errors': return { items: c.unread === true ? ring.unreadItems() : ring.take(c.clear === true) } as ControlErrors;
       case 'perf': return perf(c);
       case 'frames': return tileFrames(c);
       case 'look': {
@@ -280,10 +332,24 @@ export function connectDev(game: Game, opts: { url: string; /** Called for `rest
       case 'screenshot': {
         feed.flush();
         const view = renderView();
-        let blob = await view.shot();
-        // The canvas holds only the 3D frame; the HUD and menus are DOM, so they are painted on unless asked not to.
-        if (c.ui !== false && typeof document !== 'undefined') blob = await withUi(blob, document);
-        return asPng(blob);
+        // Particles and the UI are copied into their buffers by a frame, not by a step: without one the picture shows whatever the
+        // last frame left, which depends on whether the page's own animation callback ran since the step. A paused frame runs no
+        // steps, so this adds no game time.
+        return atSize(c.width, c.height, async () => {
+          game.frame(0);
+          let blob = await view.shot();
+          // The canvas holds only the 3D frame; the HUD and menus are DOM, so they are painted on unless asked not to.
+          if (c.ui !== false && typeof document !== 'undefined') blob = await withUi(blob, document);
+          return asPng(blob);
+        });
+      }
+      // The UI is built and updated by frames, not by steps: run one (no game time passes) so it shows the world as it is now.
+      case 'ui': game.frame(0); return readUi(document as unknown as UiDoc);
+      case 'click': {
+        game.frame(0);
+        const r = clickButton(document as unknown as UiDoc, c.button);
+        game.frame(0);
+        return r;
       }
     }
   };

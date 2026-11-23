@@ -76,24 +76,32 @@ export function inspectNode(world: World, path: string): ControlInspect {
   };
 }
 
-/** Paths with behaviour names, `depth` levels below `root`, at most 200 lines. A node at the depth limit says how many children it hides. */
+/** Paths with behaviour names, `depth` levels below `root`, at most 200 lines; repeated siblings are one line ("level/crate x14  [Mesh]"). A node at the depth limit says how many children it hides. */
 export function treeLines(world: World, root: string | undefined, depth: number): ControlTree {
   const start = root ? world.find(root) : world.root;
   if (!start) return { lines: [], more: 0 };
   const lines: string[] = [];
   let more = 0;
-  const walk = (n: Node, level: number): void => {
+  const walk = (n: Node, level: number, times: number): void => {
     if (n !== world.root) {
       if (lines.length >= MAX_LINES) { more++; } else {
         const bs = n.behaviours.map(behaviourName);
         const hidden = level >= depth && n.children.length > 0 ? ` (+${n.children.length} below)` : '';
-        lines.push(`${pathOf(n)}${bs.length ? `  [${bs.join(', ')}]` : ''}${hidden}`);
+        lines.push(`${pathOf(n)}${times > 1 ? ` x${times}` : ''}${bs.length ? `  [${bs.join(', ')}]` : ''}${hidden}`);
       }
     }
     if (level >= depth) return;
-    for (const k of n.children) walk(k, level + 1);
+    // Siblings with one name, the same behaviours and the same number of children (fourteen crates) are one line, "x14", and only the first is walked.
+    const sig = (k: Node): string => `${k.name}|${k.behaviours.map(behaviourName).join(',')}|${k.children.length}`;
+    const kids = n.children;
+    for (let i = 0; i < kids.length; i++) {
+      let j = i + 1;
+      while (j < kids.length && sig(kids[j]!) === sig(kids[i]!)) j++;
+      walk(kids[i]!, level + 1, j - i);
+      i = j - 1;
+    }
   };
-  walk(start, 0);
+  walk(start, 0, 1);
   return { lines, more };
 }
 

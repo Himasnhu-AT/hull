@@ -85,6 +85,16 @@ describe('control port reading ops', () => {
     s.conn.dispose();
   });
 
+  it('tree turns repeated siblings into one line with a count', async () => {
+    const s = await setup();
+    for (let i = 0; i < 14; i++) s.game.world.spawn('crate').add(Walker);
+    s.game.world.spawn('crate');
+    const lines = (await s.call({ op: 'tree', depth: 1 })).result.lines as string[];
+    expect(lines).toContain('crate x14  [Walker]');
+    expect(lines).toContain('crate');
+    expect(lines.filter((l) => l.startsWith('crate'))).toHaveLength(2);
+    s.conn.dispose();
+  });
   it('tree lists paths with behaviour names, cut by depth', async () => {
     const s = await setup();
     expect((await s.call({ op: 'tree' })).result).toEqual({ lines: ['player  [Walker]', 'player/hat', 'bomb  [Bomb]'], more: 0 });
@@ -181,6 +191,18 @@ describe('control port reading ops', () => {
 });
 
 describe('the error ring', () => {
+  it('unreadItems gives what is new or repeated since the last take, and marks nothing read', () => {
+    const r = createErrorRing();
+    r.add('error', 'old', undefined, 1, 0.1);
+    r.take(false);
+    expect(r.unreadItems()).toEqual([]);
+    r.add('warn', 'fresh', undefined, 2, 0.2);
+    r.add('error', 'old', undefined, 3, 0.3);
+    expect(r.unreadItems().map((i) => `${i.message}x${i.count}`)).toEqual(['oldx2', 'freshx1']);
+    expect(r.unreadItems()).toHaveLength(2);
+    r.take(false);
+    expect(r.unreadItems()).toEqual([]);
+  });
   it('counts repeats, keeps the newest 50, and carries over a restart', () => {
     const r = createErrorRing();
     for (let i = 0; i < 60; i++) r.add('warn', `w${i}`, undefined, i, i / 60);

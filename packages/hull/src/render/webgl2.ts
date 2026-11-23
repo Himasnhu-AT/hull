@@ -103,6 +103,9 @@ export class WebGL2Backend implements Backend {
     this.renderer = renderer;
     this.canvas = canvas;
     this.quality = quality;
+    // One frame is several three render() calls (shadows, the scene, each post pass). Left to itself three zeroes its counters at
+    // the start of every one of them, so stats() would show only the last pass; reset by hand once per draw() so it is the frame.
+    renderer.info.autoReset = false;
     renderer.shadowMap.enabled = q.shadows;
     renderer.shadowMap.type = PCFShadowMap;
     this.env = new SkyEnvironment(renderer);
@@ -146,6 +149,7 @@ export class WebGL2Backend implements Backend {
     const t0 = performance.now();
     this.lastCamera = cameraNode;
     const state = stateFor(world);
+    renderer.info.reset();
     try {
       const cam = cameraNode?.get(Camera);
       const view = cam?.view;

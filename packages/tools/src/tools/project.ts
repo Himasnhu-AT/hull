@@ -43,15 +43,17 @@ const controlOp: Schema = {
     obj({ op: { const: 'press' }, key: str('A KeyboardEvent code like KeyW or Space, or Mouse0 / Mouse1 / Mouse2 for a mouse button.') }, ['op', 'key']),
     obj({ op: { const: 'release' }, key: str('The same key code as press.') }, ['op', 'key']),
     obj({ op: { const: 'state' }, nodes: arr(str('A world.find path.')) }, ['op']),
-    obj({ op: { const: 'screenshot' }, ui: { type: 'boolean', description: 'false: the 3D view only, without the UI layer (HUD, menus). Default true.' } }, ['op']),
+    obj({ op: { const: 'screenshot' }, ui: { type: 'boolean', description: 'false: the 3D view only, without the UI layer (HUD, menus). Default true.' }, width: num('Picture width in pixels, 16 to 1920, for this one picture only (the page is put back after). Default: the page\'s own size, 640 headless.'), height: num('Picture height in pixels, 16 to 1080.') }, ['op']),
+    obj({ op: { const: 'ui' } }, ['op']),
+    obj({ op: { const: 'click' }, button: { type: ['string', 'number'], description: 'The text of a button (case-insensitive) or its number counting from 0 among the buttons showing.' } }, ['op', 'button']),
     obj({ op: { const: 'inspect' }, node: str('A world.find path.') }, ['op', 'node']),
     obj({ op: { const: 'tree' }, root: str('A world.find path to start at; default the whole world.'), depth: num('Levels below the root, default 3.') }, ['op']),
     obj({ op: { const: 'until' }, when: condSchema, max: num('Most ticks to step before giving up.') }, ['op', 'when', 'max']),
-    obj({ op: { const: 'errors' }, clear: { type: 'boolean', description: 'true: empty the ring after reading it.' } }, ['op']),
+    obj({ op: { const: 'errors' }, clear: { type: 'boolean', description: 'true: empty the ring after reading it.' }, unread: { type: 'boolean', description: 'true: only what nobody has read yet, and mark nothing read.' } }, ['op']),
     obj({ op: { const: 'restart' } }, ['op']),
     obj({ op: { const: 'perf' }, steps: num('Steps and frames to time, default 120. Advances the game that many ticks.') }, ['op']),
     obj({ op: { const: 'look' }, dx: num('Mouse movement in pixels, right is positive.'), dy: num('Mouse movement in pixels, down is positive.') }, ['op', 'dx', 'dy']),
-    obj({ op: { const: 'frames' }, count: num('How many pictures, 2 to 12.'), every: num('Ticks to step between pictures.') }, ['op', 'count', 'every']),
+    obj({ op: { const: 'frames' }, count: num('How many pictures, 2 to 12.'), every: num('Ticks to step between pictures.'), width: num('Each picture\'s width in pixels, 16 to 1920 (the page is put back after).'), height: num('Each picture\'s height, 16 to 1080.') }, ['op', 'count', 'every']),
   ],
 };
 // One line per op, in the tool's description (a oneOf branch has no room for prose in most clients).
@@ -67,7 +69,9 @@ export const controlOpHelp = [
   'perf {steps?}: ms per step and per frame (avg, p95, max), draw calls, triangles, node count.',
   'look {dx, dy}: mouse movement as under pointer lock.',
   'frames {count, every}: count screenshots every ticks apart, tiled into one picture with each tick written on it.',
-  'screenshot {ui?}: the frame as a picture.',
+  'screenshot {ui?, width?, height?}: the frame as a picture, with the HUD and menus; width and height (up to 1920x1080) render this one picture at that size and put the page back.',
+  'ui: what a person could read on the UI layer now: screens (ids of the ui-screens showing) and items (text, button, bar with value and max, top to bottom, 80 at most).',
+  'click {button}: click the button whose text matches (case-insensitive) or the nth (from 0); fires what a person\'s click does. A miss answers with the buttons there are. press / release of Enter, Space, Escape, Tab and the arrows also reach the UI layer: a focused button activates on Enter or Space.',
 ].join(' ');
 
 const explainInput: Schema = JSON.parse(JSON.stringify(explainSchema)) as Schema;
@@ -154,7 +158,7 @@ const SPECS: Spec[] = [
   { method: 'exp.adopt', summary: 'Three-way merge an experiment into the project. With conflicts nothing is written: call again with `resolve` ("ours" | "theirs" per "target#path").', input: obj({ name: str(), author, resolve: { type: 'object', additionalProperties: { enum: ['ours', 'theirs'] } } }, ['name']), output: obj({ ok: { type: 'boolean' }, conflicts: arr({ type: 'object', additionalProperties: true }), problems, change: historyChange }, ['ok', 'conflicts', 'problems']), },
   { method: 'exp.discard', summary: 'Close an experiment. Its changes stay in the timeline.', input: obj({ name: str() }, ['name']), output: obj({ ok: { type: 'boolean' } }, ['ok']), },
   { method: 'game.control', summary: 'Pause, resume, step, scale time or restart every connected game.', input: obj({ paused: { type: 'boolean' }, step: num('Run exactly n fixed steps (pauses afterwards).'), timeScale: num(), restart: { type: 'boolean' } }), output: empty },
-  { method: 'game.run', summary: 'Run one control op on the running game and return its answer. Time moves only by step, so a script gives the same run every time. Ops: ' + controlOpHelp + ' With no app open, a headless game page is opened for you. After a code change the page reloads: the op waits up to 10 s for it to reconnect, and the answer has reloaded: true when a reload happened during the call (its tick then restarted).', input: obj({ control: controlOp, client: str('A specific game client; default is the project\'s first.') }, ['control']), output: { description: 'step/state/until: {tick,time,checksum,paused,nodes,held,probes,errors} (until adds met, steps); screenshot/frames: {png (base64),width,height}; inspect, tree, errors, perf: as listed; press/release/look: {}.', type: 'object', additionalProperties: true },
+  { method: 'game.run', summary: 'Run one control op on the running game and return its answer. Time moves only by step, so a script gives the same run every time. Ops: ' + controlOpHelp + ' With no app open, a headless game page is opened for you. After a code change the page reloads: the op waits up to 10 s for it to reconnect, and the answer has reloaded: true when a reload happened during the call (its tick then restarted).', input: obj({ control: controlOp, client: str('A specific game client; default is the project\'s first.') }, ['control']), output: { description: 'step/state/until: {tick,time,checksum,paused,nodes,held,probes,errors} (until adds met, steps); screenshot/frames: {png (base64),width,height}; inspect, tree, errors, perf: as listed; ui: {screens, items}; click: {clicked, buttons}; press/release/look: {}.', type: 'object', additionalProperties: true },
  },
   { method: 'problems.list', summary: 'Config problems and authorship problems (AI changes over values you set), as the app shows them.', input: empty, output: obj({ ok: { type: 'boolean' }, problems }, ['ok', 'problems']) },
   { method: 'review.list', summary: 'Review notes: what has been checked and what needs a change.', input: obj({ open: { type: 'boolean' } }), key: 'entries', output: list({ type: 'object', properties: { key: str(), state: str(), note: str() }, required: ['key', 'state'], additionalProperties: true }, 'entries'), },

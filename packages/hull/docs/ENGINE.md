@@ -138,19 +138,29 @@ page for you. Time only moves when you step it, so a script gives the same resul
 * `{"op":"press","key":"KeyW"}` / `{"op":"release","key":"KeyW"}`: hold a key (also `Mouse0`).
 * `{"op":"state","nodes":["player","coin"]}`: tick, time, checksum, positions of the named nodes, held keys, probes.
 * `{"op":"inspect","node":"player"}`: position, rotation, scale, groups, children, behaviours with their state fields.
-* `{"op":"tree","depth":3}`: node paths with their behaviours.
+* `{"op":"tree","depth":3}`: node paths with their behaviours; repeated siblings are one line (`level/crate x14  [Mesh]`).
 * `{"op":"until","when":{"node":"score","field":"Score.points","cmp":">=","value":3},"max":600}`: step until it holds.
 * `{"op":"errors"}`: what threw or warned (with file:line:col in `src/`); `{"clear":true}` empties it. A step that throws
   fails with the place, and the world may be part-stepped: `{"op":"restart"}` before trusting state.
 * `{"op":"restart"}`: start again from ready, same seed, paused at tick 0.
-* `{"op":"perf"}`: step and frame times, draw calls, triangles, node count.
+* `{"op":"perf"}`: step and frame times, node count, and the draw calls and triangles of one frame (the same number whether you time 1 step or 120 on a scene that does not change).
 * `{"op":"look","dx":40,"dy":0}`: mouse movement as the game sees it under pointer lock.
-* `{"op":"screenshot"}`: a picture of the game (the UI is drawn over it; `"ui":false` for the 3D view only).
+* `{"op":"screenshot"}`: a picture of the game, 640x360 headless (the UI is drawn over it; `"ui":false` for the 3D view only).
+  `"width"` and `"height"` (whole pixels, up to 1920x1080) render that one picture at that size and put the page back, so the
+  UI scales and wraps as it would on that screen; `frames` takes the same two fields.
+* `{"op":"ui"}`: what a person could read now: `screens` (ids of the ui-screens showing) and `items` (`text`, `button` with
+  `focused`/`disabled`, `bar` with `value` and `max`; each with its `panel` label), top to bottom, hidden things left out, 80 at most.
+* `{"op":"click","button":"Start"}`: click the button whose text matches (any case; a unique part of the text works) or the nth
+  from 0. It fires what a person's click fires. A miss fails and names the buttons that are showing. `press` / `release` of `Enter`,
+  `Space`, `Escape`, `Tab` and the arrow keys also reach the UI: a focused button activates on Enter or Space, Escape goes back.
 * `{"op":"frames","count":6,"every":10}`: one picture tiling six moments, to judge motion.
 * A game exposes numbers worth watching with `probe('score', () => points)` in `ready`; `state` and `until` read them.
 
-Scripts in one call: the `play` tool runs a list of steps (press, step, until, expect, screenshot) and fails with the
-place of any error the game logged. `game.recent` lists the sounds and effects of the last seconds, which is how you
+Scripts in one call: the `play` tool runs a list of steps (press, step, until, expect, screenshot, `click`, `expectUi`, `ui`) and fails with the
+place of any error the game logged. `{"click":"Start"}` clicks a button, `{"expectUi":{"text":"Victory"}}` fails unless some visible item
+contains that text, `{"ui":true}` records the items in the report, and a `screenshot` step takes `width` and `height` too. Effects are
+deterministic under stepping: the same script gives byte-identical pictures, so a golden with an effect on screen holds at the
+default tolerance. `problems.list` also carries what the running game logged and nobody has read yet (rule `runtime`). `game.recent` lists the sounds and effects of the last seconds, which is how you
 check something that cannot be seen. Read `errors` after a run; a clean state is not proof the game did not warn.
 
 When you cannot judge something (how a hit feels, how a sound sounds), say so, and `review.set` the piece

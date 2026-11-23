@@ -181,6 +181,8 @@ export class WebGPUBackend implements Backend {
     const t0 = performance.now();
     this.lastCamera = cameraNode;
     const state = stateFor(world);
+    // three zeroes these only inside its own animation loop, which this backend does not use: without this they add up across frames.
+    renderer.info.reset();
     try {
       const cam = cameraNode?.get(Camera);
       const view = cam?.view;

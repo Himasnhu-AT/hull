@@ -18,6 +18,8 @@ export interface ErrorRing {
   take(clear: boolean): RawError[];
   /** Same as `take(false)` without marking anything read. */
   peek(): RawError[];
+  /** Only what was recorded (or repeated) since the last `take`, without marking anything read. */
+  unreadItems(): RawError[];
   /** For a restart: the ring as JSON text to hand to the next page, and back. */
   dump(): string;
   load(text: string): void;
@@ -33,6 +35,7 @@ export function frameLines(stack: string | undefined): string | undefined {
 export function createErrorRing(): ErrorRing {
   let items: RawError[] = [];
   let unread = 0;
+  let fresh = new Set<RawError>();
   const keys = new Map<RawError, string>();
   const keyOf = (level: string, message: string, stack: string | undefined): string => `${level}|${message}|${stack?.split('\n')[0] ?? ''}`;
   const add: ErrorRing['add'] = (level, message, stack, tick, time) => {
@@ -42,13 +45,14 @@ export function createErrorRing(): ErrorRing {
     unread++;
     for (let i = items.length - 1; i >= 0; i--) {
       const it = items[i]!;
-      if (keys.get(it) === key) { it.count++; it.tick = tick; it.time = time; return false; }
+      if (keys.get(it) === key) { it.count++; it.tick = tick; it.time = time; fresh.add(it); return false; }
     }
     const it: RawError = { level, message: msg, tick, time, count: 1 };
     if (frames) it.stack = frames;
     items.push(it);
     keys.set(it, key);
-    if (items.length > ERROR_RING) keys.delete(items.shift()!);
+    fresh.add(it);
+    if (items.length > ERROR_RING) { const gone = items.shift()!; keys.delete(gone); fresh.delete(gone); }
     return true;
   };
   return {
@@ -57,10 +61,12 @@ export function createErrorRing(): ErrorRing {
     take(clear) {
       const out = items.map((i) => ({ ...i }));
       unread = 0;
+      fresh = new Set();
       if (clear) { items = []; keys.clear(); }
       return out;
     },
     peek: () => items.map((i) => ({ ...i })),
+    unreadItems: () => items.filter((i) => fresh.has(i)).map((i) => ({ ...i })),
     dump: () => JSON.stringify(items),
     load(text) {
       try {
@@ -75,6 +81,7 @@ export function createErrorRing(): ErrorRing {
           for (let i = items.length - 1; i >= 0; i--) if (keys.get(items[i]!) === key) { items[i]!.count += extra; break; }
         }
         unread = 0;
+        fresh = new Set();
       } catch { /* a bad dump is just forgotten */ }
     },
   };
