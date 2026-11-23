@@ -121,6 +121,13 @@ describe('project server', () => {
       expect(JSON.parse(readFileSync(f, 'utf8')).token).toBe(server.token);
       expect(statSync(f).mode & 0o777).toBe(0o600);
     });
+    it('the page that runs the game cannot fetch the token from .hull/', async () => {
+      // The dev server serves the project folder; without a deny rule a game's own code could read server.json and get in as a studio.
+      const r = await fetch(`${server.gameUrl.replace(/\/$/, '')}/.hull/server.json`);
+      expect(r.status).toBe(403);
+      expect(await r.text()).not.toContain(server.token);
+    });
+
     it('a game socket cannot call methods: config.set from a game changes nothing and gets no answer', async () => {
       const file = join(dir, 'config/tuning/cube-look.json');
       const before = readFileSync(file, 'utf8');

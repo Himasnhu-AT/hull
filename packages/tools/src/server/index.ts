@@ -253,7 +253,10 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
       port: opts.port ?? 0,
       strictPort: opts.port !== undefined,
       host: '127.0.0.1',
-      fs: { allow: [root, resolve(import.meta.dirname, '../../../..')] },
+      // .hull/ holds the studio token (server.json) and the history: the page that runs the game must not be able to fetch
+      // them, or a game's own code could take the token and write to the project. Setting deny replaces Vite's defaults,
+      // so they are repeated here.
+      fs: { allow: [root, resolve(import.meta.dirname, '../../../..')], deny: ['.env', '.env.*', '*.{crt,pem}', '**/.git/**', '**/.hull/**'] },
       watch: { ignored: ['**/.hull/**', '**/dist/**', '**/node_modules/**'] },
     },
   });
