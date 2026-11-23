@@ -1,0 +1,52 @@
+{
+  "kind": "prefab",
+  "note": "A lamp post: a pole and a lit bulb. Only the pole is solid.",
+  "parts": [
+    {
+      "name": "pole",
+      "shape": "cylinder",
+      "at": [
+        0,
+        1.5,
+        0
+      ],
+      "size": [
+        0.2,
+        3,
+        0.2
+      ],
+      "material": "material/wall"
+    },
+    {
+      "name": "bulb",
+      "shape": "sphere",
+      "at": [
+        0,
+        3.1,
+        0
+      ],
+      "size": [
+        0.5,
+        0.5,
+        0.5
+      ],
+      "material": "material/lamp"
+    }
+  ],
+  "collider": {
+    "shape": "capsule",
+    "at": [
+      0,
+      1.5,
+      0
+    ],
+    "size": [
+      0.3,
+      3,
+      0.3
+    ]
+  },
+  "tags": [
+    "lamp"
+  ]
+}

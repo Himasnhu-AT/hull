@@ -502,6 +502,14 @@ the chain swings from the root bone's acceleration. `hitReact` (`bones`, `angle`
 * `bind` reads a value from the game's view-model: `{ "bar": { "bind": "player.hp", "max": "player.maxHp" } }`.
 * `on` names an action the game or the UI kit registered.
 * `states` are the versions the Studio's bench shows (with mock data), so every state can be reviewed.
+* **Scale and layers.** The UI is designed for 1280x720 and scales with the window: one scale on the layer's root,
+  `min(width / 1280, height / 720)` kept between 0.5 and 2, so pixel sizes in a theme or a screen mean pixels at 1280x720 and the
+  HUD keeps its share of the picture in a small window. HUD panels (the kits' `KitUi`, layer `hud`) are hidden while any menu (the
+  title, result and pause screens, game over; layer `menu`) is showing.
+* **Focus.** A menu's first button takes focus when it shows; Enter, Space and the gamepad's south button press the focused
+  button (the first one when focus is elsewhere), and the arrows or d-pad move focus.
+* **Names a screen can bind.** `title`: `title`, `subtitle`, action `title.start`. `result`: `heading`, `stat.1.label` .. `stat.8.value`, action `result.again`.
+  `pause`: `message`, `slot.1` .. `slot.9`, actions `pause.resume`, `pause.save.N`, `pause.load.N`.
 
 ## 8. `input-map`
 
@@ -583,6 +591,14 @@ A call can change one burst without a second config: `vfx.burst(id, at, dir, { c
 
 ```json
 { "kind": "material", "color": "#9aa0a8", "roughness": 0.35, "metalness": 1, "texture": { "recipe": "brushed", "scale": 2 } }
+```
+
+`emissive` (a colour, default black) and `emissiveIntensity` (0 to 20, default 1) make a surface give off light: a flame, a lamp,
+a window. The glow ignores scene light, so it shows at night, and an intensity above 1 goes past the look's `post.bloomThreshold`
+and blooms. Both backends draw it. The Studio's material thumb shows the halo.
+
+```json
+{ "kind": "material", "color": "#ff9a3a", "emissive": "#ff6a00", "emissiveIntensity": 3 }
 ```
 
 ## 11b. `prefab` and `level`

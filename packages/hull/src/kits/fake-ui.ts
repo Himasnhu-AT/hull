@@ -16,6 +16,9 @@ export class FakeEl {
   textContent = '';
   disabled = false;
   style: Record<string, unknown> & { setProperty(k: string, v: string): void } = { setProperty() {} };
+  /** Real elements have these; the fake keeps them so a test can read the layout the ui module sets. */
+  clientWidth = 0;
+  clientHeight = 0;
   classList = {
     add: (...c: string[]) => c.forEach((x) => this.classes.add(x)),
     remove: (...c: string[]) => c.forEach((x) => this.classes.delete(x)),
@@ -27,10 +30,15 @@ export class FakeEl {
   addEventListener(t: string, fn: () => void): void { (this.listeners[t] ??= []).push(fn); }
   remove(): void { if (this.parent) this.parent.children = this.parent.children.filter((c) => c !== this); this.parent = null; }
   click(): void { this.listeners['click']?.forEach((f) => f()); }
-  focus(): void { /* focus is not modelled */ }
+  focus(): void { FakeEl.active = this; }
+  static active: FakeEl | null = null;
+  contains(e: unknown): boolean { return e === this || this.children.some((c) => c.contains(e)); }
+  querySelector(sel: string): FakeEl | null { return sel === '[role=menu]' ? this.all().find((e) => e.attrs['role'] === 'menu') ?? null : null; }
+  getAttribute(k: string): string | null { return this.attrs[k] ?? null; }
+  preventDefault(): void {}
   all(): FakeEl[] { return [this, ...this.children.flatMap((c) => c.all())]; }
   /** Hidden by its own class or by an ancestor's. */
-  get hidden(): boolean { return this.classes.has('hull-hidden') || (this.parent?.hidden ?? false); }
+  get hidden(): boolean { return this.classes.has('hull-hidden') || this.classes.has('hull-off') || (this.parent?.hidden ?? false); }
 }
 
 export interface FakeUi {
@@ -48,12 +56,16 @@ export interface FakeUi {
   install(game: Game): () => void;
   /** Names of the ui-screens that are open. */
   open(): string[];
+  /** The text of the focused button, or null. */
+  focused(): string | null;
+  /** Presses a key like the page does for a menu (Enter, Space): the view's own key handling. */
+  key(k: string): boolean;
 }
 
 export function fakeUi(): FakeUi {
   const live: (() => void)[] = [];
   const ctx: UiContext = {
-    doc: { createElement: (t: string) => new FakeEl(t) } as unknown as Document,
+    doc: { createElement: (t: string) => new FakeEl(t), get activeElement() { return FakeEl.active; } } as unknown as Document,
     track: (fn) => { live.push(fn); return () => { const i = live.indexOf(fn); if (i >= 0) live.splice(i, 1); }; },
   };
   const root = new UiPanel(ctx, 'stack');
@@ -71,10 +83,12 @@ export function fakeUi(): FakeUi {
       buildNode(panel, def.root, `${full}#/root`, { vm, mock: {}, strings: (k) => k, run: (n) => actions.get(n)?.() });
       const entry = { id: full, panel };
       open.push(entry);
-      return { id: full, panel, focusFirst: () => true, close() { const i = open.indexOf(entry); if (i >= 0) { open.splice(i, 1); panel.dispose(); } } };
+      return { id: full, panel, focusFirst: () => panel.focusFirst(), activate: () => panel.activate(), close() { const i = open.indexOf(entry); if (i >= 0) { open.splice(i, 1); panel.dispose(); } } };
     },
-    get screens() { return [] as readonly UiScreen[]; },
-    focusMove: () => true,
+    get screens() { return open.map((o) => ({ id: o.id, panel: o.panel }) as unknown as UiScreen); },
+    focusMove: (d) => (open.length ? open[open.length - 1]!.panel : root).focusMove(d),
+    activate: () => (open.length ? open[open.length - 1]!.panel : root).activate(),
+    scale: 1,
     dispose() {},
   };
   const el = (): FakeEl => root.el as unknown as FakeEl;
@@ -99,5 +113,14 @@ export function fakeUi(): FakeUi {
       return () => { off(); g.hull = prev; };
     },
     open: () => open.map((o) => o.id),
+    focused: () => (FakeEl.active && FakeEl.active.tag === 'button' ? FakeEl.active.textContent : null),
+    key(k) {
+      if (k !== 'Enter' && k !== ' ') return false;
+      const top = open[open.length - 1];
+      const active = FakeEl.active;
+      // A focused button presses itself, like a real <button>; otherwise the menu's first button does.
+      if (active && top?.panel.focusables().includes(active as unknown as HTMLElement)) { active.click(); return true; }
+      return top ? top.panel.activate() : false;
+    },
   };
 }

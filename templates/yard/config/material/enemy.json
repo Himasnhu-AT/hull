@@ -1,0 +1,7 @@
+{
+  "kind": "material",
+  "note": "The enemy body.",
+  "color": "#a33a3a",
+  "roughness": 0.7,
+  "metalness": 0
+}

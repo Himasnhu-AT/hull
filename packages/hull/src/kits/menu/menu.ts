@@ -1,6 +1,6 @@
-import { Behaviour, signal } from '../../core/index.ts';
+import { Behaviour, signal, type World } from '../../core/index.ts';
 import type { UiScreen, UiView } from '../../ui/index.ts';
-import { flagsOf, type KitFlags } from '../common.ts';
+import { flagsOf, setMenuShowing, type KitFlags } from '../common.ts';
 import { kitIO } from '../io.ts';
 
 const ROWS = 8;
@@ -11,7 +11,13 @@ class ScreenHolder {
   private open: UiScreen | null = null;
   private offs: (() => void)[] = [];
 
-  constructor(private readonly id: string, private readonly vm: Record<string, unknown>, private readonly actions: Record<string, () => void>) {}
+  constructor(
+    private readonly id: string,
+    private readonly vm: Record<string, unknown>,
+    private readonly actions: Record<string, () => void>,
+    private readonly world: () => World,
+    private readonly owner: object,
+  ) {}
 
   sync(want: boolean): void {
     const ui = kitIO.ui();
@@ -29,12 +35,15 @@ class ScreenHolder {
       this.open.close();
       this.open = null;
     }
+    // While it is on screen the HUD layers step aside (KitUi, layer 'hud').
+    setMenuShowing(this.world(), this.owner, this.open !== null);
   }
 
   dispose(): void {
     for (const f of this.offs.splice(0)) f();
     this.open?.close();
     this.open = null;
+    setMenuShowing(this.world(), this.owner, false);
   }
 }
 
@@ -51,7 +60,7 @@ export class TitleScreen extends Behaviour {
   readonly begun = signal();
   readonly vm: Record<string, unknown> = { title: () => this.title, subtitle: () => this.subtitle };
   private flags!: KitFlags;
-  private screen = new ScreenHolder('ui-screen/title', this.vm, { 'title.start': () => this.start() });
+  private screen = new ScreenHolder('ui-screen/title', this.vm, { 'title.start': () => this.start() }, () => this.world, this);
 
   override ready(): void {
     this.flags = flagsOf(this.world);
@@ -91,7 +100,7 @@ export class ResultScreen extends Behaviour {
   readonly again = signal();
   readonly vm: Record<string, unknown> = { heading: () => (this.won ? this.winText : this.loseText), stat: {} as Record<string, unknown> };
   private flags!: KitFlags;
-  private screen = new ScreenHolder('ui-screen/result', this.vm, { 'result.again': () => this.playAgain() });
+  private screen = new ScreenHolder('ui-screen/result', this.vm, { 'result.again': () => this.playAgain() }, () => this.world, this);
 
   override ready(): void {
     this.flags = flagsOf(this.world);

@@ -23,6 +23,7 @@ export interface BoxOpts {
 
 export class UiWidget {
   private hidden = false;
+  private suppressed = false;
   private anchorClass = '';
   private readonly offs: (() => void)[] = [];
   parent: UiPanel | null = null;
@@ -53,6 +54,23 @@ export class UiWidget {
     this.hidden = !visible;
     this.el.classList.toggle('hull-hidden', this.hidden);
     return this;
+  }
+
+  /**
+   * Hides the widget for a reason that is not its own binding (a menu is open over a HUD, the game switched a layer
+   * off). It is a second flag so a `bindVisible` that runs every frame cannot undo it.
+   */
+  suppress(on: boolean): this {
+    if (on === this.suppressed) return this;
+    this.suppressed = on;
+    this.el.classList.toggle('hull-off', on);
+    return this;
+  }
+
+  /** True when this widget or any panel above it is hidden or suppressed: a person cannot see it. */
+  get isHidden(): boolean {
+    for (let w: UiWidget | null = this; w; w = w.parent) if (w.hidden || w.suppressed) return true;
+    return false;
   }
 
   /** Shows the widget while `read()` is truthy. Checked every frame; the DOM is touched only when the answer flips. */
@@ -244,8 +262,15 @@ export class UiPanel extends UiWidget {
 
   /** The buttons inside that can take focus, in document order. Allocates: for key presses, not for frames. */
   focusables(): HTMLElement[] {
-    return Array.from(this.el.querySelectorAll<HTMLElement>('button:not(:disabled):not(.hull-hidden)'))
-      .filter((b) => !b.closest('.hull-hidden'));
+    const out: HTMLElement[] = [];
+    const walk = (p: UiPanel): void => {
+      for (const c of p.children) {
+        if (c instanceof UiPanel) walk(c);
+        else if (c instanceof UiButton && !c.isHidden && !(c.el as HTMLButtonElement).disabled) out.push(c.el);
+      }
+    };
+    walk(this);
+    return out;
   }
 
   /** Focuses the first button; returns false if there is none. */
@@ -253,6 +278,17 @@ export class UiPanel extends UiWidget {
     const f = this.focusables()[0];
     f?.focus();
     return !!f;
+  }
+
+  /** Presses the focused button of this panel, or the first one when focus is elsewhere. False when there is none. */
+  activate(): boolean {
+    const list = this.focusables();
+    if (list.length === 0) return false;
+    const at = list.indexOf(this.ctx.doc.activeElement as HTMLElement);
+    const b = list[at < 0 ? 0 : at]!;
+    b.focus();
+    b.click();
+    return true;
   }
 
   /** Moves focus by `delta` buttons, wrapping. With nothing focused yet, +1 takes the first and -1 the last. */

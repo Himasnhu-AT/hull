@@ -4,7 +4,7 @@ import { Mesh, Model } from '../../render/index.ts';
 import { Collider } from '../../physics/index.ts';
 import type { ShapeDesc } from '../../physics/index.ts';
 import type { Level as LevelDef, Prefab } from '../../schema/index.ts';
-import { ensurePhysics, LAYER, type LevelBounds, type LevelLike, type LevelMarker } from '../common.ts';
+import { applyLook, ensurePhysics, LAYER, type LevelBounds, type LevelLike, type LevelMarker } from '../common.ts';
 import type { Block } from './level.ts';
 
 const RAD = Math.PI / 180;
@@ -44,8 +44,17 @@ function prismMesh(sx: number, sy: number, sz: number): { positions: number[]; i
 export class Level extends Behaviour implements LevelLike {
   /** The level file, relative to config/level: 'yard' reads config/level/yard.json. Set it before the node starts. */
   level = '';
-  /** The look the file names ('look/day'), for the game to apply; undefined when the level names none. */
+  /** The look the file names ('look/day'); undefined when the level names none. */
   look: string | undefined = undefined;
+  /** The level puts the page in the look its file names. Set false (when adding) to choose the look yourself. */
+  applyLook = true;
+  private lookDone = false;
+
+  /** The renderer mounts after `ready`, so the look is applied on the first frame that finds it. */
+  override update(): void {
+    if (this.lookDone) return;
+    this.lookDone = !this.applyLook || !this.look || applyLook(this.look);
+  }
   readonly bounds: LevelBounds = { minX: 0, maxX: 0, minZ: 0, maxZ: 0 };
   /** Obstacles on the floor as boxes (solid blocks, solid things, walls), for `hits` and `freeSpot`. */
   readonly blocks: Block[] = [];

@@ -1,0 +1,13 @@
+{
+  "kind": "game",
+  "id": "yard",
+  "title": "Relic Yard",
+  "note": "Carry three relics to the altar while sentries that path around the yard hunt you. A third-person game made of kits and one level file; the worked example to copy.",
+  "version": "0.1.0",
+  "entry": "src/main.ts",
+  "step": 60,
+  "features": [
+    "audio",
+    "ui"
+  ]
+}

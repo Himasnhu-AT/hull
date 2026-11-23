@@ -19,7 +19,7 @@ export const CSS = `
 .hull-btn.primary{background:var(--hull-accent);color:var(--hull-panel);border-color:transparent;font-weight:600}
 .hull-btn:disabled{opacity:.5;cursor:default}
 .hull-img{display:block;max-width:100%}
-.hull-hidden{display:none!important}
+.hull-hidden,.hull-off{display:none!important}
 .hull-a{position:absolute;margin:var(--hull-gutter)}
 .hull-a-top-left{top:0;left:0}
 .hull-a-top{top:0;left:50%;transform:translateX(-50%);margin-left:0;margin-right:0}

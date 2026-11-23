@@ -14,9 +14,9 @@ describe('pickTemplate', () => {
     expect(pickTemplate('third-person shooter')).toBe('third-person');
     expect(pickTemplate('first-person sword fighting')).toBe('fps');
   });
-  it('falls back to the arena', () => {
-    expect(pickTemplate('Run and jump to collect gems before the clock runs out')).toBe('arena');
-    expect(pickTemplate('')).toBe('arena');
+  it('falls back to the yard, not the arena', () => {
+    expect(pickTemplate('Run and jump to collect gems before the clock runs out')).toBe('yard');
+    expect(pickTemplate('')).toBe('yard');
   });
 });
 

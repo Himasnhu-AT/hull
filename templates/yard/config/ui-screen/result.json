@@ -1,0 +1,190 @@
+{
+  "kind": "ui-screen",
+  "note": "The end-of-round screen. Up to eight stat rows; a row with no label stays hidden. Keep the action name result.again.",
+  "pausesGame": true,
+  "root": {
+    "panel": {
+      "align": "center",
+      "menu": true,
+      "label": "Result",
+      "gap": 10,
+      "width": 420
+    },
+    "children": [
+      {
+        "title": {
+          "bind": "heading"
+        }
+      },
+      {
+        "row": {
+          "gap": 12,
+          "visible": "stat.1.label"
+        },
+        "children": [
+          {
+            "text": {
+              "bind": "stat.1.label",
+              "width": 200
+            }
+          },
+          {
+            "text": {
+              "bind": "stat.1.value",
+              "width": 120
+            }
+          }
+        ]
+      },
+      {
+        "row": {
+          "gap": 12,
+          "visible": "stat.2.label"
+        },
+        "children": [
+          {
+            "text": {
+              "bind": "stat.2.label",
+              "width": 200
+            }
+          },
+          {
+            "text": {
+              "bind": "stat.2.value",
+              "width": 120
+            }
+          }
+        ]
+      },
+      {
+        "row": {
+          "gap": 12,
+          "visible": "stat.3.label"
+        },
+        "children": [
+          {
+            "text": {
+              "bind": "stat.3.label",
+              "width": 200
+            }
+          },
+          {
+            "text": {
+              "bind": "stat.3.value",
+              "width": 120
+            }
+          }
+        ]
+      },
+      {
+        "row": {
+          "gap": 12,
+          "visible": "stat.4.label"
+        },
+        "children": [
+          {
+            "text": {
+              "bind": "stat.4.label",
+              "width": 200
+            }
+          },
+          {
+            "text": {
+              "bind": "stat.4.value",
+              "width": 120
+            }
+          }
+        ]
+      },
+      {
+        "row": {
+          "gap": 12,
+          "visible": "stat.5.label"
+        },
+        "children": [
+          {
+            "text": {
+              "bind": "stat.5.label",
+              "width": 200
+            }
+          },
+          {
+            "text": {
+              "bind": "stat.5.value",
+              "width": 120
+            }
+          }
+        ]
+      },
+      {
+        "row": {
+          "gap": 12,
+          "visible": "stat.6.label"
+        },
+        "children": [
+          {
+            "text": {
+              "bind": "stat.6.label",
+              "width": 200
+            }
+          },
+          {
+            "text": {
+              "bind": "stat.6.value",
+              "width": 120
+            }
+          }
+        ]
+      },
+      {
+        "row": {
+          "gap": 12,
+          "visible": "stat.7.label"
+        },
+        "children": [
+          {
+            "text": {
+              "bind": "stat.7.label",
+              "width": 200
+            }
+          },
+          {
+            "text": {
+              "bind": "stat.7.value",
+              "width": 120
+            }
+          }
+        ]
+      },
+      {
+        "row": {
+          "gap": 12,
+          "visible": "stat.8.label"
+        },
+        "children": [
+          {
+            "text": {
+              "bind": "stat.8.label",
+              "width": 200
+            }
+          },
+          {
+            "text": {
+              "bind": "stat.8.value",
+              "width": 120
+            }
+          }
+        ]
+      },
+      {
+        "button": {
+          "text": "Play again",
+          "primary": true
+        },
+        "on": {
+          "press": "result.again"
+        }
+      }
+    ]
+  }
+}

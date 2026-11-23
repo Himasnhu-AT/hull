@@ -148,16 +148,24 @@ export function scatterPickups(world: World, level: LevelLike, kind: string, cou
   return out;
 }
 
-/** One line per stock name at the bottom right: "GAS 80/100". */
+/**
+ * One line per stock name at the bottom right: "GAS 80/100". `names` lists what the game may show, but a name is drawn
+ * only while the game has it (a count or a cap above zero), so a game without gas never shows a GAS panel. With none
+ * to show, the whole panel is hidden.
+ */
 export class StockHud extends KitUi {
   /** Names to show, in order. */
   names: string[] = [];
   protected build(ui: UiView): void {
     const s = this.node.get(Stock)!;
+    const has = (name: string): boolean => s.get(name) > 0 || (s.caps[name] ?? 0) > 0;
     const p = ui.root.panel({ anchor: 'bottom-right', label: 'Supplies', width: 200 });
+    p.bindVisible(() => this.names.some(has));
     for (const name of this.names) {
-      p.text(name.toUpperCase(), { muted: true });
-      p.title('0').bind(() => s.get(name), (v) => (s.caps[name] ? `${Math.round(v)} / ${s.caps[name]}` : `${Math.round(v)}`));
+      const row = p.stack();
+      row.bindVisible(() => has(name));
+      row.text(name.toUpperCase(), { muted: true });
+      row.title('0').bind(() => s.get(name), (v) => (s.caps[name] ? `${Math.round(v)} / ${s.caps[name]}` : `${Math.round(v)}`));
     }
   }
 }

@@ -1,1 +1,1 @@
-{ "kind": "material", "note": "Warm lamp glass.", "color": "#ffd9a0", "roughness": 0.3, "metalness": 0 }
+{ "kind": "material", "note": "Warm lamp glass. It glows: emissive does not need scene light, so the lamp shows at night.", "color": "#ffd9a0", "roughness": 0.3, "metalness": 0, "emissive": "#ffb45a", "emissiveIntensity": 1.5 }

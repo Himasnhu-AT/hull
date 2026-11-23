@@ -244,6 +244,8 @@ export class WaveHud extends KitUi {
  * waves begin again. Put it on the node with the Spawner.
  */
 export class GameOver extends KitUi {
+  /** A screen that takes over: the other HUD panels hide while it shows. */
+  override layer: 'hud' | 'menu' = 'menu';
   restartAction = 'jump';
   private flags!: KitFlags;
   private spawner: Spawner | null = null;

@@ -1,0 +1,39 @@
+{
+  "kind": "prefab",
+  "note": "A glowing relic on a small stone plinth. It is not solid: the player walks through it and takes it with E.",
+  "parts": [
+    {
+      "name": "plinth",
+      "shape": "cylinder",
+      "at": [
+        0,
+        0.15,
+        0
+      ],
+      "size": [
+        0.6,
+        0.3,
+        0.6
+      ],
+      "material": "material/stone"
+    },
+    {
+      "name": "gem",
+      "shape": "sphere",
+      "at": [
+        0,
+        0.7,
+        0
+      ],
+      "size": [
+        0.5,
+        0.5,
+        0.5
+      ],
+      "material": "material/relic"
+    }
+  ],
+  "tags": [
+    "relic"
+  ]
+}

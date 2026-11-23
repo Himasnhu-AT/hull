@@ -249,7 +249,7 @@ export interface GameReport {
 
 /** A preview the Content Browser draws: numbers and colours only, read from the asset's text. */
 export type ContentThumb =
-  | { type: 'material'; color: string; roughness: number; metalness: number }
+  | { type: 'material'; color: string; roughness: number; metalness: number; emissive?: string }
   | { type: 'look'; sky: [string, string, string]; fog: string }
   | { type: 'vfx'; colors: string[] }
   | { type: 'sound'; bars: number[] | null; length: number }
