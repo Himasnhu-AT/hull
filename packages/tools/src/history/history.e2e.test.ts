@@ -39,7 +39,7 @@ beforeAll(async () => {
   await createProject({ template: 'cube', dir, title: 'M2 cube' });
   server = await startProjectServer({ root: dir, port: Number(process.env['HULL_E2E_PORT'] ?? 0), historyQuietMs: 0 });
   studio = await new Promise<Rpc>((res, rej) => {
-    const ws = new WebSocket(`${server.url}?role=studio`);
+    const ws = new WebSocket(`${server.url}&role=studio`);
     ws.on('open', () => res(new Rpc(ws)));
     ws.on('error', rej);
   });

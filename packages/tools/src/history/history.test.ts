@@ -1,10 +1,11 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { Change } from 'hull/dev/protocol';
 import { afterEach, describe, expect, it } from 'vitest';
 import { checkAuthorship } from './authors.ts';
 import { History } from './history.ts';
+import { atomicWrite, writeTracked } from './store.ts';
 
 const dirs: string[] = [];
 const opened: History[] = [];
