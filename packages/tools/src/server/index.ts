@@ -24,6 +24,7 @@ import { findTunables, rewriteTunable, type FoundTunable } from './tsTunables.ts
 import { kitImports, kitTunables } from './kitTunables.ts';
 import { engineAliases, hullResolve, virtualModule } from './vitePlugins.ts';
 import { buildBenchAudio, buildBenchModels } from './bench.ts';
+import { listKits, planKitAdd } from './kits.ts';
 import { findRefs, FOLDER_RE, ID_RE, planDelete, planDuplicate, planMoves, planNew, STARTERS, usesOf, type Plan, type Sources } from './assets.ts';
 import { thumbOf } from './thumbs.ts';
 import { createStackMapper, type MappedStack } from './stackmap.ts';
@@ -295,8 +296,14 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
   };
   const idOf = (path: string): string => (path === MANIFEST ? MANIFEST : path.slice('config/'.length, -'.json'.length));
   const kindOfPath = (path: string): string => (path === MANIFEST ? 'game' : path.split('/')[1] ?? '');
+  /** What to say about a config file that is not there: the call that makes it. A level or a prefab cannot be written by code.write (that is src/ only). */
+  const missingConfig = (path: string): string => {
+    if (path === MANIFEST) return 'hull.json does not exist: is this a Hull project?';
+    const id = idOf(path);
+    return `${path} does not exist. Create it with asset.new {"kind":"${kindOfPath(path)}","id":"${id}"} (a starter document that passes check), then set its fields with config.set. library.list shows the configs that exist.`;
+  };
   const readText = (path: string, dir = root): string => {
-    try { return readFileSync(join(dir, path), 'utf8'); } catch { throw new RpcError(-32001, `${path} does not exist`); }
+    try { return readFileSync(join(dir, path), 'utf8'); } catch { throw new RpcError(-32001, missingConfig(path)); }
   };
   const key = (p: Problem): string => `${p.file}|${p.pointer ?? ''}|${p.rule}|${p.message}`;
 
@@ -878,7 +885,14 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
       const refs = findRefs(src, new Set([p.id])).get(p.id) ?? [];
       return { ok: true, problems: [], referencedBy: refs.filter((r) => r.id !== p.id), uses: usesOf(src, p.id) };
     },
-    'asset.new': (p) => (STARTERS[p.kind] ? applyPlan(planNew(assetSources(), p.kind, p.id), p.author ?? 'you') : badAsset('config/' + p.kind, p.kind + ' cannot be created from nothing (have: ' + Object.keys(STARTERS).join(', ') + ')')),
+    'asset.new': (p) => applyPlan(planNew(assetSources(), p.kind, p.id), p.author ?? 'you'),
+    'kit.list': () => ({ ok: true, problems: [], items: listKits() }),
+    'kit.add': async (p) => {
+      const plan = planKitAdd(String(p.kit), new Set(assetIds()));
+      if (!plan.ok) return badAsset('config/', plan.message);
+      const r = await applyPlan({ ok: true, problems: [], writes: plan.writes, removes: [], mkdirs: [...new Set(plan.writes.map((w) => w.path.split('/').slice(0, -1).join('/')))], refs: [], created: plan.created, gone: [] }, p.author ?? 'you');
+      return r.ok ? { ...r, kept: plan.kept } : r;
+    },
     'asset.duplicate': (p) => applyPlan(planDuplicate(assetSources(), p.id, p.to), p.author ?? 'you'),
     'asset.rename': (p) => {
       const folder = isFolder(p.id);

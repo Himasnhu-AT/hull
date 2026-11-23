@@ -5,7 +5,7 @@ import { createMcpServer, type McpServer } from '@hull/tools/mcp';
 import type { ToolSpec } from './types.ts';
 
 /** Tools that change the project. Everything else only reads or runs the game. */
-const WRITES = new Set(['config.set', 'tunables.set', 'asset.new', 'asset.duplicate', 'asset.rename', 'asset.move', 'asset.delete', 'folder.new', 'code.edit', 'code.write', 'code.delete', 'history.restore', 'history.revert', 'exp.adopt', 'brief.write', 'explain.write', 'create.set']);
+const WRITES = new Set(['config.set', 'tunables.set', 'asset.new', 'kit.add', 'asset.duplicate', 'asset.rename', 'asset.move', 'asset.delete', 'folder.new', 'code.edit', 'code.write', 'code.delete', 'history.restore', 'history.revert', 'exp.adopt', 'brief.write', 'explain.write', 'create.set']);
 /** Writes about the flow, not the game: they never ask, and they do not make the run "dirty" (no check gate, no change card). */
 const FLOW_WRITES = new Set(['brief.write', 'explain.write', 'create.set']);
 /** Writes that are hard to see through or to undo by hand: they ask the person first. */

@@ -243,22 +243,69 @@ export function planDuplicate(src: Sources, id: string, to?: string): Plan {
   return done({ writes: [{ path: pathOfId(target), text: f.text }], mkdirs: [pathOfId(target).split('/').slice(0, -1).join('/')], created: [target] });
 }
 
-/** A small valid document per kind the Studio can create from nothing; the rest are made by duplicating one. */
+/**
+ * A small valid document for every kind in the schema, so any asset can be created from nothing. Each passes `check` in a
+ * fresh project: where it must name another asset, `NEEDS` lists the ones asset.new creates beside it when they are missing
+ * (a prefab's box needs a material). Starters for kinds a kit ships come from that kit's own example file, cut down.
+ */
 export const STARTERS: Readonly<Record<string, unknown>> = {
   material: { kind: 'material', color: '#9aa4b2', roughness: 0.6, metalness: 0 },
   look: { kind: 'look', sky: { horizon: '#c3cdd3', mid: '#a1adb8', zenith: '#8693a2' }, fog: { color: '#c3cdd3', near: 80, far: 600 } },
-  sound: { kind: 'sound', bus: 'top', level: -6, source: { type: 'synth', length: 0.2, layers: { tone: { from: { osc: 'sine', freq: 440 }, then: [{ envelope: { attack: 0.002, decay: 0.15 } }, { gain: -6 }] } } } },
+  // 'sfx' is a bus every project has (the default mixer: master, sfx, ui, voice, music); 'top' was not, so the sound played on master.
+  sound: { kind: 'sound', bus: 'sfx', level: -6, source: { type: 'synth', length: 0.2, layers: { tone: { from: { osc: 'sine', freq: 440 }, then: [{ envelope: { attack: 0.002, decay: 0.15 } }, { gain: -6 }] } } } },
   vfx: { kind: 'vfx', emit: { count: [4, 6] }, particle: { life: [0.4, 0.8], speed: [1, 3], size: [[0, 0.2], [1, 0.6]], color: [[0, '#ffd27a'], [1, '#c9523a']], alpha: [[0, 1], [1, 0]], sprite: 'soft' }, budget: { max: 200, fadeNear: 1 } },
   tuning: { kind: 'tuning' },
   'ui-screen': { kind: 'ui-screen', root: { panel: { align: 'center', gap: 10, width: 360 }, children: [{ title: { text: 'Title' } }, { text: { text: 'Change me' } }] } },
   'ui-theme': { kind: 'ui-theme', color: { panel: '#10141a', text: '#f4f1ea', accent: '#35e0c2' }, type: { size: 18 }, space: { gutter: 20, radius: 6 } },
   'input-map': { kind: 'input-map', actions: { jump: { type: 'button', keys: ['Space'] } } },
+  mixer: { kind: 'mixer', buses: { master: { level: 0 }, sfx: { to: 'master', level: 0 }, ui: { to: 'master', level: -4 }, music: { to: 'master', level: -10 } } },
+  // A walled ground with one block and the player's start marker, no prefab, so it needs only a material.
+  level: {
+    kind: 'level',
+    ground: { size: [24, 24], material: 'material/starter' },
+    walls: { height: 2.5, material: 'material/starter' },
+    blocks: [{ name: 'block', at: [4, 0.6, -4], size: [1.2, 1.2, 1.2], material: 'material/starter' }],
+    markers: { start: { at: [0, 0, 8], yawDeg: 0 } },
+  },
+  // The kit's crate prefab, with the starter material.
+  prefab: {
+    kind: 'prefab',
+    parts: [{ name: 'box', shape: 'box', at: [0, 0.6, 0], size: [1.2, 1.2, 1.2], material: 'material/starter' }],
+    collider: { shape: 'box', at: [0, 0.6, 0], size: [1.2, 1.2, 1.2] },
+  },
+  'anim-set': { kind: 'anim-set', clips: { idle: { type: 'generated', generator: 'humanoid/idle', loop: true } } },
+  'anim-graph': { kind: 'anim-graph', layers: { base: { start: 'idle', states: { idle: { clip: 'idle' } } } } },
+  character: { kind: 'character', body: { type: 'generated', recipe: 'humanoid', proportions: { height: 1.78, shoulders: 0.44, legs: 0.52, head: 0.23 } }, collider: { shape: 'capsule', radius: 0.35, height: 1.7 } },
+  'move-set': {
+    kind: 'move-set',
+    weapon: { socket: 'handR', base: [0, 0, 0], tip: [0, 0, 0.8] },
+    moves: { slash: { input: 'light', length: 0.6, damage: 10, posture: 10, reach: 1.6, windows: { telegraph: [0, 0.3], trace: [0.3, 0.45] } } },
+  },
+  enemy: { kind: 'enemy', moveSet: 'move-set/starter', health: 60, patterns: [{ name: 'cut', weight: 1, steps: [{ move: 'slash', telegraph: 0.4 }], recover: 1 }] },
 };
+
+/** The assets a starter names: made first, by their own starters, when the project does not have them. */
+export const NEEDS: Readonly<Record<string, readonly string[]>> = {
+  level: ['material/starter'],
+  prefab: ['material/starter'],
+  enemy: ['move-set/starter'],
+};
+
+const text = (doc: unknown): string => `${JSON.stringify(doc, null, 2)}\n`;
 
 export function planNew(src: Sources, kind: string, id: string): Plan {
   const starter = STARTERS[kind];
-  if (!starter) return fail(`config/${kind}`, `${kind} cannot be created from nothing here (have: ${Object.keys(STARTERS).join(', ')}); duplicate an existing one`);
+  if (!starter) return fail(`config/${kind}`, `${kind} is not a config kind (have: ${Object.keys(STARTERS).join(', ')})`);
   if (!ID_RE.test(id) || kindOf(id) !== kind) return fail(pathOfId(id), `${id} must be an id inside ${kind}/, like ${kind}/my-asset`);
-  if (ids(src).includes(id)) return fail(pathOfId(id), `${id} already exists`);
-  return done({ writes: [{ path: pathOfId(id), text: `${JSON.stringify(starter, null, 2)}\n` }], mkdirs: [pathOfId(id).split('/').slice(0, -1).join('/')], created: [id] });
+  const have = new Set(ids(src));
+  if (have.has(id)) return fail(pathOfId(id), `${id} already exists`);
+  const writes = [{ path: pathOfId(id), text: text(starter) }];
+  const created = [id];
+  for (const need of NEEDS[kind] ?? []) {
+    if (have.has(need) || need === id) continue;
+    writes.push({ path: pathOfId(need), text: text(STARTERS[kindOf(need)]) });
+    created.push(need);
+  }
+  const mkdirs = [...new Set(writes.map((w) => w.path.split('/').slice(0, -1).join('/')))];
+  return done({ writes, mkdirs, created });
 }

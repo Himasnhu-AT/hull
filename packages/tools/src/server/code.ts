@@ -7,6 +7,13 @@ export const CODE_EXT = /\.(ts|tsx|js|mjs|json|css|glsl|wgsl|txt|md)$/;
 /** A file bigger than this is neither read whole by the tools nor written by them: it is data, not code. */
 export const MAX_BYTES = 512 * 1024;
 
+/** A path under config/ is not code: say which calls make and change it. */
+function configHint(rel: string): string {
+  const m = /^config\/(([A-Za-z0-9_-]+)\/[A-Za-z0-9_./-]*?)(\.json)?$/.exec(rel);
+  if (!m) return 'config/ goes through the asset tools (asset.new, then config.set)';
+  return `create it with asset.new {"kind":"${m[2]}","id":"${m[1]}"} (a starter that passes check), then set its fields with config.set; config.read shows an existing file`;
+}
+
 export interface CodeFile { path: string; bytes: number }
 
 /**
@@ -17,7 +24,7 @@ export function resolveCodePath(root: string, rel: unknown, opts: { file?: boole
   if (typeof rel !== 'string' || rel === '') return { ok: false, message: 'a path under src/ is required, like src/main.ts' };
   if (rel.includes('\0') || rel.includes('\\') || rel.startsWith('/') || /^[A-Za-z]:/.test(rel)) return { ok: false, message: `"${rel}" is not a project path: use 'src/...' with forward slashes` };
   const parts = rel.split('/');
-  if (parts[0] !== 'src') return { ok: false, message: `"${rel}" is outside src/: code tools only reach src/ (config/ goes through config_set and the asset tools)` };
+  if (parts[0] !== 'src') return { ok: false, message: `"${rel}" is outside src/: code tools only reach src/. ${configHint(rel)}` };
   if (parts.some((p) => p === '..' || p === '.' || p === '')) return { ok: false, message: `"${rel}" must be a plain path under src/ (no '..', '.' or empty parts)` };
   if (parts.some((p, i) => i > 0 && (p.startsWith('.') || p === 'node_modules'))) return { ok: false, message: `"${rel}" goes through a hidden or node_modules folder` };
   if (opts.file && !CODE_EXT.test(rel)) return { ok: false, message: `"${rel}" must be a code or text file (.ts .tsx .js .mjs .json .css .glsl .wgsl .txt .md)` };
