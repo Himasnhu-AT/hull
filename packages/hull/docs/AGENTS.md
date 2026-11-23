@@ -24,7 +24,9 @@ guide is `docs.read guide/engine`; `docs.search` finds a section; `kit/index` li
    `until` steps to a condition, `restart` starts over, `perf` measures (draw calls and triangles are one frame), `frames` tiles several moments in one picture.
    Menus and HUD: `{"op":"ui"}` lists what a person could read (screens, texts, buttons, bars), `{"op":"click","button":"Start"}` clicks a
    button by its text, and `press` of `Enter`, `Space`, `Escape`, `Tab` or an arrow reaches the UI like a real key. `screenshot` takes
-   `width` and `height` (up to 1920x1080) for one big picture; the default is 640x360.
+   `width` and `height` (up to 1920x1080) for one big picture; the default is 640x360. To arrange a test, `teleport` and `set` (and `until` with `near`)
+   skip the walking, and a run that uses them is not a replay of real input. `test` returns what the tests printed as `output`: log a value to read it.
+   Keys: `press` takes a KeyboardEvent code (`KeyE`); an input-map writes `"E"` or `"KeyE"`. `code.write` takes `path` and `text`.
 4. Say plainly what you could not judge (how it feels, how it sounds).
 
 ## Where things are
