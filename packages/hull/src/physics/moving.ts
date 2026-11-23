@@ -2,10 +2,10 @@
 // instead of every one. Until plan-rust.md R0 the world walked the whole moving list for each query, which at about
 // 2,500 moving shapes (160 titans) and 400 queries a step was a million box tests a step.
 //
-// The layout is flat on purpose (plan-rust.md section 4, test 4): numbers in typed arrays, no objects. Most of what a
-// compiled kernel would gain comes from that layout, and plan-rust.md R1 measured it: the same grid built in Rust,
-// in a WebAssembly module's memory, made the step no faster (section 13), so it was taken out again. `MovingStore`
-// is the seam it used: the arrays and who builds the grid from them; everything that reads the grid is here.
+// The layout is flat on purpose (plan-rust.md section 4, test 4): numbers in typed arrays, no objects. This is the
+// TypeScript implementation; the kernel (crates/hull-kernels/src/world.rs) holds the same index in its own memory,
+// built and read the same way, and the world uses that one when the kernel is running. Both stay current, so the
+// world can fall back to this one at any moment.
 //
 // What a query returns never depends on the grid: candidates come back in the order the shapes were added, exactly
 // the shapes the old walk accepted. The grid only decides how few are looked at.

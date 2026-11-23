@@ -100,7 +100,9 @@ interface Rig { phys: Physics; shapes: Shape[]; }
 
 async function world(seed: number, oldWalk: boolean): Promise<Rig> {
   let phys!: Physics;
-  await startGame(defineGame({ ready(g) { phys = usePhysics(g.world); } }), { seed: 1, stepRate: 60 });
+  // This file holds the TypeScript index to the old walk, so its worlds run on TypeScript (the kernel's own index is
+  // held to the TypeScript world in world.kernel.test.ts).
+  await startGame(defineGame({ ready(g) { phys = usePhysics(g.world); } }), { seed: 1, stepRate: 60, kernels: 'off' });
   if (oldWalk) {
     // Before the index: a sweep tested every moving shape in order, an overlap kept those whose bounds met the box.
     const index = phys.index as unknown as { n: number; found: Int32Array; box(...a: number[]): number; linear(...a: number[]): number };

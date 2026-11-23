@@ -799,3 +799,34 @@ One sheet, opened from the launcher, both title bars, the builder's "Add a key" 
 | A subsystem that throws at start does not stop the game | `mountRender` and `mountAudio` report once and carry on without a picture or sound |
 | No allocations per frame in engine code | Convention for now; the physics tests check queries and the mover allocate nothing |
 | Dev tools are not in ship builds | `build` scans the bundle and fails if dev code reached it |
+
+## 11. Kernels: Rust compiled to WebAssembly
+
+`plan-rust.md` is the plan and holds the measurements. Today one subsystem runs in a kernel: all of `hull/physics`.
+
+* **One crate, one module.** `crates/hull-kernels` (`no_std`, plain `extern "C"` exports, no wasm-bindgen, no
+  dependencies) builds to one `.wasm` that imports nothing. `pnpm kernels:build` builds it (with
+  `RUSTC_BOOTSTRAP=1`, for WebAssembly's `sqrt`, `floor` and `ceil` instructions) and writes it as base64, with a
+  sha256 stamp of the crate's source, to `packages/hull/src/kernel/wasm.ts`, which is committed. `pnpm check` fails
+  when the stamp and the source disagree. Nobody but someone changing a kernel needs Rust.
+* **Loading.** `hull/kernel` registers a preload with `beforeStart`; `startGame` awaits it, so the module is compiled
+  before `ready`. A world that starts physics takes its own instance (`takeKernel`). Only a game that imports
+  `hull/physics` carries the module, and the build report says how many bytes it is.
+* **Off and failing.** `hull.json` `"kernels": false`, `?kernels=off` on the dev page, or `StartOptions.kernels` run
+  the TypeScript implementation. A module that fails to compile is reported once and the TypeScript runs
+  (`?kernels=fail` proves it). A world keeps its TypeScript grid, index and bodies current all along, so a trap
+  inside the kernel, or a world wider than the kernel's static grid holds, drops that world back to TypeScript
+  mid-game with the same answers.
+* **The boundary.** Numbers only. TypeScript keeps the API and the `Shape` and `RigidBody` objects; a shape writes
+  its pose and properties into the module's memory through typed-array views (`physics/kernel.ts`), and a moved
+  shape joins a dirty list the kernel files before its next query, so posing costs no call. A query is one call
+  (filters are written to a scratch block first: masks, interned tag ids or a bit set for a tag prefix, interned
+  node ids); a rigid step is one call, with the bodies copied in before and out after. Views are made again when
+  the header's epoch says the module's arrays moved or its memory grew.
+* **Same answers, bit for bit.** The kernel computes in `f64` with the TypeScript's operations in the TypeScript's
+  order, `min` and `max` written to JavaScript's NaN and signed-zero rules, candidates offered in the same order
+  and ties settled by the same rule. AOTT's checksum is the same with the kernel on, off and failing to load.
+  `narrow.kernel.test.ts` holds each shape kind and `world.kernel.test.ts` a whole world (queries, the mover,
+  rigid bodies) to the TypeScript; the physics suite runs on both (`physics.typescript.test.ts`).
+* **What does not move.** Game code, kits, config, the world and nodes, input, UI, audio, rendering, the tools and
+  the Studio. A game never sees the kernel.

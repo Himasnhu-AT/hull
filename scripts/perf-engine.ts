@@ -16,8 +16,11 @@ import { Animator } from '../packages/hull/src/anim/index.ts';
 import { mountVfx, vfx } from '../packages/hull/src/vfx/index.ts';
 
 const HZ = 120;
-const scales = (process.argv[2] ?? '1,4,16').split(',').map(Number);
-const only = process.argv[3]?.split(',');
+const positional = process.argv.slice(2).filter((a) => !a.startsWith('--'));
+const scales = (positional[0] ?? '1,4,16').split(',').map(Number);
+const only = positional[1]?.split(',');
+// --kernels=off times the TypeScript implementation of everything; the default is the WebAssembly kernels.
+const kernels = (process.argv.find((a) => a.startsWith('--kernels='))?.slice(10) ?? 'on') as 'on' | 'off';
 const wanted = (name: string): boolean => !only || only.some((o) => name.startsWith(o));
 
 const v = (x: number, y: number, z: number) => ({ x, y, z });
@@ -57,7 +60,7 @@ const src = (p: string) => fileURLToPath(new URL(p, import.meta.url));
 
 async function boxScene(boxes: number, side: number): Promise<{ game: Game; phys: Physics; rnd: () => number }> {
   let phys!: Physics;
-  const game = await startGame(defineGame({ ready(g) { phys = usePhysics(g.world); } }), { seed: 1, stepRate: HZ });
+  const game = await startGame(defineGame({ ready(g) { phys = usePhysics(g.world); } }), { seed: 1, stepRate: HZ, kernels });
   // The same generator as the 1,000 raycasts / 5,000 boxes test in physics.test.ts.
   const rnd = lcg(12345);
   for (let i = 0; i < boxes; i++) {
@@ -145,7 +148,7 @@ async function rigidRun(scale: number, timed: boolean): Promise<{ ms: number[]; 
         else n.add(Body, { shape: { type: 'box', size: [0.6 + (i % 4) * 0.1, 0.4, 0.5] }, mass: 2 });
       }
     },
-  }), { seed: 7, stepRate: HZ });
+  }), { seed: 7, stepRate: HZ, kernels });
   const ms: number[] = [];
   for (let i = 0; i < 600; i++) {
     const t0 = performance.now();
@@ -180,7 +183,7 @@ async function anim(): Promise<Bench> {
     const anims: Animator[] = [];
     const game = await startGame(defineGame({
       ready(g) { for (let i = 0; i < n; i++) anims.push(g.world.spawn(`c${i}`).add(Animator, { character: 'character/soldier' })); },
-    }), { seed: 3, stepRate: HZ });
+    }), { seed: 3, stepRate: HZ, kernels });
     const ms: number[] = [], rms: number[] = [];
     for (let i = 0; i < 480; i++) {
       for (let k = 0; k < n; k++) anims[k]!.set('speed', 5 + 5 * Math.sin(i * 0.01 + k));
@@ -218,7 +221,7 @@ async function particles(): Promise<Bench> {
   ]);
   if (res.problems.length) throw new Error('vfx config: ' + JSON.stringify(res.problems.slice(0, 2)));
   for (const scale of scales) {
-    const game = await startGame(defineGame({ ready() {} }), { seed: 5, stepRate: HZ });
+    const game = await startGame(defineGame({ ready() {} }), { seed: 5, stepRate: HZ, kernels });
     mountVfx(game);
     const ms: number[] = [];
     for (let i = 0; i < 480; i++) {
@@ -242,13 +245,12 @@ async function particles(): Promise<Bench> {
  * the game issues against them. Timed per step: moving every shape, then the queries.
  *
  * It uses only the public API, so the same file run on a commit before the moving-shape index (c49db6d) gives the
- * old walk ("list"); on this one it gives the index ("typescript"). plan-rust.md section 13 has both, and the Rust
- * kernel's timings from when it was built.
+ * old walk ("list"); on this one it gives the TypeScript index (--kernels=off) or the kernel world (the default).
  */
 async function movingRun(scale: number): Promise<{ row: Row; sum: number }> {
   const titans = 10 * scale, per = 15, queries = 21 * scale, rays = 3 * scale, statics = 4400, side = 400;
   let phys!: Physics;
-  const game = await startGame(defineGame({ ready(g) { phys = usePhysics(g.world, { cell: 16 }); } }), { seed: 9, stepRate: HZ });
+  const game = await startGame(defineGame({ ready(g) { phys = usePhysics(g.world, { cell: 16 }); } }), { seed: 9, stepRate: HZ, kernels });
   const rnd = lcg(4711);
   for (let i = 0; i < statics; i++) {
     const h = 6 + rnd() * 20;
@@ -311,7 +313,7 @@ async function movingRun(scale: number): Promise<{ row: Row; sum: number }> {
   const builds = ((index?.builds ?? 0) - builds0) / 600;
   const load = { moving: titans * per, statics, overlaps: queries, rays, buildsAStep: r4(builds), answers: sum };
   game.dispose();
-  return { row: { ...row(scale, load, ms, 2), variant: index ? 'typescript' : 'list' } as Row, sum };
+  return { row: { ...row(scale, load, ms, 2), variant: !index ? 'list' : (phys as unknown as { backend?: string }).backend ?? 'typescript' } as Row, sum };
 }
 
 async function moving(): Promise<Bench> {
@@ -329,4 +331,4 @@ if (wanted('physics.rigid')) benches.push(await rigid());
 if (wanted('anim.graph')) benches.push(await anim());
 if (wanted('vfx.cpu')) benches.push(await particles());
 if (wanted('physics.moving')) benches.push(await moving());
-console.log(JSON.stringify({ scales, benches }));
+console.log(JSON.stringify({ scales, kernels, benches }));

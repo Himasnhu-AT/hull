@@ -33,6 +33,17 @@ function pinnedBackend(sources: ConfigSource[]): string | undefined {
   }
 }
 
+/** True only when the manifest says "kernels": false; absent or anything else keeps the engine's default (on). */
+function kernelsOff(sources: ConfigSource[]): boolean {
+  const text = sources.find((s) => s.path === 'hull.json')?.text;
+  if (!text) return false;
+  try {
+    return (JSON.parse(text) as { kernels?: unknown }).kernels === false;
+  } catch {
+    return false;
+  }
+}
+
 export function bootSource(o: BootOptions): string {
   const features = o.features ?? [];
   const backend = pinnedBackend(o.sources);
@@ -62,7 +73,12 @@ export function bootSource(o: BootOptions): string {
   const body = [
     `const loaded = config.load(sources);`,
     `for (const p of loaded.problems) console.error(p.file + (p.pointer ?? '') + ': ' + p.message);`,
-    `const g = await startGame(game);`,
+    // The option goes through startGame only: importing hull/kernel here would put the WebAssembly in every game.
+    // The dev page's ?kernels= flag wins over hull.json, so one page can be compared against the other; it never ships.
+    // The flag is the page's, not the dev connection's: a dev page served without a connection honours it too.
+    o.build
+      ? kernelsOff(o.sources) ? `const g = await startGame(game, { kernels: 'off' });` : `const g = await startGame(game);`
+      : `const kq = new URLSearchParams(location.search).get('kernels'); const g = await startGame(game, { kernels: kq === 'off' || kq === 'fail' ? kq : ${kernelsOff(o.sources) ? "'off'" : "'on'"} });`,
     `const parts = [];`,
     `const views = { game: g };`,
     `globalThis.hull = views;`,

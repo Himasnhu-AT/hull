@@ -5,6 +5,7 @@ import type { Object3D } from 'three';
 import type { Node } from '../core/index.ts';
 import { buildMesh, type MeshData } from './mesh.ts';
 import type { MovingIndex } from './moving.ts';
+import type { KernelWorld } from './kernel.ts';
 import type { ShapeDesc, ShapeOptions } from './types.ts';
 import { LAYER_ALL } from './types.ts';
 
@@ -60,13 +61,14 @@ let nextId = 1;
 export class Shape {
   readonly id = nextId++;
   readonly kind: Kind;
-  layer: number;
-  mask: number;
-  tag: string;
-  trigger: boolean;
+  private _layer: number;
+  private _mask: number;
+  private _tag: string;
+  private _trigger: boolean;
+  private _enabled = true;
+  private _node: Node | null;
   readonly isStatic: boolean;
-  enabled = true;
-  node: Node | null;
+
   follow: Object3D | null;
   userData: unknown;
 
@@ -98,18 +100,21 @@ export class Shape {
   _removed = false;
   /** @internal rigid body that owns this shape, if any */
   _rb: unknown = null;
+  /** @internal the kernel's mirror of this world and this shape's id there; null and -1 when the world runs on TypeScript */
+  _kw: KernelWorld | null = null;
+  _kid = -1;
   /** @internal the world's index of moving shapes and this shape's slot in it; null and -1 for a static shape */
   _index: MovingIndex | null = null;
   _slot = -1;
 
   constructor(desc: ShapeDesc, o: ShapeOptions) {
-    this.layer = o.layer ?? 1;
-    this.mask = o.mask ?? LAYER_ALL;
-    this.tag = o.tag ?? '';
-    this.trigger = o.trigger ?? false;
+    this._layer = o.layer ?? 1;
+    this._mask = o.mask ?? LAYER_ALL;
+    this._tag = o.tag ?? '';
+    this._trigger = o.trigger ?? false;
     this.follow = o.follow ?? null;
     this.isStatic = o.static ?? o.follow === undefined;
-    this.node = o.node ?? null;
+    this._node = o.node ?? null;
     this.userData = o.userData;
 
     switch (desc.type) {
@@ -181,6 +186,20 @@ export class Shape {
     }
     this.updatePose(o);
   }
+
+  // Game code may change these at any time (AOTT switches shapes off around a cast); a world on the kernel hears of it.
+  get layer(): number { return this._layer; }
+  set layer(v: number) { this._layer = v; this._kw?.props(this); }
+  get mask(): number { return this._mask; }
+  set mask(v: number) { this._mask = v; this._kw?.props(this); }
+  get tag(): string { return this._tag; }
+  set tag(v: string) { this._tag = v; this._kw?.props(this); }
+  get trigger(): boolean { return this._trigger; }
+  set trigger(v: boolean) { this._trigger = v; this._kw?.props(this); }
+  get enabled(): boolean { return this._enabled; }
+  set enabled(v: boolean) { this._enabled = v; this._kw?.props(this); }
+  get node(): Node | null { return this._node; }
+  set node(v: Node | null) { this._node = v; this._kw?.props(this); }
 
   private matrixFor(o: ShapeOptions): ArrayLike<number> {
     if (this.follow) {
@@ -284,5 +303,6 @@ export class Shape {
       }
     }
     if (this._index !== null) this._index.touch(this._slot, this);
+    if (this._kw !== null) this._kw.pose(this);
   }
 }

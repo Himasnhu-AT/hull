@@ -19,6 +19,8 @@ export interface BuildResult {
   files?: { path: string; bytes: number; gzip: number }[];
   /** True when nothing from hull/dev reached game.js. */
   devFree?: boolean;
+  /** Present when game.js carries the engine's WebAssembly module; absent when no module the game imports has one. */
+  kernel?: { bytes: number };
 }
 
 /** `note` is for people reading the file; the shipped game has no use for it. */
@@ -85,9 +87,13 @@ export async function buildProject(root: string, log: (line: string) => void = (
   const text = js.toString('utf8');
   // Dev code is recognisable by what it logs and by its module path; neither may appear in a ship build.
   const devFree = !/\[dev\]|dev\/runtime|connectDev|role=game|hull-client|hull-headless/.test(text);
+  // Only a game that imports a module with a kernel (hull/physics) carries the module; its base64 starts with a fixed marker.
+  const { KERNEL_MARKER, KERNEL_BYTES } = await import('hull/kernel');
+  const kernel = text.includes(KERNEL_MARKER) ? { bytes: KERNEL_BYTES } : undefined;
   const report = [{ path: 'game.js', bytes: js.length, gzip: gzipSync(js).length }, { path: 'index.html', bytes: statSync(join(outDir, 'index.html')).size, gzip: 0 }];
-  writeFileSync(join(outDir, 'build.json'), `${JSON.stringify({ files: report, devFree }, null, 2)}\n`);
+  writeFileSync(join(outDir, 'build.json'), `${JSON.stringify({ files: report, devFree, ...(kernel ? { kernel } : {}) }, null, 2)}\n`);
   log(`dist/web/game.js ${(js.length / 1024).toFixed(0)} kB (${(report[0]!.gzip / 1024).toFixed(0)} kB gzip)`);
-  if (!devFree) return { ok: false, outDir, files: report, devFree, problems: [{ file: 'dist/web/game.js', rule: 'house-rule', message: 'dev code reached the build' }] };
-  return { ok: true, problems: [], outDir, files: report, devFree };
+  log(kernel ? `kernel: ${(kernel.bytes / 1024).toFixed(1)} kB of WebAssembly inside game.js` : 'kernel: none (the game imports no module that has one)');
+  if (!devFree) return { ok: false, outDir, files: report, devFree, kernel, problems: [{ file: 'dist/web/game.js', rule: 'house-rule', message: 'dev code reached the build' }] };
+  return { ok: true, problems: [], outDir, files: report, devFree, kernel };
 }

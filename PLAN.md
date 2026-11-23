@@ -233,7 +233,7 @@ checking the current release.
 | Schemas | TypeBox (the `typebox` package, 1.x; schemas are JSON Schema, types are inferred), Ajv to validate | One source for types, checks and forms. |
 | History storage | git objects through isomorphic-git, in a private repository under `.hull/` | A proven store and merge base with no dependency on git being installed; Hull adds the diff that understands JSON and tunables. |
 | Source edits | TypeScript 6's compiler API (`typescript@6`) | Rewrites one literal in place without touching the rest of the file. TypeScript 7 is a native compiler whose JavaScript API is still marked unstable, so tools parse with 6 while `check` type-checks with 7's `tsc`. |
-| Rigid bodies (optional) | Hull's own solver in TypeScript (`hull/physics`, `rigid.ts`) | Deterministic and in the same world as the queries; only bundled by games that import it. Rapier was the first choice and was never added. |
+| Rigid bodies (optional) | Hull's own solver (`hull/physics`, `rigid.ts`), run in the physics kernel (`crates/hull-kernels`) | Deterministic and in the same world as the queries; only bundled by games that import it. Rapier was the first choice and was never added. |
 | Tests | Vitest in Node; Playwright with headless Chromium for the browser | Logic without a browser; screenshots with one pinned Chromium. |
 | Studio | Electron * app; React + Vite inside | Its own window, direct file access, the same Chromium the games ship in. Only the Studio uses React. |
 | Desktop shell for games | Electron * + electron-builder * by default; Tauri as an experimental option | See 6.2. |
@@ -364,7 +364,7 @@ that stream for action games (target under about 80 ms from input to picture), a
 | # | Decision | Chosen |
 |---|---|---|
 | D1 | Name | **Hull**, by Marl Studio. The command is `hull`. |
-| D2 | Language | TypeScript for the engine and for games. |
+| D2 | Language | TypeScript for the engine and for games. The physics world also runs as a Rust kernel compiled to WebAssembly, behind the same TypeScript API, with the TypeScript kept as fallback and oracle (`plan-rust.md`, owner's call of 23 Nov 2026). |
 | D3 | Desktop shell | Electron by default; Tauri as an experimental option. |
 | D4 | World model | Nodes with behaviours and signals; systems over plain arrays for anything that exists in the hundreds. |
 | D5 | Where tuning lives | In the files themselves (JSON and code), with Hull keeping the diff and history, and git supported. |
