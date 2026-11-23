@@ -4,6 +4,7 @@
 import type { Object3D } from 'three';
 import type { Node } from '../core/index.ts';
 import { buildMesh, type MeshData } from './mesh.ts';
+import type { MovingIndex } from './moving.ts';
 import type { ShapeDesc, ShapeOptions } from './types.ts';
 import { LAYER_ALL } from './types.ts';
 
@@ -97,6 +98,9 @@ export class Shape {
   _removed = false;
   /** @internal rigid body that owns this shape, if any */
   _rb: unknown = null;
+  /** @internal the world's index of moving shapes and this shape's slot in it; null and -1 for a static shape */
+  _index: MovingIndex | null = null;
+  _slot = -1;
 
   constructor(desc: ShapeDesc, o: ShapeOptions) {
     this.layer = o.layer ?? 1;
@@ -279,5 +283,6 @@ export class Shape {
         break;
       }
     }
+    if (this._index !== null) this._index.touch(this._slot, this);
   }
 }
