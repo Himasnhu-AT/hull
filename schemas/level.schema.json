@@ -1,0 +1,425 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:hull:schema:level",
+  "type": "object",
+  "required": [
+    "kind",
+    "ground"
+  ],
+  "properties": {
+    "kind": {
+      "type": "string",
+      "const": "level"
+    },
+    "note": {
+      "type": "string"
+    },
+    "look": {
+      "type": "string",
+      "x-ref": "look",
+      "x-ui": {
+        "widget": "ref"
+      }
+    },
+    "ground": {
+      "type": "object",
+      "required": [
+        "size",
+        "material"
+      ],
+      "properties": {
+        "size": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "minItems": 2,
+          "maxItems": 2,
+          "items": false,
+          "default": [
+            40,
+            40
+          ],
+          "x-ui": {
+            "unit": "m",
+            "help": "Width and depth, centred on the origin."
+          }
+        },
+        "material": {
+          "type": "string",
+          "x-ref": "material",
+          "x-ui": {
+            "widget": "ref"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "walls": {
+      "type": "object",
+      "required": [
+        "height",
+        "material"
+      ],
+      "properties": {
+        "height": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "default": 2.5,
+          "x-ui": {
+            "unit": "m"
+          }
+        },
+        "thickness": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "default": 0.6,
+          "x-ui": {
+            "unit": "m"
+          }
+        },
+        "material": {
+          "type": "string",
+          "x-ref": "material",
+          "x-ui": {
+            "widget": "ref"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "x-ui": {
+        "help": "Four walls just outside the ground edge."
+      }
+    },
+    "blocks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "at",
+          "size",
+          "material"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "shape": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "box"
+              },
+              {
+                "type": "string",
+                "const": "cylinder"
+              }
+            ],
+            "default": "box",
+            "x-ui": {
+              "help": "A cylinder stands on its flat end; its width and depth are the two diameters."
+            }
+          },
+          "at": {
+            "type": "array",
+            "prefixItems": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "minItems": 3,
+            "maxItems": 3,
+            "items": false,
+            "x-ui": {
+              "unit": "m",
+              "help": "Centre of the block."
+            }
+          },
+          "size": {
+            "type": "array",
+            "prefixItems": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "minItems": 3,
+            "maxItems": 3,
+            "items": false,
+            "x-ui": {
+              "unit": "m",
+              "help": "Full width, height and depth (before any turn)."
+            }
+          },
+          "rotDeg": {
+            "type": "array",
+            "prefixItems": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "minItems": 3,
+            "maxItems": 3,
+            "items": false,
+            "x-ui": {
+              "unit": "deg",
+              "help": "Turn about x, y and z, in degrees. A ramp is a box turned about x or z."
+            }
+          },
+          "material": {
+            "type": "string",
+            "x-ref": "material",
+            "x-ui": {
+              "widget": "ref"
+            }
+          },
+          "solid": {
+            "type": "boolean",
+            "default": true,
+            "x-ui": {
+              "help": "false: drawn only, nothing collides with it."
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "things": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "prefab",
+          "at"
+        ],
+        "properties": {
+          "prefab": {
+            "type": "string",
+            "x-ref": "prefab",
+            "x-ui": {
+              "widget": "ref"
+            }
+          },
+          "at": {
+            "type": "array",
+            "prefixItems": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "minItems": 3,
+            "maxItems": 3,
+            "items": false,
+            "x-ui": {
+              "unit": "m",
+              "help": "Where the prefab origin goes."
+            }
+          },
+          "yawDeg": {
+            "type": "number",
+            "default": 0,
+            "x-ui": {
+              "unit": "deg",
+              "step": 5
+            }
+          },
+          "scale": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "default": 1,
+            "x-ui": {
+              "step": 0.05
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "markers": {
+      "type": "object",
+      "patternProperties": {
+        "^.*$": {
+          "type": "object",
+          "required": [
+            "at"
+          ],
+          "properties": {
+            "at": {
+              "type": "array",
+              "prefixItems": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "minItems": 3,
+              "maxItems": 3,
+              "items": false,
+              "x-ui": {
+                "unit": "m"
+              }
+            },
+            "yawDeg": {
+              "type": "number",
+              "default": 0,
+              "x-ui": {
+                "unit": "deg",
+                "step": 5,
+                "help": "Facing, as a camera yaw: 0 looks down -z."
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "x-ui": {
+        "help": "Named points: where the player starts, where enemies come from, the goal."
+      }
+    },
+    "scatter": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "prefab",
+          "count",
+          "area",
+          "stream"
+        ],
+        "properties": {
+          "prefab": {
+            "type": "string",
+            "x-ref": "prefab",
+            "x-ui": {
+              "widget": "ref"
+            }
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 5,
+            "x-ui": {
+              "widget": "dial"
+            }
+          },
+          "area": {
+            "type": "object",
+            "required": [
+              "at",
+              "size"
+            ],
+            "properties": {
+              "at": {
+                "type": "array",
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "minItems": 2,
+                "maxItems": 2,
+                "items": false,
+                "default": [
+                  0,
+                  0
+                ],
+                "x-ui": {
+                  "unit": "m",
+                  "help": "Centre of the area on the floor: x and z."
+                }
+              },
+              "size": {
+                "type": "array",
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "minItems": 2,
+                "maxItems": 2,
+                "items": false,
+                "x-ui": {
+                  "unit": "m",
+                  "help": "Width and depth of the area."
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          "stream": {
+            "type": "string",
+            "minLength": 1,
+            "x-ui": {
+              "help": "Name of the world random stream the positions are drawn from, so a seed gives one layout."
+            }
+          },
+          "gap": {
+            "type": "number",
+            "minimum": 0,
+            "default": 1,
+            "x-ui": {
+              "unit": "m",
+              "help": "Clear space kept between the new thing and everything solid."
+            }
+          },
+          "avoidMarkers": {
+            "type": "number",
+            "minimum": 0,
+            "default": 3,
+            "x-ui": {
+              "unit": "m",
+              "help": "Distance kept from every marker, so the start and the goals stay clear."
+            }
+          },
+          "randomYaw": {
+            "type": "boolean",
+            "default": true
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false,
+  "title": "Hull level"
+}

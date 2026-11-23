@@ -2,10 +2,9 @@ import { Behaviour, signal, type Node, type World } from '../../core/index.ts';
 import { num, tunables } from '../../config/index.ts';
 import { Mesh, teleported } from '../../render/index.ts';
 import type { UiView } from '../../ui/index.ts';
-import { flagsOf, GROUP, KitUi, upFrom, type KitFlags } from '../common.ts';
+import { flagsOf, GROUP, KitUi, upFrom, type KitFlags, type LevelLike } from '../common.ts';
 import { Health } from '../health/health.ts';
 import { kitIO } from '../io.ts';
-import type { ArenaLevel } from '../level/level.ts';
 
 export const pickupTuning = tunables('pickup', {
   spinSpeed: num(2.2, { min: 0, max: 12, step: 0.1, unit: 'rad/s', widget: 'dial' }),
@@ -135,7 +134,7 @@ export class Pickup extends Behaviour {
 }
 
 /** Puts `count` pickups of one kind on free floor of the level (from the world's 'pickups' random stream). */
-export function scatterPickups(world: World, level: ArenaLevel, kind: string, count: number, opts: { amount?: number; respawn?: number } = {}): Node[] {
+export function scatterPickups(world: World, level: LevelLike, kind: string, count: number, opts: { amount?: number; respawn?: number } = {}): Node[] {
   const out: Node[] = [];
   const spot = { x: 0, z: 0 };
   for (let i = 0; i < count; i++) {

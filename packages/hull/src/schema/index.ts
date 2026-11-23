@@ -5,7 +5,9 @@ import { animSetSchema, type AnimSet } from './anim-set.ts';
 import { characterSchema, type Character, type CharacterHit } from './character.ts';
 import { enemySchema, type Enemy, type EnemyPattern } from './enemy.ts';
 import { explainSchema } from './explain.ts';
+import { levelSchema, type Level } from './level.ts';
 import { lookSchema, type Look } from './look.ts';
+import { prefabSchema, type Prefab } from './prefab.ts';
 import { inputMapSchema, type InputMap } from './input-map.ts';
 import { materialSchema, type Material } from './material.ts';
 import { mixerSchema, type Mixer } from './mixer.ts';
@@ -17,8 +19,8 @@ import { uiScreenSchema, type UiScreenDef } from './ui-screen.ts';
 import { uiThemeSchema, type UiTheme } from './ui-theme.ts';
 import { vfxSchema, type Vfx } from './vfx.ts';
 
-export { animGraphSchema, animSetSchema, characterSchema, enemySchema, explainSchema, inputMapSchema, lookSchema, manifestSchema, materialSchema, mixerSchema, moveSetSchema, soundSchema, tuningSchema, uiScreenSchema, uiThemeSchema, vfxSchema };
-export type { AnimGraph, AnimSet, Character, CharacterHit, Enemy, EnemyPattern, InputMap, Look, Manifest, Material, Mixer, Move, MoveSet, Sound, Tuning, UiScreenDef, UiTheme, Vfx };
+export { animGraphSchema, animSetSchema, characterSchema, enemySchema, explainSchema, inputMapSchema, levelSchema, lookSchema, prefabSchema, manifestSchema, materialSchema, mixerSchema, moveSetSchema, soundSchema, tuningSchema, uiScreenSchema, uiThemeSchema, vfxSchema };
+export type { AnimGraph, AnimSet, Character, CharacterHit, Enemy, EnemyPattern, InputMap, Level, Look, Prefab, Manifest, Material, Mixer, Move, MoveSet, Sound, Tuning, UiScreenDef, UiTheme, Vfx };
 export * from './ui.ts';
 
 /** Kinds that live under config/<kind>/. The manifest is separate: it is hull.json at the project root. */
@@ -37,6 +39,8 @@ export const kinds: Readonly<Record<string, object>> = {
   'ui-screen': uiScreenSchema,
   'ui-theme': uiThemeSchema,
   vfx: vfxSchema,
+  prefab: prefabSchema,
+  level: levelSchema,
 };
 
 /** Value types per kind, so `config.get('tuning', id)` is typed. */
@@ -56,6 +60,8 @@ declare module '../config/types.ts' {
     'anim-graph': AnimGraph;
     'move-set': MoveSet;
     enemy: Enemy;
+    prefab: Prefab;
+    level: Level;
   }
 }
 

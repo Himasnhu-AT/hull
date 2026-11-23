@@ -9,6 +9,28 @@ export const LAYER = { world: 1, player: 2, enemy: 4, pickup: 8 } as const;
 /** Group names the kits find each other by. */
 export const GROUP = { player: 'player', enemy: 'enemy', pickup: 'pickup', save: 'save' } as const;
 
+/** The floor box a level gives to kits that need free ground: its edges on x and z. */
+export interface LevelBounds { minX: number; maxX: number; minZ: number; maxZ: number }
+/** A named point in a level: where something starts. `yaw` is a camera yaw (0 faces -z). */
+export interface LevelMarker { readonly name: string; readonly x: number; readonly y: number; readonly z: number; readonly yaw: number }
+/**
+ * What the pickups, spawner and nav kits ask of a level: how big it is, where it is free, the named points and the things
+ * built from prefabs. `ArenaLevel` (code) and `Level` (a config/level file) both satisfy it, so a kit never names either.
+ */
+export interface LevelLike {
+  /** Distance from the middle to the nearest edge of the floor. */
+  readonly half: number;
+  readonly bounds: LevelBounds;
+  /** True when a box of these half sizes at (x, z) overlaps anything solid. */
+  hits(x: number, z: number, hx: number, hz: number): boolean;
+  /** Writes free floor into `out`: clear by `margin`, at least `awayFrom` from (awayX, awayZ), drawn from the random stream. */
+  freeSpot(out: { x: number; z: number }, margin: number, stream: string, awayX?: number, awayZ?: number, awayFrom?: number): boolean;
+  marker(name: string): LevelMarker | null;
+  markers(prefix?: string): readonly LevelMarker[];
+  /** Nodes built from a prefab id ('prefab/crate'); empty when the level has none. */
+  things(prefab: string): readonly Node[];
+}
+
 export interface KitFlags { paused: boolean }
 const flags = new WeakMap<World, KitFlags>();
 /** One flag object per world. Gameplay behaviours skip their step while `paused` is true. */

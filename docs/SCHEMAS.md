@@ -560,43 +560,61 @@ The dev page and the build mount vfx for you when `hull.json` lists `"vfx"` or t
 
 A call can change one burst without a second config: `vfx.burst(id, at, dir, { count, size, speed, life, spread })` sets the exact count and multiplies size, start speed, life and the emit shape's reach. The count draw still happens, so the random stream stays in step.
 
-## 11. `material` (and `prefab`, `level`: not built)
+## 11. `material`
 
 ```json
 { "kind": "material", "color": "#9aa0a8", "roughness": 0.35, "metalness": 1, "texture": { "recipe": "brushed", "scale": 2 } }
 ```
 
-`prefab` and `level` have no schema yet. The two sketches below are the plan, not something `check` accepts: a game builds its
-nodes and level in code (the `level` kit's `ArenaLevel`) and loads `look` itself.
+## 11b. `prefab` and `level`
+
+A prefab is a small thing made of shapes; a level places blocks, prefab things and named points on a ground. Both are built by the
+`Level` behaviour of the level kit (`node.add(Level, { level: 'yard' })` reads `config/level/yard.json`). A prefab names no
+behaviours: game code attaches them to what the level built (`level.things('prefab/crate')`, `level.marker('start')`).
+Units are metres, and degrees where a field ends in `Deg`. Everything solid is static and on physics layer `world`.
 
 ```json
 {
   "kind": "prefab",
-  "character": "character/grunt",
-  "groups": ["enemies"],
-  "behaviours": {
-    "Health": { "tuning": "tuning/grunt.health" },
-    "Chase": { "tuning": "tuning/grunt.chase" }
-  },
-  "children": { "blade": { "socket": "handR", "prefab": "prefab/blade" } }
+  "parts": [{ "name": "box", "shape": "box", "at": [0, 0.6, 0], "size": [1.2, 1.2, 1.2], "material": "material/crate" }],
+  "collider": { "shape": "box", "at": [0, 0.6, 0], "size": [1.2, 1.2, 1.2] },
+  "tags": ["crate"]
 }
 ```
+
+`parts`: `shape` is `box`, `sphere`, `cylinder` or `capsule`; `at` is the part's centre from the prefab origin (on the floor under it), `size` its full
+extent, `rotDeg` an optional turn about x, y, z; `material` is a `material` id. `collider` is optional (`box`, `sphere` or `capsule`; a sphere
+takes its diameter from `size[0]`, a capsule its diameter from `size[0]` and its height from `size[1]`). `tags` are groups the thing joins.
 
 ```json
 {
   "kind": "level",
   "look": "look/day",
-  "music": "music/battle",
-  "build": { "generator": "yard", "seed": 7, "knobs": { "size": 80, "walls": 4 } },
-  "place": {
-    "player": { "prefab": "prefab/player", "at": [0, 0, 0], "yawDeg": 0 },
-    "g1": { "prefab": "prefab/grunt", "at": [12, 0, 6] },
-    "g2": { "prefab": "prefab/grunt", "at": [-9, 0, 14] }
-  }
+  "ground": { "size": [40, 40], "material": "material/floor" },
+  "walls": { "height": 2.5, "material": "material/wall" },
+  "blocks": [
+    { "name": "ramp", "at": [-6, 0.62, 8], "size": [6, 0.4, 4], "rotDeg": [0, 0, 12], "material": "material/crate" },
+    { "name": "pillar", "shape": "cylinder", "at": [8, 1.5, -6], "size": [2, 3, 2], "material": "material/wall" }
+  ],
+  "things": [{ "prefab": "prefab/crate", "at": [5, 0, 4], "yawDeg": 30 }],
+  "markers": { "start": { "at": [0, 0, 14] }, "spawn/north": { "at": [-12, 0, -14], "yawDeg": 0 } },
+  "scatter": [{ "prefab": "prefab/rock", "count": 6, "area": { "at": [0, 0], "size": [34, 34] }, "stream": "level-rocks", "gap": 1.5 }]
 }
 ```
 
-A level is mostly made by a generator in code (with a seed and knobs); `place` adds or overrides single things.
+* `ground`: `size` is width and depth, centred on the origin; `walls` (optional) puts four solid walls just outside it.
+* `blocks`: `at` is the block's centre, `size` its full width, height and depth before the turn, `rotDeg` the turn. A ramp is a box turned about x or z.
+  `shape` is `box` (default) or `cylinder` (a 12-sided prism for the collider; `size` holds the two diameters and the height). `solid: false` draws it only.
+* `things`: a prefab at a point, with `yawDeg` and a uniform `scale`. `markers`: named points with `yawDeg`; a name with a slash (`spawn/north`) is found by `markers('spawn/')`.
+* `scatter`: `count` copies of a prefab in a rectangle, drawn from the world random stream `stream` (so a seed gives one layout), at least `gap` metres from everything
+  solid and `avoidMarkers` metres (default 3) from every marker, with a random yaw unless `randomYaw` is false. Give each rule its own stream.
+* `look` is read back as `level.look`; the game (or manifest) applies it.
+
+The references check covers every `prefab`, `material` and `look` id at `file#/pointer` (`level/yard#/things/1/prefab`). The checkers `checkLevel` and `checkPrefab`
+(`hull/kits`) add what a schema cannot say: a block or prefab with no volume, a thing, marker or scatter area off the ground, two scatter rules on one stream.
+
+The kits ask a level only for `LevelLike` (`kits/common.ts`): `half`, `bounds`, `hits(x, z, hx, hz)`, `freeSpot(out, margin, stream, awayX, awayZ, awayFrom)`,
+`marker(name)`, `markers(prefix)` and `things(prefab)`. `ArenaLevel` (a code-built arena) and `Level` (a config file) both satisfy it, so the pickups and spawner kits work on either.
 
 ## 12. `strings` (not built)
 
