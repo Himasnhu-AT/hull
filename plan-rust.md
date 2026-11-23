@@ -4,7 +4,10 @@ How Rust enters Hull, where it is allowed, and the measured gates each step must
 `PLAN.md` stays the plan for the engine; this file is the plan for one track of it, and changes `PLAN.md` only where
 section 11 below says so.
 
-**Status: R0 is done (section 12): at 16 times AOTT's load the frame is lost and Hull's physics loses it. R1 is in progress.**
+**Status: done for now (23 Nov 2026).** R0 (section 12) found the load where the frame is lost and named Hull's
+physics. R1 (section 13) fixed it with a flat TypeScript layout, built and measured the Rust kernel for the same work,
+and closed it at the gate: Rust was 0.99 times the flat TypeScript. No Rust is in Hull. R2 and R3 have no candidate;
+R4 waits for the features it names.
 
 ## 1. What this is for
 
@@ -283,3 +286,87 @@ kernel question closes with "not needed".
 
 **The candidate R0 names** is not the one section 6 expected (casts against static shapes, which are cheap). It is
 the broadphase over moving shapes: where their bounds live, and how a query finds the few near it.
+
+## 13. R1 results: the broadphase over moving shapes
+
+Measured 23 Nov 2026, same Mac. Section 12 named the work: `Physics.gather` and `Physics.cast` walked every moving
+shape for every query. R1 ran the three steps section 4 asks for, in order.
+
+**1. Flat TypeScript** (`packages/hull/src/physics/moving.ts`). The moving shapes' bounds went into one
+`Float64Array` with a grid over them that is rebuilt as shapes leave their cells; a query reads the few cells it
+covers, plus a short list of wide or loose shapes, and hands its candidates back in the order the shapes were added,
+so every answer is the one the old walk gave. `moving.parity.test.ts` checks that bit for bit: 10,000 seeded boxes
+against the plain walk (adds, removals, moves, bounds that are not numbers), and 10,000 seeded ray, sphere, capsule
+and overlap queries against a world made to walk every shape. AOTT's checksum is unchanged at scales 1, 4 and 16.
+
+**2. Rust.** `crates/hull-kernels`: a `no_std` crate with plain `extern "C"` exports, built to a 4,426-byte module
+that imports nothing. The grid's arrays lived in the module's memory and TypeScript read them through typed-array
+views; the one call across the boundary was the grid build, about once in 70 steps. The whole pipeline of section 5
+was built and run: `pnpm kernels:build`, the module committed as base64 with a stamp of its source that `pnpm check`
+compared, loading before `ready` in Node and the browser, `"kernels": false` in hull.json and `?kernels=off|fail` on
+the dev page, a failure reported once with the TypeScript path running on, and the module's bytes in the build
+report. 3,000 seeded grids built by the module were the same bits as the TypeScript build; 10,000 queries answered
+inside the module matched. The cube and AOTT built and ran in the browser and in Node with the kernel on, off and
+failing to load; AOTT's checksum was the same in all three; `game.js` carried 4.4 kB more for it (2,794,719 bytes).
+
+**3. The bench** (`pnpm perf:engine 1,4,16 physics.moving`): 10 times scale titans of 15 moving shapes over 4,400
+static boxes, each step moving every shape and issuing the overlaps and rays AOTT issues. Median ms a frame (2 steps):
+
+| Broadphase | 1 | 4 | 16 | Calls into the module a step at 16 |
+|---|---|---|---|---|
+| Before R1: walk every moving shape | 0.066 | 0.53 | 8.19 | |
+| Flat TypeScript | 0.046 | 0.21 | 1.20 | |
+| Grid built in Rust, read from TypeScript | 0.047 | 0.21 | 1.21 | 0.015 |
+| Grid and every query in Rust | 0.045 | 0.20 | 1.10 | 384 |
+
+The grid build alone, the one piece both languages implement, takes 31 µs in TypeScript and 16 µs in Rust for 2,400
+shapes (1.9 times), but it runs about once in 70 steps, so it is under half a microsecond a step either way.
+
+**Gate (test 4): not passed.** Rust beats flat TypeScript by 0.99 times on the engine's path and by 1.09 times when
+every query crosses the boundary, which section 4 forbids anyway (384 calls a step). The gain was the layout: 6.8
+times at scale 16. As section 6 says for this case, the flat TypeScript version is kept and the crate is deleted.
+The pipeline is in the history (commits `2f002b4` to `8800698` on 23 Nov 2026) for the day a kernel candidate
+passes test 1; it worked end to end and can be restored from there rather than rebuilt.
+
+### What the player sees
+
+The dev page in headless Chrome, 1280 x 720, the CPU as it is, before R1 (commit `c49db6d`) and after. "Held" is the
+free-running rate at 55 to 60 frames a second, as in section 12.
+
+| Scale | Before: ms a step, draw, frame | After: ms a step, draw, frame | Hull physics, ms a step, before and after |
+|---|---|---|---|
+| 8 | 3.43, 3.66, held | 1.92, 4.45, held | 0.85, 0.13 |
+| 10 | 5.29, 5.12, **lost** (30 a second) | 2.45, 5.74, **held** | 1.79, 0.15 |
+| 12 | 6.42, 6.54, lost (17 a second) | 3.54, 7.59, lost (41 a second) | 2.68, 0.36 |
+| 16 | 8.74, 7.67, lost (3.6 a second) | 4.88, 7.15, lost (33 a second) | 4.27, 0.68 |
+
+Throttled 4 times, scale 1 is held and scale 4 is lost both before and after (16.5 frames a second before, 25 after).
+
+A page is stepped from wherever real-time play had left the flow, so titan counts at one scale differ between runs
+(at 10: 119 before, 98 after; at 12: 124 before, 137 after). The 12 row, where the run after had more titans and still
+ran at more than twice the rate, is the cleaner comparison.
+
+So the frame on this Mac now holds at 10 times AOTT's load (about 100 titans, 20 comrades, 70 civilians), where it
+was lost before: the load rose by a quarter, the gate R2 sets for a player-visible gain, reached in TypeScript.
+
+### Hull's subsystems after R1 (`pnpm perf:engine`), median ms a frame
+
+| Bench | 1 | 4 | 16 |
+|---|---|---|---|
+| Rigid bodies, a pile of 100 times scale | 0.28 (was 0.38) | 1.5 (was 5.3) | 10.4 (was 98) |
+| Everything else in section 12's table | unchanged | unchanged | unchanged |
+
+Rigid bodies gather their contacts through the same index, so they gained with it.
+
+### Where this leaves the plan
+
+* **R2** (finish the subsystem in Rust) does not start: its gate is R1's, and R1's Rust did not pass.
+* **R3** (further kernels) has no candidate. At scale 16, after R1, Hull's physics is 1.4 ms of the page's frame and
+  nothing else of Hull's is above 0.1 ms; what is left is three.js (transform matrices 3.2 ms, drawing 3.7 ms), the
+  browser, and the game's own code, none of which a kernel reaches (section 7). Rigid bodies pass 2 ms only in a
+  pile of 1,600, which no game asks for; the bench keeps them in view.
+* **R4** (new features written kernel-first) stays with each feature's milestone. R1's numbers say to build such a
+  feature flat in TypeScript first and to hold it to test 4 like any other kernel.
+* **What would move the frame next** is in TypeScript and three.js, not Rust: fewer forced `updateMatrixWorld(true)`
+  calls (section 7) and fewer draw calls (1,900 at scale 12), and a sphere cast that costs 8 times a ray.
+* `PLAN.md` D2 stands as written (section 11): no kernel passed.
