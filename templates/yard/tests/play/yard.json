@@ -1,0 +1,66 @@
+{
+  "tolerance": {
+    "channel": 8,
+    "pixels": 600
+  },
+  "steps": [
+    {
+      "step": 2
+    },
+    {
+      "press": "Enter"
+    },
+    {
+      "step": 2
+    },
+    {
+      "release": "Enter"
+    },
+    {
+      "expect": {
+        "probe": "relicsHome",
+        "cmp": "==",
+        "value": 0
+      }
+    },
+    {
+      "expect": {
+        "probe": "sentries",
+        "cmp": "==",
+        "value": 3
+      }
+    },
+    {
+      "step": 30
+    },
+    {
+      "screenshot": "play"
+    },
+    {
+      "hold": "KeyW",
+      "steps": 90
+    },
+    {
+      "check": {
+        "node": "player",
+        "axis": "z",
+        "max": 12
+      }
+    },
+    {
+      "until": {
+        "probe": "hp",
+        "cmp": "<=",
+        "value": 0
+      },
+      "max": 3000
+    },
+    {
+      "expect": {
+        "probe": "sentries",
+        "cmp": ">=",
+        "value": 1
+      }
+    }
+  ]
+}

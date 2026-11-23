@@ -1,0 +1,37 @@
+{
+  "kind": "prefab",
+  "note": "A boulder to scatter: a squashed sphere you walk around.",
+  "parts": [
+    {
+      "name": "rock",
+      "shape": "sphere",
+      "at": [
+        0,
+        0.4,
+        0
+      ],
+      "size": [
+        1.4,
+        0.9,
+        1.1
+      ],
+      "material": "material/stone"
+    }
+  ],
+  "collider": {
+    "shape": "box",
+    "at": [
+      0,
+      0.4,
+      0
+    ],
+    "size": [
+      1.2,
+      0.8,
+      1
+    ]
+  },
+  "tags": [
+    "rock"
+  ]
+}

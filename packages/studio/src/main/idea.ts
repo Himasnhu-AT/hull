@@ -1,18 +1,18 @@
 // From one sentence of idea to what the app needs to start a project: which template is closest, and a short title.
 // Pure, so the launcher's idea box behaves the same in Electron and in web mode and is tested without either.
 
-export type TemplateName = 'fps' | 'third-person' | 'arena';
+export type TemplateName = 'fps' | 'third-person' | 'yard';
 
 const FIRST_PERSON = /\b(first[- ]person|fps|shooter|shoot(?:ing|s)?|gun|guns|rifle|pistol|blaster|ammo|sniper|drones?)\b/i;
 const THIRD_PERSON = /\b(third[- ]person|sword|swords|samurai|ninja|knight|blade|katana|melee|action|combat|fight(?:ing|s)?|brawler|adventure|swordswoman|warrior)\b/i;
 
-/** Shooter words win over action words when both appear; anything else gets the arena. */
+/** Shooter words win over action words when both appear; anything else gets the yard (a small complete game on kits and a level file). */
 export function pickTemplate(idea: string): TemplateName {
   if (/\bfirst[- ]person\b/i.test(idea)) return 'fps';
   if (/\bthird[- ]person\b/i.test(idea)) return 'third-person';
   if (FIRST_PERSON.test(idea)) return 'fps';
   if (THIRD_PERSON.test(idea)) return 'third-person';
-  return 'arena';
+  return 'yard';
 }
 
 const SMALL = new Set(['a', 'an', 'the', 'game', 'where', 'i', 'my', 'me', 'with', 'and', 'of', 'to', 'in', 'on', 'it', 'is', 'that', 'make', 'want', 'like', 'about', 'small', 'little']);

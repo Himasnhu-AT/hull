@@ -1,0 +1,63 @@
+{
+  "kind": "anim-graph",
+  "note": "Soldier locomotion. Speed is in m/s; the walk is authored for 1.44 m/s and the run for 4.82 m/s.",
+  "params": {
+    "speed": { "type": "number", "default": 0, "min": 0, "max": 12 },
+    "grounded": { "type": "boolean", "default": true },
+    "swinging": { "type": "boolean", "default": false },
+    "dead": { "type": "boolean", "default": false },
+    "jump": { "type": "trigger" },
+    "attack": { "type": "trigger" },
+    "hit": { "type": "trigger" }
+  },
+  "layers": {
+    "base": {
+      "start": "idle",
+      "states": {
+        "idle": { "clip": "idle" },
+        "move": { "blend": { "by": "speed", "points": { "1.44": "walk", "4.82": "run" } }, "speedFrom": "speed" },
+        "jump": { "clip": "jump", "exit": "air", "exitBlend": 0.1 },
+        "air": { "clip": "fall" },
+        "swing": { "clip": "swing" },
+        "dead": { "clip": "death" }
+      },
+      "transitions": [
+        { "from": "*", "to": "dead", "when": "dead", "blend": 0.12 },
+        { "from": "*", "to": "jump", "when": "jump && grounded", "blend": 0.05 },
+        { "from": "*", "to": "swing", "when": "swinging", "blend": 0.2 },
+        { "from": "idle", "to": "air", "when": "!grounded && !swinging", "blend": 0.1 },
+        { "from": "move", "to": "air", "when": "!grounded && !swinging", "blend": 0.1 },
+        { "from": "swing", "to": "air", "when": "!swinging && !grounded", "blend": 0.2 },
+        { "from": "swing", "to": "idle", "when": "!swinging && grounded", "blend": 0.2 },
+        { "from": "jump", "to": "idle", "when": "grounded", "blend": 0.1, "after": 0.3 },
+        { "from": "air", "to": "idle", "when": "grounded", "blend": 0.12 },
+        { "from": "idle", "to": "move", "when": "speed > 0.3", "blend": 0.15 },
+        { "from": "move", "to": "idle", "when": "speed < 0.2", "blend": 0.2 }
+      ]
+    },
+    "upper": {
+      "mask": ["spine", "armL", "armR", "head"],
+      "start": "none",
+      "states": {
+        "none": {},
+        "slash": { "clip": "slash", "exit": "none", "exitBlend": 0.12 },
+        "hit": { "clip": "hit", "exit": "none", "exitBlend": 0.1 }
+      },
+      "transitions": [
+        { "from": "*", "to": "hit", "when": "hit", "blend": 0.04 },
+        { "from": "slash", "to": "slash", "when": "attack", "blend": 0.04 },
+        { "from": "*", "to": "slash", "when": "attack", "blend": 0.05 }
+      ]
+    },
+    "breath": {
+      "additive": true,
+      "weight": 0.8,
+      "start": "on",
+      "states": { "on": { "clip": "breathe" } }
+    }
+  },
+  "ik": {
+    "feet": { "enabled": true, "maxStep": 0.35 },
+    "look": { "enabled": true, "yawDeg": 80, "pitchDeg": 45 }
+  }
+}

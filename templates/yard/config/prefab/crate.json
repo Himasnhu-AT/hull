@@ -1,0 +1,37 @@
+{
+  "kind": "prefab",
+  "note": "A wooden crate the player can stand on.",
+  "parts": [
+    {
+      "name": "box",
+      "shape": "box",
+      "at": [
+        0,
+        0.6,
+        0
+      ],
+      "size": [
+        1.2,
+        1.2,
+        1.2
+      ],
+      "material": "material/crate"
+    }
+  ],
+  "collider": {
+    "shape": "box",
+    "at": [
+      0,
+      0.6,
+      0
+    ],
+    "size": [
+      1.2,
+      1.2,
+      1.2
+    ]
+  },
+  "tags": [
+    "crate"
+  ]
+}
