@@ -15,6 +15,29 @@ export type { Anchor, BoxOpts, PanelOpts, UiContext } from './widgets.ts';
 export { themeVars, applyVars, DEFAULT_THEME } from './theme.ts';
 export { buildNode, readPath, getter, widgetOf, screenProblems, type ScreenEnv, type ViewModel } from './screen.ts';
 
+/** The size the kits' widgets are designed for: pixel sizes in a theme or a ui-screen mean pixels at this window. */
+export const DESIGN_WIDTH = 1280;
+export const DESIGN_HEIGHT = 720;
+
+/**
+ * How much the whole UI layer is scaled for a window of `width` x `height` pixels: the window fitted to the design
+ * size, kept between half and double so text stays legible and a huge window does not blow it up.
+ */
+export function uiScale(width: number, height: number): number {
+  if (!(width > 0) || !(height > 0)) return 1;
+  return Math.min(2, Math.max(0.5, Math.min(width / DESIGN_WIDTH, height / DESIGN_HEIGHT)));
+}
+
+/** Sizes and scales the layer's root for a window: the root is laid out at design pixels and scaled once, so every widget follows. */
+export function layoutRoot(rootEl: HTMLElement, width: number, height: number): number {
+  const s = uiScale(width, height);
+  rootEl.style.width = `${width / s}px`;
+  rootEl.style.height = `${height / s}px`;
+  rootEl.style.transformOrigin = '0 0';
+  rootEl.style.transform = s === 1 ? '' : `scale(${s})`;
+  return s;
+}
+
 export interface ScreenOpts {
   /** A named state of the screen: its `mock` values replace the view model's, so the bench can show every state. */
   state?: string;
@@ -25,6 +48,8 @@ export interface UiScreen {
   readonly panel: UiPanel;
   /** Takes focus to the first button, for a menu that just opened. */
   focusFirst(): boolean;
+  /** Presses the focused button, or the first one when focus is elsewhere. False when the screen has no button. */
+  activate(): boolean;
   close(): void;
 }
 
@@ -43,6 +68,10 @@ export interface UiView {
   readonly screens: readonly UiScreen[];
   /** Moves keyboard focus through the buttons of the top screen (or the root): for gamepad and d-pad navigation. */
   focusMove(delta: number): boolean;
+  /** Presses the focused button of the top screen, or its first button when focus is elsewhere (gamepad south, Enter, Space). */
+  activate(): boolean;
+  /** How much the layer is scaled for the window: min(width / 1280, height / 720), kept between 0.5 and 2. */
+  readonly scale: number;
   dispose(): void;
 }
 
@@ -76,7 +105,18 @@ export function mountUi(game: Game, el: HTMLElement, theme?: string): UiView {
   const root = new UiPanel(ctx, 'stack');
   // The root is the host element itself so anchors position against the whole game view.
   host.appendChild(root.el);
-  root.el.style.cssText = 'position:absolute;inset:0';
+  root.el.style.cssText = 'position:absolute;left:0;top:0';
+  // One scale on the root: every widget, kit or game, follows the window without knowing about it.
+  let scale = 1;
+  const fit = (): void => {
+    const w = host.clientWidth;
+    const h = host.clientHeight;
+    if (w > 0 && h > 0) scale = layoutRoot(root.el, w, h);
+  };
+  fit();
+  const ro = typeof ResizeObserver === 'function' ? new ResizeObserver(fit) : null;
+  ro?.observe(host);
+  if (!ro) win.addEventListener('resize', fit);
 
   const offs: (() => void)[] = [];
   let lastVars: Record<string, string> = {};
@@ -107,6 +147,7 @@ export function mountUi(game: Game, el: HTMLElement, theme?: string): UiView {
     constructor(readonly id: string, readonly vm: ViewModel, private readonly opts: ScreenOpts) {
       this.panel = root.stack({ label: id });
       this.panel.el.style.cssText = 'position:absolute;inset:0';
+      this.panel.el.setAttribute('data-hull-screen', id);
       this.build();
       if (config.has(id)) this.off = config.watch(id, () => this.build());
     }
@@ -136,6 +177,8 @@ export function mountUi(game: Game, el: HTMLElement, theme?: string): UiView {
     }
 
     focusFirst(): boolean { return this.panel.focusFirst(); }
+
+    activate(): boolean { return this.panel.activate(); }
 
     close(): void {
       const i = open.indexOf(this);
@@ -174,14 +217,32 @@ export function mountUi(game: Game, el: HTMLElement, theme?: string): UiView {
     },
     get screens() { return open; },
     focusMove(delta) { return (open.length ? open[open.length - 1]!.panel : root).focusMove(delta); },
+    activate() { return (open.length ? open[open.length - 1]!.panel : root).activate(); },
+    get scale() { return scale; },
     dispose() {
       themeOff?.();
+      ro?.disconnect();
+      if (!ro) win.removeEventListener('resize', fit);
+      doc.removeEventListener('keydown', onKey, true);
       for (const f of offs.splice(0)) f();
       for (const s of open.slice()) s.close();
       live = [];
       host.remove();
     },
   };
+
+  // Enter and Space press the focused button on their own. When focus is somewhere else (a click on the canvas took it),
+  // they press the first button of the open menu instead, so a title screen can always be started from the keyboard.
+  function onKey(e: KeyboardEvent): void {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const top = open[open.length - 1];
+    const isMenu = !!top && (top.panel.el.getAttribute('role') === 'menu' || top.panel.el.querySelector('[role=menu]') !== null);
+    if (!top || !isMenu) return;
+    const focused = doc.activeElement as HTMLElement | null;
+    if (focused && top.panel.focusables().includes(focused)) return; // the button's own key handling
+    if (top.activate()) { e.preventDefault(); e.stopPropagation(); }
+  }
+  doc.addEventListener('keydown', onKey, true);
 
   offs.push(game.onFrame(() => {
     walking = true;

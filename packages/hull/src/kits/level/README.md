@@ -4,7 +4,10 @@ Two levels for the other kits to stand on: `Level`, built from a `config/level` 
 
 - **Behaviours**: `Level` (`built.ts`), `ArenaLevel` (`level.ts`). Both satisfy `LevelLike` (`kits/common.ts`): `half`, `bounds`, `hits(x, z, hx, hz)`,
   `freeSpot(out, margin, stream, awayX, awayZ, awayFrom)`, `marker(name)`, `markers(prefix)`, `things(prefab)`. The pickups and spawner kits take a `LevelLike`.
-- **`Level` extras**: `level` (the config id, set when adding), `look` (the look id the file names), `blocks` (floor boxes of everything solid).
+- **Looks**: `ArenaLevel.look` is `'look/day'` by default (the sky, sun, fog and post effects of that `look` file) and `''` applies none; set another id when adding
+  (`add(ArenaLevel, { look: 'look/night' })`). A `Level` applies the look its file names (`"look": "look/day"`) unless added with `applyLook: false`. Either way it is applied once, on the
+  first frame the renderer is there, and a look id the project does not have is skipped. Change the file's look to change the sky; do not expect the page to pick one for you.
+- **`Level` extras**: `level` (the config id, set when adding), `look` (the look id the file names), `applyLook`, `blocks` (floor boxes of everything solid).
 - **Checkers**: `checkLevel(def, at)`, `checkPrefab(def, at)` (`check.ts`): strings that name their place, `level/yard#/things/0/at: ...`.
 - **Tunables**: `ArenaLevel` only (`level` block, read once at start): `size`, `wallHeight`, `crateCount`, `crateMin`, `crateMax`, `clearRadius`. `Level` takes everything from its file.
 - **Config** (`config/`): `level/yard` (a ramp up to a platform, a pillar, crates, lamps, markers, rocks scattered), `prefab/crate|lamp|rock`, `material/floor|wall|crate|stone|lamp`, `look/day`. Format: docs/SCHEMAS.md section 11b.

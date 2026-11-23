@@ -17,11 +17,14 @@ function Sphere({ t }: { t: Extract<ContentThumb, { type: 'material' }> }): JSX.
   // Roughness sets how big and bright the highlight is; metal darkens the diffuse and lets the surround show.
   const gloss = 1 - Math.min(1, Math.max(0, t.roughness));
   const metal = Math.min(1, Math.max(0, t.metalness));
-  const base = mix(t.color, '#000', Math.round(metal * 45));
+  const lit = mix(t.color, '#000', Math.round(metal * 45));
+  // A glowing material shows its emissive colour through the body and throws a halo, since it needs no light to be seen.
+  const base = t.emissive ? mix(lit, t.emissive, 55) : lit;
   const spec = `radial-gradient(circle at 34% 28%, rgba(255,255,255,${(0.25 + gloss * 0.7).toFixed(2)}) 0, rgba(255,255,255,0) ${Math.round(10 + (1 - gloss) * 38)}%)`;
   const body = `radial-gradient(circle at 36% 30%, ${mix(base, '#fff', 30)} 0, ${base} 48%, ${mix(base, '#000', 62)} 100%)`;
   const env = metal > 0.3 ? `linear-gradient(180deg, rgba(190,210,235,${(metal * 0.32).toFixed(2)}) 0 46%, rgba(20,16,12,${(metal * 0.4).toFixed(2)}) 52% 100%)` : 'none';
-  return <div className="ct-sphere" style={{ backgroundImage: `${spec}, ${env}, ${body}` }} />;
+  const glow = t.emissive ? { boxShadow: `0 0 14px 2px ${mix(t.emissive, 'transparent', 35)}, 0 0 4px ${t.emissive}` } : undefined;
+  return <div className="ct-sphere" style={{ backgroundImage: `${spec}, ${env}, ${body}`, ...glow }} />;
 }
 
 function Strip({ bars }: { bars: number[] }): JSX.Element {

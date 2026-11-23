@@ -1,7 +1,8 @@
 // What the kits share: collision layers, the pause flag, physics set-up and the base of a HUD behaviour.
 import { Behaviour, type Node, type World } from '../core/index.ts';
+import { config } from '../config/index.ts';
 import { physicsOf, usePhysics, type Physics } from '../physics/index.ts';
-import type { UiView } from '../ui/index.ts';
+import type { UiView, UiWidget } from '../ui/index.ts';
 import { kitIO } from './io.ts';
 
 /** Collision layers (bits). A shape is on one; a mover or a query lists the ones it meets. */
@@ -40,6 +41,17 @@ export function flagsOf(world: World): KitFlags {
   return f;
 }
 
+/**
+ * Switches the page to look `id` once the renderer is mounted. True when it is done (applied, nothing to apply, or the
+ * project has no such look: the level kit's check reports that); false when the renderer is not there yet, so call again.
+ */
+export function applyLook(id: string): boolean {
+  if (id === '') return true;
+  const full = id.startsWith('look/') ? id : `look/${id}`;
+  if (!config.has(full)) return true;
+  return kitIO.look(full);
+}
+
 /** The world's physics, installing it first if no one has. */
 export function ensurePhysics(world: World): Physics {
   try { return physicsOf(world); } catch { return usePhysics(world); }
@@ -63,16 +75,61 @@ export const fwdZ = (yaw: number): number => -Math.cos(yaw);
  * the widgets; in Node there is no UI and this does nothing.
  */
 export abstract class KitUi extends Behaviour {
+  /**
+   * 'hud' (default) is drawn under everything and hidden while any menu is showing. 'menu' is a screen that takes over:
+   * while one shows, every 'hud' KitUi is hidden. Set it when adding the behaviour.
+   */
+  layer: 'hud' | 'menu' = 'hud';
   private built: UiView | null = null;
+  private owned: UiWidget[] = [];
+  private visible = true;
+  private suppressedNow = false;
   protected abstract build(ui: UiView): void;
+
+  /** Hides or shows everything this behaviour drew (a game that wants a bare screen: `hud.get(Hud)!.show(false)`). */
+  show(visible: boolean): this {
+    this.visible = visible;
+    this.syncLayer();
+    return this;
+  }
+
+  get shown(): boolean { return this.visible; }
+
   /** Takes the dt and alpha the world gives every behaviour, so a subclass reads them without a default. */
   override update(_dt: number, _alpha: number): void {
     const ui = kitIO.ui();
-    if (!ui || ui === this.built) return;
-    this.built = ui;
-    this.build(ui);
+    if (ui && ui !== this.built) {
+      this.built = ui;
+      // Whatever build() adds to the root belongs to this behaviour, so the layer rule can switch it off as one.
+      const before = ui.root.children.length;
+      this.build(ui);
+      this.owned = ui.root.children.slice(before);
+      this.suppressedNow = false;
+    }
+    if (this.built) this.syncLayer();
   }
+
+  private syncLayer(): void {
+    if (this.owned.length === 0) return;
+    if (this.layer === 'menu') setMenuShowing(this.world, this, this.visible && this.owned.some((w) => !w.isHidden));
+    const off = !this.visible || (this.layer === 'hud' && menuShowing(this.world));
+    if (off === this.suppressedNow) return;
+    this.suppressedNow = off;
+    for (const w of this.owned) w.suppress(off);
+  }
+
+  override dispose(): void { setMenuShowing(this.world, this, false); }
 }
+
+const menus = new WeakMap<World, Set<object>>();
+/** Menus (a title, a pause screen, a result) tell the world they are on screen, so HUD layers get out of their way. */
+export function setMenuShowing(world: World, who: object, on: boolean): void {
+  let s = menus.get(world);
+  if (!s) { s = new Set(); menus.set(world, s); }
+  if (on) s.add(who); else s.delete(who);
+}
+/** True while any menu is on screen. */
+export function menuShowing(world: World): boolean { return (menus.get(world)?.size ?? 0) > 0; }
 
 /**
  * Mouse look needs the pointer locked, and the browser only allows that from a click. Locks on the first click unless

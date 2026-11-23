@@ -54,7 +54,13 @@ function soundBars(v: Record<string, unknown>): number[] | null {
 export function thumbOf(id: string, value: unknown, byId: (id: string) => unknown): ContentThumb | null {
   const v = obj(value);
   switch (v['kind']) {
-    case 'material': return { type: 'material', color: hex(v['color'], '#8a919c'), roughness: num(v['roughness'], 0.6), metalness: num(v['metalness'], 0) };
+    case 'material': {
+      const thumb: ContentThumb = { type: 'material', color: hex(v['color'], '#8a919c'), roughness: num(v['roughness'], 0.6), metalness: num(v['metalness'], 0) };
+      // Only a material that glows says so, so the thumbs of plain ones stay as they were.
+      const glow = hex(v['emissive'], '#000000');
+      if (glow !== '#000000' && num(v['emissiveIntensity'], 1) > 0) thumb.emissive = glow;
+      return thumb;
+    }
     case 'look': {
       const sky = obj(v['sky']);
       return { type: 'look', sky: [hex(sky['zenith'], '#5a7aa8'), hex(sky['mid'], '#8aa0bc'), hex(sky['horizon'], '#c3cdd3')], fog: hex(obj(v['fog'])['color'], hex(sky['horizon'], '#c3cdd3')) };

@@ -63,7 +63,7 @@ export function attachPadNav(game: Game, ui: UiView, opts: NavOptions = {}, nav:
         const focused = doc.activeElement as HTMLElement | null;
         if (e === 'prev') ui.focusMove(-1);
         else if (e === 'next') ui.focusMove(1);
-        else if (e === 'press') focused?.click();
+        else if (e === 'press') { if (!ui.activate()) focused?.click(); }
         else (focused ?? doc.body).dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
       });
       return;

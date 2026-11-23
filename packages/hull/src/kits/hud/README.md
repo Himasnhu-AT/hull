@@ -11,6 +11,9 @@ One HUD behaviour with named slots a game fills: score, timer, objective, messag
 - **Objectives**: when a node named "objectives" has an `Objectives` (objectives kit), its goals are listed on the left.
 - **Look**: every widget takes its colours, type and spacing from the game's `ui-theme`; restyle the whole HUD by editing
   that file. Corners: bars top left, score and time top right, goals left, toast top, prompt bottom.
+- **Layer and visibility**: the HUD is on layer `hud`: it is hidden while a menu (title, result, pause, game over) shows. `hud.get(Hud)!.show(false)` hides it
+  yourself, and `show(true)` brings it back. The same goes for `HealthHud`, `StockHud`, `WaveHud`, `Crosshair` and `InteractPrompt`.
+- **Scale**: it follows the window (1280x720 is full size, 640x360 half), so the middle of the picture stays clear.
 - **Tunables** (`hud` block): `messageSeconds`, `maxQueued`.
 - **Config**: none of its own.
 - **Wiring**: nothing required. It runs headless in Node (messages still time out).

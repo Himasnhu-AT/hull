@@ -8,7 +8,7 @@ import type { PlayOptions } from '../audio/engine.ts';
 
 /** The same options `audio.play` takes (volume, pitch, `at`, `spatial`, `params`), so spatial sound needs no cast. */
 export type PlayOpts = PlayOptions;
-interface Views { ui?: UiView; audio?: { play(id: string, opts?: PlayOpts): unknown }; platform?: Platform }
+interface Views { render?: { setLook(id: string): void }; ui?: UiView; audio?: { play(id: string, opts?: PlayOpts): unknown }; platform?: Platform }
 const views = (): Views => (globalThis as { hull?: Views }).hull ?? {};
 
 let saves: Saves | null = null;
@@ -21,6 +21,16 @@ export const kitIO = {
   play(id: string, opts?: PlayOpts): void {
     if (kitIO.sink) { kitIO.sink(id, opts); return; }
     views().audio?.play(id, opts);
+  },
+  /**
+   * Switches the page's look to `id` ('look/night'). False when the page has no renderer yet, or the project has no such
+   * look (the caller tries again next frame in the first case, and a missing look is reported by check, not here).
+   */
+  look(id: string): boolean {
+    const r = views().render;
+    if (!r) return false;
+    r.setLook(id);
+    return true;
   },
   /** The mounted UI layer, or null before the page mounts it (and in Node). */
   ui(): UiView | null { return views().ui ?? null; },
