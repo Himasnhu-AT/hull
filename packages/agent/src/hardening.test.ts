@@ -1,11 +1,12 @@
 // Provider retries, output limits, parallel reads and compaction triggers, with no network and no sleeping.
 import { describe, expect, it } from 'vitest';
-import { compactIfNeeded } from './compaction.ts';
+import { compactIfNeeded, prune, stripThinking } from './compaction.ts';
 import type { HullTools } from './hullTools.ts';
 import { run, type RunIo, type SessionState } from './loop.ts';
 import { limitsFor } from './models.ts';
 import { BASE } from './prompt.ts';
 import { INDEPENDENT_STAGES, SHOT_TICKS, STAGES, stageTask } from './stages.ts';
+import { AnthropicStream, replay } from './stream.ts';
 import { anthropicProvider, backoffMs, openaiProvider, providerConfigFromEnv, retryAfterMs } from './providers.ts';
 import type { Completion, CompleteRequest, Msg, Provider } from './types.ts';
 
@@ -103,19 +104,47 @@ describe('provider errors', () => {
 });
 
 describe('output limits', () => {
-  it('asks for the model table\'s max output, not 8192, and lets the environment override it', async () => {
+  it('asks for 64000 tokens and a 300000-token working history, whatever the model can do, and lets the environment change both up to its real limits', async () => {
     const bodies: any[] = [];
     const f = (async (_u: string, init: RequestInit) => { bodies.push(JSON.parse(init.body as string)); return ok(); }) as unknown as typeof fetch;
-    await anthropicProvider({ kind: 'anthropic', apiKey: 'k', fetch: f }).complete(req());
-    await anthropicProvider({ kind: 'anthropic', apiKey: 'k', model: 'claude-sonnet-5-5', fetch: f }).complete(req());
-    await anthropicProvider({ kind: 'anthropic', apiKey: 'k', model: 'some-new-model', fetch: f }).complete(req());
+    const mk = (model?: string, extra: object = {}) => anthropicProvider({ kind: 'anthropic', apiKey: 'k', fetch: f, ...(model ? { model } : {}), ...extra });
+    const def = mk();
+    await def.complete(req());
+    await mk('claude-sonnet-5-5').complete(req());
+    await mk('claude-haiku-4-5').complete(req());
+    await mk('some-new-model').complete(req());
+    expect(bodies.map((b) => b.max_tokens)).toEqual([64_000, 64_000, 64_000, 16_000]);
+    expect(def.contextWindow).toBe(300_000);
+    expect(mk('claude-haiku-4-5').contextWindow).toBe(200_000);
     const cfg = providerConfigFromEnv({ ANTHROPIC_API_KEY: 'k', HULL_AGENT_MAX_TOKENS: '1234', HULL_AGENT_CONTEXT: '50000' })!;
     const over = anthropicProvider({ ...cfg, fetch: f });
     await over.complete(req());
-    expect(bodies.map((b) => b.max_tokens)).toEqual([32_000, 64_000, 16_000, 1234]);
+    expect(bodies.at(-1).max_tokens).toBe(1234);
     expect(over.contextWindow).toBe(50_000);
-    expect(limitsFor('openai', 'anthropic/claude-haiku-4-5').maxOutput).toBe(32_000);
-    expect(limitsFor('openai', 'whatever')).toEqual({ context: 128_000, maxOutput: 8192 });
+    const huge = providerConfigFromEnv({ ANTHROPIC_API_KEY: 'k', HULL_AGENT_MAX_TOKENS: '900000', HULL_AGENT_CONTEXT: '9000000' })!;
+    const capped = anthropicProvider({ ...huge, fetch: f });
+    await capped.complete(req());
+    expect(bodies.at(-1).max_tokens).toBe(128_000);
+    expect(capped.contextWindow).toBe(1_000_000);
+    expect(limitsFor('openai', 'anthropic/claude-haiku-4-5')).toMatchObject({ context: 200_000, maxOutput: 64_000, thinking: 'opt-in', effort: false });
+    expect(limitsFor('anthropic', 'claude-opus-5-5')).toMatchObject({ context: 1_000_000, maxOutput: 128_000, thinking: 'always', effort: true, workingContext: 300_000, askOutput: 64_000 });
+    expect(limitsFor('anthropic', 'claude-opus-5')).toMatchObject({ thinking: 'default-on' });
+    expect(limitsFor('openai', 'whatever')).toMatchObject({ context: 128_000, maxOutput: 8192, askOutput: 8192 });
+  });
+
+  it('sends output_config.effort (medium for the brief, high for build and fix, HULL_AGENT_EFFORT over both) and never a thinking field or a sampling parameter', async () => {
+    const bodies: any[] = [];
+    const f = (async (_u: string, init: RequestInit) => { bodies.push(JSON.parse(init.body as string)); return ok(); }) as unknown as typeof fetch;
+    const p = anthropicProvider({ kind: 'anthropic', apiKey: 'k', fetch: f });
+    for (const mode of ['brief', 'build', 'fix', undefined] as const) await p.complete(req(mode ? { mode } : {}));
+    expect(bodies.map((b) => b.output_config)).toEqual([{ effort: 'medium' }, { effort: 'high' }, { effort: 'high' }, { effort: 'medium' }]);
+    const cfg = providerConfigFromEnv({ ANTHROPIC_API_KEY: 'k', HULL_AGENT_EFFORT: 'xhigh' })!;
+    await anthropicProvider({ ...cfg, fetch: f }).complete(req({ mode: 'brief' }));
+    expect(bodies.at(-1).output_config).toEqual({ effort: 'xhigh' });
+    expect(providerConfigFromEnv({ ANTHROPIC_API_KEY: 'k', HULL_AGENT_EFFORT: 'turbo' })).not.toHaveProperty('effort');
+    await anthropicProvider({ kind: 'anthropic', apiKey: 'k', model: 'claude-haiku-4-5', fetch: f }).complete(req({ mode: 'fix' }));
+    expect(bodies.at(-1)).not.toHaveProperty('output_config');
+    for (const b of bodies) for (const k of ['thinking', 'temperature', 'top_p', 'top_k']) expect(b).not.toHaveProperty(k);
   });
 
   it('keeps stop max_tokens when the answer holds a cut tool call', async () => {
@@ -142,7 +171,7 @@ function harness(steps: Step[], opts: { contextWindow?: number; onSummary?: () =
         return { text: '## Objective\n- x', toolCalls: [], stop: 'end', usage: { input: 1, output: 1 } };
       }
       const s = steps[i++] ?? { text: 'end' };
-      return { text: s.text ?? '', toolCalls: s.toolCalls ?? [], stop: s.stop ?? (s.toolCalls?.length ? 'tool_use' : 'end'), usage: { input: s.usageIn ?? 10, output: 5 } };
+      return { text: s.text ?? '', toolCalls: s.toolCalls ?? [], stop: s.stop ?? (s.toolCalls?.length ? 'tool_use' : 'end'), usage: { input: s.usageIn ?? 10, output: 5 }, ...(s.parts ? { parts: s.parts } : {}), ...(s.refusal ? { refusal: s.refusal } : {}) };
     },
   };
   const log: string[] = [];
@@ -275,5 +304,120 @@ describe('stages', () => {
   it('lets only the stages that build on nothing run after a failure, and steps the game 60 ticks before the picture', () => {
     expect(INDEPENDENT_STAGES).toEqual(['sounds', 'effects', 'screens']);
     expect(SHOT_TICKS).toBe(60);
+  });
+});
+
+const THINK = { type: 'thinking', thinking: '', signature: 'EqQBCkYIARgCKkD+sig/with+chars==' };
+const REDACTED = { type: 'redacted_thinking', data: 'EmwKAhgBEgy3va3pzix/LafPsn4aDFIT2Xlxh0L5L8rLVyIwxtE3rAFBa8cr3qpP' };
+const THINKING_STREAM = [
+  'data: {"type":"message_start","message":{"usage":{"input_tokens":30,"output_tokens":1}}}', '',
+  'data: {"type":"content_block_start","index":0,"content_block":{"type":"thinking","thinking":"","signature":""}}', '',
+  'data: {"type":"content_block_delta","index":0,"delta":{"type":"signature_delta","signature":"EqQBCkYIARgCKkD+sig/"}}', '',
+  'data: {"type":"content_block_delta","index":0,"delta":{"type":"signature_delta","signature":"with+chars=="}}', '',
+  'data: {"type":"content_block_stop","index":0}', '',
+  'data: {"type":"content_block_start","index":1,"content_block":{"type":"redacted_thinking","data":"' + REDACTED.data + '"}}', '',
+  'data: {"type":"content_block_stop","index":1}', '',
+  'data: {"type":"content_block_start","index":2,"content_block":{"type":"text","text":""}}', '',
+  'data: {"type":"content_block_delta","index":2,"delta":{"type":"text_delta","text":"Looking."}}', '',
+  'data: {"type":"content_block_stop","index":2}', '',
+  'data: {"type":"content_block_start","index":3,"content_block":{"type":"tool_use","id":"toolu_1","name":"check","input":{}}}', '',
+  'data: {"type":"content_block_stop","index":3}', '',
+  'data: {"type":"content_block_start","index":4,"content_block":{"type":"thinking","thinking":"","signature":"SECOND"}}', '',
+  'data: {"type":"content_block_stop","index":4}', '',
+  'data: {"type":"message_delta","delta":{"stop_reason":"tool_use"},"usage":{"output_tokens":20}}', '',
+  'data: {"type":"message_stop"}', '', '',
+].join('\n');
+
+describe('preserved thinking', () => {
+  it('keeps thinking and redacted_thinking blocks verbatim, in place, and sends them back byte for byte', async () => {
+    const c = replay(new AnthropicStream(), THINKING_STREAM);
+    expect(c.parts!.map((p) => p.type)).toEqual(['thinking', 'thinking', 'text', 'tool_use', 'thinking']);
+    expect(c.text).toBe('Looking.');
+    const bodies: string[] = [];
+    let n = 0;
+    const f = (async (_u: string, init: RequestInit) => { bodies.push(init.body as string); return n++ === 0 ? sseOf(THINKING_STREAM.split('\n')) : ok(); }) as unknown as typeof fetch;
+    const p = anthropicProvider({ kind: 'anthropic', apiKey: 'k', fetch: f });
+    const first = await p.complete(req());
+    const history: Msg[] = [{ role: 'user', parts: [{ type: 'text', text: 'go' }] }, { role: 'assistant', parts: first.parts! }, { role: 'user', parts: [{ type: 'tool_result', id: 'toolu_1', text: 'fine' }] }];
+    await p.complete(req({ messages: history }));
+    const sent = JSON.parse(bodies[1]!).messages[1].content;
+    expect(sent.map((b: { type: string }) => b.type)).toEqual(['thinking', 'redacted_thinking', 'text', 'tool_use', 'thinking']);
+    expect(JSON.stringify(sent[0])).toBe(JSON.stringify(THINK));
+    expect(JSON.stringify(sent[1])).toBe(JSON.stringify(REDACTED));
+    expect(sent[4]).toEqual({ type: 'thinking', thinking: '', signature: 'SECOND' });
+    expect(bodies[1]).toContain(JSON.stringify(THINK));
+  });
+
+  it('reads thinking blocks from a whole (non-streamed) answer, and the OpenAI path drops them', async () => {
+    const whole = { content: [THINK, REDACTED, { type: 'text', text: 'hi' }], stop_reason: 'end_turn', usage: {} };
+    const c = await anthropicProvider({ kind: 'anthropic', apiKey: 'k', fetch: (async () => new Response(JSON.stringify(whole))) as unknown as typeof fetch }).complete(req());
+    expect(c.parts).toEqual([{ type: 'thinking', block: THINK }, { type: 'thinking', block: REDACTED }, { type: 'text', text: 'hi' }]);
+    let body: any;
+    const o = openaiProvider({ kind: 'openai', apiKey: 'k', baseUrl: 'https://x/v1', fetch: (async (_u: string, init: RequestInit) => { body = JSON.parse(init.body as string); return new Response(JSON.stringify({ choices: [{ message: { content: 'x' }, finish_reason: 'stop' }] })); }) as unknown as typeof fetch });
+    await o.complete(req({ messages: [{ role: 'user', parts: [{ type: 'text', text: 'a' }] }, { role: 'assistant', parts: c.parts! }] }));
+    expect(JSON.stringify(body)).not.toContain('signature');
+    expect(body.messages.at(-1)).toEqual({ role: 'assistant', content: 'hi' });
+  });
+
+  const withThinking = (): Msg[] => {
+    const m: Msg[] = [{ role: 'user', parts: [{ type: 'text', text: 'start' }] }];
+    for (let i = 0; i < 6; i++) {
+      m.push({ role: 'assistant', parts: [{ type: 'thinking', block: { ...THINK, signature: 's' + i } }, { type: 'tool_use', id: 't' + i, name: 'check', input: {} }] });
+      m.push({ role: 'user', parts: [{ type: 'tool_result', id: 't' + i, text: 'x'.repeat(3000) }] });
+    }
+    m.push({ role: 'assistant', parts: [{ type: 'thinking', block: THINK }, { type: 'text', text: 'last' }] });
+    m.push({ role: 'user', parts: [{ type: 'text', text: 'now' }] });
+    return m;
+  };
+  const count = (m: Msg[]) => m.filter((x) => x.role === 'assistant' && x.parts.some((p) => p.type === 'thinking')).length;
+
+  it('drops every thinking block from the turns it keeps once the history is pruned or compacted', async () => {
+    const pruned = withThinking();
+    expect(count(pruned)).toBe(7);
+    expect(prune(pruned)).toBe(true);
+    expect(count(pruned)).toBe(0);
+    expect(pruned.filter((x) => x.role === 'assistant').every((x) => x.parts.length > 0)).toBe(true);
+
+    const compacted = withThinking();
+    const prov: Provider = { name: 't', model: 't', contextWindow: 1000, complete: async () => ({ text: '## Objective\n- x', toolCalls: [], stop: 'end', usage: { input: 1, output: 1 } }) };
+    // pruning alone cannot get under the limit here, so the history is summarised and its tail kept
+    expect(await compactIfNeeded({ provider: prov, system: 's', messages: compacted, signal, reportedTokens: 900_000 })).toContain('## Objective');
+    expect(compacted[0]!.parts[0]).toMatchObject({ type: 'text' });
+    expect(compacted.some((m) => m.role === 'assistant')).toBe(true);
+    expect(count(compacted)).toBe(0);
+
+    const untouched = withThinking();
+    expect(await compactIfNeeded({ provider: prov, system: 's', messages: untouched, signal, reportedTokens: 10 })).toBeUndefined();
+    expect(count(untouched)).toBe(7);
+    expect(stripThinking(untouched)).toBe(true);
+    expect(stripThinking(untouched)).toBe(false);
+  });
+});
+
+describe('a refusal', () => {
+  const REFUSAL = [
+    'data: {"type":"message_start","message":{"usage":{"input_tokens":3,"output_tokens":1}}}', '',
+    'data: {"type":"message_delta","delta":{"stop_reason":"refusal","stop_details":{"type":"refusal","category":"cyber","explanation":"This looks like malware."}},"usage":{"output_tokens":2}}', '',
+    'data: {"type":"message_stop"}', '', '',
+  ].join('\n');
+
+  it('is read from the stream and from a whole answer, with its category and explanation', async () => {
+    const c = replay(new AnthropicStream(), REFUSAL);
+    expect(c).toMatchObject({ stop: 'refusal', refusal: { category: 'cyber', explanation: 'This looks like malware.' } });
+    const w = await anthropicProvider({ kind: 'anthropic', apiKey: 'k', fetch: (async () => new Response(JSON.stringify({ content: [], stop_reason: 'refusal', stop_details: { category: null, explanation: null }, usage: {} }))) as unknown as typeof fetch }).complete(req());
+    expect(w).toMatchObject({ stop: 'refusal', refusal: { category: null } });
+  });
+
+  it('ends the turn and says so, without a retry and without the check gate', async () => {
+    const h = harness([{ toolCalls: [call('w', 'code_write')] }, { text: 'I cannot help with that.', stop: 'refusal', refusal: { category: 'cyber', explanation: 'This looks like malware.' } }, { text: 'never reached' }]);
+    const said: string[] = [];
+    h.io.text = (t) => said.push(t);
+    const r = await h.go();
+    expect(r.stop).toBe('refusal');
+    expect(r.steps).toBe(2);
+    expect(r.checkFailed).toBe(false);
+    expect(h.log).not.toContain('start check');
+    expect(h.requests.filter((q) => q.tools.length)).toHaveLength(2);
+    expect(said.join('')).toMatch(/model declined to continue .*category: cyber\. This looks like malware\.\)\. The turn ended there/);
   });
 });

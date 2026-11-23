@@ -52,7 +52,9 @@ export interface SessionState {
 }
 
 export interface RunResult {
-  stop: 'end_turn' | 'cancelled' | 'max_turn_requests';
+  stop: 'end_turn' | 'cancelled' | 'max_turn_requests' | 'refusal';
+  /** With stop 'refusal': what the model said about why. */
+  refusal?: string;
   checkFailed: boolean;
   /** The game changed (config, tunables, code, assets). The brief, explain documents and the flow state do not count. */
   wrote: boolean;
@@ -162,7 +164,7 @@ export async function run(s: SessionState, prompt: Msg['parts'], io: RunIo, sign
     try {
       // Text goes out as it arrives; a model call after the first starts a new paragraph.
       c = await s.provider.complete({
-        system: s.system, messages: s.history, tools: specs, signal,
+        system: s.system, messages: s.history, tools: specs, signal, mode: s.mode,
         onDelta: (t) => { io.text(!streamed && spoke ? '\n\n' + t : t); streamed = true; spoke = true; },
       });
     } catch (e) {
@@ -179,9 +181,22 @@ export async function run(s: SessionState, prompt: Msg['parts'], io: RunIo, sign
       result.text = c.text;
     }
 
-    const parts: Part[] = [];
-    if (c.text) parts.push({ type: 'text', text: c.text });
-    for (const t of c.toolCalls) parts.push({ type: 'tool_use', id: t.id, name: t.name, input: t.input });
+    // The provider's own list keeps thinking blocks where they were; without one, text then tool calls.
+    const parts: Part[] = c.parts ? [...c.parts] : [];
+    if (!c.parts) {
+      if (c.text) parts.push({ type: 'text', text: c.text });
+      for (const t of c.toolCalls) parts.push({ type: 'tool_use', id: t.id, name: t.name, input: t.input });
+    }
+
+    // The model declined. That is not a finished turn and not work: no check gate, no retry, and the person is told plainly.
+    if (c.stop === 'refusal') {
+      const kept = parts.filter((p) => p.type !== 'tool_use' && p.type !== 'thinking');
+      if (kept.length) s.history.push({ role: 'assistant', parts: kept });
+      const why = [c.refusal?.category ? `category: ${c.refusal.category}` : '', c.refusal?.explanation ?? ''].filter(Boolean).join('. ');
+      result.refusal = `The model declined to continue with this request${why ? ` (${why})` : ''}. The turn ended there. Ask for it another way, or for something else.`;
+      io.text((spoke ? '\n\n' : '') + result.refusal);
+      return finish('refusal');
+    }
     if (parts.length) s.history.push({ role: 'assistant', parts });
 
     // An answer cut at the output limit is not the end of the turn, whatever it holds.

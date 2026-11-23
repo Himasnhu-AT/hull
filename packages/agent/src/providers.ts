@@ -2,9 +2,9 @@
 // is how Marl's gateway ai.marlstudio.com plugs in). Both are plain fetch calls: no SDK, so there is nothing to pin or
 // to keep in step with a vendor. Both ask for a stream (server-sent events, parsed in stream.ts) and fall back to a plain
 // JSON answer when a gateway ignores that. Keys are read from the environment by name and never logged or put in an error.
-import { limitsFor } from './models.ts';
+import { EFFORTS, effortFor, limitsFor, type Effort } from './models.ts';
 import { AnthropicStream, OpenAIStream, readSse } from './stream.ts';
-import type { Completion, CompleteRequest, Msg, Provider, ToolSpec } from './types.ts';
+import type { Completion, CompleteRequest, Msg, Part, Provider, ToolSpec } from './types.ts';
 
 export const DEFAULT_ANTHROPIC_MODEL = 'claude-opus-5-5';
 
@@ -19,6 +19,8 @@ export interface ProviderConfig {
   /** Overrides the model table (HULL_AGENT_MAX_TOKENS). */
   maxTokens?: number;
   fetch?: typeof fetch;
+  /** Overrides the effort of every kind of run (HULL_AGENT_EFFORT). Sent only to models whose table row takes one. */
+  effort?: Effort;
   /** Waits between retries. Tests pass one that records the wait and returns at once. Default: a timer that stops on abort. */
   sleep?: (ms: number, signal: AbortSignal) => Promise<void>;
   /** 0..1 for the backoff jitter. Default Math.random (this is network code, not the simulation). */
@@ -30,11 +32,12 @@ export function providerConfigFromEnv(env: Record<string, string | undefined>): 
   const num = (s: string | undefined): number | undefined => (s && Number.isFinite(Number(s)) ? Number(s) : undefined);
   const contextWindow = num(env['HULL_AGENT_CONTEXT']);
   const maxTokens = num(env['HULL_AGENT_MAX_TOKENS']);
+  const effort = EFFORTS.find((e) => e === env['HULL_AGENT_EFFORT']);
   if (env['HULL_AGENT_BASE_URL']) {
     return { kind: 'openai', baseUrl: env['HULL_AGENT_BASE_URL'], apiKey: env['HULL_AGENT_API_KEY'] ?? '', ...(env['HULL_AGENT_MODEL'] ? { model: env['HULL_AGENT_MODEL'] } : {}), ...(contextWindow ? { contextWindow } : {}), ...(maxTokens ? { maxTokens } : {}) };
   }
   if (env['ANTHROPIC_API_KEY']) {
-    return { kind: 'anthropic', apiKey: env['ANTHROPIC_API_KEY'], ...(env['HULL_AGENT_MODEL'] ? { model: env['HULL_AGENT_MODEL'] } : {}), ...(env['ANTHROPIC_BASE_URL'] ? { baseUrl: env['ANTHROPIC_BASE_URL'] } : {}), ...(contextWindow ? { contextWindow } : {}), ...(maxTokens ? { maxTokens } : {}) };
+    return { kind: 'anthropic', apiKey: env['ANTHROPIC_API_KEY'], ...(env['HULL_AGENT_MODEL'] ? { model: env['HULL_AGENT_MODEL'] } : {}), ...(env['ANTHROPIC_BASE_URL'] ? { baseUrl: env['ANTHROPIC_BASE_URL'] } : {}), ...(contextWindow ? { contextWindow } : {}), ...(maxTokens ? { maxTokens } : {}), ...(effort ? { effort } : {}) };
   }
   return undefined;
 }
@@ -157,6 +160,7 @@ const anthropicMsg = (m: Msg): unknown => ({
     switch (p.type) {
       case 'text': return { type: 'text', text: p.text || ' ' };
       case 'image': return { type: 'image', source: { type: 'base64', media_type: p.mime, data: p.data } };
+      case 'thinking': return p.block;
       case 'tool_use': return { type: 'tool_use', id: p.id, name: p.name, input: p.input ?? {} };
       case 'tool_result': return { type: 'tool_result', tool_use_id: p.id, is_error: p.isError ?? false, content: [{ type: 'text', text: p.text || ' ' }, ...(p.images ?? []).map((i) => ({ type: 'image', source: { type: 'base64', media_type: i.mime, data: i.data } }))] };
     }
@@ -170,7 +174,7 @@ export function anthropicProvider(c: ProviderConfig): Provider {
   const limits = limitsFor('anthropic', model, { ...(c.contextWindow ? { context: c.contextWindow } : {}), ...(c.maxTokens ? { maxOutput: c.maxTokens } : {}) });
   const retry = retryOf(c);
   return {
-    name: 'anthropic', model, contextWindow: limits.context, maxOutput: limits.maxOutput,
+    name: 'anthropic', model, contextWindow: limits.workingContext, maxOutput: limits.askOutput,
     async complete(req: CompleteRequest): Promise<Completion> {
       // Prompt caching is a prefix match over tools, then system, then messages. The tool list and the system prompt are the same on
       // every call of a run, so a breakpoint on the last tool and one on the system prompt let each step read them back at a tenth
@@ -181,8 +185,11 @@ export function anthropicProvider(c: ProviderConfig): Provider {
       const lastBlock = messages.at(-1)?.content.at(-1);
       if (lastBlock) lastBlock['cache_control'] = cache;
       const body = {
-        model, max_tokens: limits.maxOutput, stream: true, system: [{ type: 'text', text: req.system, cache_control: cache }], messages,
+        model, max_tokens: limits.askOutput, stream: true, system: [{ type: 'text', text: req.system, cache_control: cache }], messages,
         ...(tools.length ? { tools } : {}),
+        // Effort is how much the model thinks, and so what an answer costs. No thinking field is sent: always-on models reject
+        // "disabled" and a budget with a 400, and the others think when they need to. No temperature, top_p or top_k either.
+        ...(limits.effort ? { output_config: { effort: effortFor(req.mode, c.effort) } } : {}),
       };
       return callWithStreamRetry(async (onDelta) => {
       const res = await send(f, `${base}/v1/messages`, { 'x-api-key': c.apiKey, 'anthropic-version': '2023-06-01' }, body, req.signal, c.apiKey, retry);
@@ -191,9 +198,15 @@ export function anthropicProvider(c: ProviderConfig): Provider {
         const toolCalls = markCut(blocks.filter((b) => b.type === 'tool_use').map((b) => ({ id: String(b.id), name: String(b.name), input: b.input ?? {} })), r.stop_reason === 'max_tokens');
         const text = blocks.filter((b) => b.type === 'text').map((b) => b.text).join('');
         if (text) onDelta?.(text);
+        // Every block in the order sent: thinking blocks go back to the API in the same place.
+        const parts: Part[] = blocks.flatMap((b): Part[] => b.type === 'thinking' || b.type === 'redacted_thinking' ? [{ type: 'thinking', block: b }]
+          : b.type === 'text' ? (b.text ? [{ type: 'text', text: String(b.text) }] : [])
+          : b.type === 'tool_use' ? [{ type: 'tool_use', id: String(b.id), name: String(b.name), input: b.input ?? {} }] : []);
+        const refused = r.stop_reason === 'refusal';
         return {
-          text, toolCalls,
-          stop: r.stop_reason === 'max_tokens' ? 'max_tokens' : toolCalls.length ? 'tool_use' : 'end',
+          text, toolCalls, parts,
+          stop: refused ? 'refusal' : r.stop_reason === 'max_tokens' ? 'max_tokens' : toolCalls.length ? 'tool_use' : 'end',
+          ...(refused ? { refusal: { category: r.stop_details?.category ?? null, explanation: r.stop_details?.explanation ?? null } } : {}),
           usage: { input: (r.usage?.input_tokens ?? 0) + (r.usage?.cache_read_input_tokens ?? 0) + (r.usage?.cache_creation_input_tokens ?? 0), output: r.usage?.output_tokens ?? 0 },
         };
       });
@@ -236,10 +249,10 @@ export function openaiProvider(c: ProviderConfig): Provider {
   let host = base;
   try { host = new URL(base).host; } catch { /* keep the raw text */ }
   return {
-    name: host, model, contextWindow: limits.context, maxOutput: limits.maxOutput,
+    name: host, model, contextWindow: limits.workingContext, maxOutput: limits.askOutput,
     async complete(req: CompleteRequest): Promise<Completion> {
       const body = {
-        model, max_tokens: limits.maxOutput, stream: true, stream_options: { include_usage: true }, messages: openaiMessages(req.system, req.messages),
+        model, max_tokens: limits.askOutput, stream: true, stream_options: { include_usage: true }, messages: openaiMessages(req.system, req.messages),
         ...(req.tools.length ? { tools: req.tools.map((t: ToolSpec) => ({ type: 'function', function: { name: t.name, description: t.description, parameters: t.schema } })) } : {}),
       };
       return callWithStreamRetry(async (onDelta) => {

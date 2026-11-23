@@ -71,6 +71,7 @@ const partSize = (p: Part): number => {
     case 'text': return p.text.length;
     case 'image': return 6000;
     case 'tool_use': return JSON.stringify(p.input).length + p.name.length;
+    case 'thinking': return String(p.block['thinking'] ?? '').length + String(p.block['signature'] ?? p.block['data'] ?? '').length;
     case 'tool_result': return p.text.length + (p.images?.length ?? 0) * 6000;
   }
 };
@@ -81,15 +82,35 @@ export const estimateTokens = (system: string, messages: readonly Msg[]): number
 /** Where the kept tail may begin: a new request, or an assistant message (its tool results follow it, so no call is cut from its result). */
 const isCut = (m: Msg): boolean => m.role === 'assistant' || (m.parts.some((p) => p.type === 'text') && !m.parts.some((p) => p.type === 'tool_result'));
 
-/** Cuts long tool results in the older part of the conversation: the cheap first step, enough when one turn ran long. */
-export function prune(messages: Msg[], keepLast = 6, cap = 600): void {
+/**
+ * Takes every thinking part out of the assistant turns in `messages`. A thinking block is signed against everything before it (the
+ * system prompt, the tools and each earlier message), so once the history has been rewritten the API refuses a replayed block with a 400.
+ * Whoever rewrites the history calls this on what is kept. Returns whether anything was removed.
+ */
+export function stripThinking(messages: Msg[]): boolean {
+  let removed = false;
+  for (const m of messages) {
+    if (m.role !== 'assistant' || !m.parts.some((p) => p.type === 'thinking')) continue;
+    m.parts = m.parts.filter((p) => p.type !== 'thinking');
+    // An assistant turn must not be empty.
+    if (!m.parts.length) m.parts = [{ type: 'text', text: '(no answer)' }];
+    removed = true;
+  }
+  return removed;
+}
+
+/** Cuts long tool results in the older part of the conversation: the cheap first step, enough when one turn ran long. Returns whether it cut anything (and then the thinking blocks are dropped, see stripThinking). */
+export function prune(messages: Msg[], keepLast = 6, cap = 600): boolean {
+  let cutAny = false;
   for (let i = 0; i < messages.length - keepLast; i++) {
     for (const p of messages[i]!.parts) {
       if (p.type !== 'tool_result') continue;
-      if (p.text.length > cap) p.text = `${p.text.slice(0, cap)}\n... (older result cut to save room)`;
-      if (p.images?.length) delete p.images;
+      if (p.text.length > cap) { p.text = `${p.text.slice(0, cap)}\n... (older result cut to save room)`; cutAny = true; }
+      if (p.images?.length) { delete p.images; cutAny = true; }
     }
   }
+  if (cutAny) stripThinking(messages);
+  return cutAny;
 }
 
 function transcript(messages: readonly Msg[]): string {
@@ -144,5 +165,7 @@ export async function compactIfNeeded(o: CompactOptions, onStart?: () => void): 
 
   const note: Msg = { role: 'user', parts: [{ type: 'text', text: `${CHECKPOINT}\n<summary>\n${summary}\n</summary>\n</conversation-checkpoint>\nThe run so far is summarized above; the most recent messages follow unchanged. Continue from there.` }] };
   o.messages.splice(0, cut, note);
+  // The kept tail now follows a different prefix, so its thinking blocks would be refused.
+  stripThinking(o.messages);
   return summary;
 }

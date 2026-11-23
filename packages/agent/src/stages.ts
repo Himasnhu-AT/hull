@@ -203,7 +203,8 @@ export async function runBuild(deps: BuildDeps): Promise<BuildResult> {
 
     // A stage that fails its gates gets one more go, seeded with why it failed and what the first attempt said it made.
     let out = await buildStage(def, before, st);
-    if (out.outcome === 'failed') {
+    // A refusal is not tried again.
+    if (out.outcome === 'failed' && !out.final) {
       log('stage ' + id + ' failed: ' + out.reason);
       io.text('\n\n' + def.title + ' did not pass: ' + out.reason + ' Trying once more.');
       out = await buildStage(def, before, st, { reason: out.reason, summary: out.summary });
@@ -240,7 +241,7 @@ export async function runBuild(deps: BuildDeps): Promise<BuildResult> {
   return { outcome: 'done', built };
 
   async function buildStage(def: StageDef, prev: StageState, now: CreateState, retry?: { reason: string; summary: string }): Promise<
-    { outcome: 'ready'; summary: string; checkpoint: string; pieces: string[]; docs: ExplainDoc[] } | { outcome: 'failed'; reason: string; summary: string } | { outcome: 'cancelled' }
+    { outcome: 'ready'; summary: string; checkpoint: string; pieces: string[]; docs: ExplainDoc[] } | { outcome: 'failed'; reason: string; summary: string; final?: boolean } | { outcome: 'cancelled' }
   > {
     const baseHead = await historyHead(tools).catch(() => undefined);
     const kinds = await configKinds(tools).catch(() => new Set<string>());
@@ -274,6 +275,7 @@ export async function runBuild(deps: BuildDeps): Promise<BuildResult> {
         if (steps >= limit) return fail('it used all ' + limit + ' steps without finishing.');
         const r = await step(prompt);
         if (r.stop === 'cancelled') return { outcome: 'cancelled' };
+        if (r.stop === 'refusal') return { ...fail('the model declined: ' + cut(r.refusal ?? '', 300)), final: true };
         if (r.stop === 'max_turn_requests') return fail('it used all ' + limit + ' steps without finishing.');
         if (!summary) summary = lastText(state.history);
         if (r.checkFailed) {
@@ -305,6 +307,7 @@ export async function runBuild(deps: BuildDeps): Promise<BuildResult> {
           { type: 'image', mime: shot.images[0]!.mime, data: shot.images[0]!.data },
         ]);
         if (r.stop === 'cancelled') return { outcome: 'cancelled' };
+        if (r.stop === 'refusal') return { ...fail('the model declined at the last look: ' + cut(r.refusal ?? '', 300)), final: true };
         if (r.checkFailed) return fail('the check failed after the last look.');
         if (r.wrote) {
           const t = await testGate(tools);
