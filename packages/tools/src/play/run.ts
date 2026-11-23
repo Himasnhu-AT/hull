@@ -3,7 +3,7 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import type { Problem } from 'hull';
-import type { ControlClick, ControlUi, ControlCmp, ControlCond, ControlErrors, ControlInspect, ControlOp, ControlShot, ControlState, ControlUntil, NodeState } from 'hull/dev/protocol';
+import type { ControlClick, ControlUi, ControlCmp, ControlCond, ControlErrors, ControlInspect, ControlOp, ControlSet, ControlShot, ControlState, ControlTeleport, ControlUntil, NodeState } from 'hull/dev/protocol';
 import { connectProject, type ProjectClient } from '../control/client.ts';
 import { checkGolden, type Tolerance } from './golden.ts';
 import { closeOnExit, reapDeadSessions } from './session.ts';
@@ -28,6 +28,10 @@ export type PlayStep =
   | { until: ControlCond; max: number }
   /** Fails unless the node's field (x, y, z or "Behaviour.field") or the probe compares true. */
   | { expect: ExpectCond }
+  /** FOR ARRANGING A TEST, not for playing: move a node to [x, y, z] (and turn it to yaw radians); a run that uses it is not a replay of real input. */
+  | { teleport: string; to: [number, number, number]; yaw?: number }
+  /** FOR ARRANGING A TEST, not for playing: set one number, string or boolean field ("Health.hp"); a run that uses it is not a replay of real input. */
+  | { set: string; field: string; value: number | string | boolean }
   /** Mouse movement, as under pointer lock. */
   | { look: [number, number] }
   /** Reads one node in full (transform, groups, behaviour state) into the report. */
@@ -92,9 +96,19 @@ export function validateScript(file: string, s: unknown): Problem[] {
       if (typeof st['screenshot'] !== 'string' || !st['screenshot']) bad(`${at}/screenshot`, 'screenshot needs the golden image name');
       for (const [k, max] of [['width', 1920], ['height', 1080]] as const) if (st[k] !== undefined && !(typeof st[k] === 'number' && Number.isInteger(st[k]) && (st[k] as number) >= 16 && (st[k] as number) <= max)) bad(`${at}/${k}`, `${k} is a whole number of pixels from 16 to ${max}`);
     }
-    else if ('until' in st) {
+    else if ('teleport' in st) {
+      if (typeof st['teleport'] !== 'string' || !st['teleport']) bad(`${at}/teleport`, 'teleport needs a node name: {"teleport": "player", "to": [x, y, z]}');
+      if (!Array.isArray(st['to']) || st['to'].length !== 3 || !st['to'].every((x) => typeof x === 'number' && Number.isFinite(x))) bad(`${at}/to`, 'teleport needs "to": [x, y, z], three numbers');
+      if (st['yaw'] !== undefined && !(typeof st['yaw'] === 'number' && Number.isFinite(st['yaw']))) bad(`${at}/yaw`, 'yaw is a number of radians');
+    } else if ('set' in st) {
+      if (typeof st['set'] !== 'string' || !st['set']) bad(`${at}/set`, 'set needs a node name: {"set": "player", "field": "Health.hp", "value": 5}');
+      if (typeof st['field'] !== 'string' || !/^\w+\.\w+$/.test(st['field'])) bad(`${at}/field`, 'set needs "field" as <BehaviourName>.<field>, like "Health.hp"');
+      if (!['number', 'string', 'boolean'].includes(typeof st['value'])) bad(`${at}/value`, 'set needs "value": a number, string or boolean');
+    } else if ('until' in st) {
       const c = st['until'];
-      if (!isObj(c) || !(typeof c['event'] === 'string' || typeof c['probe'] === 'string' || (typeof c['node'] === 'string' && typeof c['field'] === 'string')) || (!('event' in c) && (!CMPS.includes(c['cmp'] as string) || c['value'] === undefined))) bad(`${at}/until`, 'until needs {"node","field","cmp","value"} | {"probe","cmp","value"} | {"event"}, and "cmp" is one of < <= > >= == !=');
+      const near = isObj(c) && typeof c['node'] === 'string' && 'near' in c;
+      if (near && !(Array.isArray(c['near']) && c['near'].length === 2 && c['near'].every((x) => typeof x === 'number') && typeof c['within'] === 'number' && c['within'] >= 0)) bad(`${at}/until`, 'until near needs {"node", "near": [x, z], "within": metres}');
+      else if (!near && (!isObj(c) || !(typeof c['event'] === 'string' || typeof c['probe'] === 'string' || (typeof c['node'] === 'string' && typeof c['field'] === 'string')) || (!('event' in c) && (!CMPS.includes(c['cmp'] as string) || c['value'] === undefined)))) bad(`${at}/until`, 'until needs {"node","field","cmp","value"} | {"node","near","within"} | {"probe","cmp","value"} | {"event"}, and "cmp" is one of < <= > >= == !=');
       if (!n('max')) bad(`${at}/max`, 'until needs "max": the most ticks to wait');
     } else if ('expect' in st) {
       const c = st['expect'];
@@ -110,7 +124,7 @@ export function validateScript(file: string, s: unknown): Problem[] {
     } else if ('ui' in st) {
       if (st['ui'] !== true) bad(`${at}/ui`, 'ui is true: {"ui": true} records what the UI shows');
     } else if ('inspect' in st) { if (typeof st['inspect'] !== 'string' || !st['inspect']) bad(`${at}/inspect`, 'inspect needs a node name'); }
-    else bad(at, `unknown step; use one of step, press, release, hold, read, check, screenshot, until, expect, look, inspect, click, expectUi, ui (got keys: ${Object.keys(st).join(', ') || 'none'})`);
+    else bad(at, `unknown step; use one of step, press, release, hold, read, check, screenshot, until, expect, teleport, set, look, inspect, click, expectUi, ui (got keys: ${Object.keys(st).join(', ') || 'none'})`);
   });
   return out;
 }
@@ -151,6 +165,7 @@ export async function runScript(o: RunOptions): Promise<PlayReport> {
   let client: ProjectClient | undefined;
   let last: ControlState = { tick: 0, time: 0, checksum: '', paused: true, nodes: {}, held: [], probes: {}, errors: 0 };
   const warnings: string[] = [];
+  let arranged = false;
   let guard: ReturnType<typeof closeOnExit> | undefined;
   try {
     client = await connectProject(o.server.url);
@@ -227,6 +242,14 @@ export async function runScript(o: RunOptions): Promise<PlayReport> {
             if (!compares(got, c.cmp, c.value)) fail(`expected ${name} ${c.cmp} ${JSON.stringify(c.value)}, but it is ${JSON.stringify(got)} at tick ${last.tick}`);
             else rep.detail = `${name} = ${JSON.stringify(got)}`;
           }
+        } else if ('teleport' in step) {
+          const t = await run<ControlTeleport>({ op: 'teleport', node: step.teleport, to: step.to, ...(step.yaw !== undefined ? { yaw: step.yaw } : {}) });
+          rep.detail = `${step.teleport} is at ${t.position.join(', ')}`;
+          arranged = true;
+        } else if ('set' in step) {
+          const s = await run<ControlSet>({ op: 'set', node: step.set, field: step.field, value: step.value });
+          rep.detail = `${step.set}.${step.field}: ${JSON.stringify(s.old)} -> ${JSON.stringify(s.new)}`;
+          arranged = true;
         } else if ('look' in step) {
           await run({ op: 'look', dx: step.look[0], dy: step.look[1] });
         } else if ('click' in step) {
@@ -285,5 +308,7 @@ export async function runScript(o: RunOptions): Promise<PlayReport> {
     await ab('close').catch(() => {});
     guard?.close();
   }
+  // A script that teleports or sets a field arranged its own test: its checksum is not what real input would give.
+  if (arranged) warnings.push('this script used teleport or set, which arrange a test: it is not a replay of real input');
   return { ok: problems.length === 0, problems, steps, tick: last.tick, checksum: last.checksum, ...(warnings.length ? { warnings } : {}) };
 }

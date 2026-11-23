@@ -29,13 +29,15 @@ const idsHelp = 'Ids, checkpoint names, "main" or an experiment name.';
 const cmpSchema: Schema = { enum: ['<', '<=', '>', '>=', '==', '!='] };
 const cmpValue: Schema = { type: ['number', 'string', 'boolean'] };
 const condSchema: Schema = {
-  description: 'What until waits for: {node, field, cmp, value} (field is "x", "y", "z" or "<BehaviourName>.<field>") | {probe, cmp, value} | {event: "<trace id>"} (an id the recent feed shows, like sound/thud).',
+  description: 'What until waits for: {node, field, cmp, value} (field is "x", "y", "z" or "<BehaviourName>.<field>") | {node, near: [x, z], within} (true when the node is within that many metres of the point on the floor plane, height ignored) | {probe, cmp, value} | {event: "<trace id>"} (an id the recent feed shows, like sound/thud).',
   oneOf: [
     obj({ node: str('A world.find path.'), field: str('x, y, z or <BehaviourName>.<field>.'), cmp: cmpSchema, value: cmpValue }, ['node', 'field', 'cmp', 'value']),
+    obj({ node: str('A world.find path.'), near: { type: 'array', items: { type: 'number' }, minItems: 2, maxItems: 2, description: '[x, z] on the floor plane.' }, within: num('Metres, 0 or more.') }, ['node', 'near', 'within']),
     obj({ probe: str('A name the game registered with probe(name, read).'), cmp: cmpSchema, value: cmpValue }, ['probe', 'cmp', 'value']),
     obj({ event: str('A trace id like sound/thud.') }, ['event']),
   ],
 };
+const arrange = ' FOR ARRANGING A TEST, not for playing: a run that uses it is not a replay of real input.';
 const controlOp: Schema = {
   description: 'One control op. Time moves only by step/until/perf/frames, so a run is the same every time. A step that makes game code throw fails with "file:line:col: Error: message", the mapped stack and a note that the world may be part-stepped: restart before trusting state.',
   oneOf: [
@@ -51,6 +53,8 @@ const controlOp: Schema = {
     obj({ op: { const: 'until' }, when: condSchema, max: num('Most ticks to step before giving up.') }, ['op', 'when', 'max']),
     obj({ op: { const: 'errors' }, clear: { type: 'boolean', description: 'true: empty the ring after reading it.' }, unread: { type: 'boolean', description: 'true: only what nobody has read yet, and mark nothing read.' } }, ['op']),
     obj({ op: { const: 'restart' } }, ['op']),
+    obj({ op: { const: 'teleport' }, node: str('A world.find path.'), to: { type: 'array', items: { type: 'number' }, minItems: 3, maxItems: 3, description: 'The node\'s new [x, y, z].' }, yaw: num('Radians; also turns the kits\' FirstPerson.yaw and ThirdPerson.facing. Without it the facing stays.') }, ['op', 'node', 'to']),
+    obj({ op: { const: 'set' }, node: str('A world.find path.'), field: str('<BehaviourName>.<field>, like Health.hp.'), value: cmpValue }, ['op', 'node', 'field', 'value']),
     obj({ op: { const: 'perf' }, steps: num('Steps and frames to time, default 120. Advances the game that many ticks.') }, ['op']),
     obj({ op: { const: 'look' }, dx: num('Mouse movement in pixels, right is positive.'), dy: num('Mouse movement in pixels, down is positive.') }, ['op', 'dx', 'dy']),
     obj({ op: { const: 'frames' }, count: num('How many pictures, 2 to 12.'), every: num('Ticks to step between pictures.'), width: num('Each picture is captured this many pixels wide (16 to 1920; the page is put back after), then the whole sheet is scaled down together to fit 1920x1080. Without width and height, tiles are at most 320 px wide.'), height: num('Each picture\'s height before that scaling, 16 to 1080.') }, ['op', 'count', 'every']),
@@ -63,9 +67,11 @@ export const controlOpHelp = [
   'state {nodes?}: tick, time, checksum, positions of the named nodes, held keys, probes (what the game registered with probe(name, read)), errors (unread count).',
   'inspect {node}: transform, groups, children and each behaviour\'s state fields.',
   'tree {root?, depth?}: node paths with behaviour names, 200 lines at most.',
-  'until {when, max}: step one tick at a time until the condition holds; answers state plus met and steps.',
+  'until {when, max}: step one tick at a time until the condition holds (a field, a probe, an event, or {node, near: [x, z], within}: the node is within that many metres on the floor plane); answers state plus met and steps.',
   'errors {clear?}: exceptions, window errors, console.error/warn from the page, with file:line:col in the TypeScript source; ring of 50, repeats counted.',
   'restart: the game starts again from ready with the same seed, paused at tick 0.',
+  'teleport {node, to: [x, y, z], yaw?}: move the node, tell the renderer it jumped and clear a kit body\'s velocity; answers its new position.' + arrange + ' Never use it to get past something a player could not.',
+  'set {node, field: "<BehaviourName>.<field>", value}: change one number, string or boolean field (not an object or a method) to a value of the same type; answers the old and new value.' + arrange,
   'perf {steps?}: ms per step and per frame (avg, p95, max), draw calls, triangles, node count.',
   'look {dx, dy}: mouse movement as under pointer lock.',
   'frames {count, every, width?, height?}: count screenshots every ticks apart, tiled into one picture with each tick written on it; tiles are at most 320 px wide, or with width/height each tile is that size and the sheet is scaled down to fit 1920x1080.',
@@ -162,7 +168,7 @@ const SPECS: Spec[] = [
   { method: 'exp.adopt', summary: 'Three-way merge an experiment into the project. With conflicts nothing is written: call again with `resolve` ("ours" | "theirs" per "target#path").', input: obj({ name: str(), author, resolve: { type: 'object', additionalProperties: { enum: ['ours', 'theirs'] } } }, ['name']), output: obj({ ok: { type: 'boolean' }, conflicts: arr({ type: 'object', additionalProperties: true }), problems, change: historyChange }, ['ok', 'conflicts', 'problems']), },
   { method: 'exp.discard', summary: 'Close an experiment. Its changes stay in the timeline.', input: obj({ name: str() }, ['name']), output: obj({ ok: { type: 'boolean' } }, ['ok']), },
   { method: 'game.control', summary: 'Pause, resume, step, scale time or restart every connected game.', input: obj({ paused: { type: 'boolean' }, step: num('Run exactly n fixed steps (pauses afterwards).'), timeScale: num(), restart: { type: 'boolean' } }), output: empty },
-  { method: 'game.run', summary: 'Run one control op on the running game and return its answer. Time moves only by step, so a script gives the same run every time. Ops: ' + controlOpHelp + ' With no app open, a headless game page is opened for you. After a code change the page reloads: the op waits up to 10 s for it to reconnect, and the answer has reloaded: true when a reload happened during the call (its tick then restarted).', input: obj({ control: controlOp, client: str('A specific game client; default is the project\'s first.') }, ['control']), output: { description: 'step/state/until: {tick,time,checksum,paused,nodes,held,probes,errors} (until adds met, steps); screenshot/frames: {png (base64),width,height}; inspect, tree, errors, perf: as listed; ui: {screens, items}; click: {clicked, buttons}; press/release/look: {}.', type: 'object', additionalProperties: true },
+  { method: 'game.run', summary: 'Run one control op on the running game and return its answer. Time moves only by step, so a script gives the same run every time. Ops: ' + controlOpHelp + ' With no app open, a headless game page is opened for you. After a code change the page reloads: the op waits up to 10 s for it to reconnect, and the answer has reloaded: true when a reload happened during the call (its tick then restarted).', input: obj({ control: controlOp, client: str('A specific game client; default is the project\'s first.') }, ['control']), output: { description: 'step/state/until: {tick,time,checksum,paused,nodes,held,probes,errors} (until adds met, steps); screenshot/frames: {png (base64),width,height}; inspect, tree, errors, perf: as listed; ui: {screens, items}; click: {clicked, buttons}; press/release/look: {}; teleport: {node, position, yaw}; set: {node, field, old, new}.', type: 'object', additionalProperties: true },
  },
   { method: 'problems.list', summary: 'Config problems and authorship problems (AI changes over values you set), as the app shows them.', input: empty, output: obj({ ok: { type: 'boolean' }, problems }, ['ok', 'problems']) },
   { method: 'review.list', summary: 'Review notes: what has been checked and what needs a change.', input: obj({ open: { type: 'boolean' } }), key: 'entries', output: list({ type: 'object', properties: { key: str(), state: str(), note: str() }, required: ['key', 'state'], additionalProperties: true }, 'entries'), },

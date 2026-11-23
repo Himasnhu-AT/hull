@@ -295,6 +295,22 @@ describe.skipIf(!hasBrowser)('reach: UI, picture size, per-frame stats, problems
     expect(dims(await mcp.run({ op: 'screenshot' }))).toEqual([640, 360]);
   }, 180_000);
 
+  it('teleport moves the player and clears its speed, set changes a field, until near waits for a place', async () => {
+    await mcp.run({ op: 'restart' });
+    await mcp.run({ op: 'step', n: 30 });
+    await mcp.run({ op: 'press', key: 'KeyW' });
+    await mcp.run({ op: 'step', n: 20 });
+    const moved = await mcp.run({ op: 'teleport', node: 'player', to: [6, 0, 7], yaw: 1 });
+    expect(moved).toMatchObject({ node: 'player', position: [6, 0, 7], yaw: 1 });
+    await mcp.run({ op: 'release', key: 'KeyW' });
+    const there = await mcp.run({ op: 'until', when: { node: 'player', near: [6, 7], within: 0.5 }, max: 3 });
+    expect(there).toMatchObject({ met: true, steps: 0 });
+    const hp = await mcp.run({ op: 'set', node: 'player', field: 'Health.hp', value: 40 });
+    expect(hp).toMatchObject({ field: 'Health.hp', new: 40 });
+    expect((await mcp.run({ op: 'set', node: 'player', field: 'Health.nope', value: 1 })).text).toMatch(/no field/);
+    await mcp.run({ op: 'restart' });
+  }, 180_000);
+
   it('problems.list carries the game\'s unread errors and warnings with their place, and does not mark them read', async () => {
     await mcp.run({ op: 'restart' });
     const edit = await mcp.tool('code.edit', { path: 'src/main.ts', old: 'ready(game) {', new: "ready(game) {\n    game.world.after(0.01, () => console.warn('reach-test-warning'));" });

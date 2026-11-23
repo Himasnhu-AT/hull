@@ -20,7 +20,8 @@ const val = { description: 'A number, string or boolean.', type: ['number', 'str
 const step = (key: string, schema: Record<string, unknown>, description: string, extra: Record<string, unknown> = {}, required: string[] = [key]): Record<string, unknown> => ({
   type: 'object', description, properties: { [key]: schema, ...extra }, required, additionalProperties: false,
 });
-const cond = { description: '{node, field, cmp, value} (field is x, y, z or "<BehaviourName>.<field>") | {probe, cmp, value} | {event: "<trace id like sound/thud>"}', type: 'object', additionalProperties: true };
+const arrange = ' FOR ARRANGING A TEST, not for playing: a script that uses it is not a replay of real input, and the report says so.';
+const cond = { description: '{node, field, cmp, value} (field is x, y, z or "<BehaviourName>.<field>") | {node, near: [x, z], within} (within that many metres on the floor plane) | {probe, cmp, value} | {event: "<trace id like sound/thud>"}', type: 'object', additionalProperties: true };
 const STEP_SHAPES: Record<string, unknown>[] = [
   step('step', { type: 'number' }, 'Run n fixed ticks: {"step": 60}.'),
   step('press', { type: 'string' }, 'Hold a key (a KeyboardEvent code, or Mouse0/Mouse1/Mouse2) until released: {"press": "KeyW"}.'),
@@ -34,6 +35,8 @@ const STEP_SHAPES: Record<string, unknown>[] = [
   step('ui', { type: 'boolean' }, 'Record what the UI shows (screens and items) in the report: {"ui": true}.'),
   step('until', cond, 'Step one tick at a time until the condition holds; fails when it does not within max ticks: {"until": {"probe": "score", "cmp": ">=", "value": 3}, "max": 600}.', { max: { type: 'number' } }, ['until', 'max']),
   step('expect', { type: 'object', description: '{node, field, cmp, value} | {probe, cmp, value}', properties: { node: { type: 'string' }, field: { type: 'string' }, probe: { type: 'string' }, cmp, value: val }, required: ['cmp', 'value'] }, 'Fail unless a field or probe compares true now: {"expect": {"node": "player", "field": "Health.hp", "cmp": ">", "value": 0}}.'),
+  step('teleport', { type: 'string' }, 'Move a node to [x, y, z], optionally turned to yaw radians; tells the renderer it jumped and clears a kit body\'s velocity: {"teleport": "player", "to": [4, 0, -6], "yaw": 1.57}.' + arrange, { to: { type: 'array', items: { type: 'number' }, minItems: 3, maxItems: 3 }, yaw: { type: 'number' } }, ['teleport', 'to']),
+  step('set', { type: 'string' }, 'Set one number, string or boolean field of a node (not an object or a method) to a value of the same type: {"set": "player", "field": "Health.hp", "value": 5}.' + arrange, { field: { type: 'string' }, value: val }, ['set', 'field', 'value']),
   step('look', { type: 'array', items: { type: 'number' }, minItems: 2, maxItems: 2 }, 'Move the mouse as under pointer lock: {"look": [40, 0]}.'),
   step('inspect', { type: 'string' }, 'Read one node in full (transform, groups, each behaviour\'s state) into the report: {"inspect": "player"}.'),
 ];

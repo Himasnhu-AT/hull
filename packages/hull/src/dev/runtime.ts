@@ -7,11 +7,12 @@ import { setTraceSink, type TraceKind } from '../core/trace.ts';
 import { clearProbes } from '../core/probes.ts';
 import { createRecentFeed } from './recent.ts';
 import { ensureCapture } from './capture.ts';
+import { setField, teleportNode } from './arrange.ts';
 import { checkCond, holds, inspectNode, probeValues, treeLines } from './inspect.ts';
 import { input } from '../input/dom.ts';
 import { withUi } from '../ui/capture.ts';
 import { clickButton, readUi, uiDefault, uiFocus, uiKeyName, type UiDoc } from '../ui/inspect.ts';
-import type { ControlErrors, ControlFrames, ControlInspect, ControlOp, ControlClick, ControlPerf, ControlShot, ControlUi, ControlState, ControlTree, ControlUntil, GameControl, GameEvents, GameReport, Pushes } from './protocol.ts';
+import type { ControlErrors, ControlFrames, ControlInspect, ControlOp, ControlClick, ControlPerf, ControlSet, ControlShot, ControlTeleport, ControlUi, ControlState, ControlTree, ControlUntil, GameControl, GameEvents, GameReport, Pushes } from './protocol.ts';
 
 export interface DevConnection { dispose(): void }
 
@@ -22,7 +23,7 @@ class StepFailure extends Error {
   constructor(message: string, readonly raw: string | undefined) { super(message); }
 }
 
-type ControlResult = ControlState | ControlShot | ControlUntil | ControlInspect | ControlTree | ControlErrors | ControlPerf | ControlFrames | ControlUi | ControlClick | Record<string, never>;
+type ControlResult = ControlState | ControlShot | ControlUntil | ControlInspect | ControlTree | ControlErrors | ControlPerf | ControlFrames | ControlUi | ControlClick | ControlTeleport | ControlSet | Record<string, never>;
 
 /** Handed from a page that is restarting to the one that replaces it (sessionStorage survives a reload, and only that). */
 const RESTART_KEY = 'hull-restart';
@@ -315,6 +316,13 @@ export function connectDev(game: Game, opts: { url: string; /** Called for `rest
       case 'tree': return treeLines(game.world, c.root, Number.isInteger(c.depth) && (c.depth as number) >= 0 ? (c.depth as number) : 3);
       case 'until': return until(c);
       case 'errors': return { items: c.unread === true ? ring.unreadItems() : ring.take(c.clear === true) } as ControlErrors;
+      case 'teleport': {
+        const r = teleportNode(game.world, c.node, c.to, c.yaw);
+        // The camera and the UI follow the node on a frame, and no game time passes.
+        game.frame(0);
+        return r;
+      }
+      case 'set': return setField(game.world, c.node, c.field, c.value);
       case 'perf': return perf(c);
       case 'frames': return tileFrames(c);
       case 'look': {

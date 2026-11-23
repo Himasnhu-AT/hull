@@ -190,6 +190,16 @@ export type ControlOp =
   | { op: 'perf'; steps?: number }
   /** Mouse movement as the input layer gets it under pointer lock. Buttons go through press/release with key Mouse0, Mouse1, Mouse2. */
   | { op: 'look'; dx: number; dy: number }
+  /**
+   * FOR ARRANGING A TEST, not for playing: move `node` to `to` ([x, y, z]), optionally turn it to `yaw` (radians), tell the renderer it jumped and
+   * clear a kit body's velocity. A run that uses this is not a replay of real input.
+   */
+  | { op: 'teleport'; node: string; to: [number, number, number]; yaw?: number }
+  /**
+   * FOR ARRANGING A TEST, not for playing: set one number, string or boolean field, `field` being "<BehaviourName>.<field>". Answers the old and
+   * new value. A run that uses this is not a replay of real input.
+   */
+  | { op: 'set'; node: string; field: string; value: number | string | boolean }
   /** `count` screenshots (2 to 12), `every` ticks apart, tiled in reading order into one PNG with each tick written in a corner. Tiles are at most 320 px wide; with `width`/`height` each tile is captured at that size and the sheet is scaled down together to fit 1920x1080. */
   | { op: 'frames'; count: number; every: number; width?: number; height?: number };
 
@@ -198,6 +208,8 @@ export type ControlCmp = '<' | '<=' | '>' | '>=' | '==' | '!=';
 export type ControlCond =
   | { node: string; field: string; cmp: ControlCmp; value: number | string | boolean }
   | { probe: string; cmp: ControlCmp; value: number | string | boolean }
+  /** True when the node is within `within` metres of the point [x, z] on the floor plane (height ignored). */
+  | { node: string; near: [number, number]; within: number }
   | { event: string };
 
 export interface NodeState { found: boolean; x: number; y: number; z: number }
@@ -210,6 +222,8 @@ export interface ControlState {
   /** Errors and warnings raised since the last `errors` op. */
   errors: number;
 }
+export interface ControlTeleport { node: string; position: [number, number, number]; yaw: number | null }
+export interface ControlSet { node: string; field: string; old: number | string | boolean; new: number | string | boolean }
 export interface ControlShot { png: string; width: number; height: number }
 export interface ControlUntil extends ControlState { met: boolean; steps: number }
 export interface ControlInspect {
