@@ -25,5 +25,5 @@ me.add(Weapon, { action: 'fire', damage: 25, range: 40 });
 ## Wiring
 
 - A thing that can be hurt has `Health` on it or on a parent of its collider; a `Weapon` hurts the first `Health` its ray or sweep reaches (mask picks layers).
-- `HealthHud` needs `ui-theme/hud`; the weapon's sound needs `sound/hit`. Copy them from the kit's `config/`.
+- `HealthHud` needs `ui-theme/hud`; the weapon's sound needs `sound/hit`. Add them with `kit.add {"kit":"health"}`.
 - Listen with `health.damaged.connect(...)`, `healed`, `died` (see the signals above).

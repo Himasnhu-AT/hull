@@ -22,5 +22,5 @@ spawnFirstPerson(w);   // body, eye camera, gun, health bar, crosshair; node nam
 ## Wiring
 
 - Spawn the pause menu first, the level before the player (the body stands on its `world` layer).
-- Copy the kit's `config/` into the project: `input-map/fps`, `material/gun`, `sound/footstep`, `sound/thud`, `sound/shot`, plus the health kit's `ui-theme/hud` and `sound/hit`.
+- Add the kit's config with `kit.add {"kit":"fps"}` (and `kit.add {"kit":"health"}` for the health kit's `ui-theme/hud` and `sound/hit`): `input-map/fps`, `material/gun`, `sound/footstep`, `sound/thud`, `sound/shot`.
 - Enemies find the player through the `player` group, which `spawnFirstPerson` sets.

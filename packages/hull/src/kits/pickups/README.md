@@ -23,4 +23,4 @@ scatterPickups(w, level, 'gas', 4, { amount: 50 });   // needs a Stock with caps
 ## Wiring
 
 - The taker is a node in the `player` group; `health` pickups need a `Health` on it, any other kind needs a `Stock` of that name (`player.add(Stock, { caps: { gas: 100 } })`).
-- Copy `material/pickup-<kind>` for each kind and `sound/pickup`. `StockHud` needs `ui-theme/hud`.
+- Add `material/pickup-<kind>` for each kind and `sound/pickup` with `kit.add {"kit":"pickups"}`. `StockHud` needs `ui-theme/hud`.

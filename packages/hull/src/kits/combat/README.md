@@ -63,6 +63,6 @@ const foe = spawnEnemy(w, 'enemy/duelist', { x: 0, z: -6, target: 'player' }); /
 ## Wiring
 
 - Spawn the level and pause menu first, then the fighters (a fighter reads `Health`, so the health kit's `ui-theme/hud` and `sound/hit` must exist).
-- Copy the kit's `config/` (move-set, enemy, character, anim-graph/combat) into the project; `check` names a missing id.
+- Add the kit's config (move-set, enemy, character, anim-graph/combat) with `kit.add {"kit":"combat"}`; `check` names a missing id.
 - The player needs the actions `move`, `attack`, `heavy`, `guard`, `dodge`, `stance1-3`, `lock` in its `input-map`.
 - The character's animator graph must have the triggers a move names (see Animator contract).

@@ -41,7 +41,12 @@ export function docSources(): DocSource[] {
     const p = join(guides, file);
     if (existsSync(p)) out.push({ id, title: titleOf(read(p), fallback), kind: 'guide', text: () => read(p) });
   }
-  for (const e of apiEntries(hull)) out.push({ id: `api/${e.name}`, title: `API: ${e.import}`, kind: 'api', text: () => (e.name === 'three' ? THREE_NOTE : apiText(hull, e)) });
+  for (const e of apiEntries(hull)) {
+    if (e.name === 'three') { out.push({ id: 'api/three', title: `API: ${e.import}`, kind: 'api', text: () => THREE_NOTE }); continue; }
+    // An entry too big for one document is an index plus one part per group (api/kits/level): the parts come from the built summary.
+    const ids = [...apiDocs(hull).keys()].filter((k) => k === e.name || k.startsWith(`${e.name}/`)).sort();
+    for (const id of ids.length ? ids : [e.name]) out.push({ id: `api/${id}`, title: id === e.name ? `API: ${e.import}` : `API: ${e.import}: ${id.slice(e.name.length + 1)}`, kind: 'api', text: () => apiText(hull, id, e) });
+  }
   return out;
 }
 
@@ -94,20 +99,35 @@ function apiEntries(hull: string): Entry[] {
 const cache = new Map<string, Map<string, string>>();
 
 /** One program over every entry, built once per hull folder: the checker is the slow part, the text is cheap. */
-function apiText(hull: string, entry: Entry): string {
+function apiDocs(hull: string): Map<string, string> {
   let all = cache.get(hull);
   if (!all) {
     // A program that cannot be built must not turn into an empty document: say what is missing and where to look instead.
     try { all = buildApi(hull); } catch { all = new Map(); }
     cache.set(hull, all);
   }
-  return all.get(entry.name) ?? `# ${entry.import}\n\n(no summary could be generated; read the module's source at ${entry.file})\n`;
+  return all;
+}
+
+function apiText(hull: string, id: string, entry: Entry): string {
+  return apiDocs(hull).get(id) ?? `# ${entry.import}\n\n(no summary could be generated; read the module's source at ${entry.file})\n`;
 }
 
 const oneLine = (s: string, max: number): string => { const t = s.replace(/\s+/g, ' ').trim(); return t.length > max ? `${t.slice(0, max - 1)}…` : t; };
 
+/** A document stays under this many bytes: an agent reads it whole, and a long one costs more than the answer it holds. */
+const API_LIMIT = 18_000;
+
+interface ApiItem { name: string; line: string; members(compact: boolean): string[]; /** The group the export is filed under when an entry must be split: a kit folder, or the first folder under src/. */ group: string }
+
+function groupOf(hull: string, file: string): string {
+  const rel = file.slice(join(hull, 'src').length + 1).split('/');
+  if (rel[0] === 'kits') return rel.length > 2 ? rel[1]! : 'shared';
+  return rel.length > 1 ? rel[0]! : rel[0]!.replace(/\.ts$/, '');
+}
+
 function buildApi(hull: string): Map<string, string> {
-  const entries = apiEntries(hull);
+  const entries = apiEntries(hull).filter((e) => e.name !== 'three');
   const program = ts.createProgram(entries.map((e) => e.file), {
     target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext, moduleResolution: ts.ModuleResolutionKind.Bundler,
     allowImportingTsExtensions: true, noEmit: true, skipLibCheck: true, strict: true, types: [],
@@ -116,29 +136,91 @@ function buildApi(hull: string): Map<string, string> {
   const out = new Map<string, string>();
   for (const e of entries) {
     const sf = program.getSourceFile(e.file);
-    const lines: string[] = [`# API: ${e.import}`, '', `\`import { ... } from '${e.import}'\`. Generated from the code; names and signatures only (read the module's README or the source for more).`, ''];
     const mod = sf && checker.getSymbolAtLocation(sf);
     const exports = mod ? checker.getExportsOfModule(mod).sort((a, b) => a.name.localeCompare(b.name)) : [];
+    const items: ApiItem[] = [];
     for (const sym of exports) {
       const target = sym.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(sym) : sym;
       const decl = target.declarations?.[0];
-      lines.push(`- ${signature(checker, sym.name, target, decl)}`);
+      items.push({ name: sym.name, line: signature(checker, sym.name, target, decl), members: (compact) => membersOf(checker, target, decl, compact), group: decl ? groupOf(hull, decl.getSourceFile().fileName) : 'other' });
     }
-    out.set(e.name, lines.join('\n') + '\n');
+    const use = '`import { ... } from \'' + e.import + '\'`';
+    const intro = [`# API: ${e.import}`, '', `${use}. Generated from the code: each export with its signature and, for a class or interface, its own public members (one line each: signature, then the first sentence of its doc comment). An inherited member is listed once, on the base class.`, ''];
+    const render = (list: ApiItem[], compact = false): string[] => list.flatMap((i) => [`- ${i.line}`, ...i.members(compact)]);
+    const whole = [...intro, ...render(items)].join('\n') + '\n';
+    if (Buffer.byteLength(whole) <= API_LIMIT) { out.set(e.name, whole); continue; }
+    // Too big for one document: this one says where each export is, and each group has a document of its own.
+    const groups = new Map<string, ApiItem[]>();
+    for (const i of items) groups.set(i.group, [...(groups.get(i.group) ?? []), i]);
+    const index = [intro[0]!, '', `${use}. This entry is split by where the code lives; read the part that has the name you need (docs.read with the id).`, ''];
+    for (const [g, list] of groups) {
+      const head = [`# API: ${e.import}: ${g}`, '', `${use}. One part of ${e.import}; the index is api/${e.name}.`, ''];
+      let text = [...head, ...render(list)].join('\n') + '\n';
+      // A part still too long (the dev protocol's method table) keeps its members' signatures and drops their comments.
+      if (Buffer.byteLength(text) > API_LIMIT) text = [...head, '(Comments left out to keep this document short; read the source for them.)', '', ...render(list, true)].join('\n') + '\n';
+      out.set(`${e.name}/${g}`, text);
+      index.push(`- api/${e.name}/${g}: ${list.map((i) => i.name).join(', ')}`);
+    }
+    out.set(e.name, index.join('\n') + '\n');
   }
   return out;
 }
 
+const F = ts.SymbolFlags;
+
+/** The first sentence of a symbol's doc comment, on one line. */
+function docOf(checker: ts.TypeChecker, sym: ts.Symbol, max: number): string {
+  const text = ts.displayPartsToString(sym.getDocumentationComment(checker)).replace(/\b(e\.g|i\.e|etc|vs)\./g, '$1\x00');
+  // The first sentence: up to a full stop followed by a capital letter (or the end), or the first blank line or list item.
+  const first = text.split(/\n\n|\n(?=[-*@])/)[0] ?? '';
+  const cut = /^([\s\S]*?[.!?])(?=\s+[A-Z`]|$)/.exec(first)?.[1] ?? first;
+  return oneLine(cut.replace(/\x00/g, '.'), max);
+}
+
+/** Own public members of a class or interface, one line each. An inherited member belongs to its base's own listing. */
+function membersOf(checker: ts.TypeChecker, sym: ts.Symbol, decl: ts.Declaration | undefined, compact: boolean): string[] {
+  if (!decl || !(sym.flags & (F.Class | F.Interface))) return [];
+  try {
+    const type = checker.getDeclaredTypeOfSymbol(sym);
+    // Static members live on the constructor type, not on the instance type.
+    const ctor = sym.flags & F.Class ? checker.getTypeOfSymbolAtLocation(sym, decl) : undefined;
+    const statics = ctor ? ctor.getProperties().filter((p) => p.name !== 'prototype') : [];
+    const decls = new Set<ts.Node>(sym.declarations ?? []);
+    const lines: { order: number; text: string }[] = [];
+    const add = (p: ts.Symbol, isStatic: boolean): void => {
+      const d = p.declarations?.[0];
+      if (!d || p.name.startsWith('_') || p.name.startsWith('#')) return;
+      // Own members only: one declared in a base class or interface is listed there.
+      if (!decls.has(d.parent)) return;
+      const mods = ts.getCombinedModifierFlags(d);
+      if (mods & (ts.ModifierFlags.Private | ts.ModifierFlags.Protected)) return;
+      if (p.getJsDocTags().some((t) => t.name === 'internal')) return;
+      const prefix = (isStatic ? 'static ' : '') + (mods & ts.ModifierFlags.Readonly ? 'readonly ' : '');
+      const optional = p.flags & F.Optional ? '?' : '';
+      // An optional member is not "or undefined" to the reader, and a member that is a function reads as a method.
+      const t = p.flags & F.Optional ? checker.getNonNullableType(checker.getTypeOfSymbolAtLocation(p, d)) : checker.getTypeOfSymbolAtLocation(p, d);
+      const calls = t.getCallSignatures();
+      const sig = calls.length && t.getProperties().length === 0
+        ? `${p.name}${optional}${checker.signatureToString(calls[0]!)}${calls.length > 1 ? ` (+${calls.length - 1} overloads)` : ''}`
+        : `${p.name}${optional}: ${checker.typeToString(t, d, ts.TypeFormatFlags.NoTruncation)}`;
+      const doc = compact ? '' : docOf(checker, p, 110);
+      lines.push({ order: d.getStart(), text: `  - ${oneLine(prefix + sig, compact ? 110 : 170)}${doc ? ` // ${doc}` : ''}` });
+    };
+    for (const p of statics) add(p, true);
+    for (const p of type.getProperties()) add(p, false);
+    // Source order reads the way the class does.
+    return lines.sort((x, y) => x.order - y.order).map((l) => l.text);
+  } catch { return []; /* a type the checker cannot print: the export's own line is still true */ }
+}
+
 function signature(checker: ts.TypeChecker, name: string, sym: ts.Symbol, decl: ts.Declaration | undefined): string {
-  const F = ts.SymbolFlags;
   let sig: string;
   try {
-    if (sym.flags & F.Class) {
+    if (sym.flags & (F.Class | F.Interface)) {
       const t = checker.getDeclaredTypeOfSymbol(sym);
       const base = checker.getBaseTypes(t as ts.InterfaceType).map((b) => checker.typeToString(b)).join(', ');
-      sig = `class ${name}${base ? ` extends ${base}` : ''}`;
-    } else if (sym.flags & F.Interface) sig = `interface ${name}`;
-    else if (sym.flags & F.TypeAlias) {
+      sig = `${sym.flags & F.Class ? 'class' : 'interface'} ${name}${base ? ` extends ${base}` : ''}`;
+    } else if (sym.flags & F.TypeAlias) {
       // The source's own words for the type beat the checker's, which prints an alias as its own name.
       const node = decl && ts.isTypeAliasDeclaration(decl) ? decl.type.getText() : checker.typeToString(checker.getDeclaredTypeOfSymbol(sym));
       sig = `type ${name}${decl && ts.isTypeAliasDeclaration(decl) && decl.typeParameters ? `<${decl.typeParameters.map((p) => p.name.text).join(', ')}>` : ''} = ${node}`;
@@ -150,8 +232,8 @@ function signature(checker: ts.TypeChecker, name: string, sym: ts.Symbol, decl: 
     } else if (decl) sig = `const ${name}: ${checker.typeToString(checker.getTypeOfSymbolAtLocation(sym, decl))}`;
     else sig = name;
   } catch { sig = name; }
-  const doc = ts.displayPartsToString(sym.getDocumentationComment(checker)).split(/\n|\. /)[0] ?? '';
-  return oneLine(sig, 220) + (doc ? ` // ${oneLine(doc, 120)}` : '');
+  const doc = docOf(checker, sym, 120);
+  return oneLine(sig, 220) + (doc ? ` // ${doc}` : '');
 }
 
 // ---- The methods ----------------------------------------------------------------------------------------------------------------

@@ -19,6 +19,6 @@ w.spawn('pause').add(PauseMenu);   // the first spawn, so a step sees the pause 
 
 ## Wiring
 
-- Needs the action `pause` in the input map and `config/ui-screen/pause.json` (copy it from the kit).
+- Needs the action `pause` in the input map and `config/ui-screen/pause.json` (add it with `kit.add {"kit":"pause"}`).
 - Save and Load buttons need a node named `saves` with `SaveSlots`.
 - Your own behaviours check `flagsOf(world).paused` at the top of `fixedUpdate`.
