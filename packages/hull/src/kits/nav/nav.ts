@@ -149,6 +149,10 @@ export class NavGrid extends Behaviour {
     }
   }
 
+  /** The centre of a cell, by its index. */
+  private cx(c: number): number { return this.bounds.minX + ((c % this.nx) + 0.5) * this.cell; }
+  private cz(c: number): number { return this.bounds.minZ + (Math.floor(c / this.nx) + 0.5) * this.cell; }
+
   private cellOf(x: number, z: number): number {
     const i = Math.floor((x - this.bounds.minX) / this.cell);
     const k = Math.floor((z - this.bounds.minZ) / this.cell);
@@ -225,11 +229,8 @@ export class NavGrid extends Behaviour {
     const goalIsExact = b.x === toX && b.z === toZ;
     const count = this.search(s, t);
     if (count === 0) return false;
-    const { nx, raw } = this;
+    const { raw } = this;
     // raw[0..count) runs goal to start. Pull it tight: from each anchor jump to the furthest cell still in sight.
-    const cs = this.cell;
-    const px = (c: number): number => this.bounds.minX + ((c % nx) + 0.5) * cs;
-    const pz = (c: number): number => this.bounds.minZ + (Math.floor(c / nx) + 0.5) * cs;
     const startFree = this.walkable(fromX, fromZ);
     let ax = startFree ? fromX : a.x;
     let az = startFree ? fromZ : a.z;
@@ -238,10 +239,10 @@ export class NavGrid extends Behaviour {
     while (j > 0) {
       let far = j - 1;
       for (let m = 0; m < j; m++) {
-        if (this.lineClear(ax, az, px(raw[m]!), pz(raw[m]!))) { far = m; break; }
+        if (this.lineClear(ax, az, this.cx(raw[m]!), this.cz(raw[m]!))) { far = m; break; }
       }
       // `far` is the smallest index in sight, that is the one nearest the goal.
-      ax = px(raw[far]!); az = pz(raw[far]!);
+      ax = this.cx(raw[far]!); az = this.cz(raw[far]!);
       if (far === 0) break;
       out.push(ax, az);
       j = far;
