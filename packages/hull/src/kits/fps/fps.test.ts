@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest';
+import { defineGame } from '../../core/index.ts';
+import { usePhysics } from '../../physics/index.ts';
+import { Mesh } from '../../render/index.ts';
+import { Weapon } from '../health/weapon.ts';
 import { ArenaLevel } from '../level/level.ts';
 import { ALL_KITS, kitSources, startRig, type Rig } from '../testing.ts';
 import bench from './bench.ts';
-import { FirstPerson } from './fps.ts';
+import { FirstPerson, spawnFirstPerson } from './fps.ts';
 
 const sources = kitSources(...ALL_KITS);
 const fwd = { move: { y: -1 } };
@@ -79,5 +83,23 @@ describe('first-person kit', () => {
       return c;
     };
     expect(await run()).toBe(await run());
+  });
+});
+
+describe('spawnFirstPerson options', () => {
+  const unarmed = defineGame({ ready(g) { usePhysics(g.world); g.world.spawn('level').add(ArenaLevel); spawnFirstPerson(g.world, { x: 2, z: 3, gun: false }); } });
+  it('has a gun by default: a Weapon on the eye and a gun mesh', async () => {
+    const { fp } = await start();
+    expect(fp.eye.get(Weapon)).toBeTruthy();
+    expect(fp.eye.children.some((c) => c.name === 'gun' && c.get(Mesh))).toBe(true);
+  });
+  it('leaves out the Weapon and its mesh with gun: false, and still places the player', async () => {
+    const r = await startRig(unarmed, sources, 'fps');
+    const me = r.g.world.find('player')!;
+    const fp = me.get(FirstPerson)!;
+    expect(fp.eye.get(Weapon)).toBeFalsy();
+    expect(r.g.world.find('player/eye/gun')).toBeFalsy();
+    expect([me.position.x, me.position.z]).toEqual([2, 3]);
+    r.step(30, { fire: { d: 1, p: 1 } });
   });
 });

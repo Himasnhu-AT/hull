@@ -3,8 +3,8 @@
 A third-person body with three gears: run, sprint, and boost (fast; it spends the stock `gas` if the node has one).
 
 - **Behaviours**: `ThirdPerson` (node = feet; child `model` holds the character and its `Animator`), `AimFollow`.
-  `spawnThirdPerson(world, at, character)` builds the player: body, `Health`, `Stock` (gas), the camera, a melee `Weapon`
-  on the `attack` action, health and gas HUD.
+  `spawnThirdPerson(world, { x, z, weapon, gas }, character)` builds the player: body, `Health`, `Stock` (gas), the camera, a melee `Weapon`
+  on the `attack` action, health and gas HUD. `weapon: false` leaves out the swing (the `Weapon` and its `aim` node); `gas: false` leaves out the gas `Stock` and its bar (boost is then free).
 - **Animator parameters it feeds**: `speed`, `grounded`, `dead`, triggers `jump`, `hit`, `attack` (the graph in
   `config/anim-graph/locomotion`). With `character = ''` the body is a capsule.
 - **Actions**: `move` (relative to the camera's `yaw`), `jump`, `sprint`, `boost`, `attack`.
@@ -18,6 +18,7 @@ A third-person body with three gears: run, sprint, and boost (fast; it spends th
 ```ts
 const level = w.spawn('level').add(ArenaLevel);
 spawnThirdPerson(w);   // body, Health, gas Stock, follow camera, melee, HUD; node name "player"
+spawnThirdPerson(w, { x: 4, z: 0, weapon: false, gas: false });   // a walker with no swing and no gas
 ```
 
 ## Wiring

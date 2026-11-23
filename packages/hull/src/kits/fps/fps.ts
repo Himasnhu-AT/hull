@@ -119,15 +119,17 @@ export class Crosshair extends KitUi {
 /**
  * The whole first-person player in one call: body, health, a gun on the eye, health bar and crosshair.
  * Returns the player node. Add it after the level and the pause menu so the order of steps is right.
+ * `gun: false` leaves out the Weapon and its mesh, for a game where the player does not shoot (a walking game, a puzzle).
  */
-export function spawnFirstPerson(world: World, at: { x: number; z: number; yaw?: number } = { x: 0, z: 0 }): Node {
+export function spawnFirstPerson(world: World, at: { x?: number; z?: number; yaw?: number; gun?: boolean } = {}): Node {
   const me = world.spawn('player');
-  me.position.set(at.x, 0, at.z);
+  me.position.set(at.x ?? 0, 0, at.z ?? 0);
   me.add(Health, { max: healthTuning.playerMax, hp: healthTuning.playerMax });
   me.add(FirstPerson, { yaw: at.yaw ?? 0 });
   const fp = me.get(FirstPerson)!;
   me.add(HealthHud);
   me.add(Crosshair);
+  if (at.gun === false) return me;
   // The gun is the node on the eye: it shoots where the camera looks, and the viewmodel rides with it.
   fp.eye.add(Weapon, { action: 'fire', damage: 25, range: 80, rate: 6, radius: 0, sound: 'sound/shot', mask: LAYER.world | LAYER.enemy });
   const gun = world.spawn('gun', fp.eye);
