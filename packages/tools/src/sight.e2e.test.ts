@@ -234,7 +234,7 @@ describe.skipIf(!hasBrowser)('reach: UI, picture size, per-frame stats, problems
   it('tree puts repeated siblings on one line', async () => {
     await mcp.run({ op: 'restart' });
     const lines = (await mcp.run({ op: 'tree', depth: 2 })).lines as string[];
-    expect(lines.some((l) => /^level\/crate x\d+  \[/.test(l))).toBe(true);
+    expect(lines.some((l) => /^level\/crate0\.\.\d+ x\d+  \[/.test(l))).toBe(true);
     expect(lines.filter((l) => l.startsWith('level/crate')).length).toBe(1);
   }, 180_000);
 

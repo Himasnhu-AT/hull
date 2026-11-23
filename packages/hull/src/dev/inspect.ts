@@ -76,32 +76,34 @@ export function inspectNode(world: World, path: string): ControlInspect {
   };
 }
 
-/** Paths with behaviour names, `depth` levels below `root`, at most 200 lines; repeated siblings are one line ("level/crate x14  [Mesh]"). A node at the depth limit says how many children it hides. */
+/** Paths with behaviour names, `depth` levels below `root`, at most 200 lines; repeated siblings are one line ("level/crate x14  [Mesh]", or "level/crate0..13 x14  [Mesh]" when they are numbered). A node at the depth limit says how many children it hides. */
 export function treeLines(world: World, root: string | undefined, depth: number): ControlTree {
   const start = root ? world.find(root) : world.root;
   if (!start) return { lines: [], more: 0 };
   const lines: string[] = [];
   let more = 0;
-  const walk = (n: Node, level: number, times: number): void => {
+  const walk = (n: Node, level: number, times: number, last: Node): void => {
     if (n !== world.root) {
       if (lines.length >= MAX_LINES) { more++; } else {
         const bs = n.behaviours.map(behaviourName);
         const hidden = level >= depth && n.children.length > 0 ? ` (+${n.children.length} below)` : '';
-        lines.push(`${pathOf(n)}${times > 1 ? ` x${times}` : ''}${bs.length ? `  [${bs.join(', ')}]` : ''}${hidden}`);
+        // crate0 .. crate13 read as "crate0..13": the range is there to be found by name, the count says how many.
+        const range = times > 1 && last.name !== n.name ? `..${/\d+$/.exec(last.name)?.[0] ?? last.name}` : '';
+        lines.push(`${pathOf(n)}${range}${times > 1 ? ` x${times}` : ''}${bs.length ? `  [${bs.join(', ')}]` : ''}${hidden}`);
       }
     }
     if (level >= depth) return;
-    // Siblings with one name, the same behaviours and the same number of children (fourteen crates) are one line, "x14", and only the first is walked.
-    const sig = (k: Node): string => `${k.name}|${k.behaviours.map(behaviourName).join(',')}|${k.children.length}`;
+    // Siblings with one name (or one name and a running number), the same behaviours and the same number of children (fourteen crates) are one line, "x14", and only the first is walked.
+    const sig = (k: Node): string => `${k.name.replace(/\d+$/, '')}|${k.behaviours.map(behaviourName).join(',')}|${k.children.length}`;
     const kids = n.children;
     for (let i = 0; i < kids.length; i++) {
       let j = i + 1;
       while (j < kids.length && sig(kids[j]!) === sig(kids[i]!)) j++;
-      walk(kids[i]!, level + 1, j - i);
+      walk(kids[i]!, level + 1, j - i, kids[j - 1]!);
       i = j - 1;
     }
   };
-  walk(start, 0, 1);
+  walk(start, 0, 1, start);
   return { lines, more };
 }
 
