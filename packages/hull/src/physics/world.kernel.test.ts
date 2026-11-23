@@ -197,4 +197,73 @@ describe('the physics world on the kernel', () => {
     expect(a.phys.state()).toEqual(b.phys.state());
     expect(a.phys.backend).toBe('kernel');
   }, LONG);
+
+  it('gives a world too wide for its grid back to TypeScript once, with the same answers', async () => {
+    const said = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const make = async (kernels: 'on' | 'off') => {
+      let phys!: Physics;
+      await startGame(defineGame({ ready(g) { phys = usePhysics(g.world); } }), { seed: 1, kernels });
+      phys.addBox(v(0, 0, 0), v(4, 4, 4), { userData: 'near' });
+      phys.addBox(v(200000, 0, 200000), v(4, 4, 4), { userData: 'far' });
+      return phys;
+    };
+    const a = await make('on'), b = await make('off');
+    expect(a.backend).toBe('kernel');
+    const ha = new Hit(), hb = new Hit();
+    expect(hitOf(a.raycast(v(-10, 0, 0), v(1, 0, 0), 100, undefined, ha))).toEqual(hitOf(b.raycast(v(-10, 0, 0), v(1, 0, 0), 100, undefined, hb)));
+    expect(a.backend).toBe('typescript');
+    expect(hitOf(a.raycast(v(199990, 0, 200000), v(1, 0, 0), 100, undefined, ha))).toEqual(hitOf(b.raycast(v(199990, 0, 200000), v(1, 0, 0), 100, undefined, hb)));
+    expect(said).toHaveBeenCalledTimes(1);
+    expect(String(said.mock.calls[0]![0])).toMatch(/carries on in TypeScript/);
+  });
+
+  it('files every moved shape even when thousands come and go between two queries', async () => {
+    const a = await world(31, 'on'), b = await world(31, 'off');
+    const R = rng(32);
+    for (let round = 0; round < 3; round++) {
+      for (let k = 0; k < 4000; k++) {
+        const p = v((R() * 2 - 1) * 70, R() * 20, (R() * 2 - 1) * 70);
+        const made = [a, b].map((w) => w.phys.add({ type: 'sphere', radius: 0.5 }, { static: false, position: p, userData: 'tmp' }));
+        const q = v(p.x + 1, p.y, p.z);
+        for (const s of made) s.setPose(q.x, q.y, q.z, 0, 0, 0, 1);
+        a.phys.remove(made[0]!); b.phys.remove(made[1]!);
+        const j = Math.floor(R() * a.shapes.length);
+        if (!a.shapes[j]!.isStatic) for (const w of [a, b]) w.shapes[j]!.setPose(q.x, q.y + 2, q.z, 0, 0, 0, 1);
+      }
+      for (let n = 0; n < 300; n++) {
+        const o = v((R() * 2 - 1) * 70, R() * 20, (R() * 2 - 1) * 70);
+        expect(ids(a.phys.overlapSphere(o, 6))).toEqual(ids(b.phys.overlapSphere(o, 6)));
+      }
+    }
+    expect(a.phys.backend).toBe('kernel');
+  }, LONG);
+
+  it('keeps a body whose shape was removed first from posing another shape', async () => {
+    const make = async (kernels: 'on' | 'off') => {
+      let phys!: Physics;
+      const game = await startGame(defineGame({ ready(g) {
+        phys = usePhysics(g.world);
+        phys.addGround(0);
+        for (let i = 0; i < 20; i++) {
+          const n = g.world.spawn('b' + i);
+          n.position.set(i * 1.5 - 15, 2 + (i % 3), 0);
+          n.add(Body, { shape: { type: 'box', size: [0.5, 0.5, 0.5] } });
+        }
+      } }), { seed: 3, stepRate: 120, kernels });
+      return { game, phys };
+    };
+    const a = await make('on'), b = await make('off');
+    for (const w of [a, b]) {
+      w.game.step(30);
+      // The shape goes, its body stays; then new shapes arrive and may take the freed ids.
+      for (let i = 0; i < 20; i += 4) w.phys.remove(w.phys.solver.bodies[i]!.shape);
+      for (let i = 0; i < 10; i++) w.phys.addSphere(v(i * 2 - 10, 0.5, 3), 0.5, { static: false, userData: 'late' + i });
+      w.game.step(120);
+    }
+    expect(a.phys.state()).toEqual(b.phys.state());
+    const late = (w: { phys: Physics }) => ids(w.phys.overlapSphere(v(0, 0.5, 3), 12)).filter((u) => String(u).startsWith('late'));
+    expect(late(a)).toEqual(late(b));
+    expect(late(a)).toHaveLength(10);
+    expect(a.phys.backend).toBe('kernel');
+  }, LONG);
 });

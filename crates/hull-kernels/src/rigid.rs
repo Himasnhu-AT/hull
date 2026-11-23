@@ -111,6 +111,10 @@ impl Rigid {
     pub fn remove(&mut self, b: usize) {
         let id = self.gi(b, SHAPE) as usize;
         set_i(id, s::RB, -1);
+        // The shape went before its body: now its id can be reused (world.rs `remove` held it back).
+        if i(id, s::WHERE) == s::WHERE_FREE {
+            unsafe { s::SH.free.push(id as i32) };
+        }
         self.bf.copy_within((b + 1) * BF_STRIDE..self.n * BF_STRIDE, b * BF_STRIDE);
         self.bi.copy_within((b + 1) * BI_STRIDE..self.n * BI_STRIDE, b * BI_STRIDE);
         self.n -= 1;

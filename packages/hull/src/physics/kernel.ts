@@ -25,6 +25,8 @@ const F_ENABLED = 1, F_TRIGGER = 2, F_STATIC = 4, F_AA = 8, F_DIRTY = 16;
 const BF = 64, BI = 4;
 const B_PX = 0, B_INV_MASS = 13, B_IIX = 20, B_PT_R = 23, B_INNER = 24, B_OUTER = 25, B_SLEEP_TIME = 26, B_IW = 27, B_PTS = 36;
 const B_SHAPE = 0, B_SLEEPING = 1, B_TOUCHING = 2, B_NPTS = 3;
+/** Why the kernel gives a world back: the static shapes span more cells than its dense grid holds. */
+const TOO_WIDE = 'the static world spans more cells than the kernel\'s grid holds (4M)';
 /// FILT words given to the prefix bit set of a tag filter (world.rs FILT is 264 words, the set starts at 8).
 const TAG_WORDS = 256;
 
@@ -187,6 +189,8 @@ export class KernelWorld {
     flags = s.aa ? flags | F_AA : flags & ~F_AA;
     if ((flags & F_DIRTY) === 0) {
       flags |= F_DIRTY;
+      // Entries of removed shapes stay until the kernel files the list, so it can fill before a query comes.
+      if (this.hdr[H_NDIRTY]! >= this.dirty.length) { this.k.hk_flush(); this.views(); }
       const n = this.hdr[H_NDIRTY]!;
       this.dirty[n] = id;
       this.hdr[H_NDIRTY] = n + 1;
@@ -238,7 +242,7 @@ export class KernelWorld {
     const res = this.res;
     res[0] = B.t; res[1] = B.nx; res[2] = B.ny; res[3] = B.nz;
     res[4] = B.shape === null ? -1 : B.shape._kid; res[5] = B.inside ? 1 : 0; res[6] = B.depth;
-    if (this.k.hk_cast(ox, oy, oz, dx, dy, dz, r) !== 0) return false;
+    if (this.k.hk_cast(ox, oy, oz, dx, dy, dz, r) !== 0) throw new Error(TOO_WIDE);
     this.views();
     const out = this.res;
     B.t = out[0]!; B.nx = out[1]!; B.ny = out[2]!; B.nz = out[3]!;
@@ -249,7 +253,7 @@ export class KernelWorld {
   }
 
   private collect(n: number, into: Shape[]): boolean {
-    if (n < 0) return false;
+    if (n < 0) throw new Error(TOO_WIDE);
     this.views();
     into.length = 0;
     const o = this.out;
@@ -322,7 +326,7 @@ export class KernelWorld {
       bi[p + B_TOUCHING] = b.touching ? 1 : 0;
       this.awake[i] = b.sleeping ? 0 : 1;
     }
-    if (this.k.hk_rigid_step(dt, g.x, g.y, g.z, iterations) !== 0) return false;
+    if (this.k.hk_rigid_step(dt, g.x, g.y, g.z, iterations) !== 0) throw new Error(TOO_WIDE);
     this.views();
     f = this.bf; bi = this.bi;
     for (let i = 0; i < n; i++) {

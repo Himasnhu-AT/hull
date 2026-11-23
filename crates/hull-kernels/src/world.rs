@@ -478,7 +478,11 @@ impl World {
         set_i(id, s::WHERE, s::WHERE_FREE);
         set_i(id, s::SLOT, -1);
         set_i(id, s::FLAGS, 0);
-        unsafe { s::SH.free.push(id as i32) };
+        // A rigid body may still hold the shape (its Collider went first); its id is reused only once the body goes,
+        // or the solver would pose whatever shape took the id.
+        if i(id, s::RB) < 0 {
+            unsafe { s::SH.free.push(id as i32) };
+        }
     }
 
     /// Shapes TypeScript moved since the last query: their new bounds into the index.

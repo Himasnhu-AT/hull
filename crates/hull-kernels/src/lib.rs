@@ -357,3 +357,9 @@ pub extern "C" fn hk_rigid_step(dt: f64, gx: f64, gy: f64, gz: f64, iters: i32) 
         world::W.failed
     }
 }
+
+/// Files the shapes TypeScript has moved now, when its dirty list is full before a query comes.
+#[no_mangle]
+pub extern "C" fn hk_flush() {
+    unsafe { world::W.flush() };
+}

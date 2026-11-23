@@ -1,7 +1,7 @@
 //! The module's memory: a bump allocator for `alloc` (Vec), and the header TypeScript reads to find its views.
 //!
-//! TypeScript holds typed-array views over arrays that live here. Whenever one of them may have moved or changed
-//! size (any reallocation, or the memory growing, which detaches the old ArrayBuffer), `EPOCH` goes up, and the
+//! TypeScript holds typed-array views over arrays that live here. Whenever one of them may have appeared, moved or
+//! changed size (any allocation, or the memory growing, which detaches the old ArrayBuffer), `EPOCH` goes up, and the
 //! TypeScript side makes its views again before it next writes. Nothing is freed except the newest block, so a
 //! Vec that grows by doubling leaves at most its old copies behind: bounded, and a world's tables only grow.
 use core::alloc::{GlobalAlloc, Layout};
@@ -49,6 +49,8 @@ unsafe impl GlobalAlloc for Bump {
         }
         LAST = start;
         NEXT = end;
+        // A first allocation can be a new array TypeScript holds a view of (an empty Vec has none yet), so it counts.
+        bump_epoch();
         start as *mut u8
     }
 

@@ -32,6 +32,7 @@ export interface KernelExports {
   hk_body_add(shape: number): number;
   hk_body_remove(index: number): void;
   hk_rigid_step(dt: number, gx: number, gy: number, gz: number, iterations: number): number;
+  hk_flush(): void;
   /** One shape at a time, for the narrow-phase parity test. */
   hk_t_sweep(id: number, ox: number, oy: number, oz: number, dx: number, dy: number, dz: number, r: number): void;
   hk_t_closest(id: number, x: number, y: number, z: number): number;
