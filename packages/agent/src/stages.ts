@@ -80,6 +80,9 @@ export const STAGES: readonly StageDef[] = [
   },
 ];
 
+/** Stages that do not build on the ones before them, so they still run when an earlier stage failed. The others need their predecessors. */
+export const INDEPENDENT_STAGES: readonly StageId[] = ['sounds', 'effects', 'screens'];
+
 export const stageDef = (id: StageId): StageDef => STAGES.find((s) => s.id === id)!;
 
 /** The system prompt of one stage's run. The first line is what the scripted model finds its steps by. */
@@ -98,7 +101,7 @@ export function stageSystem(projectRoot: string, def: StageDef): string {
 const ownerLine = (n: ExplainNeed): string => '- a "' + n.kind + '" document: ' + n.how;
 
 /** The first message of a stage's history: the brief, the docs index, the earlier stages' summaries, and this stage's task. */
-export function stageTask(def: StageDef, o: { brief: string; docs: string[]; earlier: { id: string; title: string; summary: string }[]; note?: string }): string {
+export function stageTask(def: StageDef, o: { brief: string; docs: string[]; earlier: { id: string; title: string; summary: string }[]; note?: string; retry?: { reason: string; summary: string } }): string {
   const lines = [
     'Build the "' + def.title + '" stage.',
     '',
@@ -118,6 +121,7 @@ export function stageTask(def: StageDef, o: { brief: string; docs: string[]; ear
     'Done when: ' + def.done + '.',
   ];
   if (o.note) lines.push('', 'The person looked at this stage and asked for a change: "' + o.note + '". Change only what the note asks, and keep the rest as it is.');
+  if (o.retry) lines.push('', 'A first attempt at this stage stopped because ' + o.retry.reason, 'What that attempt said it made: ' + (o.retry.summary || '(it said nothing)'), 'Its changes are still in the project. Read what is there, fix what the reason names, and finish the stage; do not start over.');
   return lines.join('\n');
 }
 
@@ -158,7 +162,17 @@ export interface BuildDeps {
   log?: (line: string) => void;
 }
 
-export interface BuildResult { outcome: 'done' | 'failed' | 'cancelled'; built: StageId[]; failed?: { stage: StageId; reason: string } }
+export interface BuildResult {
+  outcome: 'done' | 'failed' | 'cancelled';
+  built: StageId[];
+  /** The first stage that failed (after its retry). */
+  failed?: { stage: StageId; reason: string };
+  /** Every stage that failed, in build order. */
+  failures?: { stage: StageId; reason: string }[];
+}
+
+/** Fixed steps the game takes before the stage's screenshot. */
+export const SHOT_TICKS = 60;
 
 const cut = (s: string, n: number): string => (s.length > n ? s.slice(0, n) + ' ...' : s);
 
@@ -170,6 +184,7 @@ export async function runBuild(deps: BuildDeps): Promise<BuildResult> {
   const setStage = async (stage: Partial<StageState> & { id: StageId }): Promise<CreateState> => (await tools.call('create.set', { stage })).value as CreateState;
   const showStages = (st: CreateState): void => io.ui({ id: 'stages', kind: 'stages', stages: st.stages });
   const built: StageId[] = [];
+  const failures: { stage: StageId; reason: string }[] = [];
 
   let st = await get();
   const todo = deps.only ? [deps.only] : STAGES.filter((d) => st.stages.find((s) => s.id === d.id)?.status !== 'ready').map((d) => d.id);
@@ -178,13 +193,22 @@ export async function runBuild(deps: BuildDeps): Promise<BuildResult> {
 
   for (const id of todo) {
     if (signal.aborted) return { outcome: 'cancelled', built };
+    // After a failure only the stages that do not build on the others go on.
+    if (failures.length && !INDEPENDENT_STAGES.includes(id)) continue;
     const def = stageDef(id);
     const before = st.stages.find((s) => s.id === id)!;
     io.text((built.length ? '\n\n' : '') + (deps.only ? 'Changing ' : 'Building ') + def.title.toLowerCase() + '.');
     st = await setStage({ id, status: 'building' });
     showStages(st);
 
-    const out = await buildStage(def, before, st);
+    // A stage that fails its gates gets one more go, seeded with why it failed and what the first attempt said it made.
+    let out = await buildStage(def, before, st);
+    // A refusal is not tried again.
+    if (out.outcome === 'failed' && !out.final) {
+      log('stage ' + id + ' failed: ' + out.reason);
+      io.text('\n\n' + def.title + ' did not pass: ' + out.reason + ' Trying once more.');
+      out = await buildStage(def, before, st, { reason: out.reason, summary: out.summary });
+    }
     if (out.outcome === 'cancelled') {
       st = await setStage({ id, status: before.status === 'ready' ? 'ready' : 'waiting' });
       showStages(st);
@@ -193,8 +217,8 @@ export async function runBuild(deps: BuildDeps): Promise<BuildResult> {
     if (out.outcome === 'failed') {
       st = await setStage({ id, status: 'failed', summary: out.reason });
       showStages(st);
-      io.text('\n\nStopped at ' + def.title.toLowerCase() + ': ' + out.reason + ' Ask me to go on and I will start again from here.');
-      return { outcome: 'failed', built, failed: { stage: id, reason: out.reason } };
+      failures.push({ stage: id, reason: out.reason });
+      continue;
     }
     built.push(id);
     st = await setStage({ id, status: 'ready', summary: out.summary, checkpoint: out.checkpoint, pieces: out.pieces });
@@ -203,13 +227,21 @@ export async function runBuild(deps: BuildDeps): Promise<BuildResult> {
     for (const doc of out.docs) io.ui({ id: 'explain-' + doc.id, kind: 'explain', doc });
   }
 
+  if (failures.length) {
+    const first = failures[0]!;
+    const skipped = todo.filter((t) => !built.includes(t) && !failures.some((f) => f.stage === t));
+    io.text('\n\nStopped. ' + (built.length ? 'Built: ' + built.map((b) => stageDef(b).title.toLowerCase()).join(', ') + '. ' : '') + 'Failed: ' + failures.map((f) => stageDef(f.stage).title.toLowerCase() + ' (' + f.reason + ')').join(' ') + (skipped.length ? ' Not started, because they build on a failed stage: ' + skipped.map((k) => stageDef(k).title.toLowerCase()).join(', ') + '.' : '') + ' Ask me to go on and I will start again from the first stage that is not ready.');
+    showStages(st);
+    return { outcome: 'failed', built, failed: first, failures };
+  }
+
   if (st.stages.every((s) => s.status === 'ready') && st.step !== 'play') st = (await tools.call('create.set', { patch: { step: 'play' } })).value as CreateState;
   showStages(st);
   io.text('\n\nBuilt: ' + built.map((b) => stageDef(b).title.toLowerCase()).join(', ') + '. You can play it now.');
   return { outcome: 'done', built };
 
-  async function buildStage(def: StageDef, prev: StageState, now: CreateState): Promise<
-    { outcome: 'ready'; summary: string; checkpoint: string; pieces: string[]; docs: ExplainDoc[] } | { outcome: 'failed'; reason: string } | { outcome: 'cancelled' }
+  async function buildStage(def: StageDef, prev: StageState, now: CreateState, retry?: { reason: string; summary: string }): Promise<
+    { outcome: 'ready'; summary: string; checkpoint: string; pieces: string[]; docs: ExplainDoc[] } | { outcome: 'failed'; reason: string; summary: string; final?: boolean } | { outcome: 'cancelled' }
   > {
     const baseHead = await historyHead(tools).catch(() => undefined);
     const kinds = await configKinds(tools).catch(() => new Set<string>());
@@ -227,7 +259,7 @@ export async function runBuild(deps: BuildDeps): Promise<BuildResult> {
     let steps = 0;
     let fixRounds = 0;
     let summary = '';
-    let prompt: Part[] = [{ type: 'text', text: stageTask(def, { brief, docs, earlier, ...(deps.note && deps.only ? { note: deps.note } : {}) }) }];
+    let prompt: Part[] = [{ type: 'text', text: stageTask(def, { brief, docs, earlier, ...(deps.note && deps.only ? { note: deps.note } : {}), ...(retry ? { retry } : {}) }) }];
 
     const step = async (p: Part[]): Promise<Awaited<ReturnType<typeof run>>> => {
       state.maxSteps = Math.max(1, limit - steps);
@@ -236,13 +268,14 @@ export async function runBuild(deps: BuildDeps): Promise<BuildResult> {
       deps.state.runs = state.runs;
       return r;
     };
-    const fail = (reason: string): { outcome: 'failed'; reason: string } => ({ outcome: 'failed', reason });
+    const fail = (reason: string): { outcome: 'failed'; reason: string; summary: string } => ({ outcome: 'failed', reason, summary: cut(summary, 400) });
 
     try {
       while (true) {
         if (steps >= limit) return fail('it used all ' + limit + ' steps without finishing.');
         const r = await step(prompt);
         if (r.stop === 'cancelled') return { outcome: 'cancelled' };
+        if (r.stop === 'refusal') return { ...fail('the model declined: ' + cut(r.refusal ?? '', 300)), final: true };
         if (r.stop === 'max_turn_requests') return fail('it used all ' + limit + ' steps without finishing.');
         if (!summary) summary = lastText(state.history);
         if (r.checkFailed) {
@@ -264,7 +297,9 @@ export async function runBuild(deps: BuildDeps): Promise<BuildResult> {
         break;
       }
 
-      // One screenshot, read by the model: the last check that what was built is what the stage was meant to make.
+      // One screenshot, read by the model: the last check that what was built is what the stage was meant to make. The game is stepped
+      // first (a second of game time), because a page that has only just loaded is still on tick 0 and shows nothing of the stage.
+      await tools.call('game.run', { control: { op: 'step', n: SHOT_TICKS } }).catch((e: unknown) => { log('step before the screenshot failed: ' + String(e)); });
       const shot = await tools.call('game.run', { control: { op: 'screenshot' } }).catch((e: unknown) => { log('screenshot failed: ' + String(e)); return undefined; });
       if (shot?.images.length) {
         const r = await step([
@@ -272,6 +307,7 @@ export async function runBuild(deps: BuildDeps): Promise<BuildResult> {
           { type: 'image', mime: shot.images[0]!.mime, data: shot.images[0]!.data },
         ]);
         if (r.stop === 'cancelled') return { outcome: 'cancelled' };
+        if (r.stop === 'refusal') return { ...fail('the model declined at the last look: ' + cut(r.refusal ?? '', 300)), final: true };
         if (r.checkFailed) return fail('the check failed after the last look.');
         if (r.wrote) {
           const t = await testGate(tools);

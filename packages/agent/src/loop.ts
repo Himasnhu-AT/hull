@@ -4,7 +4,7 @@
 //  - an edited run is recorded in the history as a checkpoint, under the author the tools were opened with.
 import { changeCard } from './changeCard.ts';
 import { configKinds, historyHead } from './changes.ts';
-import { compactIfNeeded } from './compaction.ts';
+import { compactIfNeeded, estimateTokens } from './compaction.ts';
 import type { HullTools } from './hullTools.ts';
 import { checkUiBlock, OWN_WORDS, PLAN_TOOL, toolsFor, UI_APPROVE, UI_ASK, UI_SHOW, type AgentMode, type UiBlock } from './modes.ts';
 import type { Msg, Part, Provider, ToolSpec, Usage } from './types.ts';
@@ -47,10 +47,14 @@ export interface SessionState {
   mode: AgentMode;
   /** Counts the cards that wait, for their ids. */
   uiCount: number;
+  /** Model calls to wait before compaction is tried again after it failed, so one failure is not paid for on every step. */
+  compactSkip?: number;
 }
 
 export interface RunResult {
-  stop: 'end_turn' | 'cancelled' | 'max_turn_requests';
+  stop: 'end_turn' | 'cancelled' | 'max_turn_requests' | 'refusal';
+  /** With stop 'refusal': what the model said about why. */
+  refusal?: string;
   checkFailed: boolean;
   /** The game changed (config, tunables, code, assets). The brief, explain documents and the flow state do not count. */
   wrote: boolean;
@@ -61,6 +65,13 @@ export interface RunResult {
   /** What the model said last. */
   text: string;
 }
+
+/** How many answers in a row may be cut at the output limit before the run stops asking the model to go on. */
+const MAX_CUTS = 4;
+/** Model calls skipped after a failed compaction. */
+const COMPACT_RETRY_AFTER = 5;
+const CONTINUE = 'Your last answer was cut off at the output limit. Continue exactly where it stopped, without repeating what you already wrote.';
+const CUT_CALL = (name: string): string => `${name}: your answer hit the output limit in the middle of this call, so it was cut and not run. Write the file in smaller parts: code_write a short first part (under about 150 lines), then add the rest with code_edit, one piece at a time.`;
 
 const CHECK_PROBLEM = (text: string): string => `The check failed. Fix these before you finish (the run cannot end while check fails):\n${text}`;
 
@@ -109,6 +120,9 @@ export async function run(s: SessionState, prompt: Msg['parts'], io: RunIo, sign
   const kinds = s.mode === 'fix' ? await configKinds(s.tools).catch(() => new Set<string>()) : new Set<string>();
   const base = s.mode === 'fix' ? await historyHead(s.tools).catch(() => undefined) : undefined;
   let spoke = false;
+  let cuts = 0;
+  /** What the provider said the history held at its last call, and how long the history was then. */
+  let reported: { tokens: number; at: number } | undefined;
   let dirty = false;
   let fixes = 0;
   let ids = 0;
@@ -130,20 +144,27 @@ export async function run(s: SessionState, prompt: Msg['parts'], io: RunIo, sign
     if (signal.aborted) return finish('cancelled');
     if (result.steps >= s.maxSteps) return finish('max_turn_requests');
 
-    try {
-      const summary = await compactIfNeeded({ provider: s.provider, system: s.system, messages: s.history, signal }, () => io.compaction('in_progress'));
-      if (summary) io.compaction('completed', summary);
-    } catch (e) {
-      if (signal.aborted) return finish('cancelled');
-      io.compaction('failed', undefined, e instanceof Error ? e.message : String(e));
+    if (s.compactSkip && s.compactSkip > 0) s.compactSkip--;
+    else {
+      try {
+        // The provider's own count of the history at the last call, plus a guess for what was added since, beats a guess for all of it.
+        const reportedTokens = reported ? reported.tokens + estimateTokens('', s.history.slice(reported.at)) : undefined;
+        const summary = await compactIfNeeded({ provider: s.provider, system: s.system, messages: s.history, signal, ...(reportedTokens ? { reportedTokens } : {}) }, () => io.compaction('in_progress'));
+        if (summary) { io.compaction('completed', summary); reported = undefined; }
+      } catch (e) {
+        if (signal.aborted) return finish('cancelled');
+        s.compactSkip = COMPACT_RETRY_AFTER;
+        io.compaction('failed', undefined, e instanceof Error ? e.message : String(e));
+      }
     }
 
     let c;
     let streamed = false;
+    const sentAt = s.history.length;
     try {
       // Text goes out as it arrives; a model call after the first starts a new paragraph.
       c = await s.provider.complete({
-        system: s.system, messages: s.history, tools: specs, signal,
+        system: s.system, messages: s.history, tools: specs, signal, mode: s.mode,
         onDelta: (t) => { io.text(!streamed && spoke ? '\n\n' + t : t); streamed = true; spoke = true; },
       });
     } catch (e) {
@@ -151,6 +172,7 @@ export async function run(s: SessionState, prompt: Msg['parts'], io: RunIo, sign
       throw e;
     }
     result.steps++;
+    reported = c.usage.input > 0 ? { tokens: c.usage.input, at: sentAt } : undefined;
     total.input += c.usage.input;
     total.output += c.usage.output;
     io.usage({ used: c.usage.input + c.usage.output, size: s.provider.contextWindow, total });
@@ -159,12 +181,35 @@ export async function run(s: SessionState, prompt: Msg['parts'], io: RunIo, sign
       result.text = c.text;
     }
 
-    const parts: Part[] = [];
-    if (c.text) parts.push({ type: 'text', text: c.text });
-    for (const t of c.toolCalls) parts.push({ type: 'tool_use', id: t.id, name: t.name, input: t.input });
+    // The provider's own list keeps thinking blocks where they were; without one, text then tool calls.
+    const parts: Part[] = c.parts ? [...c.parts] : [];
+    if (!c.parts) {
+      if (c.text) parts.push({ type: 'text', text: c.text });
+      for (const t of c.toolCalls) parts.push({ type: 'tool_use', id: t.id, name: t.name, input: t.input });
+    }
+
+    // The model declined. That is not a finished turn and not work: no check gate, no retry, and the person is told plainly.
+    if (c.stop === 'refusal') {
+      const kept = parts.filter((p) => p.type !== 'tool_use' && p.type !== 'thinking');
+      if (kept.length) s.history.push({ role: 'assistant', parts: kept });
+      const why = [c.refusal?.category ? `category: ${c.refusal.category}` : '', c.refusal?.explanation ?? ''].filter(Boolean).join('. ');
+      result.refusal = `The model declined to continue with this request${why ? ` (${why})` : ''}. The turn ended there. Ask for it another way, or for something else.`;
+      io.text((spoke ? '\n\n' : '') + result.refusal);
+      return finish('refusal');
+    }
     if (parts.length) s.history.push({ role: 'assistant', parts });
 
+    // An answer cut at the output limit is not the end of the turn, whatever it holds.
+    const cutOff = c.stop === 'max_tokens';
+    cuts = cutOff ? cuts + 1 : 0;
+    if (cutOff && cuts > MAX_CUTS) { io.text(`\nStopping: the answer was cut at the output limit ${MAX_CUTS} times in a row. Ask for a smaller step, or raise HULL_AGENT_MAX_TOKENS.`); break; }
+
     if (c.toolCalls.length === 0) {
+      if (cutOff) {
+        if (!parts.length) s.history.push({ role: 'assistant', parts: [{ type: 'text', text: '(no answer)' }] });
+        s.history.push({ role: 'user', parts: [{ type: 'text', text: CONTINUE }] });
+        continue;
+      }
       if (dirty) {
         // The gate: edits since the last passing check, so check now. The model may not end the run over a failing check.
         const r = await gateCheck();
@@ -178,10 +223,21 @@ export async function run(s: SessionState, prompt: Msg['parts'], io: RunIo, sign
       break;
     }
 
+    // Calls that only read run side by side; a write, a game step or a question to the person waits for the calls before it.
     const results: Part[] = [];
-    for (const call of c.toolCalls) {
-      if (signal.aborted) { results.push({ type: 'tool_result', id: call.id, text: 'Cancelled by the person.', isError: true }); continue; }
-      results.push(await execute(call));
+    const calls = c.toolCalls;
+    const readOnly = (call: (typeof calls)[number]): boolean => {
+      const n = allowed.has(call.name) && !call.cut ? s.tools.hullName(call.name) : undefined;
+      return n !== undefined && s.tools.isReadOnly(n);
+    };
+    for (let i = 0; i < calls.length;) {
+      if (signal.aborted) { results.push({ type: 'tool_result', id: calls[i]!.id, text: 'Cancelled by the person.', isError: true }); i++; continue; }
+      let j = i + 1;
+      if (readOnly(calls[i]!)) {
+        while (j < calls.length && readOnly(calls[j]!)) j++;
+        results.push(...await Promise.all(calls.slice(i, j).map(execute)));
+      } else results.push(await execute(calls[i]!));
+      i = j;
     }
     s.history.push({ role: 'user', parts: results });
     if (signal.aborted) return finish('cancelled');
@@ -199,8 +255,14 @@ export async function run(s: SessionState, prompt: Msg['parts'], io: RunIo, sign
   }
   return result;
 
-  async function execute(call: { id: string; name: string; input: unknown }): Promise<Part> {
+  async function execute(call: { id: string; name: string; input: unknown; cut?: boolean }): Promise<Part> {
     const fail = (text: string): Part => ({ type: 'tool_result', id: call.id, text, isError: true });
+    if (call.cut) {
+      const text = CUT_CALL(call.name);
+      io.toolStart({ id: call.id, title: call.name, kind: 'other', input: call.input });
+      io.toolEnd({ id: call.id, ok: false, content: [{ type: 'text', text }], output: null });
+      return fail(text);
+    }
     if (!allowed.has(call.name)) return fail(`${call.name} is not available in ${s.mode} mode (have: ${[...allowed].join(', ')})`);
     if (call.name === UI_SHOW) {
       const c = checkUiBlock(asRecord(call.input)['block']);

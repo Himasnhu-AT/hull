@@ -1,6 +1,6 @@
 // Server-sent-event parsing for streaming model replies. Everything here is pure (strings in, a Completion out) so the
 // tests can feed recorded streams with no network. The providers read the HTTP body and push each piece in.
-import type { Completion } from './types.ts';
+import type { Completion, Part } from './types.ts';
 
 export interface SseEvent { event?: string; data: string }
 
@@ -54,6 +54,12 @@ export async function readSse(body: ReadableStream<Uint8Array>, onEvent: (e: Sse
 
 const asRec = (v: unknown): Record<string, any> => (v && typeof v === 'object' ? (v as Record<string, any>) : {});
 
+/** Whether a tool call's streamed arguments are a whole JSON text (an empty one counts: a call with no arguments). */
+const jsonWhole = (json: string): boolean => {
+  if (!json.trim()) return true;
+  try { JSON.parse(json); return true; } catch { return false; }
+};
+
 const parseInput = (json: string): unknown => {
   if (!json.trim()) return {};
   try { return JSON.parse(json); } catch { return {}; }
@@ -62,10 +68,12 @@ const parseInput = (json: string): unknown => {
 /** Anthropic Messages API stream: message_start, content_block_start/delta/stop, message_delta, message_stop, error. */
 export class AnthropicStream {
   text = '';
-  private blocks = new Map<number, { type: string; id: string; name: string; json: string }>();
+  private blocks = new Map<number, { type: string; id: string; name: string; json: string; text: string; raw: Record<string, unknown> }>();
+  private stopDetails: Record<string, any> | undefined;
   private inputTokens = 0;
   private outputTokens = 0;
   private stopReason: string | undefined;
+  private stopped = false;
 
   constructor(private onDelta?: (t: string) => void, private secret = '') {}
 
@@ -74,6 +82,7 @@ export class AnthropicStream {
     let d: Record<string, any>;
     try { d = asRec(JSON.parse(e.data)); } catch { return; }
     switch (d['type'] ?? e.event) {
+      case 'message_stop': this.stopped = true; return;
       case 'message_start': {
         const u = asRec(asRec(d['message'])['usage']);
         this.inputTokens = (u['input_tokens'] ?? 0) + (u['cache_read_input_tokens'] ?? 0) + (u['cache_creation_input_tokens'] ?? 0);
@@ -82,18 +91,29 @@ export class AnthropicStream {
       }
       case 'content_block_start': {
         const b = asRec(d['content_block']);
-        this.blocks.set(d['index'] ?? 0, { type: String(b['type']), id: String(b['id'] ?? ''), name: String(b['name'] ?? ''), json: '' });
+        // A thinking block is kept whole: the API wants it back unchanged, signature included.
+        this.blocks.set(d['index'] ?? 0, { type: String(b['type']), id: String(b['id'] ?? ''), name: String(b['name'] ?? ''), json: '', text: '', raw: { ...b } });
         return;
       }
       case 'content_block_delta': {
         const dl = asRec(d['delta']);
-        if (dl['type'] === 'text_delta' && typeof dl['text'] === 'string' && dl['text']) { this.text += dl['text']; this.onDelta?.(dl['text']); }
+        if (dl['type'] === 'text_delta' && typeof dl['text'] === 'string' && dl['text']) {
+          this.text += dl['text'];
+          const i = d['index'] ?? 0;
+          const b = this.blocks.get(i) ?? { type: 'text', id: '', name: '', json: '', text: '', raw: {} };
+          b.text += dl['text'];
+          this.blocks.set(i, b);
+          this.onDelta?.(dl['text']);
+        } else if (dl['type'] === 'thinking_delta') { const b = this.blocks.get(d['index'] ?? 0); if (b) b.raw['thinking'] = String(b.raw['thinking'] ?? '') + String(dl['thinking'] ?? ''); }
+        else if (dl['type'] === 'signature_delta') { const b = this.blocks.get(d['index'] ?? 0); if (b) b.raw['signature'] = String(b.raw['signature'] ?? '') + String(dl['signature'] ?? ''); }
         else if (dl['type'] === 'input_json_delta') { const b = this.blocks.get(d['index'] ?? 0); if (b) b.json += String(dl['partial_json'] ?? ''); }
         return;
       }
       case 'message_delta': {
         const dl = asRec(d['delta']);
         if (dl['stop_reason']) this.stopReason = String(dl['stop_reason']);
+        if (dl['stop_details'] && typeof dl['stop_details'] === 'object') this.stopDetails = dl['stop_details'];
+        else if (d['stop_details'] && typeof d['stop_details'] === 'object') this.stopDetails = d['stop_details'];
         const u = asRec(d['usage']);
         if (typeof u['output_tokens'] === 'number') this.outputTokens = u['output_tokens'];
         if (typeof u['input_tokens'] === 'number' && u['input_tokens'] > 0) this.inputTokens = u['input_tokens'] + (u['cache_read_input_tokens'] ?? 0) + (u['cache_creation_input_tokens'] ?? 0);
@@ -107,11 +127,24 @@ export class AnthropicStream {
     }
   }
 
+  /** The stream ended with no stop reason: the connection dropped before the answer was done. */
+  incomplete(): boolean { return this.stopReason === undefined && !this.stopped; }
+
   result(): Completion {
-    const toolCalls = [...this.blocks.entries()].sort((a, b) => a[0] - b[0]).map(([, b]) => b).filter((b) => b.type === 'tool_use').map((b) => ({ id: b.id, name: b.name, input: parseInput(b.json) }));
+    const cutOff = this.stopReason === 'max_tokens';
+    const ordered = [...this.blocks.entries()].sort((a, b) => a[0] - b[0]).map(([, b]) => b);
+    const parts: Part[] = [];
+    for (const b of ordered) {
+      if (b.type === 'thinking' || b.type === 'redacted_thinking') parts.push({ type: 'thinking', block: b.raw });
+      else if (b.type === 'tool_use') parts.push({ type: 'tool_use', id: b.id, name: b.name, input: parseInput(b.json) });
+      else if (b.text) parts.push({ type: 'text', text: b.text });
+    }
+    const toolCalls = ordered.filter((b) => b.type === 'tool_use').map((b) => ({ id: b.id, name: b.name, input: parseInput(b.json), ...(cutOff && !jsonWhole(b.json) ? { cut: true } : {}) }));
+    const refused = this.stopReason === 'refusal';
     return {
-      text: this.text, toolCalls,
-      stop: toolCalls.length ? 'tool_use' : this.stopReason === 'max_tokens' ? 'max_tokens' : 'end',
+      text: this.text, toolCalls, parts,
+      stop: refused ? 'refusal' : cutOff ? 'max_tokens' : toolCalls.length ? 'tool_use' : 'end',
+      ...(refused ? { refusal: { category: this.stopDetails?.['category'] ?? null, explanation: this.stopDetails?.['explanation'] ?? null } } : {}),
       usage: { input: this.inputTokens, output: this.outputTokens },
     };
   }
@@ -151,8 +184,9 @@ export class OpenAIStream {
   }
 
   result(): Completion {
-    const toolCalls = [...this.calls.entries()].sort((a, b) => a[0] - b[0]).map(([i, c]) => ({ id: c.id || `call_${i}`, name: c.name, input: parseInput(c.args) }));
-    return { text: this.text, toolCalls, stop: toolCalls.length ? 'tool_use' : this.finish === 'length' ? 'max_tokens' : 'end', usage: this.usage };
+    const cutOff = this.finish === 'length';
+    const toolCalls = [...this.calls.entries()].sort((a, b) => a[0] - b[0]).map(([i, c]) => ({ id: c.id || `call_${i}`, name: c.name, input: parseInput(c.args), ...(cutOff && !jsonWhole(c.args) ? { cut: true } : {}) }));
+    return { text: this.text, toolCalls, stop: cutOff ? 'max_tokens' : toolCalls.length ? 'tool_use' : 'end', usage: this.usage };
   }
 }
 

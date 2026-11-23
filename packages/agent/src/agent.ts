@@ -10,6 +10,7 @@ import { Readable, Writable } from 'node:stream';
 import * as acp from '@agentclientprotocol/sdk';
 import { HullTools } from './hullTools.ts';
 import { HULL_META, type AgentMode, type StageId } from 'hull/dev/protocol';
+import { stripThinking } from './compaction.ts';
 import { run, type Decision, type PermissionMode, type RunIo, type SessionState, type ToolContent } from './loop.ts';
 import { systemPrompt } from './prompt.ts';
 import { runBuild, STAGES } from './stages.ts';
@@ -114,7 +115,11 @@ export function startHullAgent(o: HullAgentOptions): HullAgent {
       live.lastMode = mode;
       live.state.mode = mode;
       live.state.provider = provider;
-      live.state.system = systemPrompt(o.projectRoot, mode);
+      // The system prompt is read again each prompt (GAME.md and AGENTS.md may have changed). A thinking block is signed against it, so a
+      // changed prompt means the kept history may not replay its thinking. The tool list is fixed per mode, and a new mode starts a new history.
+      const system = systemPrompt(o.projectRoot, mode);
+      if (system !== live.state.system) stripThinking(live.state.history);
+      live.state.system = system;
       live.state.maxSteps = 60;
       live.abort = new AbortController();
       const signal = live.abort.signal;
@@ -171,11 +176,11 @@ export function startHullAgent(o: HullAgentOptions): HullAgent {
           const note = parts.filter((p) => p.type === 'text').map((p) => (p as { text: string }).text).join('\n').trim();
           const built = await runBuild({ state: live.state, io: hostIo, signal, stageSteps, ...(stage ? { only: stage, ...(note ? { note } : {}) } : {}), log });
           await queue;
-          return { stopReason: (built.outcome === 'cancelled' ? 'cancelled' : 'end_turn') as acp.StopReason, _meta: { mode, built: built.built, outcome: built.outcome, ...(built.failed ? { failed: built.failed } : {}), model: provider.model, provider: provider.name } };
+          return { stopReason: (built.outcome === 'cancelled' ? 'cancelled' : 'end_turn') as acp.StopReason, _meta: { mode, built: built.built, outcome: built.outcome, ...(built.failed ? { failed: built.failed } : {}), ...(built.failures ? { failures: built.failures } : {}), model: provider.model, provider: provider.name } };
         }
         const result = await run(live.state, parts.length ? parts : [{ type: 'text', text: '(empty prompt)' }], hostIo, signal);
         await queue;
-        const stopReason = result.stop === 'cancelled' ? 'cancelled' : result.stop === 'max_turn_requests' ? 'max_turn_requests' : 'end_turn';
+        const stopReason = result.stop === 'cancelled' ? 'cancelled' : result.stop === 'max_turn_requests' ? 'max_turn_requests' : result.stop === 'refusal' ? 'refusal' : 'end_turn';
         return { stopReason: stopReason as acp.StopReason, _meta: { mode, usage: result.usage, steps: result.steps, wrote: result.wrote, checkFailed: result.checkFailed, ownWords: result.ownWords, model: provider.model, provider: provider.name } };
       } catch (e) {
         await queue;

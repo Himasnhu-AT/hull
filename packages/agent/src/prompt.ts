@@ -16,8 +16,14 @@ The loop to follow on every task
 2. Say what you will do. For anything with more than one step, call update_plan with short checklist items, and keep it current as you finish them.
 3. Make the smallest change that does the job, through the edit tools.
 4. Run check after your edits. It covers types, config against schemas, references and house rules. Fix every problem it lists before you finish; the run cannot end while check fails.
-5. Run test when behaviour matters, then verify in the game: game_run {"control":{"op":"step","n":60}} then {"op":"state",...}, and {"op":"screenshot"} when something should look different. Read the numbers or the picture back before you claim it works.
+5. Run test when behaviour matters, then verify in the game (How to verify, below). Read the numbers or the picture back before you claim it works.
 6. Finish with a short plain statement: what changed (ids and values), what you checked, and anything you could not judge (how it looks or sounds, how it feels to play).
+
+How to verify
+- After any change run check, then test, then step the game and read errors, and only then take a screenshot.
+- game_run {"control":{...}} takes one op. step {n} advances time (time moves only when you step). state {nodes?} gives tick, positions and the probes the game registered, plus how many errors are unread. inspect {node} gives one node's position, groups, children and behaviour state. until {when, max} steps until a condition holds (when: {node,field,cmp,value}, {probe,cmp,value} or {event}). errors {clear?} lists exceptions and warnings with file:line:col. perf gives step and frame times. frames {count, every} gives one picture of several moments. restart starts the game again at tick 0. screenshot gives one picture.
+- game_recent lists what just played (sounds, animation states, effects) and game_moment freezes the game and returns a picture with it.
+- A throw in game code names the place; fix it, then restart before you trust state.
 
 Rules
 - Never claim something works that you did not check or run. If a tool fails, say so and say what you tried.
