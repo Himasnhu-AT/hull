@@ -3,18 +3,21 @@ import { defineTool, type ProblemOutput } from '../tool.ts';
 import { checkAuthorship } from '../history/authors.ts';
 import { checkConfig } from './config.ts';
 import { checkHouseRules } from './houseRules.ts';
+import { checkConfigMeaning } from './meaning.ts';
 import { checkConfigRefs } from './refCheck.ts';
 import { runTsc } from './types.ts';
 
 export const check = defineTool<Record<string, never>, ProblemOutput>({
   name: 'check',
-  summary: 'Types, config against schemas, references, house rules, and "<kind>/<id>" names in src/ that no config answers to.',
+  summary: 'Types, config against schemas, references, what each kit knows about its own kinds (a level, a prefab, a move-set, an enemy, a glTF file that is missing), house rules, and "<kind>/<id>" names in src/ that no config answers to.',
   input: { type: 'object', properties: {}, additionalProperties: false },
   output: { type: 'object', required: ['ok', 'problems'] },
   async run(ctx) {
     // Config first: it writes .hull/gen/ids.ts, which the type check reads.
     const problems: Problem[] = [];
     problems.push(...(await checkConfig(ctx.root)));
+    // What the kits know about their own kinds and a schema cannot say (a window past the end of a move, a missing model file).
+    problems.push(...(await checkConfigMeaning(ctx.root)));
     problems.push(...checkHouseRules(ctx.root));
     problems.push(...(await checkConfigRefs(ctx.root)));
     // An AI change over a value you set is flagged (ARCHITECTURE section 7, authorship per value).

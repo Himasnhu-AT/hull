@@ -1,6 +1,6 @@
 import { Behaviour, type Node } from '../../core/index.ts';
 import { config } from '../../config/index.ts';
-import { Mesh } from '../../render/index.ts';
+import { Mesh, Model } from '../../render/index.ts';
 import { Collider } from '../../physics/index.ts';
 import type { ShapeDesc } from '../../physics/index.ts';
 import type { Level as LevelDef, Prefab } from '../../schema/index.ts';
@@ -163,11 +163,13 @@ export class Level extends Behaviour implements LevelLike {
     n.rotation.y = yaw;
     for (const tag of p.tags ?? []) n.addTo(tag);
     for (const part of p.parts) {
-      const c = this.world.spawn(part.name ?? part.shape, n);
+      const c = this.world.spawn(part.name ?? (part.model !== undefined ? 'model' : part.shape ?? 'box'), n);
       c.position.set(part.at[0] * scale, part.at[1] * scale, part.at[2] * scale);
       if (part.rotDeg) c.rotation.set(part.rotDeg[0] * RAD, part.rotDeg[1] * RAD, part.rotDeg[2] * RAD);
       c.scale.set(part.size[0] * scale, part.size[1] * scale, part.size[2] * scale);
-      c.add(Mesh, { shape: part.shape, material: part.material });
+      // A model keeps the materials of its file unless the part names one; a shape always has one (checkPrefab says so).
+      if (part.model !== undefined) c.add(Model, part.material !== undefined ? { file: part.model, material: part.material } : { file: part.model });
+      else c.add(Mesh, { shape: part.shape ?? 'box', material: part.material ?? '' });
     }
     if (p.collider) {
       const k = p.collider;

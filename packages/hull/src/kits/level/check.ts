@@ -1,13 +1,23 @@
 import type { Level, Prefab } from '../../schema/index.ts';
 
 /**
- * What a schema cannot say about a prefab: a collider that is flat, parts that are flat. Each sentence names its place
- * (`prefab/crate#/collider/size`). Missing materials are the references check's job, not this one's.
+ * What a schema cannot say about a prefab: a collider that is flat, parts that are flat, a shape with no material, a model
+ * file that is not there. Each sentence names its place (`prefab/crate#/collider/size`). A material id that does not exist is
+ * the references check's job, not this one's. `hasAsset`, when given, says whether a file is in the project's assets/.
  */
-export function checkPrefab(def: Prefab, at = 'prefab'): string[] {
+export function checkPrefab(def: Prefab, at = 'prefab', hasAsset?: (file: string) => boolean): string[] {
   const out: string[] = [];
   const flat = (v: readonly number[]): boolean => v.some((n) => !(n > 0));
-  def.parts.forEach((p, i) => { if (flat(p.size)) out.push(`${at}#/parts/${i}/size: every side must be more than 0, got [${p.size.join(', ')}]`); });
+  def.parts.forEach((p, i) => {
+    if (flat(p.size)) out.push(`${at}#/parts/${i}/size: every side must be more than 0, got [${p.size.join(', ')}]`);
+    if (p.model === undefined) {
+      if (p.material === undefined) out.push(`${at}#/parts/${i}: a shape needs a material (or give the part a model)`);
+    } else {
+      if (p.shape !== undefined) out.push(`${at}#/parts/${i}/shape: a part is a shape or a model, not both; remove one`);
+      if (!/\.(glb|gltf)$/i.test(p.model)) out.push(`${at}#/parts/${i}/model: "${p.model}" is not a .glb or .gltf file`);
+      else if (hasAsset && !hasAsset(p.model)) out.push(`${at}#/parts/${i}/model: assets/${p.model.replace(/^(\.?\/)+/, '').replace(/^assets\//, '')} does not exist`);
+    }
+  });
   if (def.collider && flat(def.collider.size.slice(0, def.collider.shape === 'box' ? 3 : def.collider.shape === 'capsule' ? 2 : 1))) {
     out.push(`${at}#/collider/size: the collider has no volume, got [${def.collider.size.join(', ')}]`);
   }

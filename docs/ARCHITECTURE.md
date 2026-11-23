@@ -589,7 +589,7 @@ The registry (`tools`) holds files-and-processes tools. Each takes a project roo
 
 | Tool | Does |
 |---|---|
-| `check` | Types, config against schemas, references, house rules (no `Math.random`, `Date.now`, `performance.now` in game code), and `"<kind>/<id>"` string literals in `src/` that no config answers to (`tools/refCheck.ts`: reported at `file:line:col` with the nearest real id; a literal that continues into an expression, ends in a separator, or is the argument of `has(` / `watch(` is not flagged); writes `.hull/gen/ids.ts` |
+| `check` | Types, config against schemas, references, what each kit knows about its own kinds (`hull/kits/checks`, run by `tools/meaning.ts` on every file that passed its schema: a level, a prefab, a move-set, an enemy against its move-set, a glTF file missing from `assets/`; rule `meaning`, at `file#/pointer` with line and column), house rules (no `Math.random`, `Date.now`, `performance.now` in game code), and `"<kind>/<id>"` string literals in `src/` that no config answers to (`tools/refCheck.ts`: reported at `file:line:col` with the nearest real id; a literal that continues into an expression, ends in a separator, or is the argument of `has(` / `watch(` is not flagged); writes `.hull/gen/ids.ts` |
 | `test` | Runs the project's `src/**/*.test.ts` in Node (Vitest) and reports each failure at the deepest frame inside the project's `src/` (else the test's own line), with the assertion's message |
 | `build` | `dist/web/game.js`, `index.html`, `build.json` (section 6) |
 | `package` | Builds, then an Electron app in `dist/desktop/` (`targets`, `smoke`) |

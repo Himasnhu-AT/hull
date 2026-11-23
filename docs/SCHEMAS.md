@@ -601,8 +601,10 @@ Units are metres, and degrees where a field ends in `Deg`. Everything solid is s
 }
 ```
 
-`parts`: `shape` is `box`, `sphere`, `cylinder` or `capsule`; `at` is the part's centre from the prefab origin (on the floor under it), `size` its full
-extent, `rotDeg` an optional turn about x, y, z; `material` is a `material` id. `collider` is optional (`box`, `sphere` or `capsule`; a sphere
+`parts`: a part is a shape or a model. A shape has `shape` (`box`, `sphere`, `cylinder` or `capsule`) and a `material` id; a model has `model`, a `.glb` or `.gltf`
+file inside `assets/` (`"model": "models/crate.glb"`), drawn with the file's own materials unless `material` is given, and `size` then scales it. `at` is the
+part's centre from the prefab origin (on the floor under it), `size` its full extent, `rotDeg` an optional turn about x, y, z. `check` reports a shape with no
+material and a model file that is not in `assets/`, at the part's pointer. `collider` is optional (`box`, `sphere` or `capsule`; a sphere
 takes its diameter from `size[0]`, a capsule its diameter from `size[0]` and its height from `size[1]`). `tags` are groups the thing joins.
 
 ```json

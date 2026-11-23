@@ -3,15 +3,17 @@ import { ref, ui } from './ui.ts';
 import { triple } from './tuples.ts';
 
 // SCHEMAS.md section 11b. A prefab is a small thing made of shapes: what it looks like, what is solid about it, and which
-// groups it joins. It names no behaviours; game code attaches those to what a level built from it.
+// groups it joins. It names no behaviours; game code attaches those to what a level built from it. A part is a shape with a
+// material, or a glTF file from assets/ (`model`), whose own materials are kept unless `material` is given.
 const part = Type.Object(
   {
     name: Type.Optional(Type.String({ minLength: 1, ...ui({ help: 'Name of the node; the shape name when left out.' }) })),
-    shape: Type.Union([Type.Literal('box'), Type.Literal('sphere'), Type.Literal('cylinder'), Type.Literal('capsule')], { default: 'box' }),
+    shape: Type.Optional(Type.Union([Type.Literal('box'), Type.Literal('sphere'), Type.Literal('cylinder'), Type.Literal('capsule')], { default: 'box' })),
+    model: Type.Optional(Type.String({ minLength: 1, ...ui({ help: 'A .glb or .gltf file inside assets/, like "models/crate.glb", drawn instead of the shape. `size` then scales it (1, 1, 1 keeps its own size).' }) })),
     at: triple({ default: [0, 0, 0], ...ui({ unit: 'm', help: 'Centre of the part, from the prefab origin (on the floor under it).' }) }),
     size: triple({ default: [1, 1, 1], ...ui({ unit: 'm', help: 'Full width, height and depth.' }) }),
     rotDeg: Type.Optional(triple({ ...ui({ unit: 'deg', help: 'Turn about x, y and z, in degrees.' }) })),
-    material: Type.String({ ...ref('material') }),
+    material: Type.Optional(Type.String({ ...ref('material'), ...ui({ help: 'Needed by a shape. On a model it replaces the materials of the file.' }) })),
   },
   { additionalProperties: false },
 );

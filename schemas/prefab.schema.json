@@ -19,10 +19,8 @@
       "items": {
         "type": "object",
         "required": [
-          "shape",
           "at",
-          "size",
-          "material"
+          "size"
         ],
         "properties": {
           "name": {
@@ -52,6 +50,13 @@
               }
             ],
             "default": "box"
+          },
+          "model": {
+            "type": "string",
+            "minLength": 1,
+            "x-ui": {
+              "help": "A .glb or .gltf file inside assets/, like \"models/crate.glb\", drawn instead of the shape. `size` then scales it (1, 1, 1 keeps its own size)."
+            }
           },
           "at": {
             "type": "array",
@@ -130,7 +135,7 @@
             "type": "string",
             "x-ref": "material",
             "x-ui": {
-              "widget": "ref"
+              "help": "Needed by a shape. On a model it replaces the materials of the file."
             }
           }
         },

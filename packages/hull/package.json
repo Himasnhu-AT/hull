@@ -17,6 +17,7 @@
     "./ui": "./src/ui/index.ts",
     "./platform": "./src/platform/index.ts",
     "./kits": "./src/kits/index.ts",
+    "./kits/checks": "./src/kits/checks.ts",
     "./kits/testing": "./src/kits/testing.ts",
     "./dev": "./src/dev/index.ts",
     "./dev/protocol": "./src/dev/protocol.ts",

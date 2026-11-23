@@ -6,6 +6,7 @@ import { bindTunables } from './tunables.ts';
 
 export * from './types.ts';
 export { createRegistry, checkManifest } from './registry.ts';
+export { scanJson } from './scan.ts';
 export { num, bool, color, vec, choice, range, curve, tunables, listTunables, setTunable, resetTunables, bindTunables, tuningProblems, tunableProblem, tuningIdOf } from './tunables.ts';
 
 /** The registry the game reads; the dev runtime and builds fill it before `ready`. */
