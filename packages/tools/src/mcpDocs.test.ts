@@ -1,9 +1,12 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { docSources } from './create/docs.ts';
 import { createMcpServer } from './mcp/server.ts';
 import type { ProjectLink } from './server/link.ts';
 
 // docs.read over MCP: the text content is the markdown itself, and structuredContent is the object with title and text.
+// The first call builds one TypeScript program over every entry of the hull package (a few seconds when the machine is busy), so these tests wait longer than the default.
+vi.setConfig({ testTimeout: 30_000 });
+
 describe('docs.read over MCP', () => {
   const link = async (): Promise<ProjectLink> => ({
     attached: true, url: 'ws://x', gameUrl: 'http://x', close: async () => {},

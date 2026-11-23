@@ -22,7 +22,7 @@ const bytesOf = (s: string): number => Buffer.byteLength(s, 'utf8');
 const read = (p: string): string => readFileSync(p, 'utf8');
 
 /** Kit READMEs and the catalogue, then the guides that exist next to the package (the repository's docs/ folder), then the API summaries. */
-export function docSources(): DocSource[] {
+export function docSources(withApi = true): DocSource[] {
   const hull = hullDir();
   const out: DocSource[] = [];
   // The guide to the engine comes first: it is what an agent reads before it writes a line.
@@ -41,6 +41,7 @@ export function docSources(): DocSource[] {
     const p = join(guides, file);
     if (existsSync(p)) out.push({ id, title: titleOf(read(p), fallback), kind: 'guide', text: () => read(p) });
   }
+  if (!withApi) return out;
   for (const e of apiEntries(hull)) {
     if (e.name === 'three') { out.push({ id: 'api/three', title: `API: ${e.import}`, kind: 'api', text: () => THREE_NOTE }); continue; }
     // An entry too big for one document is an index plus one part per group (api/kits/level): the parts come from the built summary.
@@ -280,7 +281,8 @@ export function readSection(text: string, section: string): string | null {
 }
 
 export function readDoc(id: string, section?: string): { id: string; title: string; text: string; sections?: string[]; missing?: boolean } | null {
-  const s = docSources().find((x) => x.id === id);
+  // Only an api/ document needs the API program, which is the slow part to build.
+  const s = docSources(id.startsWith('api/')).find((x) => x.id === id);
   if (!s) return null;
   const text = s.text();
   if (!section) return { id: s.id, title: s.title, text };
