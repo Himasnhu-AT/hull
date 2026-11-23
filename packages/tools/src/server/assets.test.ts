@@ -95,11 +95,12 @@ describe('new and duplicate', () => {
     for (const kind of Object.keys(STARTERS)) {
       const plan = planNew({ configs: [], code: [] }, kind, `${kind}/fresh`);
       expect(plan.ok, kind).toBe(true);
-      const r = createRegistry().load([{ path: plan.writes[0]!.path, text: plan.writes[0]!.text }]);
+      // A starter that names another asset brings it along (a level's material), so load the whole plan.
+      const r = createRegistry().load(plan.writes.map((w) => ({ path: w.path, text: w.text })));
       expect(r.problems, kind).toEqual([]);
     }
     expect(Object.keys(STARTERS)).toEqual(expect.arrayContaining(['ui-screen', 'ui-theme']));
-    expect(planNew(src(), 'character', 'character/x').ok).toBe(false);
+    expect(planNew(src(), 'sprite', 'sprite/x').ok).toBe(false);
     expect(planNew(src(), 'material', 'sound/x').ok).toBe(false);
   });
 });

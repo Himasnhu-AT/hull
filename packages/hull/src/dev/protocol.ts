@@ -286,6 +286,19 @@ export interface AssetResult {
   refs?: AssetRef[];
   created?: string[];
   gone?: string[];
+  /** kit.add: the kit's files the project already had, left alone. */
+  kept?: string[];
+}
+
+/** One kit as kit.list shows it. */
+export interface KitItem {
+  kit: string;
+  /** The first sentence of the kit's README. */
+  summary: string;
+  /** The config ids the kit ships, like 'material/floor'. kit.add copies the ones the project lacks. */
+  config: string[];
+  /** The names the kit adds to 'hull/kits'. */
+  exports: string[];
 }
 
 /** Methods the server answers. */
@@ -339,6 +352,10 @@ export interface Methods extends CreateMethods {
   'asset.refs': { params: { id: string }; result: { ok: boolean; problems: Problem[]; referencedBy: AssetRef[]; uses: { id: string; pointer?: string }[] } };
   /** A new asset from the kind's starter document. */
   'asset.new': { params: { kind: string; id: string; author?: Author }; result: AssetResult };
+  /** Every kit with its one-line summary, the config files it ships and the names it exports. */
+  'kit.list': { params: Record<string, never>; result: { ok: boolean; problems: Problem[]; items: KitItem[] } };
+  /** Copies a kit's config files into config/ (existing files are left alone and listed as kept), validated and recorded like any write. */
+  'kit.add': { params: { kit: string; author?: Author }; result: AssetResult };
   'asset.duplicate': { params: { id: string; to?: string; author?: Author }; result: AssetResult };
   /** Changes an id (or a folder's path). Every reference in other configs and in src/ is rewritten in the same step. */
   'asset.rename': { params: { id: string; to: string; author?: Author }; result: AssetResult };

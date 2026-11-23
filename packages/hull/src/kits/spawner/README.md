@@ -27,5 +27,5 @@ waves.add(GameOver);             // press jump to restart
 ## Wiring
 
 - Spawn after the level and the player (it aims enemies at the node in group `player`). A custom `factory` must return nodes in the `enemy` group with a `Health`.
-- Copy `material/enemy`, `material/enemy-head`; `WaveHud` needs `ui-theme/hud`.
+- Add `material/enemy` and `material/enemy-head` with `kit.add {"kit":"spawner"}`; `WaveHud` needs `ui-theme/hud`.
 - Random stream `spawner`; the same seed gives the same waves.

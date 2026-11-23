@@ -23,5 +23,5 @@ spawnThirdPerson(w);   // body, Health, gas Stock, follow camera, melee, HUD; no
 ## Wiring
 
 - Spawn the pause menu first and the level before the player.
-- Copy the kit's `config/` into the project: `input-map/third-person`, `character/soldier`, `anim-set/humanoid`, `anim-graph/locomotion`, materials and sounds, plus the health kit's `ui-theme/hud`.
+- Add the kit's config with `kit.add {"kit":"third-person"}` (and `kit.add {"kit":"health"}` for `ui-theme/hud`): `input-map/third-person`, `character/soldier`, `anim-set/humanoid`, `anim-graph/locomotion`, materials and sounds.
 - Gas pickups (`scatterPickups(..., 'gas', ...)`) fill the `gas` Stock this body makes.

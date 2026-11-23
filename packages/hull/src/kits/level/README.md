@@ -30,5 +30,5 @@ for (const crate of level.things('prefab/crate')) crate.add(Breakable); // game 
 ## Wiring
 
 - Spawn it before everything that stands on it. It installs physics itself.
-- `Level`: copy the level file, the prefabs it names and their materials into the project's `config/`. `ArenaLevel`: copy `material/floor`, `material/wall`, `material/crate` and `look/day`.
+- Both: `kit.add {"kit":"level"}` copies `level/yard` (the example level), the prefabs it names, their materials and `look/day`. `Level` reads a level file (make your own with `asset.new {"kind":"level","id":"level/mine"}` and edit it with `config.set`); `ArenaLevel` needs `material/floor`, `material/wall`, `material/crate` and `look/day`.
 - Behaviours are not named in a level file: game code adds them to `level.things(prefab)` and places actors at `level.marker(name)`.

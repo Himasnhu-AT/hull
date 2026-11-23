@@ -16,6 +16,10 @@ smallest complete game) and read `docs.list` for kits, config formats and the AP
   (`alpha` is the share of the next step). Never put rules in `update`.
 * **Spawn order is update order.** Nodes and behaviours step in the order they were spawned and added, so spawn what others
   read first (level, round), then the player, then what reads where the player ended up (camera).
+* **Remove a node with `node.destroy()`** (there is no `remove`, `delete` or `dispose` on a node). It takes effect at the end of the
+  current step: the node, its children and their behaviours go (each behaviour's `dispose()` runs), signal connections that named it as
+  owner end, and `node.destroyed` is true. Do not read a destroyed node later, and drop your own references to it. There is no call that
+  removes one behaviour: destroy the node, or keep a flag the behaviour reads.
 * Groups: `node.addTo('enemy')`, `world.group('enemy')`. Find a node: `world.find('player')` (a path like `player/model`).
 * Signals: `readonly died = signal<[from: Node | null]>()`; `other.died.connect(fn, owner?)`; `died.emit(from)`. A connection
   that names an owner node ends when the owner is destroyed.
@@ -41,7 +45,36 @@ the determinism test, and a field you forgot to list is what breaks it.
   Formats: `docs.read guide/schemas`. `check` reports a bad value as `file#/pointer` and a name in `src/` that no config
   answers to (`"material/playr"`) with the nearest real id. Change values with `config.set` / `tunables.set`, not by hand.
 * Rule of thumb: used by one class and nobody else, a tunable; has structure or is read by tools, a config file.
+* **Kit config is not in your project until you add it.** A kit's code reads config it ships (`TitleScreen` opens
+  `ui-screen/title`, `Spawner` draws with `material/enemy`). `kit.list` shows each kit, its one-line summary and its files;
+  `kit.add {"kit":"menu"}` copies the files your project lacks into `config/` (files you already have are kept and listed; it is
+  validated and recorded under your name). `check` reports a kit imported without its config at the import's `file:line:col` and
+  names the `kit.add` call; without the files the game runs, logs a warning every frame and draws nothing.
+* **New config of your own** (a level, a prefab, a material, a screen, any kind): `asset.new {"kind":"level","id":"level/arena"}` writes a
+  starter that passes `check` (a level or prefab starter also creates `material/starter` when you have no such material), then
+  `config.set` changes its fields. `code.write` only reaches `src/`; `config.set` on a file that does not exist answers with the
+  `asset.new` call to make.
 * Input and sound go through a small module (`rig.ts` in the arena template) so a test can replace them.
+
+## ui-screens: what the names in a screen mean
+
+A `ui-screen` is a JSON tree (`config/ui-screen/<id>.json`) of widgets: each node has exactly one widget key (`panel`, `stack`, `row`,
+`title`, `text`, `bar`, `button`, `image`) and optionally `on` and `children`. Three kinds of name connect it to your code:
+
+* **`bind`** (on `text`, `title`, `bar`) and **`visible`** (any node) name a value in the *view model*: the object you pass as the second
+  argument of `ui.screen('ui-screen/title', vm)`. A dotted name walks it (`"bind": "slot.1"` reads `vm.slot['1']`); if the value is a
+  function it is called every frame, so put getters in the view model (`vm.score = () => this.points`) and the text follows. A `bar`
+  needs `bind` and takes `max` as a number or as another name (`"max": "player.maxHp"`). `format` is a template with `{}` for the value
+  (`"Score {}"`); `visible` shows the node while its value is truthy. A name the view model lacks reads as empty or 0, silently.
+* **`on.press`** (a button) and **`on.back`** (a panel, for Escape) name an *action*: you register it with `ui.action('title.start', () => ...)`
+  where `ui = kitIO.ui()` (null until the page has a UI layer: check it each frame and wire when it appears, as `PauseMenu` does).
+* **`@key`** text is looked up through `ui.setStrings`; without it the key itself shows.
+
+Worked example, the pause kit: `config/ui-screen/pause.json` has a `button` with `"on": { "press": "pause.resume" }` and rows whose `text`
+has `"bind": "slot.1"`; `PauseMenu` sets `vm.slot = { '1': () => label }` and `vm.message = () => text`, calls
+`ui.action('pause.resume', () => this.set(false))`, and opens it with `ui.screen('ui-screen/pause', this.vm)` while paused. `kit.add` puts the
+kits' screens in your project: edit the JSON to restyle them, keep the names the kit's README lists (`title.start`, `result.again`,
+`stat.N.label`).
 
 ## A whole small game
 
@@ -125,6 +158,20 @@ it('the same seed and input give the same run', async () => {
   expect(a.g.world.find('player')!.position.x).toBeGreaterThan(5);
 });
 ```
+
+Where each testing helper lives (a wrong path is a type error in `check`, which type-checks test files too):
+
+| Import | From |
+|---|---|
+| `projectSources`, `kitSources`, `startRig`, `runScenario`, `ALL_KITS`, type `Rig` | `'hull/kits/testing'` (Node only) |
+| `InputCore`, `wireInput`, type `StepSnapshot` | `'hull/input'` |
+| `config`, `startGame`, `defineGame`, `probe`, types `ConfigSource`, `Game` | `'hull'` |
+| `kitIO` and every kit class (`Hud`, `TitleScreen`, `Stock`, ...) | `'hull/kits'` |
+| `describe`, `it`, `expect`, `beforeAll` | `'vitest'` |
+
+`kitSources('level', 'menu')` is the default config of those kits (for a test that does not load your project); `projectSources(root)` is
+your `hull.json` plus everything in your `config/`. `startRig(game, sources, 'play', seed)` starts the game with a headless input mapped by
+`input-map/play` ('' for none); `rig.step(n, { move: { x: 1 } })` holds an input for `n` steps; `runScenario` records one.
 
 `test` reports a failure at your own file and line (the deepest frame inside `src/`) with the assertion's message.
 

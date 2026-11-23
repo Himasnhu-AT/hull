@@ -67,6 +67,7 @@ export class World {
     return this._tick;
   }
 
+  /** Makes a new empty node under `parent` (the world's root by default); give it behaviours with `node.add`. */
   spawn(name = 'node', parent: Node = this.root): Node {
     if (parent.destroyed) throw new Error(`Cannot spawn "${name}" under destroyed node "${parent.name}"`);
     return new Node(this, name, parent);
@@ -90,6 +91,7 @@ export class World {
     return cur;
   }
 
+  /** The live list of nodes in a named group (see `node.addTo`); do not keep it across steps if nodes may be destroyed. */
   group(name: string): readonly Node[] {
     return this._groupArray(name);
   }
@@ -103,15 +105,18 @@ export class World {
     this.systems.push({ name, def: s });
   }
 
+  /** Calls `fn` once after this many seconds of game time. Cancel it with the returned timer. */
   after(seconds: number, fn: () => void): Timer {
     return this.timers.add(this._tick + this.ticksFor(seconds), 0, fn);
   }
 
+  /** Calls `fn` every this many seconds of game time, until the returned timer is cancelled. */
   every(seconds: number, fn: () => void): Timer {
     const n = this.ticksFor(seconds);
     return this.timers.add(this._tick + n, n, fn);
   }
 
+  /** A named random stream that a seed makes repeatable: use this, never Math.random, in the simulation. */
   random(stream: string): Random {
     let r = this.streams.get(stream);
     if (r === undefined) {

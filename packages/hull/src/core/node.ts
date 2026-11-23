@@ -48,6 +48,7 @@ export class Node {
     return this._destroyed;
   }
 
+  /** Adds a behaviour: builds it, sets its fields from `init`, then calls its `ready()`. Returns it. */
   add<B extends Behaviour>(type: new () => B, init?: Partial<B>): B {
     if (this._destroyed) throw new Error(`Node "${this.name}" is destroyed; cannot add a behaviour`);
     const b = new type();
@@ -62,6 +63,7 @@ export class Node {
     return b;
   }
 
+  /** The first behaviour on this node that is a `type` (or a subclass of it), or undefined. */
   get<B extends Behaviour>(type: new () => B): B | undefined {
     const list = this._behaviours;
     for (let i = 0; i < list.length; i++) {
@@ -71,6 +73,7 @@ export class Node {
     return undefined;
   }
 
+  /** Puts the node in a named group, which `world.group(name)` lists. Adding twice does nothing. */
   addTo(group: string): this {
     const arr = this.world._groupArray(group);
     if (arr.indexOf(this) < 0) {
@@ -80,6 +83,7 @@ export class Node {
     return this;
   }
 
+  /** Takes the node out of a named group. */
   removeFrom(group: string): this {
     const arr = this.world._groupArray(group);
     const i = arr.indexOf(this);
@@ -89,7 +93,7 @@ export class Node {
     return this;
   }
 
-  /** Takes effect at the end of the current step; its signal connections end with it. Children go with it. */
+  /** Removes the node, its children and its behaviours (this is how to remove a node). It takes effect at the end of the current step, and its signal connections end with it. */
   destroy(): void {
     if (this._pending || this._destroyed) return;
     this._pending = true;

@@ -15,4 +15,4 @@ UI rules every kit shares: the UI layer scales with the window (designed for 128
 Shared rules: tunables are `tunables()` blocks (Inspector widgets); no allocation in a step; game time and the world's random
 streams only; sound, input and the UI go through `kitIO` so a test can swap them (`hull/kits/testing`).
 `templates/fps` and `templates/third-person` are whole games under 30 lines of code each.
-Copy a kit's `config/` files into the project's `config/` to use it.
+A kit's code reads config it ships (materials, sounds, screens, a level). The project has none until `kit.add` copies it: `kit.add {"kit":"<name>"}` copies the files the project lacks into `config/` (`kit.list` shows each kit and its files); `check` names the kit to add when it is imported without them.

@@ -6,7 +6,7 @@ A title screen that holds the game until Start, and a result screen with a stats
   `playAgain()`, signal `again`, texts `winText` / `loseText`; up to 8 stat rows).
 - **Pause flag**: both use `flagsOf(world).paused`, the flag the pause kit uses, and hold it each step while they are up, so
   the `pause` action cannot dismiss them. Declared state (`started`, `shown`, `won`, `rows`) is in the checksum and saves.
-- **Screens**: `config/ui-screen/title.json` (action `title.start`; values `title`, `subtitle`) and
+- **Screens** (`kit.add {"kit":"menu"}` adds both): `config/ui-screen/title.json` (action `title.start`; values `title`, `subtitle`) and
   `config/ui-screen/result.json` (action `result.again`; values `heading`, `stat.N.label`, `stat.N.value`). The first
   button takes focus, so Enter, the arrow keys and a gamepad d-pad work. Colours and type come from the game's `ui-theme`.
 - **Layer**: both are menus: while one shows, every HUD-layer `KitUi` (Hud, HealthHud, StockHud, ...) is hidden. The first button takes focus; Enter, Space and

@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join, relative, resolve } from 'node:path';
 import type { Problem } from 'hull';
@@ -28,10 +29,43 @@ export function tscPath(): string {
   return join(dirname(pkg), 'bin', 'tsc');
 }
 
+/** The folder of a package's `@types/<name>`, searched upward from this package (the engine's own node_modules), or undefined. */
+function typesRoot(): string | undefined {
+  for (let d = dirname(tscPath()); ; d = dirname(d)) {
+    if (existsSync(join(d, 'node_modules', '@types', 'node', 'package.json'))) return join(d, 'node_modules', '@types');
+    if (dirname(d) === d) return undefined;
+  }
+}
+
+/**
+ * The tsconfig to check with. A project's own tsconfig leaves `*.test.ts` out (they need Node and vitest types a game
+ * does not have), so a wrong import in a test passed `check` and failed in `test`. This writes a twin under .hull/cache
+ * that keeps the project's options and includes the tests, with the vitest and Node types found beside the engine's tools.
+ * Without those types it falls back to the project's own file.
+ */
+export function checkConfigPath(root: string): string {
+  const own = join(resolve(root), 'tsconfig.json');
+  let cfg: { compilerOptions?: Record<string, unknown>; exclude?: string[] };
+  try { cfg = JSON.parse(readFileSync(own, 'utf8')) as typeof cfg; } catch { return resolve(root); }
+  if (!(cfg.exclude ?? []).some((e) => e.includes('.test.'))) return resolve(root);
+  const types = typesRoot();
+  let vitest: string;
+  try { vitest = join(dirname(createRequire(import.meta.url).resolve('vitest/package.json')), 'dist', 'index.d.ts'); } catch { return resolve(root); }
+  if (!types || !existsSync(vitest)) return resolve(root);
+  const paths = { ...((cfg.compilerOptions?.['paths'] as Record<string, string[]> | undefined) ?? {}), vitest: [vitest] };
+  const dir = join(resolve(root), '.hull', 'cache');
+  const file = join(dir, 'tsconfig.check.json');
+  const text = JSON.stringify({ extends: '../../tsconfig.json', compilerOptions: { paths, typeRoots: [types] }, include: ['../../src', '../../.hull/gen'], exclude: [] }, null, 2) + '\n';
+  mkdirSync(dir, { recursive: true });
+  try { if (readFileSync(file, 'utf8') === text) return file; } catch { /* first write */ }
+  writeFileSync(file, text);
+  return file;
+}
+
 /** `fast` keeps tsc's build info under .hull/cache, so the second run after a one-file edit re-checks only what changed. */
 export function runTsc(root: string, opts: { fast?: boolean } = {}): Promise<Problem[]> {
   return new Promise((done, fail) => {
-    const child = spawn(process.execPath, [tscPath(), '--noEmit', '--pretty', 'false', '-p', resolve(root), ...(opts.fast ? ['--incremental', '--tsBuildInfoFile', join(resolve(root), '.hull', 'cache', 'code-tools.tsbuildinfo')] : [])], { cwd: root, env: nodeChildEnv() });
+    const child = spawn(process.execPath, [tscPath(), '--noEmit', '--pretty', 'false', '-p', checkConfigPath(root), ...(opts.fast ? ['--incremental', '--tsBuildInfoFile', join(resolve(root), '.hull', 'cache', 'code-tools.tsbuildinfo')] : [])], { cwd: root, env: nodeChildEnv() });
     let buf = '';
     child.stdout.on('data', (d) => (buf += d));
     child.stderr.on('data', (d) => (buf += d));

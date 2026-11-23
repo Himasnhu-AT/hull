@@ -94,7 +94,7 @@ describe('docs', () => {
     const index = docSources().find((s) => s.id === 'kit/index')!.text();
     const kits = join(hullDir(), 'src', 'kits');
     for (const n of readdirSync(kits)) if (existsSync(join(kits, n, 'README.md'))) expect(index, n).toContain('`' + n + '`');
-  });
+  }, 30_000); // listing builds the API program, a few seconds on a busy machine
   it('every kit README starts with one sentence and ends with Use it and Wiring', () => {
     const kits = join(hullDir(), 'src', 'kits');
     for (const n of readdirSync(kits)) {
