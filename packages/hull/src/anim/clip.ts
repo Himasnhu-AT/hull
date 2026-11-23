@@ -1,6 +1,7 @@
 // Clips: keyframed tracks (smooth Catmull-Rom curves through Euler keys), generated clips (a function of the loop
 // phase with knobs), and the events on their timelines. Sampling writes into a Pose and allocates nothing.
 import type { ClipDef, Ease } from '../schema/anim-set.ts';
+import { readGltfClip, sampleGltfClip, type GltfBody } from './gltf.ts';
 import { Pose, type Skeleton } from './skeleton.ts';
 
 export interface ClipEvent { name: string; /** Seconds into the clip. */ time: number }
@@ -170,9 +171,10 @@ function windowsOf(def: ClipDef, length: number, loop: boolean, where: string, p
 }
 
 /** Builds a clip for a skeleton. Problems are reported by place, and the clip is skipped by returning null for a bad one. */
-export function compileClip(name: string, def: ClipDef, skeleton: Skeleton, where: string, problem: (m: string) => void): Clip | null {
-  if (def.type === 'gltf') {
-    problem(`${where}: glTF clips are not supported yet; the clip "${name}" is skipped.`);
+export function compileClip(name: string, def: ClipDef, skeleton: Skeleton, where: string, problem: (m: string) => void, gltf: GltfBody | null = null): Clip | null {
+  if (def.type === 'gltf') return compileGltfClip(name, def, gltf, where, problem);
+  if (gltf && def.type === 'generated') {
+    problem(`${where}/type: a generated clip is built for the humanoid recipe and cannot drive a glTF body; the clip "${name}" is skipped (use a keyframes or gltf clip).`);
     return null;
   }
   const speed = def.speed ?? 1;
@@ -307,4 +309,34 @@ export function sampleClip(clip: Clip, skeleton: Skeleton, t: number): Pose {
   const p = new Pose(skeleton.n);
   clip.sample(t, p);
   return p;
+}
+
+/** A clip taken from an animation of the character's glTF body (the `clip` field names it; it defaults to the clip's own name). */
+function compileGltfClip(name: string, def: ClipDef, gltf: GltfBody | null, where: string, problem: (m: string) => void): Clip | null {
+  if (!gltf) {
+    problem(`${where}/type: a gltf clip needs a character whose body is a glTF file (body.type "gltf"); the clip "${name}" is skipped.`);
+    return null;
+  }
+  const want = def.clip ?? name;
+  const anim = gltf.animations.find((a) => a.name === want);
+  if (!anim) {
+    const have = gltf.animations.map((a) => a.name);
+    problem(`${where}/clip: the model "${gltf.file}" has no animation "${want}" (it has: ${have.length ? have.join(', ') : 'none'}); the clip "${name}" is skipped.`);
+    return null;
+  }
+  const data = readGltfClip(anim, gltf);
+  if (data.matched === 0) {
+    problem(`${where}/clip: the animation "${want}" moves none of the body's joints; the clip "${name}" is skipped.`);
+    return null;
+  }
+  if (def.rootMotion) problem(`${where}/rootMotion: root motion is not read from glTF clips yet; it is ignored.`);
+  const length = def.length ?? data.length;
+  const loop = def.loop ?? false;
+  return {
+    name, length, loop, speed: def.speed ?? 1, travel: def.travel ?? 0, events: eventsOf(def, length, loop, where, problem), windows: windowsOf(def, length, loop, where, problem), root: null,
+    sample(t, pose) {
+      const tt = loop ? ((t % length) + length) % length : Math.min(Math.max(t, 0), length);
+      sampleGltfClip(data, tt * (data.length / length), pose);
+    },
+  };
 }

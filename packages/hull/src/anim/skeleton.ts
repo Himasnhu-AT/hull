@@ -5,6 +5,7 @@ import type { Character, CharacterPart } from '../schema/character.ts';
 import { qFromEuler, qIdentity, qMul, qNlerp, qRotate, type Arr } from './math.ts';
 
 export const REF_HEIGHT = 1.78;
+const _local = new Float64Array(4);
 
 export class Skeleton {
   readonly n: number;
@@ -16,6 +17,8 @@ export class Skeleton {
   readonly dims: HumanoidDims | null;
   /** Height over 1.78 m: clip offsets and gait lengths are authored for the reference body and scale by this. */
   readonly scale: number;
+  /** Rest rotation per bone (x y z w), 4 numbers each; null when every bone rests at identity (generated bodies). A glTF body has them. */
+  restRot: Float64Array | null = null;
   private readonly lookup = new Map<string, number>();
 
   constructor(names: string[], parent: number[], rest: number[], scale: number, dims: HumanoidDims | null) {
@@ -50,15 +53,19 @@ export class Skeleton {
       const ly = this.rest[i * 3 + 1]! + pose.off[i * 3 + 1]!;
       const lz = this.rest[i * 3 + 2]! + pose.off[i * 3 + 2]!;
       const p = par[i]!;
+      // The bone's own rotation is its rest rotation (identity unless a glTF body set one) turned by the pose.
+      const rr = this.restRot;
+      let lq: Arr = pose.rot, lo = i * 4;
+      if (rr) { qMul(_local, 0, rr, i * 4, pose.rot, i * 4); lq = _local; lo = 0; }
       if (p < 0) {
         mp[i * 3] = lx; mp[i * 3 + 1] = ly; mp[i * 3 + 2] = lz;
-        mq[i * 4] = pose.rot[i * 4]!; mq[i * 4 + 1] = pose.rot[i * 4 + 1]!; mq[i * 4 + 2] = pose.rot[i * 4 + 2]!; mq[i * 4 + 3] = pose.rot[i * 4 + 3]!;
+        mq[i * 4] = lq[lo]!; mq[i * 4 + 1] = lq[lo + 1]!; mq[i * 4 + 2] = lq[lo + 2]!; mq[i * 4 + 3] = lq[lo + 3]!;
       } else {
         qRotate(mq, p * 4, lx, ly, lz, mp, i * 3);
         mp[i * 3] = mp[i * 3]! + mp[p * 3]!;
         mp[i * 3 + 1] = mp[i * 3 + 1]! + mp[p * 3 + 1]!;
         mp[i * 3 + 2] = mp[i * 3 + 2]! + mp[p * 3 + 2]!;
-        qMul(mq, i * 4, mq, p * 4, pose.rot, i * 4);
+        qMul(mq, i * 4, mq, p * 4, lq, lo);
       }
     }
   }
@@ -207,6 +214,7 @@ const Y = (y: number): [number, number, number] => [0, y, 0];
 
 /** Bones and parts from a character's body. Throws a sentence naming the field if a custom bone list is wrong. */
 export function buildBody(body: Character['body'], at = 'body'): BuiltBody {
+  if (body.type === 'gltf') throw new Error(`${at}/type: a glTF body is built from its model file (the Animator does it); buildBody makes generated bodies`);
   const scale = body.scale ?? 1;
   const custom = body.recipe === 'custom';
   const names: string[] = [];

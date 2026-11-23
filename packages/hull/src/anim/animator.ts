@@ -10,7 +10,9 @@ import { stateFor } from '../render/interp.ts';
 import type { AnimGraph } from '../schema/anim-graph.ts';
 import type { AnimSet } from '../schema/anim-set.ts';
 import type { Character } from '../schema/character.ts';
-import { Body } from './body.ts';
+import { Body, type BodyView } from './body.ts';
+import { buildGltfBody, GltfBodyView, ModelPending, type GltfBody } from './gltf.ts';
+import { loadModel } from '../render/gltf.ts';
 import { compileClip, type Clip } from './clip.ts';
 import './generators.ts';
 import { Graph } from './graph.ts';
@@ -68,7 +70,8 @@ export class Animator extends Behaviour {
   readonly problems: string[] = [];
 
   skeleton!: Skeleton;
-  private body: Body | null = null;
+  private body: BodyView | null = null;
+  private gltf: GltfBody | null = null;
   private clips = new Map<string, Clip>();
   private graphRt: Graph | null = null;
   private pose!: Pose;
@@ -171,20 +174,31 @@ export class Animator extends Behaviour {
     // (and again on a live edit, which must not announce it twice), so this costs nothing per frame. A studio that connects later
     // asks again through announceActor().
     if (this.actorId === '') { this.actorId = where; trace('actor', where, this.node.name); }
-    let built;
+    let built: { skeleton: Skeleton; parts: Character['body']['parts'] } | undefined;
+    let gltf: GltfBody | null = null;
     try {
-      if (def.body.type === 'gltf') throw new Error(`${where}#/body/type: glTF bodies are not supported yet`);
-      built = buildBody(def.body, `${where}#/body`);
+      if (def.body.type === 'gltf') {
+        gltf = buildGltfBody(def.body, `${where}#/body`);
+        built = { skeleton: gltf.skeleton, parts: [] };
+      } else {
+        built = buildBody(def.body, `${where}#/body`);
+      }
     } catch (e) {
+      if (e instanceof ModelPending) {
+        // The file is read once; the body is built when it arrives, and draws nothing until then.
+        loadModel(e.file).then(() => { this.dirty = true; }, (err: unknown) => this.report(`${where}#/body/file: ${err instanceof Error ? err.message : String(err)}`));
+        return;
+      }
       this.report(e instanceof Error ? e.message : String(e));
       return;
     }
+    this.gltf = gltf;
     this.skeleton = built.skeleton;
     const sk = built.skeleton;
     this.pose = new Pose(sk.n);
     this.mq = new Float64Array(sk.n * 4);
     this.mp = new Float64Array(sk.n * 3);
-    this.body = new Body(this.node.object3d, sk, built.parts, def.materials, this.severed);
+    this.body = gltf ? new GltfBodyView(this.node.object3d, gltf) : new Body(this.node.object3d, sk, built.parts ?? [], def.materials, this.severed);
 
     for (const [name, s] of Object.entries(def.sockets ?? {})) {
       const bi = sk.index(s.joint);
@@ -202,7 +216,7 @@ export class Animator extends Behaviour {
     if (set) {
       const setWhere = typeof setRef === 'string' ? `anim-set/${bare('anim-set', setRef)}` : 'anim-set';
       for (const [name, cd] of Object.entries(set.clips)) {
-        const c = compileClip(name, cd, sk, `${setWhere}#/clips/${name}`, (m) => this.report(m));
+        const c = compileClip(name, cd, sk, `${setWhere}#/clips/${name}`, (m) => this.report(m), gltf);
         if (c) this.clips.set(name, c);
       }
     }
@@ -241,11 +255,14 @@ export class Animator extends Behaviour {
     this.lookChain = Int16Array.from(order.map((k) => chain[k]!));
     this.lookWeights = Float64Array.from(order.map((k) => ws[k]!));
     this.reaches = [];
+    // Looking and feet are solved for generated bodies, whose bones rest at identity; a model's bones have rest rotations
+    // the solvers do not know about, so a glTF body is animated by its clips alone.
+    if (this.gltf) { this.legs = []; this.lookChain = new Int16Array(0); this.lookWeights = new Float64Array(0); }
 
     // Hands that hold a socket (the off-hand on the hilt).
     this.grips = [];
     const g = this.graphRt;
-    for (const [hand, gd] of Object.entries(g?.ik.grips ?? {})) {
+    for (const [hand, gd] of Object.entries(this.gltf ? {} : (g?.ik.grips ?? {}))) {
       const c = i(hand);
       const b = c >= 0 ? sk.parent[c]! : -1;
       const a = b >= 0 ? sk.parent[b]! : -1;
@@ -373,6 +390,7 @@ export class Animator extends Behaviour {
   reach(endBone: string, target: Vec3 | null, weight = 1): void {
     const sk = this.skeleton;
     const c = sk.index(endBone);
+    if (this.gltf) { this.report('reach: reaching is not supported on a glTF body yet.'); return; }
     if (c < 0) { this.report(`reach: the body has no bone "${endBone}".`); return; }
     const b = sk.parent[c]!;
     const a = b >= 0 ? sk.parent[b]! : -1;
