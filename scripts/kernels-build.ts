@@ -12,7 +12,9 @@ import { kernelSourceStamp } from '../packages/hull/src/kernel/stamp.ts';
 const root = fileURLToPath(new URL('../', import.meta.url));
 const crate = join(root, 'crates', 'hull-kernels');
 // Run from the crate so its .cargo/config.toml (the small stack) applies.
-execFileSync('cargo', ['build', '--release', '--target', 'wasm32-unknown-unknown', '--locked'], { cwd: crate, stdio: 'inherit' });
+// RUSTC_BOOTSTRAP: the crate uses WebAssembly's sqrt, floor and ceil instructions, which Rust still marks unstable
+// (crates/hull-kernels/src/math.rs says why they are worth it).
+execFileSync('cargo', ['build', '--release', '--target', 'wasm32-unknown-unknown', '--locked'], { cwd: crate, stdio: 'inherit', env: { ...process.env, RUSTC_BOOTSTRAP: '1' } });
 const wasm = readFileSync(join(root, 'target', 'wasm32-unknown-unknown', 'release', 'hull_kernels.wasm'));
 const module = new WebAssembly.Module(wasm);
 const imports = WebAssembly.Module.imports(module);
