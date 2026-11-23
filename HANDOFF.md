@@ -14,6 +14,15 @@ CLAUDE.md, then PLAN.md §7. Those three files are enough to pick up the work.
 - **Since then (19 Nov 2026, later):** M9 core and M10 are on `main`. The app's agent panel is an ACP client (Hull's own agent in `packages/agent`, external ACP agents, Claude Code in a terminal pane); agents can edit `src/` through Hull's code tools. Ironleaf (`examples/ironleaf`, GAME.md) is playable: combat kit (`hull/kits` combat: move-set and enemy configs), layered keyed animation with windows, five enemy types and a duel, camp balance checked by scripted bots over 20 seeds. Studio gained the Content Browser, readable Changes diffs, launch options, the Community tab, input bindings table. Dev commands run without memgate (owner's instruction).
 - **Not started:** M8 (hosted). Next for M9: a live-model run and an eval suite; for M10: someone plays it by hand and listens.
 
+- **Updated 23 Nov 2026 (M12, agent sight and reach):** an audit drove a fresh project over MCP, and its findings were fixed and merged on `main` (nothing pushed). `pnpm check`: 149 files, 1,119 tests. What is new:
+  - **Over MCP** a screenshot is a picture, tool inputs are checked against their schemas, results are small, and the control port (`game.run`) has `inspect`, `tree`, `until`, `errors` (file:line:col through source maps), `restart`, `perf` (per frame), `look`, `frames`, `ui`, `click` and sized screenshots; games expose values with `probe(name, read)`. Play scripts have `until`, `expect`, `click`, `expectUi`, and fail on a logged error.
+  - **check** also runs the kits' own rules (`hull/kits/checks`), flags a `"kind/id"` literal with no config, a kit imported without its config (fix: `kit.add`), and type-checks tests. `asset.new` makes every kind; `kit.list` / `kit.add` copy kit config in.
+  - **Docs for agents:** `packages/hull/docs/ENGINE.md` (`docs.read guide/engine`), API pages with class members, and an `AGENTS.md` + `CLAUDE.md` in every new project.
+  - **Engine:** kinds `level` and `prefab` (a part can be a glTF model), kits `nav`, `hud`, `menu`, `objectives`, `interact`, `projectile`, `checkpoint`, `inventory`, glTF models and skinned glTF bodies, emissive materials, a UI that scales with the window and menus that hide the HUD, the `yard` template (a whole game on kits and a level file).
+  - **Safety:** tokens on the project socket and on MCP over HTTP, game sockets that can only report, `.hull/` not served to the game page, an IPC guard in the app, per-user budgets and a model allowlist in `backend/`, atomic history writes.
+  - **Hull's agent:** retries with backoff, cut answers handled, thinking blocks kept and replayed, effort per mode, refusals, a stage that fails is retried once. Still never run against a live model.
+  - Section 8 says how to try the engine as an agent would.
+
 ## 2. What the owner wants (standing instructions)
 
 - **The product is the Hull desktop app** (`packages/studio`), like Unreal's editor:
@@ -115,3 +124,33 @@ templates/              cube, arena, fps, third-person
 ## 7. Done: the AOTT port (M6)
 
 Phase 1 (one lead) and phase 2 (sound, characters, effects, look, collision, kits in parallel) are merged. `examples/aott/PORT.md` is the record.
+
+## 8. Trying it as an agent would (M12)
+
+The honest test of the tools is an agent that has nothing else. Two were run on 23 Nov 2026, each told to touch the
+project only through MCP tool calls and to log every point of friction:
+
+| Run | Game | Result | Friction |
+|---|---|---|---|
+| 1 | Emberwatch (third person, keep a fire fed while shades hunt you), from `arena` | 249 lines of its own code on the kits, 5 tests, build 1.95 MB | About 35 of 120 calls wasted: no UI click, no way to create a level file, kit config silently missing, cumulative perf numbers, HUD over the menus |
+| 2 | Vault Run (first person, a level file of three rooms, switches, turrets, checkpoints), from `fps` | 284 lines of its own code, 4 tests, a level and a door prefab made with the tools, play golden matching at 0 pixels, build 1.94 MB | Run after the fixes; its own friction log is the place to start next |
+
+How to repeat it:
+
+```
+pnpm project:run new <parent dir> '{"dir":"mygame","template":"yard"}'
+node scripts/mcp-client.mjs <parent dir>/mygame 5599 <dir for pictures>     # one MCP session, kept open
+node scripts/mcp-call.mjs --tools                                           # what the agent sees
+node scripts/mcp-call.mjs game.run '{"control":{"op":"ui"}}'                 # one tool call
+curl -s http://127.0.0.1:5599/stop                                          # ends it and its headless page
+```
+
+Give a worker agent only `mcp-call.mjs`, forbid every other way to the project, and ask for a friction log (the exact
+call, the reply, what it expected, what it cost). Do not edit engine source while it runs: a save reloads its game page.
+
+**Still open after M12:**
+- No run with a live model, and no scored task suite. The root `.env` has a key for `backend/`; a run spends credits, so the owner starts it.
+- The Electron app was not opened in this work; the Studio has no bench for `level` or `prefab` beyond the kit's bench scene.
+- AOTT and Ironleaf do not use the new kinds and kits yet (their worlds and HUDs are still code).
+- glTF: no IK on glTF bodies, clips only from the body's own file, textured files untested.
+- Goldens are from this Mac's headless GPU. Sound was measured, never heard.

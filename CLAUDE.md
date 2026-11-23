@@ -3,7 +3,7 @@
 Hull is Marl Studio's TypeScript game engine for one workflow: an AI writes the game, a person verifies and tunes
 it in Hull Studio, and the game builds to one JavaScript file that runs on the web and on the desktop.
 
-**Status: M0–M7, M9 (core) and M10 are on `main`; M11 (idea to play) and M12 (agent sight and reach) are in progress.** `pnpm check` runs types and
+**Status: M0–M7, M9 (core), M10 and M12 (agent sight and reach) are on `main`; M11 (idea to play) is in progress.** `pnpm check` runs types and
 every test; `pnpm app` opens the Hull app. Maintainer scripts that call the tools on a project: `pnpm project:check <dir>`, `pnpm project:build <dir>`, `pnpm project:dev <dir>`, `pnpm project:run <tool> <dir> [json]` (they never ship). PLAN.md §7 has each milestone's state and its known gaps. The design is in
 these files. Read them in this order before changing code:
 
