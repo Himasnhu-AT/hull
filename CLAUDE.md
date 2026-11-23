@@ -33,7 +33,10 @@ needs: read its `ARCHITECTURE.md` when designing an engine module, and expect to
 
 ## Rules of the code
 
-* TypeScript, strict, for the engine and for games.
+* TypeScript, strict, for the engine and for games. The one exception is a kernel: Rust in `crates/hull-kernels`,
+  compiled to WebAssembly, behind a TypeScript API that does not change (today: all of `hull/physics`). A kernel
+  carries numbers only, keeps its TypeScript implementation as fallback and oracle, and matches it bit for bit
+  (`docs/ARCHITECTURE.md` section 11). After changing the crate, run `pnpm kernels:build` and commit `kernel/wasm.ts`.
 * `core` and `config` run in Node: no `window`, `document`, `AudioContext` or WebGL in them.
 * Game time only: no `setTimeout`, `Date.now`, `performance.now` or `Math.random` in the simulation. Use the
   loop's clock, `world.after`, and `world.random(name)`.

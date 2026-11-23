@@ -4,10 +4,10 @@ How Rust enters Hull, where it is allowed, and the measured gates each step must
 `PLAN.md` stays the plan for the engine; this file is the plan for one track of it, and changes `PLAN.md` only where
 section 11 below says so.
 
-**Status: done for now (23 Nov 2026).** R0 (section 12) found the load where the frame is lost and named Hull's
-physics. R1 (section 13) fixed it with a flat TypeScript layout, built and measured the Rust kernel for the same work,
-and closed it at the gate: Rust was 0.99 times the flat TypeScript. No Rust is in Hull. R2 and R3 have no candidate;
-R4 waits for the features it names.
+**Status (23 Nov 2026): R2 is done on the owner's call (section 14).** All of `hull/physics` runs as a Rust kernel
+compiled to WebAssembly, bit for bit with the TypeScript, which stays as fallback and oracle; AOTT runs on it in
+Node, on the dev page and from its built `game.js`. R0 (section 12) and R1 (section 13) are the measurements that
+came first: R1's gate closed the kernel, and the owner then asked for the port regardless.
 
 ## 1. What this is for
 
@@ -169,10 +169,10 @@ desktop".
 | # | Question | Assumed until you say otherwise |
 |---|---|---|
 | RQ1 | The target load: what must Hull hold at 60 frames a second that AOTT does not ask for today? (For example: 100 titans, 500 soldiers, a city four times the size.) | R0 measures 1, 4 and 16 times AOTT and you pick from the table. |
-| RQ2 | The thresholds in section 4: 2 ms of the frame to qualify, 1.5 times over flat TypeScript to proceed. | As written. |
+| RQ2 | The thresholds in section 4: 2 ms of the frame to qualify, 1.5 times over flat TypeScript to proceed. | **Decided 23 Nov 2026: not applied to physics** ("complete all. migrate completely and get it working with our aot game"). |
 | RQ3 | Committed `.wasm`, or cargo required to build Hull. | Committed, with a stamp checked by `pnpm check`. |
 | RQ4 | Which machine is the floor. This Mac throttled 4 times stands in for a slow laptop; a real one would be better. | The throttled Mac. |
-| RQ5 | Whether to port one kernel regardless of R0's result, as a foundation for larger games. | No: R1 starts only on a candidate R0 names. |
+| RQ5 | Whether to port one kernel regardless of R0's result, as a foundation for larger games. | **Decided 23 Nov 2026: yes, all of physics** (section 14). |
 
 ## 11. Changes to other files, each with the phase that earns it
 
@@ -182,6 +182,10 @@ desktop".
   Physics is Hull's own TypeScript. The row should say so.
 * `docs/ARCHITECTURE.md`, with R1: a section on the kernel boundary, loading and fallback.
 * `CLAUDE.md`, with R1: the kernel rules in "Rules of the code", and `pnpm kernels:build`.
+
+All four were made with R2 (23 Nov 2026), on the owner's call rather than R1's gate: D2 now names the physics
+kernel, the Rapier row says the solver runs in the kernel, ARCHITECTURE section 11 is the boundary, and CLAUDE.md
+has the rule and the build command.
 
 ## 12. R0 results: where the limit is
 
@@ -370,3 +374,68 @@ Rigid bodies gather their contacts through the same index, so they gained with i
 * **What would move the frame next** is in TypeScript and three.js, not Rust: fewer forced `updateMatrixWorld(true)`
   calls (section 7) and fewer draw calls (1,900 at scale 12), and a sphere cast that costs 8 times a ray.
 * `PLAN.md` D2 stands as written (section 11): no kernel passed.
+
+## 14. R2: all of physics in the kernel
+
+The owner's call after reading section 13 (23 Nov 2026): "complete all. migrate completely and get it working with
+our aot game". So the kernel came back and took the whole of `hull/physics`, not one piece of it.
+
+**What moved.** The kernel world (`crates/hull-kernels`) holds every shape (the static grid, the short list of wide
+shapes, the moving-shape index), answers every query (ray, sphere and capsule casts, sphere and capsule overlaps,
+`gather`, `distanceTo`; the slide mover's sweeps go through the same cast) and runs the rigid solver. The narrow
+phase is all six shape kinds, meshes with their BVH and height fields included. What stays in TypeScript: the API,
+the `Shape` and `RigidBody` objects, a shape's pose (it follows a three.js object; the kernel poses only the bodies
+it moves), the slide mover's logic, ropes, and the debug view. `docs/ARCHITECTURE.md` section 11 has the boundary.
+
+**The boundary, as built.** Section 3's rule was "a handful of calls a step". A query is one call here, because game
+code asks one question at a time and acts on the answer; nothing else crosses by call. Poses and properties are
+written into the module's memory, moved shapes are filed by the kernel before its next query, and a rigid step is
+one call with the bodies copied in and out. No objects, callbacks or strings cross: tags and nodes are interned to
+numbers, and a tag prefix becomes a bit set over tag ids.
+
+**Same answers.** Every operation in the TypeScript's order, in `f64`; `min` and `max` written to JavaScript's NaN
+and signed-zero rules; `sqrt`, `floor` and `ceil` are WebAssembly's own instructions, which Rust still marks
+unstable, so the crate builds with `RUSTC_BOOTSTRAP=1` (`pnpm kernels:build` sets it). Checked by:
+
+* `narrow.kernel.test.ts`: 10,000 sweeps and 10,000 closest points per shape kind, and 10,000 box tests, against
+  narrow.ts, every number compared with `Object.is` (a tie-rule mutation fails 6 of its tests).
+* `world.kernel.test.ts`: a world on the kernel and the same world on TypeScript, 320 shapes of every kind and a
+  mesh, a height field and a plane, changed alike (moved, switched off, retagged, removed, added) and asked 20,000
+  seeded queries with every filter, plus the slide mover; and 300 rigid bodies stepped 720 steps through settling,
+  sleep and an impulse. Every answer and state the same bits.
+* The physics suite on both implementations (`physics.test.ts` on the kernel, `physics.typescript.test.ts` off).
+* AOTT's checksum at scales 1, 4 and 16 is the same with the kernel on, off and failing to load
+  (`a45ff85a5ba1346a`, `e982040814d9d251`, `6a60322536452045`).
+
+`pnpm check`: 155 files, 1,207 tests.
+
+**How fast** (`pnpm perf:engine 1,4,16` against `--kernels=off`, median ms a frame; same answers in every row):
+
+| Bench | TypeScript 1 / 4 / 16 | Kernel 1 / 4 / 16 | Kernel faster by |
+|---|---|---|---|
+| Ray casts, 5,000 static boxes | 0.54 / 2.88 / 12.0 | 0.27 / 1.63 / 6.68 | 1.8 to 2.0 times |
+| Ray casts, boxes times scale | 0.55 / 0.72 / 1.01 | 0.28 / 0.35 / 0.61 | 1.7 to 2.0 times |
+| Sphere casts | 3.65 / 15.1 / 61.0 | 1.80 / 7.45 / 30.8 | 2.0 times |
+| Sphere overlaps | 0.20 / 0.91 / 4.40 | 0.16 / 0.71 / 3.37 | 1.2 to 1.3 times |
+| Rigid bodies, a pile | 0.26 / 1.42 / 9.22 | 0.20 / 1.10 / 7.38 | 1.25 times |
+| Moving shapes (AOTT's mix) | 0.046 / 0.21 / 1.15 | 0.052 / 0.21 / 1.14 | the same |
+
+Casts against the static world, where the time is the narrow phase, are twice as fast. Where the time is shapes
+moving, it is TypeScript working out the poses (they follow three.js objects) and writing them across, and the
+kernel saves nothing.
+
+**In AOTT.** Headless at scale 16, physics is 0.17 ms a step on TypeScript and 0.19 on the kernel (0.10 of it
+TypeScript posing and writing, 0.09 inside the module); the whole step is 2.45 and 2.52 ms, inside the noise. In the
+page the kernel does better: at scale 12, 0.42 ms a step against 0.23; at 16, 0.53 against 0.47. The frame at those
+scales is decided by three.js and drawing (section 13), so it is still lost at 16 either way. Read plainly: AOTT
+runs on the kernel with the same results and about the same speed; games that cast a lot against static worlds
+(shooters, many projectiles, line-of-sight checks) get the twofold.
+
+**What it costs.** The module is 71,035 bytes (55 kB at opt-level "s", traded for speed). AOTT's `game.js` is
+2,891,100 bytes (800,907 gzip) with it and 2,785,683 (761,289 gzip) without: 105 kB, 40 kB gzipped. Only a game that
+imports `hull/physics` carries it.
+
+**Not moved, and why.** Hull's animation graphs (0.66 ms at 160 characters) and CPU particles (0.59 ms at 32,000)
+are the other candidates of section 7; neither is used on AOTT's hot path (its bodies and poses are the game's own
+code, its large effects run on the GPU), so porting them would change nothing AOTT does. They are the next
+candidates if a game needs them. Skinning and navmesh (R4) are not built yet.

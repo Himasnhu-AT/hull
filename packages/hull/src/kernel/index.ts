@@ -1,4 +1,4 @@
-// The engine's WebAssembly kernels (plan-rust.md, ARCHITECTURE section 10): one module built from crates/hull-kernels,
+// The engine's WebAssembly kernels (plan-rust.md, ARCHITECTURE section 11): one module built from crates/hull-kernels,
 // carried in the bundle as base64 and started before a game's `ready`. A kernel is batch arithmetic over flat arrays
 // behind a TypeScript API that does not change; the TypeScript implementation of the same work stays, as the fallback
 // and as the oracle the kernel is tested against. So everything here may fail without the game noticing: a module

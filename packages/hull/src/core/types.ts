@@ -16,7 +16,7 @@ export interface StartOptions {
   seed?: number;
   stepRate?: number;
   /**
-   * Whether the engine's WebAssembly kernels run (ARCHITECTURE section 10). 'on' is the default. 'off' runs the
+   * Whether the engine's WebAssembly kernels run (ARCHITECTURE section 11). 'on' is the default. 'off' runs the
    * TypeScript implementation of everything, which gives the same answers (hull.json `"kernels": false`, or
    * `?kernels=off` on the dev page). 'fail' is for testing the fallback: the kernel module is made to fail to compile.
    */
