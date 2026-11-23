@@ -12,6 +12,9 @@ import { ArrayStore, buildGrid, GRID, MovingIndex, NI, NITEMS, NK, NOVER, type M
 
 beforeAll(() => loadKernels('on'));
 
+// Ten thousand cases take a second or two alone and several times that while the rest of the suite runs beside them.
+const LONG = 60_000;
+
 function kernelStore(): KernelStore {
   const k = takeKernel();
   if (k === null) throw new Error('the kernel module did not load in this test run');
@@ -106,12 +109,18 @@ describe.each(STORES)('moving index on the $name store', ({ make }) => {
     expect(cases).toBeGreaterThanOrEqual(10000);
     // The grid was really in use: it was built many times, not once.
     expect(grown).toBeGreaterThan(100);
-  });
+  }, LONG);
 });
 
 // ---------------------------------------------------------------- the kernel against TypeScript, array by array
 
 const bits = (a: Float64Array, n: number): string[] => Array.from(new BigUint64Array(a.buffer, a.byteOffset, n), (v) => v.toString(16));
+
+/** The first n entries are the same numbers. A plain loop: these arrays are long and compared thousands of times. */
+function same(what: string, got: Int32Array, want: Int32Array, n: number): void {
+  for (let i = 0; i < n; i++) if (got[i] !== want[i]) throw new Error(`${what}[${i}] is ${got[i]}, TypeScript built ${want[i]}`);
+}
+
 
 describe('the kernel', () => {
   it('builds 3,000 seeded grids into the same bits as buildGrid', () => {
@@ -138,10 +147,10 @@ describe('the kernel', () => {
       expect(bits(k.headF, 3)).toEqual(bits(ts.headF, 3));
       expect(Array.from(k.headI.subarray(0, 5))).toEqual(Array.from(ts.headI.subarray(0, 5)));
       const nCells = ts.headI[NI]! * ts.headI[NK]!;
-      expect(Array.from(k.state.subarray(0, n))).toEqual(Array.from(ts.state.subarray(0, n)));
-      expect(Array.from(k.over.subarray(0, ts.headI[NOVER]!))).toEqual(Array.from(ts.over.subarray(0, ts.headI[NOVER]!)));
-      expect(Array.from(k.cellStart.subarray(0, nCells + 1))).toEqual(Array.from(ts.cellStart.subarray(0, nCells + 1)));
-      expect(Array.from(k.items.subarray(0, ts.headI[NITEMS]!))).toEqual(Array.from(ts.items.subarray(0, ts.headI[NITEMS]!)));
+      same(`scene ${scene}: state`, k.state, ts.state, n);
+      same(`scene ${scene}: over`, k.over, ts.over, ts.headI[NOVER]!);
+      same(`scene ${scene}: cellStart`, k.cellStart, ts.cellStart, nCells + 1);
+      same(`scene ${scene}: items`, k.items, ts.items, ts.headI[NITEMS]!);
       // A slot outside the grid has no range; whatever an earlier build left there is not part of the answer.
       for (let i = 0; i < n; i++) {
         if (ts.state[i] !== GRID) continue;
@@ -153,7 +162,7 @@ describe('the kernel', () => {
     // The scenes were not all empty or all in the short list.
     expect(cells).toBeGreaterThan(100000);
     expect(wide).toBeGreaterThan(1000);
-  });
+  }, LONG);
 
   it('answers 10,000 seeded boxes inside the module exactly as MovingIndex.box does', () => {
     const R = rng(99173);
@@ -193,7 +202,7 @@ describe('the kernel', () => {
       }
     }
     expect(found).toBeGreaterThan(10000);
-  });
+  }, LONG);
 });
 
 // ---------------------------------------------------------------- the whole world
@@ -297,5 +306,5 @@ describe.each(STORES)('physics queries on the $name store', ({ make }) => {
     expect(hits).toBeGreaterThan(1000);
     expect(overlaps).toBeGreaterThan(1000);
     expect(a.phys.index.builds).toBeGreaterThan(50);
-  });
+  }, LONG);
 });
