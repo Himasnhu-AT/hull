@@ -7,11 +7,12 @@ import { setTraceSink, type TraceKind } from '../core/trace.ts';
 import { clearProbes } from '../core/probes.ts';
 import { createRecentFeed } from './recent.ts';
 import { ensureCapture } from './capture.ts';
+import { setField, teleportNode } from './arrange.ts';
 import { checkCond, holds, inspectNode, probeValues, treeLines } from './inspect.ts';
 import { input } from '../input/dom.ts';
 import { withUi } from '../ui/capture.ts';
 import { clickButton, readUi, uiDefault, uiFocus, uiKeyName, type UiDoc } from '../ui/inspect.ts';
-import type { ControlErrors, ControlFrames, ControlInspect, ControlOp, ControlClick, ControlPerf, ControlShot, ControlUi, ControlState, ControlTree, ControlUntil, GameControl, GameEvents, GameReport, Pushes } from './protocol.ts';
+import type { ControlErrors, ControlFrames, ControlInspect, ControlOp, ControlClick, ControlPerf, ControlSet, ControlShot, ControlTeleport, ControlUi, ControlState, ControlTree, ControlUntil, GameControl, GameEvents, GameReport, Pushes } from './protocol.ts';
 
 export interface DevConnection { dispose(): void }
 
@@ -22,7 +23,7 @@ class StepFailure extends Error {
   constructor(message: string, readonly raw: string | undefined) { super(message); }
 }
 
-type ControlResult = ControlState | ControlShot | ControlUntil | ControlInspect | ControlTree | ControlErrors | ControlPerf | ControlFrames | ControlUi | ControlClick | Record<string, never>;
+type ControlResult = ControlState | ControlShot | ControlUntil | ControlInspect | ControlTree | ControlErrors | ControlPerf | ControlFrames | ControlUi | ControlClick | ControlTeleport | ControlSet | Record<string, never>;
 
 /** Handed from a page that is restarting to the one that replaces it (sessionStorage survives a reload, and only that). */
 const RESTART_KEY = 'hull-restart';
@@ -218,11 +219,14 @@ export function connectDev(game: Game, opts: { url: string; /** Called for `rest
       blobs.push(await view.shot());
     }
     const bitmaps = await Promise.all(blobs.map((b) => createImageBitmap(b)));
-    // Small tiles: the point is judging motion cheaply, so each frame is at most 320 px wide.
-    const tw = Math.min(bitmaps[0]!.width, 320);
-    const th = Math.round((tw * bitmaps[0]!.height) / bitmaps[0]!.width);
     const cols = Math.ceil(Math.sqrt(c.count));
     const rows = Math.ceil(c.count / cols);
+    const bw = bitmaps[0]!.width, bh = bitmaps[0]!.height;
+    // With no size asked the point is judging motion cheaply, so each tile is at most 320 px wide. With a width or height each
+    // tile is that size, then the whole sheet is scaled down together so it stays within 1920x1080.
+    const scale = c.width === undefined && c.height === undefined ? Math.min(1, 320 / bw) : Math.min(1, MAX_W / (cols * bw), MAX_H / (rows * bh));
+    const tw = Math.max(1, Math.round(bw * scale));
+    const th = Math.max(1, Math.round(bh * scale));
     const canvas = document.createElement('canvas');
     canvas.width = cols * tw;
     canvas.height = rows * th;
@@ -312,6 +316,13 @@ export function connectDev(game: Game, opts: { url: string; /** Called for `rest
       case 'tree': return treeLines(game.world, c.root, Number.isInteger(c.depth) && (c.depth as number) >= 0 ? (c.depth as number) : 3);
       case 'until': return until(c);
       case 'errors': return { items: c.unread === true ? ring.unreadItems() : ring.take(c.clear === true) } as ControlErrors;
+      case 'teleport': {
+        const r = teleportNode(game.world, c.node, c.to, c.yaw);
+        // The camera and the UI follow the node on a frame, and no game time passes.
+        game.frame(0);
+        return r;
+      }
+      case 'set': return setField(game.world, c.node, c.field, c.value);
       case 'perf': return perf(c);
       case 'frames': return tileFrames(c);
       case 'look': {

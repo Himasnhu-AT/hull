@@ -78,6 +78,13 @@
         "F"
       ],
       "pad": "west"
+    },
+    "interact": {
+      "type": "button",
+      "keys": [
+        "E"
+      ],
+      "pad": "west"
     }
   },
   "groups": {
@@ -85,7 +92,8 @@
       "move",
       "jump",
       "sprint",
-      "boost"
+      "boost",
+      "interact"
     ],
     "Look": [
       "look",

@@ -140,21 +140,23 @@ export class ThirdPerson extends Behaviour {
 /**
  * The whole third-person player in one call: body with a character, health, a melee swing on the `attack` action,
  * the follow camera, and the HUD. Returns the player node. Add it after the level and the pause menu.
+ * `weapon: false` leaves out the swing (the Weapon and its aim node); `gas: false` leaves out the gas Stock and its bar, so boost is free.
  */
-export function spawnThirdPerson(world: World, at: { x: number; z: number } = { x: 0, z: 0 }, character = 'character/soldier'): Node {
+export function spawnThirdPerson(world: World, at: { x?: number; z?: number; weapon?: boolean; gas?: boolean } = {}, character = 'character/soldier'): Node {
   const me = world.spawn('player');
-  me.position.set(at.x, 0, at.z);
+  me.position.set(at.x ?? 0, 0, at.z ?? 0);
   me.add(Health, { max: healthTuning.playerMax, hp: healthTuning.playerMax });
-  me.add(Stock, { caps: { gas: 100 }, values: { gas: 100 } });
+  if (at.gas !== false) me.add(Stock, { caps: { gas: 100 }, values: { gas: 100 } });
   const cam = world.spawn('camera');
   // Order of steps: the body moves first, then the camera follows where it ended up.
   const tp = me.add(ThirdPerson, { character });
   cam.add(Camera, { fov: 60 });
   cam.add(FollowCamera);
   me.add(HealthHud);
-  me.add(StockHud, { names: ['gas'] });
+  if (at.gas !== false) me.add(StockHud, { names: ['gas'] });
   // The swing starts at the chest and goes where the body faces; `model` faces its front along +Z turned by
   // `modelYaw`, so an empty child holds the exact forward.
+  if (at.weapon === false) return me;
   const aim = world.spawn('aim', me);
   aim.add(AimFollow, { source: tp });
   aim.add(Weapon, { action: 'attack', damage: 40, range: 2.4, rate: 2.5, radius: 0.7, height: 1.1, sound: 'sound/swing', mask: LAYER.world | LAYER.enemy });

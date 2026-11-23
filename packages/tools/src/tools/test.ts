@@ -51,14 +51,36 @@ export function problemsFromReport(report: JsonResult, root: string): Problem[] 
   return out;
 }
 
-export interface TestOutput extends ProblemOutput { total: number; passed: number }
+/** What a test run may print back to the caller: about this many characters. */
+export const OUTPUT_LIMIT = 4000;
+
+/**
+ * What the tests printed, taken from Vitest's default reporter log: its `stdout | file > test` and `stderr | ...` blocks, in
+ * order, so the caller can read a value a test logged instead of throwing to see it. Cut to OUTPUT_LIMIT characters with a note.
+ */
+export function printedOutput(log: string): string | undefined {
+  const lines = log.replace(/\x1b\[[0-9;]*m/g, '').split('\n');
+  const blocks: string[] = [];
+  let cur: string[] | null = null;
+  for (const l of lines) {
+    if (/^(stdout|stderr) \| /.test(l)) { cur = [l]; blocks.push(''); }
+    else if (cur && /^\s*(✓|❯|×|↓|FAIL\b|Test Files|⎯|JSON report)/.test(l)) cur = null;
+    else if (cur) cur.push(l);
+    if (cur) blocks[blocks.length - 1] = cur.join('\n').replace(/\n+$/, '');
+  }
+  const text = blocks.join('\n\n').trim();
+  if (!text) return undefined;
+  return text.length <= OUTPUT_LIMIT ? text : text.slice(0, OUTPUT_LIMIT) + `\n[output cut: ${text.length - OUTPUT_LIMIT} more characters not shown]`;
+}
+
+export interface TestOutput extends ProblemOutput { total: number; passed: number; output?: string }
 
 export const test = defineTool<Record<string, never>, TestOutput>({
   name: 'test',
-  summary: 'Runs the project tests (src/**/*.test.ts) in Node; `hull` and `hull/<module>` imports resolve to the engine.',
+  summary: 'Runs the project tests (src/**/*.test.ts) in Node; `hull` and `hull/<module>` imports resolve to the engine. Whatever the tests printed (console.log, console.error) comes back in "output", per test file, cut at about 4000 characters: log a value to read it instead of throwing.',
   input: { type: 'object', properties: {}, additionalProperties: false },
   output: { type: 'object', required: ['ok', 'problems', 'total', 'passed'] },
-  format: (o) => [`${o.passed}/${o.total} tests passed`],
+  format: (o) => [`${o.passed}/${o.total} tests passed`, ...(o.output ? ['', 'printed by the tests:', o.output] : [])],
   async run(ctx) {
     const pkg = createRequire(import.meta.url).resolve('vitest/package.json');
     const bin = join(dirname(pkg), 'vitest.mjs');
@@ -70,7 +92,7 @@ export const test = defineTool<Record<string, never>, TestOutput>({
     writeFileSync(configFile, `export default { resolve: { alias: [${hullAliases().map((a) => `{ find: new RegExp(${JSON.stringify(a.pattern)}), replacement: ${JSON.stringify(a.target)} }`).join(', ')}] } };\n`);
     try {
       const log = await new Promise<string>((done, fail) => {
-        const child = spawn(process.execPath, [bin, 'run', '--root', ctx.root, '--config', configFile, '--reporter=json', `--outputFile=${outFile}`, 'src/'], { cwd: ctx.root });
+        const child = spawn(process.execPath, [bin, 'run', '--root', ctx.root, '--config', configFile, '--reporter=json', '--reporter=default', `--outputFile.json=${outFile}`, 'src/'], { cwd: ctx.root, env: { ...process.env, NO_COLOR: '1', FORCE_COLOR: '0' } });
         let buf = '';
         child.stdout.on('data', (d) => (buf += d));
         child.stderr.on('data', (d) => (buf += d));
@@ -82,7 +104,8 @@ export const test = defineTool<Record<string, never>, TestOutput>({
         return { ok: false, total: 0, passed: 0, problems: [{ file: 'src', message: log.trim().split('\n').slice(-5).join('\n') || 'vitest produced no report', rule: 'test' }] };
       }
       const problems = problemsFromReport(report, ctx.root);
-      return { ok: problems.length === 0, total: report.numTotalTests, passed: report.numPassedTests, problems };
+      const output = printedOutput(log);
+      return { ok: problems.length === 0, total: report.numTotalTests, passed: report.numPassedTests, problems, ...(output ? { output } : {}) };
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

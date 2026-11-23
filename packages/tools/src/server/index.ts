@@ -700,7 +700,7 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
   };
 
   /** Applies a plan: validates the result (an operation may not add a problem), writes, records, tells the game and the Studio. */
-  const applyPlan = async (plan: Plan, by: Author, opts: { dropFolders?: string[]; moved?: { from: string; to: string }[] } = {}): Promise<AssetResult> => {
+  const applyPlan = async (plan: Plan, by: Author, opts: { dropFolders?: string[]; moved?: { from: string; to: string }[]; merged?: Record<string, string[]> } = {}): Promise<AssetResult> => {
     if (!plan.ok) return { ok: false, problems: plan.problems, refs: plan.refs };
     const before = new Map<string, string>(configFiles().map((f) => [f.path, f.text]));
     const after = new Map(before);
@@ -723,6 +723,8 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
     for (const w of plan.writes) if (w.path.startsWith('config/')) push('config.changed', { id: idOf(w.path), path: w.path, text: w.text });
     const now = new Date().toISOString();
     const log = (c: Omit<Change, 'at' | 'by'>): void => { appendChange(root, { at: now, by, ...c }); push('journal.added', { at: now, by, ...c }); };
+    // An existing file that gained actions is a change to that file, so the journal says which ones and who added them.
+    for (const [id, names] of Object.entries(opts.merged ?? {})) for (const a of names) log({ target: id, path: `/actions/${a}`, from: null, to: 'added' });
     if (opts.moved) for (const m of opts.moved) log({ target: m.to, path: '(id)', from: m.from, to: m.to });
     else {
       for (const id of plan.created) log({ target: id, path: '(asset)', from: null, to: 'created' });
@@ -888,10 +890,10 @@ export async function startProjectServer(opts: { root: string; port?: number; lo
     'asset.new': (p) => applyPlan(planNew(assetSources(), p.kind, p.id), p.author ?? 'you'),
     'kit.list': () => ({ ok: true, problems: [], items: listKits() }),
     'kit.add': async (p) => {
-      const plan = planKitAdd(String(p.kit), new Set(assetIds()));
+      const plan = planKitAdd(String(p.kit), new Set(assetIds()), (id) => texts.get(`config/${id}.json`));
       if (!plan.ok) return badAsset('config/', plan.message);
-      const r = await applyPlan({ ok: true, problems: [], writes: plan.writes, removes: [], mkdirs: [...new Set(plan.writes.map((w) => w.path.split('/').slice(0, -1).join('/')))], refs: [], created: plan.created, gone: [] }, p.author ?? 'you');
-      return r.ok ? { ...r, kept: plan.kept } : r;
+      const r = await applyPlan({ ok: true, problems: [], writes: plan.writes, removes: [], mkdirs: [...new Set(plan.writes.map((w) => w.path.split('/').slice(0, -1).join('/')))], refs: [], created: plan.created, gone: [] }, p.author ?? 'you', { merged: plan.merged });
+      return r.ok ? { ...r, kept: plan.kept, differs: plan.differs, merged: plan.merged } : r;
     },
     'asset.duplicate': (p) => applyPlan(planDuplicate(assetSources(), p.id, p.to), p.author ?? 'you'),
     'asset.rename': (p) => {

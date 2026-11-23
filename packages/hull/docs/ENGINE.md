@@ -28,6 +28,15 @@ smallest complete game) and read `docs.list` for kits, config formats and the AP
   `Math.random`, `Date.now`, `performance.now`, `setTimeout` and `setInterval` in `src/`.
 * No allocation per step in hot code: keep scratch objects in fields.
 
+## The calls you will make, with their real field names
+
+```
+code.write {"path":"src/enemy.ts","text":"<the whole file>"}                       (the file's content is `text`, not content or code)
+code.edit  {"path":"src/main.ts","old":"<text that occurs once>","new":"<replacement>"}  (`all:true` for every match)
+config.set {"id":"material/gem","pointer":"/color","value":"#40e0d0"}   tunables.set {"block":"player","key":"runSpeed","value":8}
+asset.new  {"kind":"level","id":"level/arena"}   kit.add {"kit":"fps"}   game.run {"control":{"op":"step","n":60}}
+```
+
 ## State and the checksum
 
 Fields that are gameplay state are listed in `static override state = ['score', 'timeLeft']`. They are in the world checksum
@@ -47,8 +56,10 @@ the determinism test, and a field you forgot to list is what breaks it.
 * Rule of thumb: used by one class and nobody else, a tunable; has structure or is read by tools, a config file.
 * **Kit config is not in your project until you add it.** A kit's code reads config it ships (`TitleScreen` opens
   `ui-screen/title`, `Spawner` draws with `material/enemy`). `kit.list` shows each kit, its one-line summary and its files;
-  `kit.add {"kit":"menu"}` copies the files your project lacks into `config/` (files you already have are kept and listed; it is
-  validated and recorded under your name). `check` reports a kit imported without its config at the import's `file:line:col` and
+  `kit.add {"kit":"menu"}` copies the files your project lacks into `config/`. A file you already have is kept and listed in `kept`; one that
+  differs from the kit's also goes in `differs`, and an `input-map` that lacks actions the kit's has gains them (`merged: {"input-map/fps":["interact"]}`; an
+  action you have is never changed). It is validated and recorded under your name. `check` also flags a kit whose code reads an input action (`Interactor`: `interact`)
+  that no input-map in the project defines, at the import, naming the `kit.add` call: otherwise the prompt shows and the key does nothing. `check` reports a kit imported without its config at the import's `file:line:col` and
   names the `kit.add` call; without the files the game runs, logs a warning every frame and draws nothing.
 * **New config of your own** (a level, a prefab, a material, a screen, any kind): `asset.new {"kind":"level","id":"level/arena"}` writes a
   starter that passes `check` (a level or prefab starter also creates `material/starter` when you have no such material), then
@@ -169,11 +180,16 @@ Where each testing helper lives (a wrong path is a type error in `check`, which 
 | `kitIO` and every kit class (`Hud`, `TitleScreen`, `Stock`, ...) | `'hull/kits'` |
 | `describe`, `it`, `expect`, `beforeAll` | `'vitest'` |
 
+**`rig.step(n, snapshot)`** holds one snapshot for each of `n` steps. A snapshot names actions: `{ move: { x: 0, y: -1 }, jump: { d: 1, p: 1 } }` where `d` is held, `p` pressed this step,
+`r` released, `v` a button's 0..1 value, and `x`/`y` an axis2 (`y: -1` is forward, like the screen). `p` repeats on every one of the `n` steps, so a single tap is
+`rig.step(1, { jump: { d: 1, p: 1 } })` and then `rig.step(n)`.
+
 `kitSources('level', 'menu')` is the default config of those kits (for a test that does not load your project); `projectSources(root)` is
 your `hull.json` plus everything in your `config/`. `startRig(game, sources, 'play', seed)` starts the game with a headless input mapped by
 `input-map/play` ('' for none); `rig.step(n, { move: { x: 1 } })` holds an input for `n` steps; `runScenario` records one.
 
-`test` reports a failure at your own file and line (the deepest frame inside `src/`) with the assertion's message.
+`test` reports a failure at your own file and line (the deepest frame inside `src/`) with the assertion's message, and returns what the tests printed
+(`console.log`, `console.error`, per file, about 4,000 characters, cut with a note) as `output`: log a value to read it, do not throw to see it.
 
 ## How to verify
 
@@ -182,28 +198,33 @@ say ok), `test`, then run the game with `game.run` and read what happened. A `ga
 page for you. Time only moves when you step it, so a script gives the same result every run.
 
 * `{"op":"step","n":120}`: run 120 fixed steps (pauses the game). Answers tick, time, checksum.
-* `{"op":"press","key":"KeyW"}` / `{"op":"release","key":"KeyW"}`: hold a key (also `Mouse0`).
+* `{"op":"press","key":"KeyW"}` / `{"op":"release","key":"KeyW"}`: hold a key by its KeyboardEvent code (`KeyW`, `Space`, `Escape`, `ShiftLeft`, `ArrowUp`, `Digit1`, `Enter`) or `Mouse0`..`Mouse4`. `"W"` is not a code and reaches nothing.
 * `{"op":"state","nodes":["player","coin"]}`: tick, time, checksum, positions of the named nodes, held keys, probes.
 * `{"op":"inspect","node":"player"}`: position, rotation, scale, groups, children, behaviours with their state fields.
 * `{"op":"tree","depth":3}`: node paths with their behaviours; repeated siblings are one line (`level/crate x14  [Mesh]`).
-* `{"op":"until","when":{"node":"score","field":"Score.points","cmp":">=","value":3},"max":600}`: step until it holds.
+* `{"op":"until","when":{"node":"score","field":"Score.points","cmp":">=","value":3},"max":600}`: step until it holds. `{"node":"player","near":[4,-6],"within":1.5}` holds when the node is within 1.5 m of x=4, z=-6 on the floor (height ignored).
 * `{"op":"errors"}`: what threw or warned (with file:line:col in `src/`); `{"clear":true}` empties it. A step that throws
   fails with the place, and the world may be part-stepped: `{"op":"restart"}` before trusting state.
 * `{"op":"restart"}`: start again from ready, same seed, paused at tick 0.
 * `{"op":"perf"}`: step and frame times, node count, and the draw calls and triangles of one frame (the same number whether you time 1 step or 120 on a scene that does not change).
-* `{"op":"look","dx":40,"dy":0}`: mouse movement as the game sees it under pointer lock.
+* `{"op":"look","dx":40,"dy":0}`: mouse movement in pixels as the game sees it under pointer lock (right and down are positive). The fps kit turns 0.0022 rad per pixel
+  (`fps.mouseSensitivity` times the map action's `sensitivity`): dx 100 is about 12.6 degrees to the right, dx 714 about 90.
+* **For arranging a test, not for playing** (a run that uses them is not a replay of real input; `play` says so in its report):
+  `{"op":"teleport","node":"player","to":[4,0,-6],"yaw":1.57}` moves the node, tells the renderer it jumped and clears a kit body's velocity;
+  `{"op":"set","node":"player","field":"Health.hp","value":5}` changes one number, string or boolean field and answers `old` and `new`.
 * `{"op":"screenshot"}`: a picture of the game, 640x360 headless (the UI is drawn over it; `"ui":false` for the 3D view only).
   `"width"` and `"height"` (whole pixels, up to 1920x1080) render that one picture at that size and put the page back, so the
-  UI scales and wraps as it would on that screen; `frames` takes the same two fields.
+  UI scales and wraps as it would on that screen.
 * `{"op":"ui"}`: what a person could read now: `screens` (ids of the ui-screens showing) and `items` (`text`, `button` with
   `focused`/`disabled`, `bar` with `value` and `max`; each with its `panel` label), top to bottom, hidden things left out, 80 at most.
 * `{"op":"click","button":"Start"}`: click the button whose text matches (any case; a unique part of the text works) or the nth
   from 0. It fires what a person's click fires. A miss fails and names the buttons that are showing. `press` / `release` of `Enter`,
   `Space`, `Escape`, `Tab` and the arrow keys also reach the UI: a focused button activates on Enter or Space, Escape goes back.
-* `{"op":"frames","count":6,"every":10}`: one picture tiling six moments, to judge motion.
+* `{"op":"frames","count":6,"every":10}`: one picture tiling six moments, to judge motion; tiles are at most 320 px wide. With `width` and `height`
+  each tile is captured at that size and the whole sheet is scaled down together to fit 1920x1080 (six 1280x720 tiles come back as 1920x720).
 * A game exposes numbers worth watching with `probe('score', () => points)` in `ready`; `state` and `until` read them.
 
-Scripts in one call: the `play` tool runs a list of steps (press, step, until, expect, screenshot, `click`, `expectUi`, `ui`) and fails with the
+Scripts in one call: the `play` tool runs a list of steps (press, step, until, expect, screenshot, `click`, `expectUi`, `ui`, and for arranging a test `{"teleport":"player","to":[x,y,z]}` and `{"set":"player","field":"Health.hp","value":5}`) and fails with the
 place of any error the game logged. `{"click":"Start"}` clicks a button, `{"expectUi":{"text":"Victory"}}` fails unless some visible item
 contains that text, `{"ui":true}` records the items in the report, and a `screenshot` step takes `width` and `height` too. Effects are
 deterministic under stepping: the same script gives byte-identical pictures, so a golden with an effect on screen holds at the
@@ -213,6 +234,16 @@ check something that cannot be seen. Read `errors` after a run; a clean state is
 When you cannot judge something (how a hit feels, how a sound sounds), say so, and `review.set` the piece
 `needs-change` or leave it for the person. Your changes are recorded in `history.list` under your name; a value the person
 set is flagged by `check` if you overwrite it.
+
+## Facts that cost calls to find out
+
+* **Input maps and `press` write keys differently.** An `input-map` key is a short name (`"W"`, `"E"`, `"1"`, `"Esc"`, `"Shift"`, `"Space"`, `"Up"`) or a KeyboardEvent
+  code (`"KeyW"`, `"ShiftLeft"`, `"ArrowUp"`, `"Escape"`), starting with a capital; also `Mouse0`..`Mouse4`, `WheelUp`, `WheelDown`, `pad:south`. A name it cannot read is reported with
+  its pointer (`input-map/play#/actions/jump/keys/0`). `game.run` `press` and the play steps `press`, `release`, `hold` take only the event code (`KeyE`, never `E`).
+* **A Mesh's size is its node's scale.** Every shape is one unit across (a capsule one unit tall, a plane lies flat), so `node.scale.set(4, 0.2, 4)` is a 4 x 0.2 x 4 m slab
+  and a `Collider` is sized on its own.
+* **Yaw** is radians about +y. Yaw 0 faces -z; a positive yaw turns left, toward -x (forward is `(-sin yaw, -cos yaw)`); the mouse moving right lowers it.
+  `FirstPerson.yaw` and `ThirdPerson.facing` are the kits' own copies: set those too (`teleport` with `yaw` does).
 
 ## Where to read next
 

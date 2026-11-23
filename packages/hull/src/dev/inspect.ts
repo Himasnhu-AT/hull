@@ -40,7 +40,7 @@ function plain(v: unknown, depth = 0): unknown {
   return `<${typeof v}>`;
 }
 
-const behaviourName = (b: Behaviour): string => b.constructor?.name || 'Behaviour';
+export const behaviourName = (b: Behaviour): string => b.constructor?.name || 'Behaviour';
 
 /** The fields a behaviour class lists in static state, then its own number, string and boolean fields; 40 at most. */
 export function stateOfBehaviour(b: Behaviour): Record<string, unknown> {
@@ -123,7 +123,7 @@ export function compare(a: unknown, cmp: ControlCmp, b: unknown): boolean {
 
 /** The check for `until`, made once before the loop so a bad condition fails at tick 0 and says why. */
 export function checkCond(c: unknown): ControlCond {
-  const shape = 'until needs "when" as {node, field, cmp, value} | {probe, cmp, value} | {event}';
+  const shape = 'until needs "when" as {node, field, cmp, value} | {node, near: [x, z], within} | {probe, cmp, value} | {event}';
   if (typeof c !== 'object' || c === null) throw new Error(shape);
   const o = c as Record<string, unknown>;
   const cmpOk = typeof o['cmp'] === 'string' && CMPS.includes(o['cmp']);
@@ -132,6 +132,11 @@ export function checkCond(c: unknown): ControlCond {
   if (typeof o['probe'] === 'string') {
     if (!cmpOk || !valOk) throw new Error(`${shape}: "cmp" is one of ${CMPS.join(' ')} and "value" a number, string or boolean`);
     return { probe: o['probe'], cmp: o['cmp'] as ControlCmp, value: o['value'] as number };
+  }
+  if (typeof o['node'] === 'string' && o['near'] !== undefined) {
+    const nr = o['near'];
+    if (!Array.isArray(nr) || nr.length !== 2 || !nr.every((x) => typeof x === 'number' && Number.isFinite(x)) || typeof o['within'] !== 'number' || !(o['within'] >= 0)) throw new Error(`${shape}: "near" is [x, z] and "within" a distance in metres, 0 or more`);
+    return { node: o['node'], near: [nr[0] as number, nr[1] as number], within: o['within'] };
   }
   if (typeof o['node'] === 'string' && typeof o['field'] === 'string') {
     if (!cmpOk || !valOk) throw new Error(`${shape}: "cmp" is one of ${CMPS.join(' ')} and "value" a number, string or boolean`);
@@ -168,6 +173,10 @@ export function holds(world: World, c: ControlCond, eventSeen: boolean): boolean
     let v: unknown;
     try { v = readProbe(c.probe); } catch { return false; }
     return v !== undefined && compare(v, c.cmp, c.value);
+  }
+  if ('near' in c) {
+    const n = world.find(c.node);
+    return n !== null && n !== undefined && Math.hypot(n.position.x - c.near[0], n.position.z - c.near[1]) <= c.within;
   }
   const v = readField(world, c.node, c.field);
   return v !== undefined && compare(v, c.cmp, c.value);

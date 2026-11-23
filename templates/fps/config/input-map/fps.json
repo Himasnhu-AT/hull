@@ -71,13 +71,21 @@
         "F"
       ],
       "pad": "triggerR"
+    },
+    "interact": {
+      "type": "button",
+      "keys": [
+        "E"
+      ],
+      "pad": "west"
     }
   },
   "groups": {
     "Move": [
       "move",
       "jump",
-      "sprint"
+      "sprint",
+      "interact"
     ],
     "Look": [
       "look",

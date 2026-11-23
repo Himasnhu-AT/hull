@@ -190,6 +190,77 @@ describe('control port reading ops', () => {
   });
 });
 
+class Body extends Behaviour {
+  walk = { vx: 4, vy: 1, vz: -3, grounded: true, coyote: 0.1, stride: 0.5 };
+  yaw = 0;
+  speed = 2;
+  label = 'calm';
+  armed = false;
+  items = [1, 2];
+}
+
+describe('arranging a test: teleport, set and until near (dev only)', () => {
+  it('teleport moves the node, turns it, and clears the walker velocity', async () => {
+    const s = await setup();
+    const p = s.game.world.find('player')!;
+    p.add(Body);
+    const r = (await s.call({ op: 'teleport', node: 'player', to: [3, 1, -4], yaw: 1.5 })).result;
+    expect(r).toMatchObject({ node: 'player', position: [3, 1, -4], yaw: 1.5 });
+    expect([p.position.x, p.position.y, p.position.z]).toEqual([3, 1, -4]);
+    const b = p.get(Body)!;
+    expect([b.walk.vx, b.walk.vy, b.walk.vz]).toEqual([0, 0, 0]);
+    expect(b.yaw).toBe(1.5);
+    expect(p.rotation.y).toBe(1.5);
+    s.conn.dispose();
+  });
+  it('teleport without a yaw keeps the facing, and a missing node fails naming it', async () => {
+    const s = await setup();
+    const p = s.game.world.find('player')!;
+    p.add(Body).yaw = 0.7;
+    await s.call({ op: 'teleport', node: 'player', to: [1, 0, 1] });
+    expect(p.get(Body)!.yaw).toBe(0.7);
+    const bad = await s.call({ op: 'teleport', node: 'nobody', to: [1, 0, 1] });
+    expect(JSON.stringify(bad)).toContain('nobody');
+    const bad2 = await s.call({ op: 'teleport', node: 'player', to: [1, 0] });
+    expect(JSON.stringify(bad2)).toContain('three numbers');
+    s.conn.dispose();
+  });
+  it('set changes a number, string or boolean field and answers the old and new value', async () => {
+    const s = await setup();
+    const p = s.game.world.find('player')!;
+    p.add(Body);
+    expect((await s.call({ op: 'set', node: 'player', field: 'Body.speed', value: 9 })).result).toEqual({ node: 'player', field: 'Body.speed', old: 2, new: 9 });
+    expect((await s.call({ op: 'set', node: 'player', field: 'Body.label', value: 'angry' })).result).toMatchObject({ old: 'calm', new: 'angry' });
+    expect((await s.call({ op: 'set', node: 'player', field: 'Body.armed', value: true })).result).toMatchObject({ old: false, new: true });
+    expect(p.get(Body)!.speed).toBe(9);
+    s.conn.dispose();
+  });
+  it('set refuses an object field, a value of another type and a field that is not there, and changes nothing', async () => {
+    const s = await setup();
+    const p = s.game.world.find('player')!;
+    p.add(Body);
+    for (const [field, value, why] of [['Body.items', 5, 'number, string or boolean'], ['Body.speed', 'fast', 'number'], ['Body.nope', 1, 'no field'], ['Nobody.speed', 1, 'behaviour'], ['speed', 1, 'Behaviour']] as const) {
+      const r = await s.call({ op: 'set', node: 'player', field, value });
+      expect(JSON.stringify(r), field).toContain(why);
+    }
+    expect(p.get(Body)!.speed).toBe(2);
+    expect(p.get(Body)!.items).toEqual([1, 2]);
+    s.conn.dispose();
+  });
+  it('until near holds when the node is within the distance on the floor plane, whatever its height', async () => {
+    const s = await setup();
+    const p = s.game.world.find('player')!;
+    p.position.set(10, 50, 0);
+    const near = { node: 'player', near: [10, 3], within: 2 };
+    let r = (await s.call({ op: 'until', when: near, max: 5 })).result;
+    expect(r).toMatchObject({ met: false, steps: 5 });
+    p.position.set(10, 50, 1.5);
+    r = (await s.call({ op: 'until', when: near, max: 5 })).result;
+    expect(r).toMatchObject({ met: true, steps: 0 });
+    s.conn.dispose();
+  });
+});
+
 describe('the error ring', () => {
   it('unreadItems gives what is new or repeated since the last take, and marks nothing read', () => {
     const r = createErrorRing();

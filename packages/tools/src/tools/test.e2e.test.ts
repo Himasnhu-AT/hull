@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
@@ -20,4 +20,26 @@ describe('test tool resolves hull imports', () => {
       expect(out.passed).toBe(out.total);
     }, 180_000);
   }
+});
+
+describe('test tool output', () => {
+  const copy = (name: string) => copyProject({ from: join(templatesDir, 'cube'), dir: join(tmp, name) }).root;
+  const add = (root: string, body: string) => writeFileSync(join(root, 'src', 'print.test.ts'), "import { it } from 'vitest';\nit('prints', () => {\n" + body + "\n});\n");
+
+  it('returns what the tests printed to stdout and stderr, so a value can be read without throwing', async () => {
+    const root = copy('print');
+    add(root, "console.log('speed is', 4.5);\nconsole.error('warned about x');");
+    const out = (await runTool(root, 'test')) as { output?: string };
+    expect(out.output).toContain('speed is 4.5');
+    expect(out.output).toContain('warned about x');
+    expect(out.output).toContain('print.test.ts');
+  }, 120_000);
+
+  it('cuts a long print to about 4000 characters and says so', async () => {
+    const root = copy('long');
+    add(root, "console.log('x'.repeat(10000));");
+    const out = (await runTool(root, 'test')) as { output?: string };
+    expect(out.output!.length).toBeLessThan(4400);
+    expect(out.output).toMatch(/cut/);
+  }, 120_000);
 });

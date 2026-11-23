@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest';
+import { defineGame } from '../../core/index.ts';
+import { usePhysics } from '../../physics/index.ts';
+import { Weapon } from '../health/weapon.ts';
+import { ArenaLevel } from '../level/level.ts';
 import { ALL_KITS, kitSources, startRig } from '../testing.ts';
 import { followTuning } from '../follow-camera/follow-camera.ts';
 import { Stock } from '../pickups/pickups.ts';
 import bench from './bench.ts';
-import { ThirdPerson, tpTuning } from './third-person.ts';
+import { ThirdPerson, spawnThirdPerson, tpTuning } from './third-person.ts';
 
 const sources = kitSources(...ALL_KITS);
 
@@ -74,5 +78,22 @@ describe('third-person kit', () => {
       return c;
     };
     expect(await run()).toBe(await run());
+  });
+});
+
+describe('spawnThirdPerson options', () => {
+  const bare = defineGame({ ready(g) { usePhysics(g.world); g.world.spawn('level').add(ArenaLevel); spawnThirdPerson(g.world, { x: 2, z: 3, weapon: false, gas: false }); } });
+  it('has the melee weapon and the gas stock by default', async () => {
+    const { r, me } = await start();
+    expect(r.g.world.find('player/aim')!.get(Weapon)).toBeTruthy();
+    expect(me.get(Stock)).toBeTruthy();
+  });
+  it('leaves out the melee weapon and the gas stock with weapon: false and gas: false, and boost is then free', async () => {
+    const r = await startRig(bare, sources, 'third-person');
+    const me = r.g.world.find('player')!;
+    expect(r.g.world.find('player/aim')).toBeFalsy();
+    expect(me.get(Stock)).toBeFalsy();
+    expect([me.position.x, me.position.z]).toEqual([2, 3]);
+    r.step(30, { move: { y: -1 }, boost: { d: 1 } });
   });
 });

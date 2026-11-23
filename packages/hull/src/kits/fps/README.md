@@ -4,7 +4,7 @@ A first-person body: capsule on the physics mover, mouse look, WASD relative to 
 coyote time, footsteps and landing sounds.
 
 - **Behaviours**: `FirstPerson` (node = feet, child `eye` carries the `Camera`), `Crosshair` (HUD dot).
-  `spawnFirstPerson(world, at)` builds the whole player: body, `Health`, gun (`Weapon` on the eye), health bar, crosshair.
+  `spawnFirstPerson(world, { x, z, yaw, gun })` builds the whole player: body, `Health`, gun (`Weapon` on the eye), health bar, crosshair. `gun: false` leaves out the `Weapon` and the gun mesh (a game where the player does not shoot).
 - **Actions it reads**: `move`, `look` (mouse delta), `lookPad` (arrows or right stick), `jump`, `sprint`; the gun reads `fire`.
 - **Tunables** (`fps` block): `walkSpeed`, `sprintSpeed`, `accel`, `airControl`, `jumpHeight`, `gravity`, `coyoteTime`,
   `eyeHeight`, `radius`, `height`, `mouseSensitivity`, `padLookSpeed`, `pitchLimit`, `fov`, `strideLength`.
@@ -17,6 +17,7 @@ coyote time, footsteps and landing sounds.
 ```ts
 const level = w.spawn('level').add(ArenaLevel);
 spawnFirstPerson(w);   // body, eye camera, gun, health bar, crosshair; node name "player"
+spawnFirstPerson(w, { x: 4, z: -2, yaw: 0, gun: false });   // the same without the gun
 ```
 
 ## Wiring
