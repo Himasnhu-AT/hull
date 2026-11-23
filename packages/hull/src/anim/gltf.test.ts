@@ -83,17 +83,17 @@ describe('Model', () => {
     const { game, m } = await model({ file: 'models/cube.glb' });
     expect(m.loaded).toBe(true);
     const mesh = m.view!.getObjectByProperty('isMesh', true) as ThreeMesh;
-    expect((mesh.material as { color: { g: number } }).color.g).toBeGreaterThan(0.4);
+    expect((mesh.material as unknown as { color: { g: number } }).color.g).toBeGreaterThan(0.4);
     game.step(3);
     game.dispose();
   });
   it('takes a colour override and gives the file\'s material back when it is cleared', async () => {
     const { game, m } = await model({ file: 'models/cube.glb', color: '#ff0000' });
     const mesh = m.view!.getObjectByProperty('isMesh', true) as ThreeMesh;
-    expect((mesh.material as { color: { r: number; g: number } }).color.r).toBe(1);
+    expect((mesh.material as unknown as { color: { r: number; g: number } }).color.r).toBe(1);
     m.color = undefined;
     game.world.update(0, 0);
-    expect((mesh.material as { color: { r: number; g: number } }).color.g).toBeGreaterThan(0.4);
+    expect((mesh.material as unknown as { color: { r: number; g: number } }).color.g).toBeGreaterThan(0.4);
     game.dispose();
   });
   it('shows a file that loads later, and reports a missing one without throwing', async () => {

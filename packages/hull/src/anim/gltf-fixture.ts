@@ -89,7 +89,8 @@ export function armGlb(): ArrayBuffer {
   );
 }
 
-export function cubeGlb(): ArrayBuffer {
+/** `padBytes` adds an unused binary block, to make a file of a chosen size (build size measurements). */
+export function cubeGlb(padBytes = 0): ArrayBuffer {
   const p = [-0.5, -0.5, 0.5, 0.5, -0.5, 0.5, 0.5, 0.5, 0.5, -0.5, 0.5, 0.5, -0.5, -0.5, -0.5, 0.5, -0.5, -0.5, 0.5, 0.5, -0.5, -0.5, 0.5, -0.5];
   const i = [0, 1, 2, 0, 2, 3, 5, 4, 7, 5, 7, 6, 4, 0, 3, 4, 3, 7, 1, 5, 6, 1, 6, 2, 3, 2, 6, 3, 6, 7, 4, 5, 1, 4, 1, 0];
   return pack(
@@ -104,6 +105,6 @@ export function cubeGlb(): ArrayBuffer {
         { bufferView: 1, componentType: 5123, count: i.length, type: 'SCALAR' },
       ],
     },
-    [f32(p), u16(i)],
+    [f32(p), u16(i), ...(padBytes > 0 ? [Uint8Array.from({ length: padBytes }, (_, k) => (k * 2654435761) >>> 24)] : [])],
   );
 }

@@ -321,8 +321,20 @@ A character is a body, what it is made of, where things attach, and which animat
 ```
 
 `animSet` and `animGraph` are ids of `anim-set` and `anim-graph` files (`config/anim-set/soldier.json`,
-`config/anim-graph/soldier.json`). `body.type` is `generated` or `gltf` (`file`, and a `joints` map from the engine's joint
-names to the model's); glTF bodies are in the schema but the Animator reports them as not supported yet. A generated body
+`config/anim-graph/soldier.json`). `body.type` is `generated` or `gltf`. A **glTF body** (`file`: a .glb or .gltf inside `assets/`, and a `joints` map from the engine's
+joint names to the model's) is a skinned model: the Animator uses the model's own bones (every joint of its skin; a joint
+named in `joints` takes the engine's name, the others keep the model's, so a model name with a colon is written as in the
+file) and draws its materials. Clips written for the engine's joints (keyframes) play on it, rotations being changes from the
+bone's rest, and so do the model's own animations (below); `sockets` work. Looking, reaching and foot placement (IK) are for
+generated bodies and are off for a glTF body, and so is `detach`. The file is read once when the character is built (the
+body appears when it has loaded; a game can await `preloadModels(['models/hero.glb'])` in `ready`). A missing file, a joint
+the model lacks or a missing `file` is reported with its pointer, like `character/hero#/body/joints/hips: the model
+"models/hero.glb" has no joint "mixamorig:Hips"`. A static model that is not a character is a `Model` behaviour
+(`node.add(Model, { file: 'models/crate.glb', material: 'material/steel' })` from `hull/render`; `material` or `color`
+replaces the file's materials). Binary files in `assets/` (.glb .gltf .bin .png .jpg .webp .ktx2) are served in dev and inlined
+into `game.js` as base64 in a build, all of them whether a game uses them or not: a 1 MB model adds about 1.33 MB to `game.js`
+(roughly its own size again when gzipped, since meshes do not compress), and using `Model` or a glTF body adds the loader (about
+70 kB). A generated body
 has a `recipe` (`humanoid`, with `proportions`: `height`, `shoulders`, `legs`, `head`, `arms`, `build`; or `custom`, with a `bones`
 list of `{ name, parent, offset }` and a `parts` list of `limb`, `box` and `sphere` shapes on bones) and a `scale`.
 
@@ -351,6 +363,13 @@ checks them against the body and returns each with its bone index.
   }
 }
 ```
+
+A `gltf` clip plays an animation of the character's glTF body file: `clip` names it (default: the clip's own name), `loop`,
+`speed`, `length`, `events` and `windows` work as for keyframes. Its rotation and position tracks drive the joints they target
+(through the `joints` table), blend through the state graph like any other clip, and tracks for nodes that are not joints are
+ignored. Not read yet: scale and morph tracks, `rootMotion` (reported and ignored), cubic-spline tangents (the curve passes
+through the keys linearly). A `generated` clip cannot drive a glTF body (it is built for the humanoid recipe) and is skipped with
+a message. A `gltf` clip on a generated body is skipped too.
 
 Clip `events` map a name to a time, or a list of times (0 to 1 for loops, seconds otherwise), at which the Animator's `events`
 signal fires. A clip also has `speed`, `travel` (ground speed in m/s, for stride matching) and `curve` (`smooth` or `linear`

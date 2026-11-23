@@ -320,7 +320,7 @@
         "file": {
           "type": "string",
           "x-ui": {
-            "help": "gltf only."
+            "help": "gltf only (required): a .glb or .gltf inside assets/, like models/hero.glb. It needs a skin."
           }
         },
         "joints": {
@@ -331,7 +331,7 @@
             }
           },
           "x-ui": {
-            "help": "gltf only: engine joint name to the model's."
+            "help": "gltf only: engine joint name to the model's joint, like {\"hips\": \"mixamorig:Hips\"}. A joint left out keeps the model's own name."
           }
         }
       },
