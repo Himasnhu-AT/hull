@@ -28,6 +28,23 @@ export interface PhysicsOptions {
 const MAX_CELLS = 256;
 /** A sphere cast whose bounds cover at most this many cells visits them all; longer ones walk the line. */
 const BOX_CELLS = 64;
+/**
+ * Cell indices past this are not walked cell by cell: a loop counting up from a number near 2^53 never moves, and
+ * an infinite index never ends. 2^50 cells is far beyond any world (about 1.8e16 m of 16 m cells).
+ */
+const CELL_LIMIT = 2 ** 50;
+/** A capsule is sampled at most this many times along its axis (the kernel counts in an i32). */
+const MAX_SAMPLES = 2147483647;
+
+/**
+ * Whether a static shape's cell range is one the grid files it under: finite, not absurdly far, at most MAX_CELLS
+ * cells. Infinite or NaN bounds are not, so such a shape goes to the short list, where a bounds test settles it
+ * (before this, a shape with infinite bounds hung the loop that files it).
+ */
+function cellsFit(i0: number, i1: number, k0: number, k1: number): boolean {
+  return (i1 - i0 + 1) * (k1 - k0 + 1) <= MAX_CELLS
+    && Math.abs(i0) <= CELL_LIMIT && Math.abs(i1) <= CELL_LIMIT && Math.abs(k0) <= CELL_LIMIT && Math.abs(k1) <= CELL_LIMIT;
+}
 
 function key(i: number, k: number): number {
   return ((i + 32768) & 0xffff) * 65536 + ((k + 32768) & 0xffff);
@@ -102,9 +119,7 @@ export class Physics {
     if (s.isStatic) this.insertStatic(s);
     else { this.moving.push(s); this.index.add(s); this.dirty = true; }
     if (this._kw !== null) {
-      let ok = false;
-      try { ok = this._kw.add(s); } catch (e) { this.dropKernel(e); }
-      if (!ok && this._kw !== null) this.dropKernel(new Error('the world is too wide for the kernel\'s static grid'));
+      try { this._kw.add(s); } catch (e) { this.dropKernel(e); }
     }
     return s;
   }
@@ -181,7 +196,7 @@ export class Physics {
     const c = this.cell;
     const i0 = Math.floor(s.minx / c), i1 = Math.floor(s.maxx / c);
     const k0 = Math.floor(s.minz / c), k1 = Math.floor(s.maxz / c);
-    if (s.kind === K.plane || (i1 - i0 + 1) * (k1 - k0 + 1) > MAX_CELLS) {
+    if (s.kind === K.plane || !cellsFit(i0, i1, k0, k1)) {
       s._big = true;
       this.bigs.push(s);
       return;
@@ -253,6 +268,12 @@ export class Physics {
    */
   cast(ox: number, oy: number, oz: number, dx: number, dy: number, dz: number, r: number, f: QueryFilter | undefined): void {
     this.ensureSynced();
+    // A sphere from beyond the cells the grid can walk, or of infinite radius, hits nothing: its ring loop would never
+    // end. A NaN origin is not caught here (its comparisons are all false), and behaves as it always did.
+    if (r > 0) {
+      const lim = this.cell * CELL_LIMIT;
+      if (Math.abs(ox) + r > lim || Math.abs(oz) + r > lim) return;
+    }
     if (this._kw !== null) {
       try { if (this._kw.cast(ox, oy, oz, dx, dy, dz, r, f)) return; } catch (e) { this.dropKernel(e); }
     }
@@ -369,6 +390,8 @@ export class Physics {
     beginSweep(maxDist);
     const len = Math.sqrt((b.x - a.x) ** 2 + (b.y - a.y) ** 2 + (b.z - a.z) ** 2);
     const n = Math.max(1, Math.ceil(len / (radius * 0.5)));
+    // No samples to take along the axis (NaN end points, a zero radius, an axis too long for its radius): no hit.
+    if (!(n <= MAX_SAMPLES)) return null;
     let bx = a.x, by = a.y, bz = a.z;
     for (let i = 0; i <= n; i++) {
       const u = n === 0 ? 0 : i / n;
@@ -393,9 +416,15 @@ export class Physics {
     const stamp = ++this.stamp;
     const c = this.cell;
     const i0 = Math.floor(x0 / c), i1 = Math.floor(x1 / c), k0 = Math.floor(z0 / c), k1 = Math.floor(z1 / c);
-    if ((i1 - i0 + 1) * (k1 - k0 + 1) > 4096) {
-      const st = this.statics;
-      for (let n = 0; n < st.length; n++) this.take(st[n]!, stamp, x0, y0, z0, x1, y1, z1, f);
+    const walkable = (i1 - i0 + 1) * (k1 - k0 + 1) <= 4096
+      && Math.abs(i0) <= CELL_LIMIT && Math.abs(i1) <= CELL_LIMIT && Math.abs(k0) <= CELL_LIMIT && Math.abs(k1) <= CELL_LIMIT;
+    if (!walkable) {
+      // A wide box, or one too far out to count cells in (an infinite centre): every static shape's bounds are tested
+      // instead. A box with a NaN edge holds no static shape.
+      if (x0 === x0 && x1 === x1 && z0 === z0 && z1 === z1) {
+        const st = this.statics;
+        for (let n = 0; n < st.length; n++) this.take(st[n]!, stamp, x0, y0, z0, x1, y1, z1, f);
+      }
     } else {
       for (let i = i0; i <= i1; i++) {
         for (let k = k0; k <= k1; k++) {
@@ -446,6 +475,9 @@ export class Physics {
     out.length = 0;
     const len = Math.sqrt((b.x - a.x) ** 2 + (b.y - a.y) ** 2 + (b.z - a.z) ** 2);
     const n = Math.max(1, Math.ceil(len / (radius * 0.5)));
+    // No shapes when there are no samples to take: a NaN end point or radius, a zero radius (n is infinite) or an axis
+    // too long for its radius for the kernel's i32 count. The kernel and this code then agree, and neither hangs.
+    if (!(n <= MAX_SAMPLES)) return out;
     if (this._kw !== null) {
       this.ensureSynced();
       try { if (this._kw.overlapCapsule(a.x, a.y, a.z, b.x, b.y, b.z, radius, n, filter, out)) return out; } catch (e) { this.dropKernel(e); }

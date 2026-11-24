@@ -166,15 +166,11 @@ pub extern "C" fn hk_mesh_data(tris: i32, nodes: i32) -> i32 {
     unsafe {
         let sh = &mut shapes::SH;
         let (t, n) = (tris as usize, nodes as usize);
-        let f = sh.fdata.len();
-        let i = sh.idata.len();
-        sh.fdata.resize(f + t * 12 + n * 6, 0.0);
-        sh.idata.resize(i + n * 4, 0);
-        sh.data.push(shapes::Data { kind: shapes::K_MESH, a: t, b: n, f, i, h: 0 });
+        let d = shapes::Data { kind: shapes::K_MESH, a: t, b: n, f: alloc::vec![0.0; t * 12 + n * 6], i: alloc::vec![0; n * 4], h: alloc::vec::Vec::new() };
+        mem::HDR[h::UPF] = d.f.as_ptr() as i32;
+        mem::HDR[h::UPI] = d.i.as_ptr() as i32;
         mem::bump_epoch();
-        mem::HDR[h::UPF] = sh.fdata.as_ptr().add(f) as i32;
-        mem::HDR[h::UPI] = sh.idata.as_ptr().add(i) as i32;
-        (sh.data.len() - 1) as i32
+        sh.put_data(d) as i32
     }
 }
 
@@ -183,15 +179,11 @@ pub extern "C" fn hk_mesh_data(tris: i32, nodes: i32) -> i32 {
 pub extern "C" fn hk_hf_data(columns: i32, rows: i32) -> i32 {
     unsafe {
         let sh = &mut shapes::SH;
-        let f = sh.fdata.len();
-        let hh = sh.hdata.len();
-        sh.fdata.resize(f + 5, 0.0);
-        sh.hdata.resize(hh + (columns * rows) as usize, 0.0);
-        sh.data.push(shapes::Data { kind: shapes::K_HEIGHTFIELD, a: columns as usize, b: rows as usize, f, i: 0, h: hh });
+        let d = shapes::Data { kind: shapes::K_HEIGHTFIELD, a: columns as usize, b: rows as usize, f: alloc::vec![0.0; 5], i: alloc::vec::Vec::new(), h: alloc::vec![0.0; (columns * rows) as usize] };
+        mem::HDR[h::UPF] = d.f.as_ptr() as i32;
+        mem::HDR[h::UPH] = d.h.as_ptr() as i32;
         mem::bump_epoch();
-        mem::HDR[h::UPF] = sh.fdata.as_ptr().add(f) as i32;
-        mem::HDR[h::UPH] = sh.hdata.as_ptr().add(hh) as i32;
-        (sh.data.len() - 1) as i32
+        sh.put_data(d) as i32
     }
 }
 
@@ -231,13 +223,13 @@ pub extern "C" fn hk_world_init(cell: f64) {
     publish_shapes();
 }
 
-/// Files a shape TypeScript has filled in. Returns 0, or 1 when the world can no longer be held here.
+/// Files a shape TypeScript has filled in. Returns 0 (kept as a status so the export need not change).
 #[no_mangle]
 pub extern "C" fn hk_shape_commit(id: i32) -> i32 {
     unsafe {
         world::W.commit(id as usize);
         publish_shapes();
-        world::W.failed
+        0
     }
 }
 
@@ -246,7 +238,7 @@ pub extern "C" fn hk_shape_remove(id: i32) {
     unsafe { world::W.remove(id as usize) };
 }
 
-/// world.ts `cast`: B seeded from RES, the filter from FILT; the best hit back in RES. Returns 0, or 1 on failure.
+/// world.ts `cast`: B seeded from RES, the filter from FILT; the best hit back in RES. Returns 0.
 #[no_mangle]
 pub extern "C" fn hk_cast(ox: f64, oy: f64, oz: f64, dx: f64, dy: f64, dz: f64, r: f64) -> i32 {
     unsafe {
@@ -256,7 +248,7 @@ pub extern "C" fn hk_cast(ox: f64, oy: f64, oz: f64, dx: f64, dy: f64, dz: f64, 
         b_in();
         w.cast(ox, oy, oz, dx, dy, dz, r, &fl);
         b_out();
-        w.failed
+        0
     }
 }
 
@@ -265,7 +257,7 @@ fn finish_out() -> i32 {
     unsafe { world::W.out.len() as i32 }
 }
 
-/// world.ts `gather`: ids into OUT; returns how many (-1 on failure).
+/// world.ts `gather`: ids into OUT; returns how many.
 #[no_mangle]
 pub extern "C" fn hk_gather(x0: f64, y0: f64, z0: f64, x1: f64, y1: f64, z1: f64) -> i32 {
     unsafe {
@@ -273,7 +265,6 @@ pub extern "C" fn hk_gather(x0: f64, y0: f64, z0: f64, x1: f64, y1: f64, z1: f64
         w.flush();
         let fl = world::read_filter();
         w.gather(x0, y0, z0, x1, y1, z1, &fl);
-        if w.failed != 0 { return -1; }
         w.out.clear();
         for j in 0..w.cand.len() { let v = w.cand[j]; w.out.push(v); }
     }
@@ -288,7 +279,6 @@ pub extern "C" fn hk_overlap_sphere(cx: f64, cy: f64, cz: f64, radius: f64) -> i
         w.flush();
         let fl = world::read_filter();
         w.gather(cx - radius, cy - radius, cz - radius, cx + radius, cy + radius, cz + radius, &fl);
-        if w.failed != 0 { return -1; }
         w.out.clear();
         for j in 0..w.cand.len() {
             let id = w.cand[j];
@@ -307,7 +297,6 @@ pub extern "C" fn hk_overlap_capsule(ax: f64, ay: f64, az: f64, bx: f64, by: f64
         w.flush();
         let fl = world::read_filter();
         w.gather(min(ax, bx) - radius, min(ay, by) - radius, min(az, bz) - radius, max(ax, bx) + radius, max(ay, by) + radius, max(az, bz) + radius, &fl);
-        if w.failed != 0 { return -1; }
         w.out.clear();
         let rr = radius * 1.03;
         let nf = n as f64;
@@ -348,13 +337,13 @@ pub extern "C" fn hk_body_remove(b: i32) {
     unsafe { rigid::RB.remove(b as usize) };
 }
 
-/// One step of the rigid solver, after TypeScript has written the bodies in. Returns 0, or 1 on failure.
+/// One step of the rigid solver, after TypeScript has written the bodies in. Returns 0.
 #[no_mangle]
 pub extern "C" fn hk_rigid_step(dt: f64, gx: f64, gy: f64, gz: f64, iters: i32) -> i32 {
     unsafe {
         world::W.flush();
         rigid::RB.step(dt, gx, gy, gz, iters);
-        world::W.failed
+        0
     }
 }
 

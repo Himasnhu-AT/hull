@@ -81,17 +81,24 @@ pub const K_MESH: i32 = 3;
 pub const K_PLANE: i32 = 4;
 pub const K_HEIGHTFIELD: i32 = 5;
 
-/// A static mesh or height field's numbers, in the world's data arenas.
-#[derive(Clone, Copy)]
+/// A static mesh or height field's numbers. Each shape owns its arrays, so removing the shape frees them for the
+/// next one; their addresses do not change while the shape lives.
 pub struct Data {
     pub kind: i32,
     /// Mesh: triangles and BVH nodes. Height field: columns and rows.
     pub a: usize,
     pub b: usize,
-    /// Offsets into `fdata` (f64), `idata` (i32) and `hdata` (f32).
-    pub f: usize,
-    pub i: usize,
-    pub h: usize,
+    /// f64 numbers (mesh: v, n, bb; height field: cell, x0, z0, y0, scale), i32 numbers (mesh: left, right, first,
+    /// count) and f32 heights.
+    pub f: Vec<f64>,
+    pub i: Vec<i32>,
+    pub h: Vec<f32>,
+}
+
+impl Data {
+    pub const fn empty() -> Data {
+        Data { kind: -1, a: 0, b: 0, f: Vec::new(), i: Vec::new(), h: Vec::new() }
+    }
 }
 
 /// A mesh's arrays (mesh.ts `MeshData`): v 9 a triangle, n 3 a triangle, bb 6 a node; left, right, first, count.
@@ -126,15 +133,14 @@ pub struct Shapes {
     pub si: Vec<i32>,
     pub cap: usize,
     pub free: Vec<i32>,
+    /// Data tables by index (a shape's DATA); an index whose shape was removed is in `data_free`.
     pub data: Vec<Data>,
-    pub fdata: Vec<f64>,
-    pub idata: Vec<i32>,
-    pub hdata: Vec<f32>,
+    pub data_free: Vec<i32>,
 }
 
 impl Shapes {
     pub const fn new() -> Self {
-        Shapes { sf: Vec::new(), si: Vec::new(), cap: 0, free: Vec::new(), data: Vec::new(), fdata: Vec::new(), idata: Vec::new(), hdata: Vec::new() }
+        Shapes { sf: Vec::new(), si: Vec::new(), cap: 0, free: Vec::new(), data: Vec::new(), data_free: Vec::new() }
     }
 
     /// A free id, the tables grown when there is none.
@@ -148,6 +154,30 @@ impl Shapes {
         self.si.resize(self.cap * SI_STRIDE, 0);
         crate::mem::bump_epoch();
         id
+    }
+
+    /// A data index for `d`, a freed one when there is one.
+    pub fn put_data(&mut self, d: Data) -> usize {
+        match self.data_free.pop() {
+            Some(k) => {
+                self.data[k as usize] = d;
+                k as usize
+            }
+            None => {
+                self.data.push(d);
+                self.data.len() - 1
+            }
+        }
+    }
+
+    /// Frees the mesh or height-field arrays of shape `id`, if it has any.
+    pub fn drop_data(&mut self, id: usize) {
+        let k = i(id, DATA);
+        if k >= 0 {
+            self.data[k as usize] = Data::empty();
+            self.data_free.push(k);
+            set_i(id, DATA, -1);
+        }
     }
 }
 
@@ -180,19 +210,19 @@ pub fn flag(id: usize, bit: i32) -> bool {
 
 pub fn mesh(id: usize) -> MeshRef {
     unsafe {
-        let d = SH.data[i(id, DATA) as usize];
+        let d = &SH.data[i(id, DATA) as usize];
         let (t, n) = (d.a, d.b);
-        let fp = SH.fdata.as_ptr().add(d.f);
-        let ip = SH.idata.as_ptr().add(d.i);
+        let fp = d.f.as_ptr();
+        let ip = d.i.as_ptr();
         MeshRef { tris: t, nodes: n, v: fp, n: fp.add(t * 9), bb: fp.add(t * 12), left: ip, right: ip.add(n), first: ip.add(2 * n), count: ip.add(3 * n) }
     }
 }
 
 pub fn hf(id: usize) -> HfRef {
     unsafe {
-        let d = SH.data[i(id, DATA) as usize];
-        let fp = SH.fdata.as_ptr().add(d.f);
-        HfRef { h: SH.hdata.as_ptr().add(d.h), columns: d.a as i32, rows: d.b as i32, cell: *fp, x0: *fp.add(1), z0: *fp.add(2), y0: *fp.add(3), scale: *fp.add(4) }
+        let d = &SH.data[i(id, DATA) as usize];
+        let fp = d.f.as_ptr();
+        HfRef { h: d.h.as_ptr(), columns: d.a as i32, rows: d.b as i32, cell: *fp, x0: *fp.add(1), z0: *fp.add(2), y0: *fp.add(3), scale: *fp.add(4) }
     }
 }
 
