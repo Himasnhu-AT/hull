@@ -815,8 +815,20 @@ One sheet, opened from the launcher, both title bars, the builder's "Add a key" 
 * **Off and failing.** `hull.json` `"kernels": false`, `?kernels=off` on the dev page, or `StartOptions.kernels` run
   the TypeScript implementation. A module that fails to compile is reported once and the TypeScript runs
   (`?kernels=fail` proves it). A world keeps its TypeScript grid, index and bodies current all along, so a trap
-  inside the kernel, or a world wider than the kernel's static grid holds, drops that world back to TypeScript
-  mid-game with the same answers.
+  inside the kernel drops that world back to TypeScript mid-game with the same answers. `"kernels": false` does not
+  take the module out of `game.js` (it is imported by `hull/physics`); it only keeps it from starting.
+* **Memory and the static grid.** The module's allocator frees: a block goes on a free list for its size class and is
+  handed out again, so mesh and height-field arrays of a removed shape, and a grid cell's list, are reused and a
+  world that adds and removes shapes all game does not grow (the memory itself never shrinks; what stays is the most
+  the world held at once). Static shapes live in a hash map of cells to lists, kept like `world.ts`'s `Map`: a shape
+  is appended to each cell it covers, removal keeps the order of the rest, and a cell that empties is deleted, so
+  adding or removing a static shape costs about what it costs in TypeScript and a world of any width stays small.
+  Cell keys wrap at 65,536 cells as in TypeScript, so the two agree even there.
+* **Numbers that are not usable.** Both implementations answer promptly. A static shape whose cell range is not finite
+  (or is past 2^50 cells) goes to the short list. A sphere or capsule cast from an origin that far out, or of infinite
+  radius, hits nothing; an overlap whose box is that far out tests every static shape's bounds, which finds nothing
+  for an infinite centre. A capsule query whose sample count is NaN, infinite (radius 0) or past an i32 returns no
+  shapes (no hit for `capsulecast`). Finite input answers as before.
 * **The boundary.** Numbers only. TypeScript keeps the API and the `Shape` and `RigidBody` objects; a shape writes
   its pose and properties into the module's memory through typed-array views (`physics/kernel.ts`), and a moved
   shape joins a dirty list the kernel files before its next query, so posing costs no call. A query is one call

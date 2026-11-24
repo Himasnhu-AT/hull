@@ -198,7 +198,7 @@ describe('the physics world on the kernel', () => {
     expect(a.phys.backend).toBe('kernel');
   }, LONG);
 
-  it('gives a world too wide for its grid back to TypeScript once, with the same answers', async () => {
+  it('holds a world two hundred kilometres wide on the kernel, with the same answers', async () => {
     const said = vi.spyOn(console, 'error').mockImplementation(() => {});
     const make = async (kernels: 'on' | 'off') => {
       let phys!: Physics;
@@ -211,10 +211,10 @@ describe('the physics world on the kernel', () => {
     expect(a.backend).toBe('kernel');
     const ha = new Hit(), hb = new Hit();
     expect(hitOf(a.raycast(v(-10, 0, 0), v(1, 0, 0), 100, undefined, ha))).toEqual(hitOf(b.raycast(v(-10, 0, 0), v(1, 0, 0), 100, undefined, hb)));
-    expect(a.backend).toBe('typescript');
     expect(hitOf(a.raycast(v(199990, 0, 200000), v(1, 0, 0), 100, undefined, ha))).toEqual(hitOf(b.raycast(v(199990, 0, 200000), v(1, 0, 0), 100, undefined, hb)));
-    expect(said).toHaveBeenCalledTimes(1);
-    expect(String(said.mock.calls[0]![0])).toMatch(/carries on in TypeScript/);
+    // A sparse grid holds only the cells that have shapes, so no width makes the kernel give the world back.
+    expect(a.backend).toBe('kernel');
+    expect(said).not.toHaveBeenCalled();
   });
 
   it('files every moved shape even when thousands come and go between two queries', async () => {

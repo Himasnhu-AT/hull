@@ -142,6 +142,10 @@ Schema (abridged):
 }
 ```
 
+`kernels: false` is a run-time switch only: the game still carries the engine's WebAssembly module (about 75 kB) in
+`game.js` and never starts it. The module is imported by `hull/physics` itself, so the build cannot leave it out
+without a second build of the engine's physics, which is not done. The build report's `kernel` line says what a game carries.
+
 ## 3. `tuning`: a block of numbers owned by code
 
 A block of numbers kept as a file, for values that are shared (several pieces of code, a level, a tool) or that vary by file (one per enemy type, one per difficulty). The file schema says only "`kind`, an optional `note`, and numbers": the names and ranges come from a `tunables` block of the same name in code. A kit's block is overridden by `config/tuning/<block>.json` (block name in kebab case; `thirdPerson` is `third-person.json`): keys the file lacks keep the code value. A key the block does not know, or a value its options refuse, is a problem at `file#/key`. Numbers used by one piece of code alone and not shared go in a `tunables` block with no file.

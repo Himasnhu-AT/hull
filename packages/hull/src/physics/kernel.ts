@@ -1,7 +1,7 @@
 // The physics world's mirror in the kernel (plan-rust.md R2): every shape and rigid body is also written into the
 // WebAssembly module's memory, and queries and the rigid solver run there. TypeScript keeps the API, the Shape and
 // RigidBody objects, and its own grid and index, always current, so the world can drop the kernel at any moment
-// (a trap, a world too wide for it) and carry on in TypeScript with the same answers.
+// (a trap) and carry on in TypeScript with the same answers.
 //
 // The numbers cross through typed-array views over the module's memory: a pose is written, not passed in a call.
 // The field numbers are crates/hull-kernels' (shapes.rs, rigid.rs, lib.rs `h`, world.rs FILT).
@@ -25,8 +25,6 @@ const F_ENABLED = 1, F_TRIGGER = 2, F_STATIC = 4, F_AA = 8, F_DIRTY = 16;
 const BF = 64, BI = 4;
 const B_PX = 0, B_INV_MASS = 13, B_IIX = 20, B_PT_R = 23, B_INNER = 24, B_OUTER = 25, B_SLEEP_TIME = 26, B_IW = 27, B_PTS = 36;
 const B_SHAPE = 0, B_SLEEPING = 1, B_TOUCHING = 2, B_NPTS = 3;
-/** Why the kernel gives a world back: the static shapes span more cells than its dense grid holds. */
-const TOO_WIDE = 'the static world spans more cells than the kernel\'s grid holds (4M)';
 /// FILT words given to the prefix bit set of a tag filter (world.rs FILT is 264 words, the set starts at 8).
 const TAG_WORDS = 256;
 
@@ -94,8 +92,8 @@ export class KernelWorld {
     return id;
   }
 
-  /** Mirrors a shape the world has just added. False when the kernel cannot hold the world any more. */
-  add(s: Shape): boolean {
+  /** Mirrors a shape the world has just added. */
+  add(s: Shape): void {
     const id = this.k.hk_shape_new(s.kind);
     this.views();
     s._kw = this;
@@ -114,9 +112,8 @@ export class KernelWorld {
     // The pose joins the dirty list like any other: other shapes moved since the last query are waiting there too,
     // and the kernel files them all before it next answers.
     this.pose(s);
-    const failed = this.k.hk_shape_commit(id);
+    this.k.hk_shape_commit(id);
     this.views();
-    return failed === 0;
   }
 
   private uploadMesh(s: Shape, id: number): void {
@@ -242,7 +239,7 @@ export class KernelWorld {
     const res = this.res;
     res[0] = B.t; res[1] = B.nx; res[2] = B.ny; res[3] = B.nz;
     res[4] = B.shape === null ? -1 : B.shape._kid; res[5] = B.inside ? 1 : 0; res[6] = B.depth;
-    if (this.k.hk_cast(ox, oy, oz, dx, dy, dz, r) !== 0) throw new Error(TOO_WIDE);
+    this.k.hk_cast(ox, oy, oz, dx, dy, dz, r);
     this.views();
     const out = this.res;
     B.t = out[0]!; B.nx = out[1]!; B.ny = out[2]!; B.nz = out[3]!;
@@ -253,7 +250,6 @@ export class KernelWorld {
   }
 
   private collect(n: number, into: Shape[]): boolean {
-    if (n < 0) throw new Error(TOO_WIDE);
     this.views();
     into.length = 0;
     const o = this.out;
@@ -326,7 +322,7 @@ export class KernelWorld {
       bi[p + B_TOUCHING] = b.touching ? 1 : 0;
       this.awake[i] = b.sleeping ? 0 : 1;
     }
-    if (this.k.hk_rigid_step(dt, g.x, g.y, g.z, iterations) !== 0) throw new Error(TOO_WIDE);
+    this.k.hk_rigid_step(dt, g.x, g.y, g.z, iterations);
     this.views();
     f = this.bf; bi = this.bi;
     for (let i = 0; i < n; i++) {

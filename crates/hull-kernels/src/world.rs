@@ -11,8 +11,171 @@ use alloc::vec::Vec;
 const MAX_STATIC_CELLS: f64 = 256.0;
 /// A sphere cast whose bounds cover at most this many cells visits them all; longer ones walk the line.
 const BOX_CELLS: f64 = 64.0;
-/// The dense static grid stops here; a world wider than this stays on TypeScript (the world reports it).
-const MAX_GRID: f64 = 4_194_304.0;
+/// Cell indices beyond this are not walked cell by cell: adding 1 to a number near 2^53 changes nothing, so a loop over
+/// them never ends. Far larger than any world (2^50 cells of 16 m).
+const CELL_LIMIT: f64 = 1_125_899_906_842_624.0;
+
+/// Whether a static shape's cell range is one the grid files it under: finite, not absurdly far, at most
+/// `MAX_STATIC_CELLS` cells (world.ts `cellsFit`). A range with infinite or NaN bounds is not, so the shape goes to the
+/// short list, where a bounds test settles it.
+fn cells_fit(i0: f64, i1: f64, k0: f64, k1: f64) -> bool {
+    (i1 - i0 + 1.0) * (k1 - k0 + 1.0) <= MAX_STATIC_CELLS && abs(i0) <= CELL_LIMIT && abs(i1) <= CELL_LIMIT && abs(k0) <= CELL_LIMIT && abs(k1) <= CELL_LIMIT
+}
+
+// ---------------------------------------------------------------- the static grid (world.ts `grid`)
+
+/// The low 16 bits of ToInt32(x), as JavaScript's `x & 0xffff` gives them.
+#[inline(always)]
+fn low16(x: f64) -> u32 {
+    if !x.is_finite() {
+        return 0;
+    }
+    if abs(x) < 4.0e18 {
+        return ((x as i64) & 0xffff) as u32;
+    }
+    // Beyond i64: a whole number m * 2^e, whose low bits are m's shifted up.
+    let bits = x.to_bits();
+    let e = ((bits >> 52) & 0x7ff) as i32 - 1075;
+    let m = (bits & ((1u64 << 52) - 1)) | (1u64 << 52);
+    let v = if e >= 16 { 0 } else { m.wrapping_shl(e as u32) & 0xffff };
+    (if x < 0.0 { 0u64.wrapping_sub(v) & 0xffff } else { v }) as u32
+}
+
+/// world.ts `key`: cell (i, k) as one number. Cells 65,536 apart share a key there, so they do here.
+#[inline(always)]
+pub fn cell_key(i: f64, k: f64) -> u32 {
+    (low16(i + 32768.0) << 16) | low16(k + 32768.0)
+}
+
+struct Cell {
+    key: u32,
+    used: bool,
+    list: Vec<i32>,
+}
+
+impl Cell {
+    const fn empty() -> Cell {
+        Cell { key: 0, used: false, list: Vec::new() }
+    }
+}
+
+/// A hash map from cell key to the shapes filed there, in the order they were added: world.ts's `Map<number, Shape[]>`.
+/// Open addressing with linear probing; a cell whose list empties is deleted (the probe run closes up behind it), so a
+/// world that adds and removes shapes far apart does not keep growing.
+pub struct Grid {
+    cells: Vec<Cell>,
+    live: usize,
+}
+
+impl Grid {
+    pub const fn new() -> Grid {
+        Grid { cells: Vec::new(), live: 0 }
+    }
+
+    #[inline(always)]
+    fn home(&self, key: u32) -> usize {
+        let h = key.wrapping_mul(0x9E37_79B1);
+        ((h ^ (h >> 15)) as usize) & (self.cells.len() - 1)
+    }
+
+    fn find(&self, key: u32) -> Option<usize> {
+        if self.live == 0 {
+            return None;
+        }
+        let mask = self.cells.len() - 1;
+        let mut p = self.home(key);
+        loop {
+            let c = &self.cells[p];
+            if !c.used {
+                return None;
+            }
+            if c.key == key {
+                return Some(p);
+            }
+            p = (p + 1) & mask;
+        }
+    }
+
+    /// The list's address and length; a null address and 0 when the cell has no shapes.
+    #[inline(always)]
+    pub fn get(&self, key: u32) -> (*const i32, usize) {
+        match self.find(key) {
+            Some(p) => {
+                let l = &self.cells[p].list;
+                (l.as_ptr(), l.len())
+            }
+            None => (core::ptr::null(), 0),
+        }
+    }
+
+    /// Cells that hold at least one shape (the size of world.ts's Map).
+    pub fn live(&self) -> usize {
+        self.live
+    }
+
+    fn grow(&mut self) {
+        let cap = if self.cells.is_empty() { 64 } else { self.cells.len() * 2 };
+        let mut old = core::mem::take(&mut self.cells);
+        self.cells.resize_with(cap, Cell::empty);
+        for c in old.iter_mut() {
+            if c.used {
+                let mut p = self.home(c.key);
+                while self.cells[p].used {
+                    p = (p + 1) & (cap - 1);
+                }
+                self.cells[p] = core::mem::replace(c, Cell::empty());
+            }
+        }
+    }
+
+    pub fn push(&mut self, key: u32, id: i32) {
+        if let Some(p) = self.find(key) {
+            self.cells[p].list.push(id);
+            return;
+        }
+        if (self.live + 1) * 2 > self.cells.len() {
+            self.grow();
+        }
+        let mask = self.cells.len() - 1;
+        let mut p = self.home(key);
+        while self.cells[p].used {
+            p = (p + 1) & mask;
+        }
+        let c = &mut self.cells[p];
+        c.used = true;
+        c.key = key;
+        c.list.push(id);
+        self.live += 1;
+    }
+
+    /// Takes the first `id` out of the cell's list, the rest keeping their order; an emptied cell is deleted.
+    pub fn remove(&mut self, key: u32, id: i32) {
+        let Some(mut hole) = self.find(key) else { return };
+        let list = &mut self.cells[hole].list;
+        if let Some(k) = list.iter().position(|&x| x == id) {
+            list.remove(k);
+        }
+        if !list.is_empty() {
+            return;
+        }
+        let mask = self.cells.len() - 1;
+        self.cells[hole] = Cell::empty();
+        self.live -= 1;
+        let mut j = hole;
+        loop {
+            j = (j + 1) & mask;
+            if !self.cells[j].used {
+                break;
+            }
+            let home = self.home(self.cells[j].key);
+            // The cell at j may fill the hole when its home is not between the hole and j.
+            if (j.wrapping_sub(home) & mask) >= (j.wrapping_sub(hole) & mask) {
+                self.cells.swap(hole, j);
+                hole = j;
+            }
+        }
+    }
+}
 
 /// What a query lets through: QueryFilter, as TypeScript writes it into FILT before the call.
 #[derive(Clone, Copy)]
@@ -392,27 +555,18 @@ pub struct World {
     pub moving: Vec<i32>,
     /// Cell range each static shape was filed under when it was added: i0, i1, k0, k1, by shape id.
     srange: Vec<f64>,
-    sg_dirty: bool,
-    sg_i0: f64,
-    sg_k0: f64,
-    sg_ni: usize,
-    sg_nk: usize,
-    sg_start: Vec<i32>,
-    sg_items: Vec<i32>,
+    grid: Grid,
     stamp: i32,
     pub mi: MovingIndex,
     dda: Dda,
     pub cand: Vec<i32>,
     pub out: Vec<i32>,
     pub dirty: Vec<i32>,
-    /// Set when the world cannot be held here (the static grid would be too large); TypeScript then drops the kernel.
-    pub failed: i32,
 }
 
 pub static mut W: World = World {
-    cell: 16.0, statics: Vec::new(), bigs: Vec::new(), moving: Vec::new(), srange: Vec::new(), sg_dirty: false, sg_i0: 0.0,
-    sg_k0: 0.0, sg_ni: 0, sg_nk: 0, sg_start: Vec::new(), sg_items: Vec::new(), stamp: 0, mi: MovingIndex::new(),
-    dda: Dda::new(), cand: Vec::new(), out: Vec::new(), dirty: Vec::new(), failed: 0,
+    cell: 16.0, statics: Vec::new(), bigs: Vec::new(), moving: Vec::new(), srange: Vec::new(), grid: Grid::new(), stamp: 0, mi: MovingIndex::new(),
+    dda: Dda::new(), cand: Vec::new(), out: Vec::new(), dirty: Vec::new(),
 };
 
 impl World {
@@ -437,7 +591,7 @@ impl World {
             let i1 = floor(f(id, s::MAXX) / c);
             let k0 = floor(f(id, s::MINZ) / c);
             let k1 = floor(f(id, s::MAXZ) / c);
-            if s::kind(id) == s::K_PLANE || (i1 - i0 + 1.0) * (k1 - k0 + 1.0) > MAX_STATIC_CELLS {
+            if s::kind(id) == s::K_PLANE || !cells_fit(i0, i1, k0, k1) {
                 set_i(id, s::WHERE, s::WHERE_BIG);
                 self.bigs.push(id as i32);
                 return;
@@ -449,7 +603,7 @@ impl World {
             self.srange[o + 3] = k1;
             set_i(id, s::WHERE, s::WHERE_GRID);
             self.statics.push(id as i32);
-            self.sg_dirty = true;
+            self.grid_add(id);
         } else {
             set_i(id, s::WHERE, s::WHERE_MOVING);
             self.moving.push(id as i32);
@@ -462,7 +616,7 @@ impl World {
         match i(id, s::WHERE) {
             s::WHERE_GRID => {
                 if let Some(k) = self.statics.iter().position(|&x| x == id as i32) { self.statics.remove(k); }
-                self.sg_dirty = true;
+                self.grid_remove(id);
             }
             s::WHERE_BIG => {
                 if let Some(k) = self.bigs.iter().position(|&x| x == id as i32) { self.bigs.remove(k); }
@@ -475,6 +629,7 @@ impl World {
             }
             _ => {}
         }
+        unsafe { s::SH.drop_data(id) };
         set_i(id, s::WHERE, s::WHERE_FREE);
         set_i(id, s::SLOT, -1);
         set_i(id, s::FLAGS, 0);
@@ -500,82 +655,46 @@ impl World {
         }
     }
 
-    /// Dense CSR over the static shapes' cells, filled in the order they were added, as world.ts's Map of lists is.
-    fn build_static(&mut self) {
-        self.sg_dirty = false;
-        if self.statics.is_empty() {
-            self.sg_ni = 0;
-            self.sg_nk = 0;
-            self.sg_items.clear();
-            return;
-        }
-        let (mut i0, mut i1, mut k0, mut k1) = (f64::INFINITY, f64::NEG_INFINITY, f64::INFINITY, f64::NEG_INFINITY);
-        for &id in self.statics.iter() {
-            let o = id as usize * 4;
-            let r = &self.srange[o..o + 4];
-            if r[0] < i0 { i0 = r[0]; }
-            if r[1] > i1 { i1 = r[1]; }
-            if r[2] < k0 { k0 = r[2]; }
-            if r[3] > k1 { k1 = r[3]; }
-        }
-        let ni = i1 - i0 + 1.0;
-        let nk = k1 - k0 + 1.0;
-        if !(ni * nk <= MAX_GRID) {
-            self.failed = 1;
-            return;
-        }
-        let (ni, nk) = (ni as usize, nk as usize);
-        self.sg_i0 = i0;
-        self.sg_k0 = k0;
-        self.sg_ni = ni;
-        self.sg_nk = nk;
-        let cells = ni * nk;
-        self.sg_start.clear();
-        self.sg_start.resize(cells + 1, 0);
-        for &id in self.statics.iter() {
-            let o = id as usize * 4;
-            let (a0, a1, c0, c1) = ((self.srange[o] - i0) as usize, (self.srange[o + 1] - i0) as usize, (self.srange[o + 2] - k0) as usize, (self.srange[o + 3] - k0) as usize);
-            for x in a0..=a1 { for z in c0..=c1 { self.sg_start[x * nk + z + 1] += 1; } }
-        }
-        for c in 0..cells { self.sg_start[c + 1] += self.sg_start[c]; }
-        let total = self.sg_start[cells] as usize;
-        self.sg_items.clear();
-        self.sg_items.resize(total, 0);
-        let mut cur: Vec<i32> = self.sg_start[..cells].to_vec();
-        for &id in self.statics.iter() {
-            let o = id as usize * 4;
-            let (a0, a1, c0, c1) = ((self.srange[o] - i0) as usize, (self.srange[o + 1] - i0) as usize, (self.srange[o + 2] - k0) as usize, (self.srange[o + 3] - k0) as usize);
-            for x in a0..=a1 {
-                for z in c0..=c1 {
-                    let c = x * nk + z;
-                    self.sg_items[cur[c] as usize] = id;
-                    cur[c] += 1;
-                }
+    /// The static shapes filed under cell (i, k): the list's address and length, empty when the cell has none.
+    #[inline(always)]
+    fn cell_list(&self, i: f64, k: f64) -> (*const i32, usize) {
+        self.grid.get(cell_key(i, k))
+    }
+
+    /// Files static shape `id` under every cell of its range, after the shapes already there (world.ts `insertStatic`).
+    fn grid_add(&mut self, id: usize) {
+        let o = id * 4;
+        let (i0, i1, k0, k1) = (self.srange[o], self.srange[o + 1], self.srange[o + 2], self.srange[o + 3]);
+        let mut i = i0;
+        while i <= i1 {
+            let mut k = k0;
+            while k <= k1 {
+                self.grid.push(cell_key(i, k), id as i32);
+                k += 1.0;
             }
+            i += 1.0;
         }
     }
 
-    #[inline(always)]
-    fn ready(&mut self) {
-        if self.sg_dirty { self.build_static(); }
-    }
-
-    /// The static shapes in cell (i, k), as a range of sg_items; empty outside the grid.
-    #[inline(always)]
-    fn cell_range(&self, i: f64, k: f64) -> (usize, usize) {
-        let a = i - self.sg_i0;
-        let b = k - self.sg_k0;
-        if !(a >= 0.0 && b >= 0.0 && a < self.sg_ni as f64 && b < self.sg_nk as f64) {
-            return (0, 0);
+    /// Takes static shape `id` out of its cells; the shapes that stay keep their order (world.ts `remove`).
+    fn grid_remove(&mut self, id: usize) {
+        let o = id * 4;
+        let (i0, i1, k0, k1) = (self.srange[o], self.srange[o + 1], self.srange[o + 2], self.srange[o + 3]);
+        let mut i = i0;
+        while i <= i1 {
+            let mut k = k0;
+            while k <= k1 {
+                self.grid.remove(cell_key(i, k), id as i32);
+                k += 1.0;
+            }
+            i += 1.0;
         }
-        let c = a as usize * self.sg_nk + b as usize;
-        (self.sg_start[c] as usize, self.sg_start[c + 1] as usize)
     }
 
     fn test_cell(&mut self, ci: f64, ck: f64, stamp: i32, ox: f64, oy: f64, oz: f64, dx: f64, dy: f64, dz: f64, r: f64, fl: &Filter) {
-        let (a, b) = self.cell_range(ci, ck);
-        for j in a..b {
-            let id = self.sg_items[j] as usize;
+        let (p, n) = self.cell_list(ci, ck);
+        for j in 0..n {
+            let id = unsafe { *p.add(j) } as usize;
             if i(id, s::STAMP) == stamp { continue; }
             set_i(id, s::STAMP, stamp);
             if !pass(id, fl) { continue; }
@@ -585,11 +704,18 @@ impl World {
 
     /// world.ts `cast`: sweeps a sphere from o along unit d up to B.t; the best hit is left in B.
     pub fn cast(&mut self, ox: f64, oy: f64, oz: f64, dx: f64, dy: f64, dz: f64, r: f64, fl: &Filter) {
-        self.ready();
+        // A sphere from beyond the cells the grid can walk (or of infinite radius) hits nothing: its ring loop would
+        // never end. Not a number is left alone, as TypeScript leaves it (world.ts `cast` says the same).
+        if r > 0.0 {
+            let lim = self.cell * CELL_LIMIT;
+            if abs(ox) + r > lim || abs(oz) + r > lim {
+                return;
+            }
+        }
         let max_t = unsafe { B.t };
         let stamp = self.next_stamp();
         let c = self.cell;
-        if !self.sg_items.is_empty() {
+        if self.grid.live() > 0 {
             let mut box_mode = false;
             let (mut i0, mut i1, mut k0, mut k1) = (0.0, 0.0, 0.0, 0.0);
             if r > 0.0 {
@@ -668,24 +794,29 @@ impl World {
 
     /// world.ts `gather`: shapes whose bounds meet the box and pass the filter, into `cand`.
     pub fn gather(&mut self, x0: f64, y0: f64, z0: f64, x1: f64, y1: f64, z1: f64, fl: &Filter) {
-        self.ready();
         self.cand.clear();
         let stamp = self.next_stamp();
         let c = self.cell;
         let (i0, i1, k0, k1) = (floor(x0 / c), floor(x1 / c), floor(z0 / c), floor(z1 / c));
-        if (i1 - i0 + 1.0) * (k1 - k0 + 1.0) > 4096.0 {
-            for j in 0..self.statics.len() {
-                let id = self.statics[j] as usize;
-                self.take(id, stamp, x0, y0, z0, x1, y1, z1, fl);
+        let span = (i1 - i0 + 1.0) * (k1 - k0 + 1.0);
+        let walkable = span <= 4096.0 && abs(i0) <= CELL_LIMIT && abs(i1) <= CELL_LIMIT && abs(k0) <= CELL_LIMIT && abs(k1) <= CELL_LIMIT;
+        if !walkable {
+            // A wide box, or one too far out to count cells in: every static shape's bounds are tested instead. A box
+            // with a NaN edge holds no static shape (world.ts `gather` says the same).
+            if x0 == x0 && x1 == x1 && z0 == z0 && z1 == z1 {
+                for j in 0..self.statics.len() {
+                    let id = self.statics[j] as usize;
+                    self.take(id, stamp, x0, y0, z0, x1, y1, z1, fl);
+                }
             }
         } else {
             let mut i = i0;
             while i <= i1 {
                 let mut k = k0;
                 while k <= k1 {
-                    let (a, b) = self.cell_range(i, k);
-                    for j in a..b {
-                        let id = self.sg_items[j] as usize;
+                    let (p, n) = self.cell_list(i, k);
+                    for j in 0..n {
+                        let id = unsafe { *p.add(j) } as usize;
                         self.take(id, stamp, x0, y0, z0, x1, y1, z1, fl);
                     }
                     k += 1.0;
