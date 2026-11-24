@@ -22,7 +22,11 @@ Without `ANTHROPIC_API_KEY` the server still starts: sign-in works and the AI ro
 | --- | --- | --- |
 | `ANTHROPIC_API_KEY` | none | The owner's key. Required for the AI routes. |
 | `ADDR` | `127.0.0.1:8787` | Listen address. |
-| `DATA_DIR` | `./data` | Holds `hull.db` (SQLite). |
+| `DATA_DIR` | `./data` | Holds `hull.db` (SQLite, only when `DATABASE_URL` is not set) and the community game files. |
+| `DATABASE_URL` | none | `postgres://user:password@host:5432/db?sslmode=verify-full&sslrootcert=/path/ca.pem`. Set: Postgres. Unset: SQLite. A secret; never printed. |
+| `DATABASE_SCHEMA` | `public` | Postgres schema that holds the tables (plain identifier). Unused with SQLite. |
+| `SITE_ORIGINS` | `https://marlstudio.com,https://www.marlstudio.com` | Web origins allowed to call `POST /api/waitlist` from a browser (CORS). |
+| `ADMIN_EMAILS` | none | Comma-separated accounts that may open `/admin`. Empty: no admins. |
 | `PUBLIC_URL` | `http://127.0.0.1:8787` | Used in pages; `https` turns on the Secure cookie flag. |
 | `ANTHROPIC_BASE_URL` | `https://api.anthropic.com` | Where requests are forwarded. |
 | `ALLOW_SIGNUP` | `true` | Set `false` to close sign-up. |
@@ -33,8 +37,74 @@ Without `ANTHROPIC_API_KEY` the server still starts: sign-in works and the AI ro
 | `TRUSTED_PROXIES` | none | Comma-separated IPs or CIDRs of your reverse proxy. Only from these is `X-Forwarded-For` believed (read from the right). |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | none | Turn on "Continue with Google". Set both or neither; one alone stops the server at startup. |
 
-Test: `go vet ./... && go test ./...`. Behind a reverse proxy, set `TRUSTED_PROXIES`: the per-IP limits on login, sign-up and the catalog use the
+Test: `go vet ./... && go test ./...` (SQLite in memory). With `TEST_DATABASE_URL=postgres://...` set, the same suites run against Postgres, each test in a schema of its own that is dropped afterwards. Behind a reverse proxy, set `TRUSTED_PROXIES`: the per-IP limits on login, sign-up and the catalog use the
 connection's address unless it is a trusted proxy, then the nearest `X-Forwarded-For` address that is not one.
+
+## Database
+
+With no `DATABASE_URL` the server uses SQLite at `DATA_DIR/hull.db` (local development, `pnpm dev`; nothing to install). With it set, it uses Postgres through
+pgx (`database/sql`); community game files stay on disk under `DATA_DIR` either way. Every SQL statement is written once with `?` placeholders and rewritten to
+`$1..` for Postgres; times are Unix seconds in integer columns on both.
+
+The schema is applied at start, never by hand: `CREATE TABLE IF NOT EXISTS` for every table, inside one transaction that first takes a Postgres advisory lock, so two
+processes starting together apply it one after the other. The `hull_schema` table records the version (`version`, `applied_at`); a later change adds a
+migration step and raises the number. A SQLite file made before Google sign-in gets its `google_sub` column added on open; Postgres has it from the start.
+`DATABASE_SCHEMA` (default `public`) is created if missing and put first in the connection's `search_path`, so this server can share a database instance.
+
+TLS follows the URL as pgx reads it: `sslmode=verify-full&sslrootcert=/path/to/rds-ca.pem` checks the server's certificate and name. The pool holds at most 8 connections
+(4 idle, recycled after 30 minutes), a connection attempt gives up after 10 s, and start-up pings the database: a failure names `DATABASE_URL`,
+the host and the database name, never the URL.
+
+```sh
+hull-backend migrate      # open the database, apply the schema, print what was created and the schema version; the deploy runs it first
+```
+
+## Waitlist
+
+`POST /api/waitlist`, JSON body `{"email": string, "source"?: string, "company"?: string}`.
+
+- `email`: trimmed, lower-cased, at most 254 characters, one `@`, a dotted domain, no spaces. Otherwise 400 `{"error":"invalid_email"}`.
+- `source`: where the form was; letters, digits, `-` and `_`, at most 64; anything else is stored as an empty string. The site sends `"home"`.
+- `company`: a honeypot. Non-empty: answer 200 `{"ok":true}` and store nothing.
+- A new address and one already listed both answer 200 `{"ok":true}`, so the form never reveals who is on the list.
+- More than 5 requests a minute from one client IP (see `TRUSTED_PROXIES`): 429 `{"error":"rate_limited"}` with `Retry-After` in seconds.
+  A body over 4 KB or not a JSON object: 400 `{"error":"invalid_request"}`. A database failure: 500 `{"error":"server_error"}`.
+- CORS, on this route only: for an `Origin` listed in `SITE_ORIGINS` the answer carries `Access-Control-Allow-Origin: <that origin>` and `Vary: Origin`;
+  `OPTIONS` (preflight) answers 204 with `Allow-Methods: POST, OPTIONS`, `Allow-Headers: Content-Type` and `Max-Age: 600`. Other origins get no CORS
+  headers; credentials are never allowed. The site calls it with `fetch(..., {method:"POST", headers:{"Content-Type":"application/json"}, credentials:"omit"})`.
+
+The `waitlist` table holds `id`, `email` (unique), `source` and `created_at`. No IP address and no user agent is stored.
+
+## Admin
+
+An admin is a signed-in account (the same `hull_session` cookie) whose email is in `ADMIN_EMAILS`. To become one: put your address there, restart, make an
+account with that address at `/signup` (or sign in at `/login`, Google included), then open `/admin`. Empty setting, no admins.
+
+- `GET /admin`: waitlist total, today and last 7 days, a 14-day table, the newest 200 addresses; accounts total and the newest 50; active tokens; AI usage today and
+  over 7 days and the top 10 accounts by tokens today; community games and versions; database kind, schema version, start time, Go version. All times are UTC; "today" is the UTC
+  calendar day and "last 7 days" is today and the six days before.
+- `GET /admin/waitlist.csv`: the whole waitlist (`email,source,created_at` as ISO 8601 UTC), `Content-Disposition: attachment`, `Cache-Control: no-store`.
+  A cell that starts with `=`, `+`, `-` or `@` gets a leading `'` so a spreadsheet does not run it.
+- `GET /api/admin/stats`: the same numbers as JSON (cookie session; a Bearer token is not enough).
+
+Everyone who is not an admin, signed in or not, gets the same 404 an unknown path gets, and a signed-out visit is not redirected to `/login`, so the routes do not show
+themselves. Sign in at `/login` first.
+
+## Deploy
+
+Files for a Linux host (Caddy in front, systemd, RDS Postgres) are in `deploy/`. Nothing here connects to a server; the steps are done by hand, in this order:
+
+1. `deploy/build.sh` makes `dist/hull-backend-linux-arm64`, a static linux/arm64 binary, and prints its size and sha256.
+2. On the host: make the system user `hull` (no login), copy the binary to `/usr/local/bin/hull-backend`, and compare its sha256 with the one printed.
+3. Create the database and a login role for it on the Postgres instance (the role owns the database, or the schema named in `DATABASE_SCHEMA`). Put the RDS CA bundle at
+   `/etc/hull-backend/rds-ca.pem`.
+4. Fill in `/etc/hull-backend/db.env` and `/etc/hull-backend/backend.env` from `deploy/db.env.template` and `deploy/backend.env.template` (owner root, group hull, mode 0640).
+5. Run `hull-backend migrate` as user hull with both files loaded; it creates the tables or says they are in place, and stops here if the URL, TLS or grants are wrong.
+6. Install `deploy/hull-backend.service` into `/etc/systemd/system/`, then `systemctl daemon-reload && systemctl enable --now hull-backend`; check `curl 127.0.0.1:8787/healthz`.
+7. Add `deploy/Caddyfile.snippet` to the Caddyfile and reload Caddy (it must not buffer: AI answers stream). Point `api.marlstudio.com` at the host first so Caddy can get its certificate.
+8. Make your account at `https://api.marlstudio.com/signup` (its address is in `ADMIN_EMAILS`) and open `/admin`. Send a test sign-up from the site and read it back there.
+
+To update: build, copy the binary over the old one, run `hull-backend migrate`, then `systemctl restart hull-backend`. The server drains for up to 20 s on stop.
 
 ## Google sign-in
 
@@ -93,7 +163,7 @@ HTTP, public, GET only, 120 requests a minute per IP:
 ## Protocol
 
 Web pages (cookie session, HttpOnly, SameSite=Lax, CSRF token on every form): `/signup`, `/login`, `POST /logout`,
-`/` (account: apps signed in with Revoke, token usage this month).
+`/` (account: apps signed in with Revoke, token usage this month), `/admin` (see Admin).
 
 App sign-in (OAuth 2.0 authorization code with PKCE S256, loopback redirect per RFC 8252):
 

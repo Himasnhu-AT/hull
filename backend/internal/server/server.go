@@ -44,6 +44,8 @@ type Server struct {
 
 	communityLimit *ratelimit.Limiter // public catalog reads, per IP
 	aiLimit        *ratelimit.Limiter // AI requests, per user; nil when the cap is off
+	waitlistLimit  *ratelimit.Limiter // waitlist sign-ups, per IP
+	started        time.Time
 
 	dummyOnce sync.Once
 	dummyHash string
@@ -55,7 +57,8 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger) *Server {
 	tr.ResponseHeaderTimeout = 10 * time.Minute
 	s := &Server{cfg: cfg, st: st, log: log, now: time.Now, params: passwords.Default,
 		limit: ratelimit.New(10), client: &http.Client{Transport: tr},
-		google: &http.Client{Timeout: 10 * time.Second}, communityLimit: ratelimit.New(communityRate)}
+		google: &http.Client{Timeout: 10 * time.Second}, communityLimit: ratelimit.New(communityRate),
+		waitlistLimit: ratelimit.New(waitlistPerMinute), started: time.Now()}
 	if cfg.AIRequestsPerMinute > 0 {
 		s.aiLimit = ratelimit.New(cfg.AIRequestsPerMinute)
 	}
@@ -88,6 +91,13 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/community/{id}/cover", s.communityLimited(s.communityLatestCover))
 	mux.HandleFunc("GET /api/community/{id}/{version}/cover", s.communityLimited(s.communityVersionCover))
 	mux.HandleFunc("GET /api/community/{id}/{version}/game.tar.gz", s.communityLimited(s.communityArchive))
+
+	mux.HandleFunc("POST "+waitlistPath, s.waitlistJoin)
+	mux.HandleFunc("OPTIONS "+waitlistPath, s.waitlistPreflight)
+
+	mux.HandleFunc("GET /admin", s.admin(s.adminPage))
+	mux.HandleFunc("GET /admin/waitlist.csv", s.admin(s.adminWaitlistCSV))
+	mux.HandleFunc("GET /api/admin/stats", s.admin(s.adminStats))
 
 	mux.HandleFunc("POST /v1/messages", s.handleMessages)
 	mux.HandleFunc("POST /v1/messages/count_tokens", s.handleCountTokens)

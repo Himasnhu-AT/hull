@@ -12,7 +12,7 @@ const layout = `{{define "layout"}}<!doctype html>
 <style>
 *{box-sizing:border-box}
 body{margin:0;background:#f3f2ee;color:#1c1b18;font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;display:flex;justify-content:center;padding:48px 16px}
-main{width:100%;max-width:420px}main.wide{max-width:640px}
+main{width:100%;max-width:420px}main.wide{max-width:640px}main.xwide{max-width:1000px}
 .brand{font-weight:700;letter-spacing:.02em;margin:0 0 16px 4px}
 .card{background:#fff;border-radius:16px;padding:28px;box-shadow:0 1px 2px rgba(28,27,24,.06);margin-bottom:16px}
 h1{font-size:22px;margin:0 0 16px}h2{font-size:16px;margin:0 0 12px}
@@ -29,11 +29,12 @@ a.gbtn:hover{background:#faf9f6}a.gbtn svg{width:18px;height:18px;flex:none}
 .or{display:flex;align-items:center;gap:12px;color:#6b695f;font-size:14px;margin:16px 0 0}.or:before,.or:after{content:"";flex:1;border-top:1px solid #eceae3}
 .error{background:#fbeceb;color:#8a1f17;border-radius:10px;padding:10px 12px;margin:0 0 12px;font-size:14px}
 .muted{color:#6b695f;font-size:14px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:0 16px}.num{text-align:right}
 table{width:100%;border-collapse:collapse;font-size:14px}td,th{text-align:left;padding:8px 4px;border-top:1px solid #eceae3}th{border-top:0;color:#6b695f;font-weight:500}
 .nums{display:flex;gap:24px}.nums b{display:block;font-size:22px}
 code{background:#f3f2ee;border-radius:6px;padding:1px 6px;font-size:14px}
 a{color:#1c1b18}
-</style></head><body><main{{if .Wide}} class="wide"{{end}}><p class="brand">Hull</p>{{template "body" .}}</main></body></html>{{end}}`
+</style></head><body><main{{if .XWide}} class="xwide"{{else if .Wide}} class="wide"{{end}}><p class="brand">Hull</p>{{template "body" .}}</main></body></html>{{end}}`
 
 const authBody = `{{define "body"}}<div class="card"><h1>{{.Title}}</h1>
 {{if .Error}}<p class="error" role="alert">{{.Error}}</p>{{end}}
@@ -64,12 +65,38 @@ const consentBody = `{{define "body"}}<div class="card"><h1>Allow {{.Client}} to
 {{range .Hidden}}<input type="hidden" name="{{.Name}}" value="{{.Value}}">{{end}}
 <div class="row"><button type="submit" name="decision" value="allow">Allow</button><button class="ghost" type="submit" name="decision" value="deny">Cancel</button></div></form></div>{{end}}`
 
+const adminBody = `{{define "body"}}{{with .Admin}}
+<div class="card"><h1>Waitlist</h1><div class="nums"><div><b>{{.Stats.WaitlistTotal}}</b><span class="muted">total</span></div><div><b>{{.Stats.WaitlistToday}}</b><span class="muted">today (UTC)</span></div><div><b>{{.Stats.WaitlistWeek}}</b><span class="muted">last 7 days</span></div></div>
+<p class="muted"><a href="/admin/waitlist.csv">Download all as CSV</a></p></div>
+<div class="grid"><div class="card"><h2>Last 14 days</h2><table><tr><th>Day (UTC)</th><th class="num">Sign-ups</th></tr>
+{{range .Stats.WaitlistDays}}<tr><td>{{.Day}}</td><td class="num">{{.Count}}</td></tr>{{end}}</table></div>
+<div class="card"><h2>Accounts, tokens, community</h2><div class="nums"><div><b>{{.Stats.AccountsTotal}}</b><span class="muted">accounts</span></div><div><b>{{.Stats.TokensActive}}</b><span class="muted">active tokens</span></div></div>
+<div class="nums" style="margin-top:16px"><div><b>{{.Stats.CommunityGames}}</b><span class="muted">community games</span></div><div><b>{{.Stats.CommunityVersions}}</b><span class="muted">versions</span></div></div></div></div>
+<div class="card"><h2>AI usage</h2><table><tr><th></th><th class="num">Requests</th><th class="num">Input tokens</th><th class="num">Output tokens</th></tr>
+<tr><td>Today</td><td class="num">{{.Stats.UsageToday.Requests}}</td><td class="num">{{.Stats.UsageToday.Input}}</td><td class="num">{{.Stats.UsageToday.Output}}</td></tr>
+<tr><td>Last 7 days</td><td class="num">{{.Stats.UsageWeek.Requests}}</td><td class="num">{{.Stats.UsageWeek.Input}}</td><td class="num">{{.Stats.UsageWeek.Output}}</td></tr></table>
+<h2 style="margin-top:20px">Top accounts today</h2>
+{{if .Top}}<table><tr><th>Account</th><th class="num">Requests</th><th class="num">Input</th><th class="num">Output</th></tr>
+{{range .Top}}<tr><td>{{.Email}}</td><td class="num">{{.Requests}}</td><td class="num">{{.Input}}</td><td class="num">{{.Output}}</td></tr>{{end}}</table>{{else}}<p class="muted">No AI use yet today.</p>{{end}}</div>
+<div class="card"><h2>Newest waitlist addresses ({{len .Waitlist}})</h2>
+{{if .Waitlist}}<table><tr><th>Email</th><th>Source</th><th>Joined (UTC)</th></tr>
+{{range .Waitlist}}<tr><td>{{.Email}}</td><td>{{.Source}}</td><td>{{.At}}</td></tr>{{end}}</table>{{else}}<p class="muted">Nobody yet.</p>{{end}}</div>
+<div class="card"><h2>Newest accounts ({{len .Accounts}} of {{.Stats.AccountsTotal}})</h2>
+{{if .Accounts}}<table><tr><th>Email</th><th>Created (UTC)</th><th>Sign-in</th></tr>
+{{range .Accounts}}<tr><td>{{.Email}}</td><td>{{.At}}</td><td>{{.How}}</td></tr>{{end}}</table>{{else}}<p class="muted">No accounts.</p>{{end}}</div>
+<div class="card"><h2>System</h2><table>
+<tr><td>Database</td><td>{{.System.DBKind}} <span class="muted">{{.System.DBWhere}}</span></td></tr>
+<tr><td>Schema version</td><td>{{.System.SchemaVersion}}</td></tr>
+<tr><td>Server started</td><td>{{.System.StartedAt}}</td></tr>
+<tr><td>Go</td><td>{{.System.GoVersion}}</td></tr></table></div>
+{{end}}{{end}}`
+
 const messageBody = `{{define "body"}}<div class="card"><h1>{{.Title}}</h1><p>{{.Error}}</p></div>{{end}}`
 
 var pages = map[string]*template.Template{}
 
 func init() {
-	for name, body := range map[string]string{"auth": authBody, "account": accountBody, "consent": consentBody, "message": messageBody} {
+	for name, body := range map[string]string{"auth": authBody, "account": accountBody, "consent": consentBody, "message": messageBody, "admin": adminBody} {
 		pages[name] = template.Must(template.Must(template.New(name).Parse(layout)).Parse(body))
 	}
 }
@@ -83,7 +110,8 @@ type tokenRow struct {
 
 type pageData struct {
 	Title, Error, CSRF, Next, Email string
-	Wide, Closed, Signup            bool
+	Wide, XWide, Closed, Signup     bool
+	Admin                           *adminView
 	Google, GoogleLinked            bool
 	GoogleHref                      string
 	Action, Alt, AltHref, AltLabel  string

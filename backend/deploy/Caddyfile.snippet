@@ -1,0 +1,8 @@
+# Add to /etc/caddy/Caddyfile, then: sudo systemctl reload caddy
+# AI answers stream token by token, so the proxy must not buffer them: flush_interval -1 sends every chunk at once.
+# Caddy sets X-Forwarded-For; the backend believes it only from TRUSTED_PROXIES=127.0.0.1.
+api.marlstudio.com {
+	reverse_proxy 127.0.0.1:8787 {
+		flush_interval -1
+	}
+}
