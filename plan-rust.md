@@ -403,9 +403,12 @@ unstable, so the crate builds with `RUSTC_BOOTSTRAP=1` (`pnpm kernels:build` set
   mesh, a height field and a plane, changed alike (moved, switched off, retagged, removed, added) and asked 20,000
   seeded queries with every filter, plus the slide mover; and 300 rigid bodies stepped 720 steps through settling,
   sleep and an impulse. Every answer and state the same bits. Three failure cases found in review have their own
-  tests: a world too wide for the kernel's grid drops to TypeScript once, not on every query; more moved shapes
+  tests: more moved shapes
   between two queries than the dirty list holds are all still seen; a shape removed before its rigid body keeps its
   id until the body goes. (A fourth, a first allocation the TypeScript views missed, is covered by every test.)
+* `world.kernel.churn.test.ts` (added after the review, see "Review fixes" below): 4,000 static additions and removals
+  against TypeScript with every answer and its order compared; mesh and height-field churn with the module's memory
+  held flat; and input that is not a finite number, run in a child process with a timeout so a hang fails the test.
 * The physics suite on both implementations (`physics.test.ts` on the kernel, `physics.typescript.test.ts` off).
 * AOTT's checksum at scales 1, 4 and 16 is the same with the kernel on, off and failing to load
   (`a45ff85a5ba1346a`, `e982040814d9d251`, `6a60322536452045`).
@@ -434,7 +437,28 @@ scales is decided by three.js and drawing (section 13), so it is still lost at 1
 runs on the kernel with the same results and about the same speed; games that cast a lot against static worlds
 (shooters, many projectiles, line-of-sight checks) get the twofold.
 
-**What it costs.** The module is 71,417 bytes (55 kB at opt-level "s", traded for speed). AOTT's `game.js` is
+**Review fixes.** An independent review (46,000 fuzzed queries, kernel against TypeScript, no mismatch) found these
+and they are fixed:
+
+* *Static churn was slow.* The kernel kept static shapes in a dense grid rebuilt from scratch at the next query after
+  any add or remove (one cycle of add a box, cast, remove, cast: 75 us against TypeScript's 4.5 us over 5,000 statics
+  across 600 m; 956 us against 1.4 us for 200 statics across 16 km, with a 15 MB grid). It is now a hash map of cell
+  to list, appended to and removed from in place like `world.ts`'s `Map`. The same cycles now cost 5.3, 4.0 and 2.4 us
+  (TypeScript 4.6, 2.2, 1.2), and the "world too wide" fallback is gone with the grid it guarded.
+* *Memory grew without bound on mesh and height-field churn* (3,000 add, cast, remove cycles of a 300-triangle mesh:
+  0.5 MB to 333 MB). The allocator now frees (size classes with free lists) and each shape owns its arrays, which go
+  back when it is removed. The same loop stays at 0.56 MB; moving-shape and body churn are still 0.69 and 0.31 MB.
+* *`overlapCapsule` with a NaN end point* gave shapes on the kernel and none on TypeScript (the kernel's i32 turned
+  NaN into 0); and a sample count past 2^31 wrapped. Both now decide in `world.ts` before the kernel is called:
+  not a usable count means no shapes.
+* *Hangs on input that is not finite*, older than the port: a sphere or capsule cast from an infinite origin (ring
+  loops), an overlap with an infinite centre, a static shape with infinite bounds, and `overlapCapsule` or
+  `capsulecast` with radius 0. Each now returns at once with no hit, no shapes, or the shape on the short list, the
+  same on both implementations (ARCHITECTURE section 11 lists them); finite input is unchanged.
+* The Rust compiler is pinned (`rust-toolchain.toml`, 1.99.1, wasm32 target) and its file is part of the source stamp.
+* `"kernels": false` keeps the module out of use but not out of `game.js`; SCHEMAS.md says so.
+
+**What it costs.** The module is 74,899 bytes (55 kB at opt-level "s", traded for speed). AOTT's `game.js` is
 2,891,100 bytes (800,907 gzip) with it and 2,785,683 (761,289 gzip) without: 105 kB, 40 kB gzipped. Only a game that
 imports `hull/physics` carries it.
 
