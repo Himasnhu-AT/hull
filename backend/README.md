@@ -106,6 +106,28 @@ Files for a Linux host (Caddy in front, systemd, RDS Postgres) are in `deploy/`.
 
 To update: build, copy the binary over the old one, run `hull-backend migrate`, then `systemctl restart hull-backend`. The server drains for up to 20 s on stop.
 
+## Production
+
+Deployed 24 November 2026 at `https://api.marlstudio.com`, by the steps above.
+
+| What | Where |
+| --- | --- |
+| Host | The studio's EC2 server (t4g.small, us-east-1), reached with the key and scripts in the `synthai/backend` repo's `infra/`. |
+| Service | `hull-backend.service`, user `hull`, listening on `127.0.0.1:8787` behind Caddy. |
+| Settings | `/etc/hull-backend/db.env` and `backend.env` (root:hull, 0640), with the RDS CA at `/etc/hull-backend/rds-ca.pem`. |
+| Database | Database `hull`, role `hull`, on the RDS instance `ashlar-backend` (Postgres 17), `sslmode=verify-full`. Its own database: nothing of the Rust backend's `backend` database is read or changed. |
+| Files | `/var/lib/hull-backend` (the community catalog; empty until a game is published there). |
+
+How it is set: sign-up is open, Google sign-in is on with the client the Rust backend used (the callback path is the
+same), `ADMIN_EMAILS` is the list the Rust dashboard had, and `ANTHROPIC_API_KEY` is **not set**, so the AI routes
+answer 503. Setting it with sign-up open lets any new account spend the owner's key up to `DAILY_TOKEN_BUDGET` a
+day, so decide the budget, the allowed models and whether sign-up stays open before turning it on.
+
+The Rust backend that served this address before (`backend.service` and `backend-dashboard.service`, ports 8090 and
+8091) is stopped and disabled, not removed: its binary, `/etc/ashlar-backend` and its database are as they were. To go
+back: `sudo cp /etc/caddy/Caddyfile.before-hull-2026-11-24 /etc/caddy/Caddyfile && sudo systemctl reload caddy && sudo
+systemctl enable --now backend backend-dashboard && sudo systemctl disable --now hull-backend`.
+
 ## Google sign-in
 
 1. In Google Cloud Console, make an OAuth client (type Web application) and set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`.
