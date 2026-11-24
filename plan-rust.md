@@ -458,6 +458,11 @@ and they are fixed:
 * The Rust compiler is pinned (`rust-toolchain.toml`, 1.99.1, wasm32 target) and its file is part of the source stamp.
 * `"kernels": false` keeps the module out of use but not out of `game.js`; SCHEMAS.md says so.
 
+*What the sparse grid costs.* Casts against the static world look a cell up in the hash map instead of indexing a dense
+array. Measured back to back on a busy machine (`pnpm perf:engine 1,4`, best of 3): ray casts 0.46 ms against 0.41
+before, sphere casts 2.54 against 2.31, overlaps the same; TypeScript on the same run was 0.74 and 4.37. So the table
+above reads about a tenth high for static casts: the kernel is now about 1.6 to 1.7 times TypeScript there, not 2.
+
 **What it costs.** The module is 74,899 bytes (55 kB at opt-level "s", traded for speed). AOTT's `game.js` is
 2,891,100 bytes (800,907 gzip) with it and 2,785,683 (761,289 gzip) without: 105 kB, 40 kB gzipped. Only a game that
 imports `hull/physics` carries it.
