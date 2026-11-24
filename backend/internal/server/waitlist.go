@@ -56,6 +56,9 @@ func (s *Server) waitlistCORS(w http.ResponseWriter, r *http.Request) {
 	w.Header().Add("Vary", "Origin")
 	if o := r.Header.Get("Origin"); o != "" && s.cfg.OriginAllowed(o) {
 		w.Header().Set("Access-Control-Allow-Origin", o)
+		// Retry-After is not a header a page may read from another origin unless it is named here, and the site
+		// uses it to say how long to wait after a 429.
+		w.Header().Set("Access-Control-Expose-Headers", "Retry-After")
 	}
 }
 

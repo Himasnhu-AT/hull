@@ -127,7 +127,8 @@ func TestWaitlistBodyTooLarge(t *testing.T) {
 func TestWaitlistCORS(t *testing.T) {
 	e := waitlistEnv(t)
 	resp, _ := e.join(`{"email":"a@example.com"}`, "https://marlstudio.com")
-	if resp.Header.Get("Access-Control-Allow-Origin") != "https://marlstudio.com" || resp.Header.Get("Vary") != "Origin" || resp.Header.Get("Access-Control-Allow-Credentials") != "" {
+	if resp.Header.Get("Access-Control-Allow-Origin") != "https://marlstudio.com" || resp.Header.Get("Vary") != "Origin" || resp.Header.Get("Access-Control-Allow-Credentials") != "" ||
+		resp.Header.Get("Access-Control-Expose-Headers") != "Retry-After" {
 		t.Fatalf("allowed origin headers: %v", resp.Header)
 	}
 	resp, _ = e.join(`{"email":"b@example.com"}`, "https://evil.example")
