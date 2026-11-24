@@ -28,7 +28,7 @@ function readEnv(file: string): Record<string, string> {
 
 const fileEnv = readEnv(join(root, '.env'));
 /** The backend's own settings: never handed to the app, whether they come from .env or the shell. */
-const SERVER_ONLY = ['ANTHROPIC_API_KEY', 'ANTHROPIC_BASE_URL', 'GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'ADDR', 'PUBLIC_URL', 'DATA_DIR', 'ALLOW_SIGNUP', 'DEFAULT_MODEL'];
+const SERVER_ONLY = ['ANTHROPIC_API_KEY', 'ANTHROPIC_BASE_URL', 'GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'ADDR', 'PUBLIC_URL', 'DATA_DIR', 'ALLOW_SIGNUP', 'DEFAULT_MODEL', 'DATABASE_URL', 'DATABASE_SCHEMA', 'SITE_ORIGINS', 'ADMIN_EMAILS'];
 if (!existsSync(join(root, '.env'))) console.log('[dev] no .env at the repo root: copy .env.example to .env and fill in ANTHROPIC_API_KEY. Starting with defaults.');
 // The shell's own values win over the file, so a one-off override needs no edit.
 const backendEnv: NodeJS.ProcessEnv = { ...fileEnv, ...process.env };

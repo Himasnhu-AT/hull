@@ -18,6 +18,7 @@ import (
 	"github.com/marlstudio/hull/backend/internal/config"
 	"github.com/marlstudio/hull/backend/internal/passwords"
 	"github.com/marlstudio/hull/backend/internal/store"
+	"github.com/marlstudio/hull/backend/internal/store/storetest"
 )
 
 const testKey = "sk-ant-TESTKEY-do-not-leak-0123456789"
@@ -84,11 +85,7 @@ func newEnv(t *testing.T, mut func(*config.Config)) *env {
 	if mut != nil {
 		mut(&cfg)
 	}
-	st, err := store.Open(":memory:")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { st.Close() })
+	st := storetest.Open(t)
 	logs := &syncBuf{}
 	s := New(cfg, st, slog.New(slog.NewTextHandler(logs, &slog.HandlerOptions{Level: slog.LevelDebug})))
 	s.params = passwords.Params{Time: 1, Memory: 8, Threads: 1} // cheap hashes keep tests fast

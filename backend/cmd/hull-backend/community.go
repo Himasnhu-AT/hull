@@ -1,12 +1,11 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
 	"io"
-	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 
@@ -30,10 +29,7 @@ func runCommunity(args []string, getenv func(string) string, out io.Writer) erro
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(cfg.DataDir, 0o700); err != nil {
-		return err
-	}
-	st, err := store.Open(filepath.Join(cfg.DataDir, "hull.db"))
+	st, err := openStore(context.Background(), cfg)
 	if err != nil {
 		return err
 	}

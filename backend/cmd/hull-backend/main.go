@@ -9,19 +9,24 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"syscall"
 	"time"
 
 	"github.com/marlstudio/hull/backend/internal/config"
 	"github.com/marlstudio/hull/backend/internal/server"
-	"github.com/marlstudio/hull/backend/internal/store"
 )
 
 func main() {
 	// "community ..." runs a publishing command and exits; with no subcommand the binary serves as before.
 	if len(os.Args) > 1 && os.Args[1] == "community" {
 		if err := runCommunity(os.Args[2:], os.Getenv, os.Stdout); err != nil {
+			fmt.Fprintln(os.Stderr, "hull-backend:", err)
+			os.Exit(1)
+		}
+		return
+	}
+	if len(os.Args) > 1 && os.Args[1] == "migrate" {
+		if err := runMigrate(os.Getenv, os.Stdout); err != nil {
 			fmt.Fprintln(os.Stderr, "hull-backend:", err)
 			os.Exit(1)
 		}
@@ -39,14 +44,12 @@ func run(log *slog.Logger) error {
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(cfg.DataDir, 0o700); err != nil {
-		return err
-	}
-	st, err := store.Open(filepath.Join(cfg.DataDir, "hull.db"))
+	st, err := openStore(context.Background(), cfg)
 	if err != nil {
 		return err
 	}
 	defer st.Close()
+	log.Info("database ready", "kind", st.Kind(), "where", st.Where())
 
 	if cfg.AnthropicKey == "" {
 		log.Warn("ANTHROPIC_API_KEY is not set: sign-in works, but the AI routes answer 503")

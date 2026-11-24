@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/marlstudio/hull/backend/internal/store"
+	"github.com/marlstudio/hull/backend/internal/store/storetest"
 )
 
 func put(t *testing.T, path, body string, mode os.FileMode) {
@@ -50,11 +51,7 @@ func gameDir(t *testing.T) string {
 }
 
 func openStore(t *testing.T) *store.Store {
-	st, err := store.Open(":memory:")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { st.Close() })
+	st := storetest.Open(t)
 	return st
 }
 

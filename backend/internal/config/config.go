@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/netip"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 )
@@ -36,7 +37,18 @@ type Config struct {
 	// Google's endpoints are fields so tests can point them at a fake; the environment cannot change them.
 	GoogleAuthURL  string
 	GoogleTokenURL string
+
+	// DatabaseURL is a postgres:// URL; empty means SQLite at DataDir/hull.db. It holds a password: never log or print it.
+	DatabaseURL string
+	// DatabaseSchema is the Postgres schema every table lives in (search_path). Unused with SQLite.
+	DatabaseSchema string
+	// SiteOrigins are the web origins allowed to call POST /api/waitlist from a browser (CORS).
+	SiteOrigins []string
+	// AdminEmails (lower-cased) may open /admin once signed in. Empty means nobody can.
+	AdminEmails []string
 }
+
+var schemaName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]{0,62}$`)
 
 const (
 	DefaultGoogleAuthURL  = "https://accounts.google.com/o/oauth2/v2/auth"
@@ -70,6 +82,34 @@ func Load(getenv func(string) string) (Config, error) {
 		GoogleClientSecret: strings.TrimSpace(getenv("GOOGLE_CLIENT_SECRET")),
 		GoogleAuthURL:      DefaultGoogleAuthURL,
 		GoogleTokenURL:     DefaultGoogleTokenURL,
+
+		DatabaseURL:    strings.TrimSpace(getenv("DATABASE_URL")),
+		DatabaseSchema: def("DATABASE_SCHEMA", "public"),
+	}
+	if c.DatabaseURL != "" {
+		// The URL holds the password, so the error says what is wrong with its shape and never repeats it.
+		if u, err := url.Parse(c.DatabaseURL); err != nil || (u.Scheme != "postgres" && u.Scheme != "postgresql") || u.Host == "" {
+			return c, fmt.Errorf("env DATABASE_URL: not a postgres:// URL with a host (value not shown)")
+		}
+	}
+	if !schemaName.MatchString(c.DatabaseSchema) {
+		return c, fmt.Errorf("env DATABASE_SCHEMA: %q is not a plain identifier (letters, digits, underscore)", c.DatabaseSchema)
+	}
+	origins := def("SITE_ORIGINS", "https://marlstudio.com,https://www.marlstudio.com")
+	for _, o := range strings.Split(origins, ",") {
+		if o = strings.TrimRight(strings.TrimSpace(o), "/"); o == "" {
+			continue
+		}
+		u, err := url.Parse(o)
+		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.Path != "" {
+			return c, fmt.Errorf("env SITE_ORIGINS: %q is not an origin such as https://example.com", o)
+		}
+		c.SiteOrigins = append(c.SiteOrigins, strings.ToLower(o))
+	}
+	for _, e := range strings.Split(getenv("ADMIN_EMAILS"), ",") {
+		if e = strings.ToLower(strings.TrimSpace(e)); e != "" {
+			c.AdminEmails = append(c.AdminEmails, e)
+		}
 	}
 	// One half alone is a mistake that would silently leave the button off, so stop at startup.
 	if c.GoogleClientID == "" && c.GoogleClientSecret != "" {
@@ -138,3 +178,25 @@ func Load(getenv func(string) string) (Config, error) {
 
 // Secure reports whether cookies must carry the Secure flag.
 func (c Config) Secure() bool { return strings.HasPrefix(c.PublicURL, "https://") }
+
+// IsAdmin reports whether email (any case) is listed in ADMIN_EMAILS.
+func (c Config) IsAdmin(email string) bool {
+	email = strings.ToLower(strings.TrimSpace(email))
+	for _, a := range c.AdminEmails {
+		if a == email {
+			return true
+		}
+	}
+	return false
+}
+
+// OriginAllowed reports whether a browser page at origin may call the waitlist (exact match, case-insensitive).
+func (c Config) OriginAllowed(origin string) bool {
+	origin = strings.ToLower(origin)
+	for _, o := range c.SiteOrigins {
+		if o == origin {
+			return true
+		}
+	}
+	return false
+}

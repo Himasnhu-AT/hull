@@ -1,0 +1,372 @@
+package store
+
+import (
+	"context"
+	"database/sql"
+	"errors"
+	"fmt"
+	"regexp"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+	_ "github.com/jackc/pgx/v5/stdlib" // registers "pgx" for database/sql
+	_ "modernc.org/sqlite"             // pure-Go driver, keeps the binary a single static file
+)
+
+var (
+	ErrNotFound   = errors.New("not found")
+	ErrEmailTaken = errors.New("email already registered")
+	ErrSubTaken   = errors.New("google account already linked")
+)
+
+// SchemaVersion is the version this binary writes into hull_schema. Raise it with the first change that
+// needs a migration, and add that migration to applySchema.
+const SchemaVersion = 1
+
+// Store is the database. Every statement is written once with ? placeholders; query, exec and queryRow turn
+// them into $1.. for Postgres, so the two databases share one code path.
+type Store struct {
+	db      *sql.DB
+	pg      bool
+	where   string   // "host/database" for Postgres, the file path for SQLite; safe to print
+	created []string // tables this open created, for the migrate command to report
+}
+
+// Kind is "postgres" or "sqlite".
+func (s *Store) Kind() string {
+	if s.pg {
+		return "postgres"
+	}
+	return "sqlite"
+}
+
+// Where names the database for logs: host and database name for Postgres (never the URL), the path for SQLite.
+func (s *Store) Where() string { return s.where }
+
+// CreatedTables lists the tables the last open had to create; empty when the schema was already there.
+func (s *Store) CreatedTables() []string { return s.created }
+
+func (s *Store) Close() error { return s.db.Close() }
+
+// rebind rewrites ? placeholders as $1.. for Postgres. No statement here holds a literal question mark.
+func (s *Store) rebind(q string) string {
+	if !s.pg {
+		return q
+	}
+	var b strings.Builder
+	n := 0
+	for i := 0; i < len(q); i++ {
+		if q[i] == '?' {
+			n++
+			b.WriteByte('$')
+			b.WriteString(strconv.Itoa(n))
+			continue
+		}
+		b.WriteByte(q[i])
+	}
+	return b.String()
+}
+
+func (s *Store) exec(q string, args ...any) (sql.Result, error) {
+	return s.db.Exec(s.rebind(q), args...)
+}
+func (s *Store) query(q string, args ...any) (*sql.Rows, error) {
+	return s.db.Query(s.rebind(q), args...)
+}
+func (s *Store) queryRow(q string, args ...any) *sql.Row { return s.db.QueryRow(s.rebind(q), args...) }
+
+// uniqueViolation reports whether err is a duplicate key on either database and names the constraint:
+// Postgres gives the constraint's name (SQLSTATE 23505), SQLite the failing columns in its message.
+func uniqueViolation(err error) (constraint string, ok bool) {
+	if err == nil {
+		return "", false
+	}
+	var pe *pgconn.PgError
+	if errors.As(err, &pe) {
+		if pe.Code == "23505" {
+			return pe.ConstraintName, true
+		}
+		return "", false
+	}
+	if m := err.Error(); strings.Contains(m, "UNIQUE") || strings.Contains(m, "PRIMARY KEY") {
+		return m, true
+	}
+	return "", false
+}
+
+const sqliteSchema = `
+CREATE TABLE IF NOT EXISTS users(
+  id INTEGER PRIMARY KEY, email TEXT NOT NULL UNIQUE, password_hash TEXT NOT NULL, created_at INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS sessions(
+  hash TEXT PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, expires_at INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS auth_codes(
+  hash TEXT PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  client_id TEXT NOT NULL, redirect_uri TEXT NOT NULL, code_challenge TEXT NOT NULL, expires_at INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS tokens(
+  id INTEGER PRIMARY KEY, hash TEXT NOT NULL UNIQUE, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name TEXT NOT NULL, created_at INTEGER NOT NULL, last_used_at INTEGER, revoked_at INTEGER);
+CREATE TABLE IF NOT EXISTS usage(
+  id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, token_id INTEGER,
+  model TEXT NOT NULL, input_tokens INTEGER NOT NULL, output_tokens INTEGER NOT NULL, created_at INTEGER NOT NULL);
+CREATE INDEX IF NOT EXISTS usage_user_time ON usage(user_id, created_at);
+CREATE TABLE IF NOT EXISTS community_versions(
+  game_id TEXT NOT NULL, version TEXT NOT NULL, title TEXT NOT NULL, note TEXT NOT NULL, size INTEGER NOT NULL,
+  sha256 TEXT NOT NULL, cover_mime TEXT NOT NULL, published_at INTEGER NOT NULL, PRIMARY KEY(game_id, version));
+CREATE TABLE IF NOT EXISTS waitlist(
+  id INTEGER PRIMARY KEY, email TEXT NOT NULL UNIQUE, source TEXT NOT NULL, created_at INTEGER NOT NULL);
+CREATE INDEX IF NOT EXISTS waitlist_created ON waitlist(created_at);
+CREATE TABLE IF NOT EXISTS hull_schema(version INTEGER PRIMARY KEY, applied_at INTEGER NOT NULL);
+`
+
+// pgSchema is the same tables as sqliteSchema, one statement per entry because the driver runs one at a time.
+// google_sub is here from the start; only SQLite databases made before Google sign-in need the ALTER.
+var pgSchema = []string{
+	`CREATE TABLE IF NOT EXISTS users(
+  id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY, email TEXT NOT NULL UNIQUE, password_hash TEXT NOT NULL,
+  created_at BIGINT NOT NULL, google_sub TEXT)`,
+	`CREATE UNIQUE INDEX IF NOT EXISTS users_google_sub ON users(google_sub)`,
+	`CREATE TABLE IF NOT EXISTS sessions(
+  hash TEXT PRIMARY KEY, user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE, expires_at BIGINT NOT NULL)`,
+	`CREATE TABLE IF NOT EXISTS auth_codes(
+  hash TEXT PRIMARY KEY, user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  client_id TEXT NOT NULL, redirect_uri TEXT NOT NULL, code_challenge TEXT NOT NULL, expires_at BIGINT NOT NULL)`,
+	`CREATE TABLE IF NOT EXISTS tokens(
+  id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY, hash TEXT NOT NULL UNIQUE,
+  user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name TEXT NOT NULL, created_at BIGINT NOT NULL, last_used_at BIGINT, revoked_at BIGINT)`,
+	`CREATE TABLE IF NOT EXISTS usage(
+  id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY, user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  token_id BIGINT, model TEXT NOT NULL, input_tokens BIGINT NOT NULL, output_tokens BIGINT NOT NULL, created_at BIGINT NOT NULL)`,
+	`CREATE INDEX IF NOT EXISTS usage_user_time ON usage(user_id, created_at)`,
+	`CREATE TABLE IF NOT EXISTS community_versions(
+  game_id TEXT NOT NULL, version TEXT NOT NULL, title TEXT NOT NULL, note TEXT NOT NULL, size BIGINT NOT NULL,
+  sha256 TEXT NOT NULL, cover_mime TEXT NOT NULL, published_at BIGINT NOT NULL, PRIMARY KEY(game_id, version))`,
+	`CREATE TABLE IF NOT EXISTS waitlist(
+  id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY, email TEXT NOT NULL UNIQUE, source TEXT NOT NULL, created_at BIGINT NOT NULL)`,
+	`CREATE INDEX IF NOT EXISTS waitlist_created ON waitlist(created_at)`,
+	`CREATE TABLE IF NOT EXISTS hull_schema(version BIGINT PRIMARY KEY, applied_at BIGINT NOT NULL)`,
+}
+
+// Open opens (and migrates) the SQLite database at path; ":memory:" gives a throwaway one for tests.
+func Open(path string) (*Store, error) {
+	dsn := "file:" + path + "?_pragma=busy_timeout(5000)&_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)"
+	if path == ":memory:" {
+		dsn = "file::memory:?_pragma=foreign_keys(1)"
+	}
+	db, err := sql.Open("sqlite", dsn)
+	if err != nil {
+		return nil, fmt.Errorf("store: opening %s: %w", path, err)
+	}
+	// One connection keeps writes serial and makes :memory: a single database. Traffic here is small.
+	db.SetMaxOpenConns(1)
+	s := &Store{db: db, where: path}
+	before, _ := s.tables()
+	if _, err := db.Exec(sqliteSchema); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("store: migrating %s: %w", path, err)
+	}
+	if err := migrateGoogleSub(db); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("store: migrating %s: %w", path, err)
+	}
+	if _, err := db.Exec("INSERT INTO hull_schema(version,applied_at) VALUES(?,?) ON CONFLICT DO NOTHING", SchemaVersion, time.Now().Unix()); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("store: recording schema version in %s: %w", path, err)
+	}
+	s.created = s.newTables(before)
+	return s, nil
+}
+
+// migrateGoogleSub adds users.google_sub to a database made before Google sign-in. SQLite cannot drop NOT NULL,
+// so an account without a password keeps an empty password_hash, which no password can match.
+func migrateGoogleSub(db *sql.DB) error {
+	rows, err := db.Query("SELECT name FROM pragma_table_info('users')")
+	if err != nil {
+		return err
+	}
+	has := false
+	for rows.Next() {
+		var n string
+		if err := rows.Scan(&n); err != nil {
+			rows.Close()
+			return err
+		}
+		has = has || n == "google_sub"
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	if !has {
+		if _, err := db.Exec("ALTER TABLE users ADD COLUMN google_sub TEXT"); err != nil {
+			return err
+		}
+	}
+	// Unique over a nullable column: any number of accounts may have no Google link.
+	_, err = db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS users_google_sub ON users(google_sub)")
+	return err
+}
+
+var schemaNameRE = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]{0,62}$`)
+
+// pgLockKey is the advisory lock that makes two processes starting together apply the schema one after the other.
+const pgLockKey = 7261570031
+
+// OpenPostgres connects to the Postgres database in rawURL, uses schema for every table (search_path), applies
+// the schema in one transaction under an advisory lock and returns the store. TLS follows the URL's sslmode and
+// sslrootcert exactly as pgx reads them. Errors never carry the URL, which holds the password.
+func OpenPostgres(ctx context.Context, rawURL, schema string) (*Store, error) {
+	if schema == "" {
+		schema = "public"
+	}
+	if !schemaNameRE.MatchString(schema) {
+		return nil, fmt.Errorf("store: DATABASE_SCHEMA %q is not a plain identifier (letters, digits, underscore)", schema)
+	}
+	cfg, err := pgx.ParseConfig(rawURL)
+	if err != nil {
+		// pgx's own message would repeat the URL; its inner error names the problem without it.
+		var pe *pgconn.ParseConfigError
+		if errors.As(err, &pe) && pe.Unwrap() != nil {
+			return nil, fmt.Errorf("store: DATABASE_URL is not a valid Postgres URL: %w", pe.Unwrap())
+		}
+		return nil, errors.New("store: DATABASE_URL is not a valid Postgres URL")
+	}
+	cfg.ConnectTimeout = 10 * time.Second
+	cfg.RuntimeParams["search_path"] = schema
+	where := cfg.Host + "/" + cfg.Database
+
+	db := openPgx(cfg)
+	s := &Store{db: db, pg: true, where: where}
+	pctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	if err := db.PingContext(pctx); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("store: cannot reach the database in DATABASE_URL (host %s, database %s): %w", cfg.Host, cfg.Database, err)
+	}
+	if err := s.applyPostgresSchema(pctx, schema); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("store: applying the schema in %s schema %s: %w", where, schema, err)
+	}
+	s.where = where + " schema " + schema
+	return s, nil
+}
+
+func (s *Store) applyPostgresSchema(ctx context.Context, schema string) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	// Released at commit or rollback, so a crash cannot leave it held.
+	if _, err := tx.ExecContext(ctx, "SELECT pg_advisory_xact_lock($1)", int64(pgLockKey)); err != nil {
+		return err
+	}
+	if schema != "public" {
+		if _, err := tx.ExecContext(ctx, `CREATE SCHEMA IF NOT EXISTS "`+schema+`"`); err != nil {
+			return err
+		}
+	}
+	before, err := tablesIn(ctx, tx)
+	if err != nil {
+		return err
+	}
+	for _, q := range pgSchema {
+		if _, err := tx.ExecContext(ctx, q); err != nil {
+			return err
+		}
+	}
+	if _, err := tx.ExecContext(ctx, "INSERT INTO hull_schema(version,applied_at) VALUES($1,$2) ON CONFLICT DO NOTHING", int64(SchemaVersion), time.Now().Unix()); err != nil {
+		return err
+	}
+	after, err := tablesIn(ctx, tx)
+	if err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	for _, n := range after {
+		found := false
+		for _, b := range before {
+			found = found || b == n
+		}
+		if !found {
+			s.created = append(s.created, n)
+		}
+	}
+	return nil
+}
+
+type queryer interface {
+	QueryContext(ctx context.Context, q string, args ...any) (*sql.Rows, error)
+}
+
+// tablesIn lists the tables in the connection's current schema.
+func tablesIn(ctx context.Context, q queryer) ([]string, error) {
+	rows, err := q.QueryContext(ctx, "SELECT table_name FROM information_schema.tables WHERE table_schema=current_schema() ORDER BY 1")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var n string
+		if err := rows.Scan(&n); err != nil {
+			return nil, err
+		}
+		out = append(out, n)
+	}
+	return out, rows.Err()
+}
+
+// tables lists SQLite's tables.
+func (s *Store) tables() ([]string, error) {
+	rows, err := s.db.Query("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY 1")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var n string
+		if err := rows.Scan(&n); err != nil {
+			return nil, err
+		}
+		out = append(out, n)
+	}
+	return out, rows.Err()
+}
+
+func (s *Store) newTables(before []string) []string {
+	after, _ := s.tables()
+	var out []string
+	for _, n := range after {
+		found := false
+		for _, b := range before {
+			found = found || b == n
+		}
+		if !found {
+			out = append(out, n)
+		}
+	}
+	return out
+}
+
+// DropSchema removes the schema and everything in it. Tests use it to clean up a per-test schema; it refuses "public".
+func (s *Store) DropSchema(schema string) error {
+	if !s.pg || schema == "public" || !schemaNameRE.MatchString(schema) {
+		return errors.New("store: DropSchema is for a named Postgres schema only")
+	}
+	_, err := s.db.Exec(`DROP SCHEMA IF EXISTS "` + schema + `" CASCADE`)
+	return err
+}
+
+// SchemaVersion reads the newest version recorded in hull_schema.
+func (s *Store) SchemaVersion() (int64, error) {
+	var v int64
+	err := s.queryRow("SELECT CAST(COALESCE(MAX(version),0) AS BIGINT) FROM hull_schema").Scan(&v)
+	return v, err
+}

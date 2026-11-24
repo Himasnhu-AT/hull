@@ -1,0 +1,38 @@
+[Unit]
+Description=Hull backend (accounts, AI proxy, waitlist, admin)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=hull
+Group=hull
+# db.env holds DATABASE_URL (a secret); backend.env holds the rest. Both are root-owned, readable by group hull only.
+EnvironmentFile=/etc/hull-backend/db.env
+EnvironmentFile=/etc/hull-backend/backend.env
+ExecStart=/usr/local/bin/hull-backend
+Restart=on-failure
+RestartSec=3
+# The server drains open requests for up to 20 s after SIGTERM (AI streams can be long), so give it more than that.
+TimeoutStopSec=30
+
+# /var/lib/hull-backend, owned by hull, created by systemd. Community game files live here; the database does not.
+StateDirectory=hull-backend
+StateDirectoryMode=0700
+Environment=DATA_DIR=/var/lib/hull-backend
+
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+LockPersonality=true
+ReadWritePaths=/var/lib/hull-backend
+
+[Install]
+WantedBy=multi-user.target

@@ -6,18 +6,15 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/marlstudio/hull/backend/internal/store/storetest"
 )
 
 func TestCommunityCLI(t *testing.T) {
 	data, game := t.TempDir(), t.TempDir()
 	os.WriteFile(filepath.Join(game, "hull.json"), []byte(`{"id":"g1","title":"Game One","version":"1.0.0"}`), 0o644)
 	os.WriteFile(filepath.Join(game, "a.txt"), []byte("a"), 0o644)
-	env := func(k string) string {
-		if k == "DATA_DIR" {
-			return data
-		}
-		return ""
-	}
+	env := storetest.Env(t, map[string]string{"DATA_DIR": data})
 	run := func(args ...string) (string, error) {
 		var b bytes.Buffer
 		err := runCommunity(args, env, &b)

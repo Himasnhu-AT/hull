@@ -1,6 +1,9 @@
 package config
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestLoadGuards(t *testing.T) {
 	c, err := Load(func(string) string { return "" })
@@ -35,5 +38,29 @@ func TestLoadDefaultsAndErrors(t *testing.T) {
 	}
 	if _, err := Load(func(k string) string { return map[string]string{"PUBLIC_URL": "ftp://x"}[k] }); err == nil {
 		t.Error("bad PUBLIC_URL accepted")
+	}
+}
+
+func TestLoadDatabaseWaitlistAdmin(t *testing.T) {
+	c, err := Load(func(string) string { return "" })
+	if err != nil || c.DatabaseURL != "" || c.DatabaseSchema != "public" || len(c.SiteOrigins) != 2 || len(c.AdminEmails) != 0 ||
+		!c.OriginAllowed("https://marlstudio.com") || !c.OriginAllowed("https://www.marlstudio.com") || c.OriginAllowed("https://evil.example") || c.IsAdmin("a@example.com") {
+		t.Fatalf("defaults: %+v %v", c, err)
+	}
+	env := map[string]string{"DATABASE_URL": "postgres://hull:pw@db.example.com:5432/hull?sslmode=verify-full", "DATABASE_SCHEMA": "hull_app",
+		"SITE_ORIGINS": "http://localhost:3000/, https://Site.Example", "ADMIN_EMAILS": " Boss@Example.com ,, b2@example.com"}
+	c, err = Load(func(k string) string { return env[k] })
+	if err != nil || c.DatabaseSchema != "hull_app" || !c.OriginAllowed("http://localhost:3000") || !c.OriginAllowed("https://site.example") ||
+		c.OriginAllowed("https://marlstudio.com") || !c.IsAdmin("BOSS@example.com") || !c.IsAdmin("b2@example.com") || c.IsAdmin("x@example.com") {
+		t.Fatalf("env: %+v %v", c, err)
+	}
+	for _, bad := range []map[string]string{{"DATABASE_URL": "mysql://u:secretpw@h/db"}, {"DATABASE_URL": "not a url secretpw"}, {"DATABASE_SCHEMA": "a;drop"},
+		{"SITE_ORIGINS": "https://a.example/path"}, {"SITE_ORIGINS": "ftp://a.example"}} {
+		_, err := Load(func(k string) string { return bad[k] })
+		if err == nil {
+			t.Errorf("accepted %v", bad)
+		} else if strings.Contains(err.Error(), "secretpw") {
+			t.Errorf("error repeats the database URL: %v", err)
+		}
 	}
 }

@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 )
 
@@ -37,10 +36,10 @@ func scanVersion(sc interface{ Scan(...any) error }) (CommunityVersion, error) {
 
 // AddCommunityVersion records a version; the same game and version twice is ErrVersionExists.
 func (s *Store) AddCommunityVersion(v CommunityVersion) error {
-	_, err := s.db.Exec("INSERT INTO community_versions("+communityCols+") VALUES(?,?,?,?,?,?,?,?)",
+	_, err := s.exec("INSERT INTO community_versions("+communityCols+") VALUES(?,?,?,?,?,?,?,?)",
 		v.GameID, v.Version, v.Title, v.Note, v.Size, v.SHA256, v.CoverMime, ts(v.PublishedAt))
 	if err != nil {
-		if strings.Contains(err.Error(), "UNIQUE") || strings.Contains(err.Error(), "PRIMARY KEY") {
+		if _, dup := uniqueViolation(err); dup {
 			return ErrVersionExists
 		}
 		return fmt.Errorf("store: adding community version: %w", err)
@@ -50,7 +49,7 @@ func (s *Store) AddCommunityVersion(v CommunityVersion) error {
 
 // CommunityVersion reads one version; an unknown one is ErrNotFound.
 func (s *Store) CommunityVersion(gameID, version string) (CommunityVersion, error) {
-	v, err := scanVersion(s.db.QueryRow("SELECT "+communityCols+" FROM community_versions WHERE game_id=? AND version=?", gameID, version))
+	v, err := scanVersion(s.queryRow("SELECT "+communityCols+" FROM community_versions WHERE game_id=? AND version=?", gameID, version))
 	if errors.Is(err, sql.ErrNoRows) {
 		return CommunityVersion{}, ErrNotFound
 	}
@@ -71,7 +70,7 @@ func (s *Store) AllCommunityVersions() ([]CommunityVersion, error) {
 }
 
 func (s *Store) queryVersions(q string, args ...any) ([]CommunityVersion, error) {
-	rows, err := s.db.Query(q, args...)
+	rows, err := s.query(q, args...)
 	if err != nil {
 		return nil, fmt.Errorf("store: listing community versions: %w", err)
 	}
@@ -89,7 +88,7 @@ func (s *Store) queryVersions(q string, args ...any) ([]CommunityVersion, error)
 
 // RemoveCommunityVersion deletes a row; an unknown one is ErrNotFound.
 func (s *Store) RemoveCommunityVersion(gameID, version string) error {
-	res, err := s.db.Exec("DELETE FROM community_versions WHERE game_id=? AND version=?", gameID, version)
+	res, err := s.exec("DELETE FROM community_versions WHERE game_id=? AND version=?", gameID, version)
 	if err != nil {
 		return fmt.Errorf("store: removing community version: %w", err)
 	}
