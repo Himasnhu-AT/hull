@@ -1,0 +1,6 @@
+# The exact compiler that builds the committed kernel module (packages/hull/src/kernel/wasm.ts). The crate uses the
+# unstable wasm_numeric_instr feature (pnpm kernels:build sets RUSTC_BOOTSTRAP=1), which can change from one release to
+# the next, so the version is pinned like every other dependency.
+[toolchain]
+channel = "1.99.1"
+targets = ["wasm32-unknown-unknown"]
