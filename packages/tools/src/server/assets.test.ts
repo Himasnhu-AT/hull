@@ -107,6 +107,19 @@ describe('new and duplicate', () => {
     expect(bare.ok).toBe(true);
     expect(bare.created).toContain('material/fresh');
   });
+  it('refuses an id that would leave config/', () => {
+    const s = src();
+    for (const id of ['material/../../../escaped', 'material/../../hull', 'material/..', 'material/./x', 'material/.hidden', 'material/a/../../../b']) {
+      expect(planNew(s, 'material', id).ok, `new ${id}`).toBe(false);
+      expect(planDuplicate(s, 'material/jacket', id).ok, `duplicate to ${id}`).toBe(false);
+      expect(planMoves(s, [{ from: 'material/jacket', to: id }]).ok, `move to ${id}`).toBe(false);
+    }
+    // A dot inside a name is still fine.
+    expect(planNew(s, 'material', 'material/v1.2').ok).toBe(true);
+    for (const plan of [planNew(s, 'material', 'material/fresh'), planDuplicate(s, 'material/jacket')]) {
+      for (const w of plan.writes) expect(w.path.startsWith('config/') && !w.path.includes('..')).toBe(true);
+    }
+  });
 });
 
 describe('thumbnails', () => {

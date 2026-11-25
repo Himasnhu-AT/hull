@@ -58,6 +58,14 @@ export interface BootOptions {
 /** Where the headless tests put the input they drive (a Hull InputCore); a browser leaves it null and uses the mounted one. */
 export const hub: { view: InputView | null; options: BootOptions; audio: AudioView | null } = { view: null, options: {}, audio: null };
 
+/**
+ * The stress scale a run uses: a whole range of 1 to 16, whatever the address asked for. `?scale=Infinity` (or 1e9)
+ * used to pass `Math.max(1, ..)` and freeze the page in the loop that places that many comrades.
+ */
+function stressScale(asked: number | undefined): number {
+  return typeof asked === 'number' && Number.isFinite(asked) ? Math.min(16, Math.max(1, asked)) : 1;
+}
+
 function queryOptions(): BootOptions {
   if (HEADLESS || typeof location === 'undefined') return {};
   const p = new URLSearchParams(location.search);
@@ -125,7 +133,7 @@ export class AottHost extends Behaviour {
       scene, camera, hull, events: new Events(), time: 0, mode: 'menu', hitstop: 0,
       collision: new CollisionWorld(hull.world), settings: { sens: opts.sens || 1, invertY: false },
       fx: null, impactFrame: null, audio: null, hud: null, titans: null, training: null,
-      trainingActive: false, allies: [], herd: null, quality: 2, load: Math.max(1, opts.scale || 1),
+      trainingActive: false, allies: [], herd: null, quality: 2, load: stressScale(opts.scale),
     } as unknown as Game;
     this.g = game;
     game.input = new Input(hub.view ?? hullInput);

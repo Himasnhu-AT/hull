@@ -34,7 +34,9 @@ export interface Plan {
 
 export interface Sources { configs: { path: string; text: string }[]; code: { path: string; text: string }[] }
 
-export const ID_RE = /^[A-Za-z0-9_-]+(\/[A-Za-z0-9_.-]+)+$/;
+// No part of an id may start with a dot: an id becomes the path config/<id>.json, and a part of ".." walked out of
+// config/ and out of the project ('tuning/../../hull' overwrote hull.json; three more wrote beside the project).
+export const ID_RE = /^[A-Za-z0-9_-]+(\/[A-Za-z0-9_-][A-Za-z0-9_.-]*)+$/;
 export const FOLDER_RE = /^[A-Za-z0-9_-]+(\/[A-Za-z0-9_-]+)*$/;
 const pathOfId = (id: string): string => `config/${id}.json`;
 export const idOfPath = (path: string): string => path.slice('config/'.length, -'.json'.length);
