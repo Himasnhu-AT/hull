@@ -91,7 +91,7 @@ export class Physics {
     this.solver = new RigidSolver(this);
     const kernel = takeKernel();
     if (kernel !== null) {
-      try { this._kw = new KernelWorld(kernel, this.cell); } catch (e) { this.dropKernel(e); }
+      try { this._kw = new KernelWorld(kernel, this.cell, (e) => { if (this._kw !== null) this.dropKernel(e); }); } catch (e) { this.dropKernel(e); }
     }
   }
 
@@ -160,7 +160,8 @@ export class Physics {
 
   remove(s: Shape): void {
     if (s._removed) return;
-    if (this._kw !== null) { try { this._kw.remove(s); } catch (e) { this.dropKernel(e); } }
+    // Only a shape this world mirrored: another world's shape carries an id that is a different shape here.
+    if (this._kw !== null && s._kw === this._kw) { try { this._kw.remove(s); } catch (e) { this.dropKernel(e); } }
     s._removed = true;
     s.enabled = false;
     if (s._cells !== null) {
@@ -503,7 +504,7 @@ export class Physics {
     this.ensureSynced();
     let d = NaN;
     let done = false;
-    if (this._kw !== null && s._kid >= 0) {
+    if (this._kw !== null && s._kw === this._kw && s._kid >= 0) {
       try { d = this._kw.closest(s, p.x, p.y, p.z); done = true; } catch (e) { this.dropKernel(e); }
     }
     if (!done) d = closestOn(s, p.x, p.y, p.z);

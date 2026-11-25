@@ -49,8 +49,12 @@ export class KernelWorld {
   private nextNode = 1;
   private awake = new Uint8Array(64);
 
-  constructor(k: KernelExports, cell: number) {
+  /** Told when the module traps in a call the world did not make itself (a pose or a property written by a Shape). */
+  private readonly onTrap: (e: unknown) => void;
+
+  constructor(k: KernelExports, cell: number, onTrap: (e: unknown) => void) {
     this.k = k;
+    this.onTrap = onTrap;
     k.hk_world_init(cell);
     this.hdr = new Int32Array(k.memory.buffer, k.hk_hdr(), 64);
     this.views();
@@ -158,6 +162,12 @@ export class KernelWorld {
 
   /** Layer, mask, flags, tag and node, after any of them changed. */
   props(s: Shape): void {
+    // A Shape's setters call this from game code, outside the world's own try: a trap here must end in the world
+    // dropping the kernel, not in an error thrown at whoever set `enabled`.
+    try { this.writeProps(s); } catch (e) { this.onTrap(e); }
+  }
+
+  private writeProps(s: Shape): void {
     this.views();
     const o = s._kid * SI, si = this.si;
     si[o + LAYER] = s.layer;
@@ -169,6 +179,11 @@ export class KernelWorld {
 
   /** The pose Shape.setMatrix has just worked out; the shape joins the list the kernel files before its next query. */
   pose(s: Shape): void {
+    // Called from Shape.setMatrix (a sync, a mover, a teleport), outside the world's own try: see props.
+    try { this.writePose(s); } catch (e) { this.onTrap(e); }
+  }
+
+  private writePose(s: Shape): void {
     this.views();
     const id = s._kid, f = this.sf, o = id * SF;
     f[o] = s.cx; f[o + 1] = s.cy; f[o + 2] = s.cz;
@@ -181,8 +196,8 @@ export class KernelWorld {
     f[o + PLANE_Y] = s.planeY;
     f[o + MINX] = s.minx; f[o + MINX + 1] = s.miny; f[o + MINX + 2] = s.minz;
     f[o + MINX + 3] = s.maxx; f[o + MINX + 4] = s.maxy; f[o + MINX + 5] = s.maxz;
-    const si = this.si, fo = id * SI + FLAGS;
-    let flags = si[fo]!;
+    const fo = id * SI + FLAGS;
+    let flags = this.si[fo]!;
     flags = s.aa ? flags | F_AA : flags & ~F_AA;
     if ((flags & F_DIRTY) === 0) {
       flags |= F_DIRTY;
@@ -192,7 +207,9 @@ export class KernelWorld {
       this.dirty[n] = id;
       this.hdr[H_NDIRTY] = n + 1;
     }
-    si[fo] = flags;
+    // Through this.si, not a view taken before the flush: a flush may grow the module's memory, which detaches
+    // every view made before it, and a write to a detached view is silently lost.
+    this.si[fo] = flags;
   }
 
   // ---- queries ----
@@ -205,7 +222,8 @@ export class KernelWorld {
     w[1] = f.mask !== undefined ? 1 : 0;
     w[2] = f.mask ?? 0;
     w[3] = f.triggers === true ? 1 : 0;
-    w[4] = f.ignoreShape !== undefined && f.ignoreShape !== null ? f.ignoreShape._kid : -1;
+    // A shape of another world has an id that means a different shape here: it is in nobody's way, so it ignores nothing.
+    w[4] = f.ignoreShape !== undefined && f.ignoreShape !== null && f.ignoreShape._kw === this ? f.ignoreShape._kid : -1;
     w[5] = f.ignoreNode !== undefined && f.ignoreNode !== null ? this.nodeId(f.ignoreNode) : 0;
     const tag = f.tag;
     if (tag === undefined) { w[6] = 0; return true; }
@@ -335,6 +353,11 @@ export class KernelWorld {
       for (let k = 0; k < 9; k++) b.iw[k] = f[o + B_IW + k]!;
       b.sleeping = bi[p + B_SLEEPING] !== 0;
       b.touching = bi[p + B_TOUCHING] !== 0;
+    }
+    // Posing comes after every body has been read: setPose writes back into the module and may flush, which can
+    // grow its memory and detach `f` and `bi`, and a body read through a detached view comes back undefined.
+    for (let i = 0; i < n; i++) {
+      const b = bodies[i]!;
       if (this.awake[i] === 1 || !b.sleeping) b.shape.setPose(b.px, b.py, b.pz, b.qx, b.qy, b.qz, b.qw);
       const node = b.node;
       if (node !== null && !b.sleeping) {

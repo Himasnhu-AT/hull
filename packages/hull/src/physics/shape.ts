@@ -162,7 +162,9 @@ export class Shape {
       case 'heightfield': {
         this.kind = K.heightfield;
         if (!this.isStatic) throw new Error('physics: a heightfield collider must be static');
-        if (desc.columns < 2 || desc.rows < 2) throw new Error('physics: a heightfield needs at least 2 columns and 2 rows');
+        if (!Number.isInteger(desc.columns) || !Number.isInteger(desc.rows) || desc.columns < 2 || desc.rows < 2) {
+          throw new Error(`physics: a heightfield needs whole numbers of columns and rows, at least 2 of each, got ${desc.columns} by ${desc.rows}`);
+        }
         if (desc.heights.length < desc.columns * desc.rows) {
           throw new Error(`physics: heightfield has ${desc.heights.length} samples, needs ${desc.columns * desc.rows}`);
         }
