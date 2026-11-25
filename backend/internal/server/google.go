@@ -247,11 +247,14 @@ func (s *Server) googleAccount(c idClaims) (store.User, int, string) {
 		if u.GoogleSub != "" || !c.googleIsAuthority(email) {
 			return store.User{}, http.StatusConflict, "An account with this email already exists. Sign in with your password."
 		}
-		if err := s.st.LinkGoogle(u.ID, c.Sub); err != nil {
+		// Linking drops the account's password, sessions and tokens (store.LinkGoogle says why): whoever made the
+		// password account never proved the address, and must not keep a way in.
+		if err := s.st.LinkGoogle(u.ID, c.Sub, s.now()); err != nil {
 			s.log.Error("linking google account", "err", err)
 			return store.User{}, 500, generic
 		}
 		u.GoogleSub = c.Sub
+		u.PassHash = ""
 		return u, 0, ""
 	case err != store.ErrNotFound:
 		s.log.Error("reading user by email", "err", err)

@@ -67,12 +67,32 @@ func (s *Store) CreateGoogleUser(email, sub string, now time.Time) (User, error)
 }
 
 // LinkGoogle ties an existing account to a Google subject.
-func (s *Store) LinkGoogle(userID int64, sub string) error {
-	_, err := s.exec("UPDATE users SET google_sub=? WHERE id=?", sub, userID)
-	if _, dup := uniqueViolation(err); dup {
-		return ErrSubTaken
+// LinkGoogle ties an existing password account to a Google user and, in the same transaction, removes every way
+// into the account that was made before: the password, the sessions, the app sign-in codes and the API tokens.
+// Sign-up does not prove an address, so the account may have been made by someone who does not own it; Google has
+// now vouched for the person linking, and only they may hold a key to it.
+func (s *Store) LinkGoogle(userID int64, sub string, now time.Time) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
 	}
-	return err
+	defer tx.Rollback()
+	if _, err := tx.Exec(s.rebind("UPDATE users SET google_sub=?, password_hash='' WHERE id=?"), sub, userID); err != nil {
+		if _, dup := uniqueViolation(err); dup {
+			return ErrSubTaken
+		}
+		return err
+	}
+	if _, err := tx.Exec(s.rebind("DELETE FROM sessions WHERE user_id=?"), userID); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(s.rebind("DELETE FROM auth_codes WHERE user_id=?"), userID); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(s.rebind("UPDATE tokens SET revoked_at=? WHERE user_id=? AND revoked_at IS NULL"), ts(now), userID); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func (s *Store) UserByGoogleSub(sub string) (User, error) {

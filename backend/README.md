@@ -77,8 +77,10 @@ The `waitlist` table holds `id`, `email` (unique), `source` and `created_at`. No
 
 ## Admin
 
-An admin is a signed-in account (the same `hull_session` cookie) whose email is in `ADMIN_EMAILS`. To become one: put your address there, restart, make an
-account with that address at `/signup` (or sign in at `/login`, Google included), then open `/admin`. Empty setting, no admins.
+An admin is a signed-in account (the same `hull_session` cookie) whose email is in `ADMIN_EMAILS` **and that Google has vouched for** (it signed in with
+Google at least once). To become one: put your Google address there, restart, choose "Continue with Google" at `/login`, then open `/admin`. Empty setting, no
+admins. A password alone never makes an admin: sign-up takes any address without proof, so until 25 November 2026 whoever registered an admin's address first was
+the admin. An address Google cannot vouch for (not Gmail, and not on a Workspace domain) cannot be an admin until the server can verify email itself.
 
 - `GET /admin`: waitlist total, today and last 7 days, a 14-day table, the newest 200 addresses; accounts total and the newest 50; active tokens; AI usage today and
   over 7 days and the top 10 accounts by tokens today; community games and versions; database kind, schema version, start time, Go version. All times are UTC; "today" is the UTC
@@ -146,6 +148,9 @@ Which account signs in:
 2. Else an account with that email. It is linked only when Google is the authority for the address: it ends in
    `@gmail.com` or `@googlemail.com`, or the token's `hd` (Workspace domain) equals the address's domain. Otherwise it is
    refused ("Sign in with your password"), so an unproven Google address cannot take over a password account.
+   Linking removes the account's password, its sessions, its pending app sign-ins and its API tokens. The password
+   account was made without proof of the address, possibly by someone else, so nothing made before the link may
+   still open it. From then on the account signs in with Google only, and apps sign in again.
 3. Else a new account with no password (refused when `ALLOW_SIGNUP=false`).
 
 A Google-only account cannot log in with a password. An existing database is migrated on start (a nullable, unique `google_sub` column).

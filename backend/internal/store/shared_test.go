@@ -33,10 +33,10 @@ func TestDuplicatesAndWaitlist(t *testing.T) {
 	if _, err := st.CreateGoogleUser("g@example.com", "sub2", now); err != store.ErrEmailTaken {
 		t.Fatalf("dup google email: %v", err)
 	}
-	if err := st.LinkGoogle(u.ID, "sub1"); err != store.ErrSubTaken {
+	if err := st.LinkGoogle(u.ID, "sub1", time.Now()); err != store.ErrSubTaken {
 		t.Fatalf("link taken sub: %v", err)
 	}
-	if err := st.LinkGoogle(u.ID, "sub3"); err != nil {
+	if err := st.LinkGoogle(u.ID, "sub3", time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	if got, err := st.UserByGoogleSub("sub3"); err != nil || got.ID != u.ID {

@@ -11,10 +11,14 @@ import (
 
 // admin answers 404, never 401 or a redirect, to everyone who is not a signed-in admin, so the routes do not show
 // themselves. An admin signs in at /login first, like anyone else.
+//
+// An admin is an account in ADMIN_EMAILS that Google has vouched for (it is linked to a Google user). A password
+// alone is not enough: sign-up takes any address without proof, so anyone could register an admin's address before
+// its owner does.
 func (s *Server) admin(next func(http.ResponseWriter, *http.Request)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		u, ok := s.sessionUser(r)
-		if !ok || !s.cfg.IsAdmin(u.Email) {
+		if !ok || u.GoogleSub == "" || !s.cfg.IsAdmin(u.Email) {
 			http.NotFound(w, r)
 			return
 		}

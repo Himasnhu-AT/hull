@@ -26,17 +26,18 @@ func TestMigrateAddsGoogleSub(t *testing.T) {
 			t.Fatal(err)
 		}
 		u, err := st.UserByEmail("old@example.com")
-		if err != nil || u.PassHash != "h" || (i == 0 && u.GoogleSub != "") || (i == 1 && u.GoogleSub != "other") {
+		// Linking to Google (below, on the first pass) drops the password, so the second pass finds none.
+		if err != nil || (i == 0 && (u.PassHash != "h" || u.GoogleSub != "")) || (i == 1 && (u.PassHash != "" || u.GoogleSub != "other")) {
 			t.Fatalf("old user: %+v %v", u, err)
 		}
 		if i == 0 {
 			if _, err := st.CreateGoogleUser("g@gmail.com", "sub", time.Now()); err != nil {
 				t.Fatal(err)
 			}
-			if err := st.LinkGoogle(u.ID, "sub"); err != ErrSubTaken {
+			if err := st.LinkGoogle(u.ID, "sub", time.Now()); err != ErrSubTaken {
 				t.Fatalf("duplicate sub: %v", err)
 			}
-			if err := st.LinkGoogle(u.ID, "other"); err != nil {
+			if err := st.LinkGoogle(u.ID, "other", time.Now()); err != nil {
 				t.Fatal(err)
 			}
 		}

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -28,6 +29,23 @@ func (e *env) get(c *http.Client, path string) (*http.Response, string) {
 	defer resp.Body.Close()
 	b, _ := io.ReadAll(resp.Body)
 	return resp, string(b)
+}
+
+// adminBrowser is a browser signed in as an account Google has vouched for, which is what an admin must be.
+func (e *env) adminBrowser(email string) *http.Client {
+	e.t.Helper()
+	u, err := e.st.CreateGoogleUser(strings.ToLower(email), "sub-"+strings.ToLower(email), e.s.now())
+	if err != nil {
+		e.t.Fatal(err)
+	}
+	id := randomString(32)
+	if err := e.st.CreateSession(hashSecret(id), u.ID, e.s.now().Add(sessionTTL)); err != nil {
+		e.t.Fatal(err)
+	}
+	c := e.browser()
+	at, _ := url.Parse(e.ts.URL)
+	c.Jar.SetCookies(at, []*http.Cookie{{Name: sessionCookie, Value: id, Path: "/"}})
+	return c
 }
 
 // seedAdmin fills the database with numbers that are easy to check by hand.
@@ -96,10 +114,22 @@ func TestAdminNobodyWhenSettingEmpty(t *testing.T) {
 	}
 }
 
-func TestAdminPage(t *testing.T) {
+// Sign-up takes any address without proof, so a password account at an admin's address must not open the admin:
+// before this, whoever registered the address first was the admin.
+func TestAdminNeedsGoogle(t *testing.T) {
 	e := adminEnv(t)
 	c := e.browser()
-	e.signup(c, "Boss@Example.com", "correct horse battery")
+	e.signup(c, "boss@example.com", "correct horse battery")
+	for _, p := range []string{"/admin", "/admin/waitlist.csv", "/api/admin/stats"} {
+		if resp, body := e.get(c, p); resp.StatusCode != 404 || strings.Contains(body, "Waitlist") {
+			t.Errorf("a password account at the admin's address got %s: %d", p, resp.StatusCode)
+		}
+	}
+}
+
+func TestAdminPage(t *testing.T) {
+	e := adminEnv(t)
+	c := e.adminBrowser("Boss@Example.com")
 	e.seedAdmin()
 	resp, body := e.get(c, "/admin")
 	if resp.StatusCode != 200 || resp.Header.Get("Cache-Control") != "no-store" || !strings.Contains(resp.Header.Get("Content-Security-Policy"), "default-src 'none'") {
@@ -119,8 +149,7 @@ func TestAdminPage(t *testing.T) {
 
 func TestAdminStatsJSON(t *testing.T) {
 	e := adminEnv(t)
-	c := e.browser()
-	e.signup(c, "boss@example.com", "correct horse battery")
+	c := e.adminBrowser("boss@example.com")
 	e.signup(e.browser(), "g@example.com", "correct horse battery")
 	e.seedAdmin()
 	resp, body := e.get(c, "/api/admin/stats")
@@ -157,8 +186,7 @@ func TestAdminStatsJSON(t *testing.T) {
 
 func TestAdminWaitlistCSV(t *testing.T) {
 	e := adminEnv(t)
-	c := e.browser()
-	e.signup(c, "boss@example.com", "correct horse battery")
+	c := e.adminBrowser("boss@example.com")
 	e.seedAdmin()
 	resp, body := e.get(c, "/admin/waitlist.csv")
 	if resp.StatusCode != 200 || resp.Header.Get("Cache-Control") != "no-store" || !strings.HasPrefix(resp.Header.Get("Content-Disposition"), "attachment") || !strings.HasPrefix(resp.Header.Get("Content-Type"), "text/csv") {

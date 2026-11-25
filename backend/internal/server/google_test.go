@@ -308,14 +308,36 @@ func TestGoogleNewAccountSignsIn(t *testing.T) {
 func TestGoogleLinking(t *testing.T) {
 	t.Run("gmail links", func(t *testing.T) {
 		e, fg := newGoogleEnv(t, nil)
-		e.signup(e.browser(), "me@gmail.com", "correct horse battery")
+		// Someone made a password account at this address first (the owner, or a stranger: sign-up cannot tell),
+		// signed in with it and made an API token.
+		first := e.browser()
+		e.signup(first, "me@gmail.com", "correct horse battery")
+		tok := e.token2(first)
+		if resp, _ := e.do("GET", "/api/me", tok, nil, ""); resp.StatusCode != 200 {
+			t.Fatalf("token before linking: %d", resp.StatusCode)
+		}
 		fg.set(goodClaims("sub9", "me@gmail.com"))
-		if resp, _ := e.googleLogin(e.browser(), "/"); resp.StatusCode != 303 {
+		owner := e.browser()
+		if resp, _ := e.googleLogin(owner, "/"); resp.StatusCode != 303 {
 			t.Fatalf("%d", resp.StatusCode)
 		}
 		u, _ := e.st.UserByEmail("me@gmail.com")
-		if u.GoogleSub != "sub9" || u.PassHash == "" {
-			t.Fatalf("not linked or lost the password: %+v", u)
+		if u.GoogleSub != "sub9" || u.PassHash != "" {
+			t.Fatalf("not linked, or the old password still works: sub %q, has password %v", u.GoogleSub, u.PassHash != "")
+		}
+		// Every way in from before the link is gone; the Google sign-in is the only one.
+		if resp, _ := e.get(first, "/"); resp.StatusCode != 303 || resp.Header.Get("Location") != "/login" {
+			t.Errorf("the session from before the link still opens the account: %d", resp.StatusCode)
+		}
+		if resp, _ := e.do("GET", "/api/me", tok, nil, ""); resp.StatusCode != 401 {
+			t.Errorf("the token from before the link still works: %d", resp.StatusCode)
+		}
+		again := e.browser()
+		if resp, _ := e.post(again, "/login", url.Values{"csrf": {e.csrf(again, "/login")}, "email": {"me@gmail.com"}, "password": {"correct horse battery"}}); resp.StatusCode == 303 {
+			t.Error("the password from before the link still logs in")
+		}
+		if resp, _ := e.get(owner, "/"); resp.StatusCode != 200 {
+			t.Errorf("the owner's Google session: %d", resp.StatusCode)
 		}
 	})
 	t.Run("other domain refused", func(t *testing.T) {

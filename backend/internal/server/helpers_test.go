@@ -191,6 +191,12 @@ func (e *env) token(email string) string {
 	e.t.Helper()
 	c := e.browser()
 	e.signup(c, email, "correct horse battery")
+	return e.token2(c)
+}
+
+// token2 runs the PKCE flow in a browser that is already signed in, returning the app token.
+func (e *env) token2(c *http.Client) string {
+	e.t.Helper()
 	v, ch := pkce()
 	code, _ := e.consent(c, e.authorizeQuery(ch, loopback), "allow")
 	status, m := e.exchange(code, v, loopback, "hull")
